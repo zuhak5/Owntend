@@ -17,7 +17,8 @@
     "validate:toolchain": "node tool/toolchain_manifest.mjs --enforce",
     "generate:sbom-and-notices": "node tool/generate_sbom_and_notices.mjs",
     "supabase:lint": "supabase db lint --local --level error --fail-on error",
-    "supabase:test": "supabase test db --local supabase/tests/database"
+    "supabase:test": "supabase test db --local supabase/tests/database",
+    "test:release-workflows": "node --test tool/release-workflows.test.mjs"
   },
   "devDependencies": {
     "@supabase/supabase-js": "^2.112.3",
