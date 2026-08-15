@@ -4,10 +4,14 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import {
+  ACCOUNT_DELETION_SITE_URL,
   accountDeletionConfigFromEnvironment,
   validateAccountDeletionPublicConfig,
   writeAccountDeletionConfig,
 } from "./build_account_deletion_site.mjs";
+
+const PRIVACY_POLICY_URL =
+  "https://github.com/zuhak5/Owntend/blob/main/PRIVACY.md";
 
 function parseArguments(argv) {
   const values = {};
@@ -65,12 +69,51 @@ export async function buildVersionDeckSite({
   if (!accountDeletionPage.includes("__ACCOUNT_DELETION_ASSET_REVISION__")) {
     throw new Error("Account-deletion asset revision placeholder is missing.");
   }
+  if (!accountDeletionPage.includes(ACCOUNT_DELETION_SITE_URL)) {
+    throw new Error("Account-deletion canonical URL placeholder is missing.");
+  }
+  if (!accountDeletionPage.includes('href="PRIVACY.md"')) {
+    throw new Error("Account-deletion privacy link placeholder is missing.");
+  }
   await fs.writeFile(
     accountDeletionPagePath,
-    accountDeletionPage.replaceAll(
-      "__ACCOUNT_DELETION_ASSET_REVISION__",
-      revision.toLowerCase(),
+    accountDeletionPage
+      .replaceAll(
+        "__ACCOUNT_DELETION_ASSET_REVISION__",
+        revision.toLowerCase(),
+      )
+      .replaceAll(ACCOUNT_DELETION_SITE_URL, publicConfig.accountDeletionSiteUrl)
+      .replaceAll('href="PRIVACY.md"', `href="${PRIVACY_POLICY_URL}"`),
+    "utf8",
+  );
+
+  const accountDeletionScriptPath = path.join(output, "account-deletion.js");
+  const accountDeletionScript = await fs.readFile(accountDeletionScriptPath, "utf8");
+  if (!accountDeletionScript.includes(ACCOUNT_DELETION_SITE_URL)) {
+    throw new Error("Account-deletion browser callback URL placeholder is missing.");
+  }
+  await fs.writeFile(
+    accountDeletionScriptPath,
+    accountDeletionScript.replaceAll(
+      ACCOUNT_DELETION_SITE_URL,
+      publicConfig.accountDeletionSiteUrl,
     ),
+    "utf8",
+  );
+
+  const indexPath = path.join(output, "index.html");
+  const index = await fs.readFile(indexPath, "utf8");
+  const defaultSiteRoot = new URL("./", ACCOUNT_DELETION_SITE_URL).toString();
+  const deployedSiteRoot = new URL(
+    "./",
+    publicConfig.accountDeletionSiteUrl,
+  ).toString();
+  if (!index.includes(defaultSiteRoot)) {
+    throw new Error("VersionDeck canonical site URL placeholder is missing.");
+  }
+  await fs.writeFile(
+    indexPath,
+    index.replaceAll(defaultSiteRoot, deployedSiteRoot),
     "utf8",
   );
 
