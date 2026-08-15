@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 export const ACCOUNT_DELETION_SUPABASE_URL =
-  "https://iajvkvvvhwjdiuaufymh.supabase.co";
+  "https://qvdccazlbpvsrzkxunxo.supabase.co";
 export const ACCOUNT_DELETION_SITE_URL =
   "https://owntend.app/account-deletion.html";
 

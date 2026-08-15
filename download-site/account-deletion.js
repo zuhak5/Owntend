@@ -1,7 +1,7 @@
 const PKCE_STORAGE_KEY = "owntend-account-deletion-pkce-verifier";
 const RECOVERY_STORAGE_KEY = "owntend-account-deletion-recovery-v1";
 const REQUIRED_CONFIRMATION = "delete-my-account";
-const EXPECTED_SUPABASE_ORIGIN = "https://iajvkvvvhwjdiuaufymh.supabase.co";
+const EXPECTED_SUPABASE_ORIGIN = "https://qvdccazlbpvsrzkxunxo.supabase.co";
 const EXPECTED_DELETION_PAGE_URL = "https://owntend.app/account-deletion.html";
 
 export function validatePublicConfig(value) {

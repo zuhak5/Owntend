@@ -69,7 +69,7 @@ The VersionDeck build generates `account-deletion-config.js` from three public c
 
 | Variable | Required production value | Exposure and validation |
 | --- | --- | --- |
-| `PUBLIC_SUPABASE_URL` | `https://iajvkvvvhwjdiuaufymh.supabase.co` | Public project URL. Any other URL is rejected. |
+| `PUBLIC_SUPABASE_URL` | `https://qvdccazlbpvsrzkxunxo.supabase.co` | Public project URL. Any other URL is rejected. |
 | `PUBLIC_SUPABASE_PUBLISHABLE_KEY` | The hosted project's public publishable key, or legacy anonymous JWT | Intentionally browser-distributed. It must validate as a public `sb_publishable_...` key or an anonymous-role JWT; a privileged key is rejected because it does not satisfy that shape. Never substitute a service-role credential. |
 | `ACCOUNT_DELETION_SITE_URL` | `https://owntend.app/account-deletion.html` | Exact Google OAuth callback and canonical public page. Any other URL is rejected. |
 

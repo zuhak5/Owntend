@@ -163,7 +163,7 @@ Use a disposable Google/Supabase account with non-sensitive test rows and privat
      --header "Origin: https://owntend.app" `
      --header "Access-Control-Request-Method: POST" `
      --header "Access-Control-Request-Headers: authorization,apikey,content-type" `
-     "https://iajvkvvvhwjdiuaufymh.supabase.co/functions/v1/delete-account"
+     "https://qvdccazlbpvsrzkxunxo.supabase.co/functions/v1/delete-account"
    ```
 
    Expect HTTP `204`, `Access-Control-Allow-Origin: https://owntend.app`, `Vary: Origin`, and the documented methods and headers. Repeat for `/functions/v1/account-deletion-status` with `Access-Control-Request-Headers: apikey,content-type`, then repeat both with an unapproved origin and expect rejection with no allow-origin header. Do not use wildcard expectations.

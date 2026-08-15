@@ -406,7 +406,7 @@ test("site assets expose confirmation and isolate deletion from offline navigati
   assert.match(html, /Content-Security-Policy/);
   assert.match(
     html,
-    /connect-src https:\/\/iajvkvvvhwjdiuaufymh\.supabase\.co/,
+    /connect-src https:\/\/qvdccazlbpvsrzkxunxo\.supabase\.co/,
   );
   assert.ok(
     html.indexOf("account-deletion-config.js") <

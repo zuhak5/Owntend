@@ -161,7 +161,7 @@ for (const directive of [
   "default-src 'none'",
   "script-src 'self'",
   "style-src 'self'",
-  "connect-src https://iajvkvvvhwjdiuaufymh.supabase.co",
+  "connect-src https://qvdccazlbpvsrzkxunxo.supabase.co",
   "object-src 'none'",
   "base-uri 'none'",
   "form-action 'none'",
