@@ -1,0 +1,155 @@
+name: Validate Flutter
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: owntend-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Format, analyze, and test
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Set up Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: "24"
+
+      - name: Install workflow contract dependencies
+        run: npm ci
+
+      - name: Validate immutable GitHub Actions and release workflow contracts
+        run: npm run test:release-workflows
+
+      - name: Validate dependency security and license policy
+        run: npm run test:dependency-security
+
+      - name: Validate canonical toolchain contracts and manifest
+        run: |
+          npm run test:toolchain
+          npm run validate:toolchain
+
+      - name: Validate Android release lint gate
+        run: npm run test:android-lint
+
+      - name: Validate asset provenance and license policy
+        run: |
+          npm run test:asset-provenance
+          npm run validate:asset-provenance
+
+      - name: Validate canonical test and asset inventory
+        run: npm run validate:test-inventory
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: "3.47.0"
+          channel: stable
+          cache: true
+
+      - name: Show tool versions
+        run: |
+          flutter --version
+          dart --version
+          pwsh --version
+
+      - name: Resolve dependencies
+        # --enforce-lockfile fails if pubspec.lock does not exactly satisfy
+        # pubspec.yaml or if any hosted-package content hash has changed.
+        run: flutter pub get --enforce-lockfile
+
+      - name: Verify pubspec.lock is unchanged
+        # Any mutation after the enforced resolution is an integrity failure.
+        shell: pwsh
+        run: |
+          $LockChanges = (git status --porcelain pubspec.lock 2>&1 | Out-String).Trim()
+          if (-not [string]::IsNullOrWhiteSpace($LockChanges)) {
+            Write-Error "pubspec.lock was modified unexpectedly. Commit the updated lockfile and verify the change before merging."
+            Write-Error $LockChanges
+            exit 1
+          }
+
+      - name: Generate localization files
+        run: flutter gen-l10n
+
+      - name: Generate source files
+        run: dart run build_runner build
+
+      - name: Verify formatting
+        run: dart format --output=none --set-exit-if-changed lib test
+
+      - name: Parse production PowerShell scripts
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          foreach ($Script in @(
+            "tool/build_prod.ps1",
+            "tool/build_play_prod.ps1",
+            "tool/collect_android_release_evidence.ps1",
+            "tool/publish_sentry_release.ps1"
+          )) {
+            $Tokens = $null
+            $Errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              (Join-Path $PWD $Script),
+              [ref]$Tokens,
+              [ref]$Errors
+            ) | Out-Null
+            if ($Errors.Count -gt 0) {
+              $Errors | ForEach-Object { Write-Error $_.Message }
+              throw "PowerShell parsing failed for $Script."
+            }
+          }
+
+      - name: Analyze
+        run: flutter analyze --no-pub
+
+      - name: Run tests
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          flutter test `
+            --no-pub `
+            --concurrency=1 `
+            --timeout 3m `
+            --reporter expanded `
+            --exclude-tags production-config `
+            2>&1 | Tee-Object -FilePath flutter-test-output.log
+
+          $TestExitCode = $LASTEXITCODE
+          if ($TestExitCode -ne 0) {
+            exit $TestExitCode
+          }
+
+      - name: Upload test diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: flutter-test-output
+          path: flutter-test-output.log
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Validate production configuration schema
+        run: >-
+          flutter test
+          --no-pub
+          test/prod_build_config_test.dart
+          --dart-define-from-file=config/prod.example.json
+          --dart-define=VERIFY_PRODUCTION_CONFIG=true

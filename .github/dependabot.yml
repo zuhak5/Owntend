@@ -1,0 +1,57 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
+    reviewers:
+      - movinesta
+      - sijelna
+    commit-message:
+      prefix: ci
+
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
+    reviewers:
+      - movinesta
+      - sijelna
+    commit-message:
+      prefix: deps
+
+  - package-ecosystem: pub
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
+    reviewers:
+      - movinesta
+      - sijelna
+    commit-message:
+      prefix: deps
+
+  - package-ecosystem: gradle
+    directory: "/android"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
+    reviewers:
+      - movinesta
+      - sijelna
+    commit-message:
+      prefix: deps

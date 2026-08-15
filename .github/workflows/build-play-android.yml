@@ -1,0 +1,403 @@
+name: Build Play Store AAB
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_notes:
+        description: "Google Play internal-track release notes"
+        required: false
+        type: string
+
+concurrency:
+  group: owntend-play-release
+  cancel-in-progress: false
+
+jobs:
+  validate-release-source:
+    name: Require current main release source
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Reject a non-main dispatch
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
+            echo "Production AAB releases must be dispatched from main, not $GITHUB_REF." >&2
+            exit 1
+          fi
+
+      - name: Check out selected source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          fetch-depth: 0
+
+      - name: Require selected SHA to equal current origin/main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main --no-tags
+          source_sha="$(git rev-parse HEAD)"
+          remote_sha="$(git rev-parse origin/main)"
+          test "$source_sha" = "$GITHUB_SHA"
+          if [[ "$source_sha" != "$remote_sha" ]]; then
+            echo "Selected source $source_sha is not current origin/main $remote_sha." >&2
+            exit 1
+          fi
+
+  build-play-aab:
+    name: Build and verify signed production AAB
+    needs: validate-release-source
+    runs-on: windows-latest
+    timeout-minutes: 75
+    environment: production-play-signing
+
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+      attestations: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          fetch-depth: 0
+
+      - name: Revalidate exact release source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          git fetch origin main --no-tags
+          if ($LASTEXITCODE -ne 0) { throw "Could not refresh origin/main." }
+          $SourceSha = (git rev-parse HEAD).Trim()
+          $MainSha = (git rev-parse origin/main).Trim()
+          if ($SourceSha -ne $env:GITHUB_SHA) {
+            throw "Checked-out source $SourceSha differs from GITHUB_SHA $env:GITHUB_SHA."
+          }
+          if ($SourceSha -ne $MainSha) {
+            throw "Play artifacts require exact current origin/main $MainSha, got $SourceSha."
+          }
+          "- Exact source SHA: ``$SourceSha``" >> $env:GITHUB_STEP_SUMMARY
+
+      - name: Set up Java 17
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: "3.47.0"
+          channel: stable
+          cache: true
+
+      - name: Set up Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Set up Deno
+        uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          deno-version: "2.9.3"
+
+      - name: Run release security contracts
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          npm ci
+          node tool/validate_google_release_contracts.mjs
+          cd supabase/functions/admob-ssv-handler && deno install --frozen && cd ../../..
+          cd supabase/functions/delete-account && deno install --frozen && cd ../../..
+          cd supabase/functions/account-deletion-status && deno install --frozen && cd ../../..
+          cd supabase/functions/admob-ssv-handler && deno check --frozen index.ts && cd ../../..
+          cd supabase/functions/delete-account && deno check --frozen index.ts && cd ../../..
+          cd supabase/functions/account-deletion-status && deno check --frozen index.ts && cd ../../..
+          cd supabase/functions/admob-ssv-handler && deno test --frozen --allow-env --allow-net index_test.ts && cd ../../..
+          cd supabase/functions/delete-account && deno test --frozen --allow-env --allow-net index_test.ts && cd ../../..
+          cd supabase/functions/account-deletion-status && deno test --frozen --allow-env --allow-net index_test.ts && cd ../../..
+
+      - name: Require backend database gate for this SHA
+        id: backend_gate
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $Runs = gh api `
+            "repos/$env:GITHUB_REPOSITORY/actions/workflows/validate-google-backend.yml/runs?head_sha=$env:GITHUB_SHA&status=completed&per_page=20" |
+            ConvertFrom-Json
+          $Passed = @($Runs.workflow_runs | Where-Object {
+            $_.path -eq ".github/workflows/validate-google-backend.yml" -and
+            $_.head_sha -eq $env:GITHUB_SHA -and
+            $_.head_branch -eq "main" -and
+            $_.event -in @("push", "workflow_dispatch") -and
+            $_.conclusion -eq "success"
+          })
+          if ($Passed.Count -eq 0) {
+            throw "The exact Google/backend/database workflow has not passed on main for $env:GITHUB_SHA."
+          }
+          $Gate = $Passed | Sort-Object created_at -Descending | Select-Object -First 1
+          "run_id=$($Gate.id)" >> $env:GITHUB_OUTPUT
+          "run_url=$($Gate.html_url)" >> $env:GITHUB_OUTPUT
+          "- Backend gate: [$($Gate.id)]($($Gate.html_url)) for ``$($Gate.head_sha)``" >> $env:GITHUB_STEP_SUMMARY
+
+      - name: Prepare release metadata
+        id: metadata
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $VersionLine = Get-Content "pubspec.yaml" |
+            Where-Object { $_ -match '^version:\s*' } |
+            Select-Object -First 1
+          if (-not $VersionLine) { throw "Version was not found in pubspec.yaml." }
+          $VersionValue = ($VersionLine -replace '^version:\s*', '').Trim()
+          if ($VersionValue -notmatch '^(\d+\.\d+\.\d+)\+(\d+)$') {
+            throw "Expected version format x.y.z+build, got: $VersionValue"
+          }
+          $VersionName = $Matches[1]
+          $BuildNumber = $Matches[2]
+          $AabName = "Owntend-$VersionName-build-$BuildNumber.aab"
+          "version_name=$VersionName" >> $env:GITHUB_OUTPUT
+          "build_number=$BuildNumber" >> $env:GITHUB_OUTPUT
+          "aab_name=$AabName" >> $env:GITHUB_OUTPUT
+
+      - name: Initialize AAB diagnostics
+        shell: pwsh
+        env:
+          VERSION_NAME: ${{ steps.metadata.outputs.version_name }}
+          BUILD_NUMBER: ${{ steps.metadata.outputs.build_number }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $EvidencePath = Join-Path $PWD "release\aab-evidence"
+          New-Item -ItemType Directory -Path $EvidencePath -Force | Out-Null
+          $Context = [ordered]@{
+            workflow = $env:GITHUB_WORKFLOW
+            repository = $env:GITHUB_REPOSITORY
+            repository_id = $env:GITHUB_REPOSITORY_ID
+            repository_owner_id = $env:GITHUB_REPOSITORY_OWNER_ID
+            run_id = $env:GITHUB_RUN_ID
+            run_attempt = $env:GITHUB_RUN_ATTEMPT
+            source_sha = $env:GITHUB_SHA
+            source_ref = $env:GITHUB_REF
+            event_name = $env:GITHUB_EVENT_NAME
+            runner_environment = "github-hosted"
+            source_repository_visibility = "public"
+            backend_gate_run_id = "${{ steps.backend_gate.outputs.run_id }}"
+            backend_gate_run_url = "${{ steps.backend_gate.outputs.run_url }}"
+            artifact_type = "aab"
+            version_name = $env:VERSION_NAME
+            version_code = $env:BUILD_NUMBER
+          } | ConvertTo-Json
+          [System.IO.File]::WriteAllText(
+            (Join-Path $EvidencePath "workflow-context.json"),
+            $Context,
+            (New-Object System.Text.UTF8Encoding($false))
+          )
+
+      - name: Create production configuration
+        shell: pwsh
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
+          GOOGLE_WEB_CLIENT_ID: ${{ vars.GOOGLE_WEB_CLIENT_ID }}
+          SENTRY_DSN: ${{ vars.SENTRY_DSN }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $Required = @{
+            SUPABASE_URL = $env:SUPABASE_URL
+            SUPABASE_PUBLISHABLE_KEY = $env:SUPABASE_PUBLISHABLE_KEY
+            GOOGLE_WEB_CLIENT_ID = $env:GOOGLE_WEB_CLIENT_ID
+            SENTRY_DSN = $env:SENTRY_DSN
+          }
+          foreach ($Item in $Required.GetEnumerator()) {
+            if ([string]::IsNullOrWhiteSpace($Item.Value)) {
+              throw "Missing production variable: $($Item.Key)"
+            }
+          }
+          try { $SentryUri = [System.Uri]$env:SENTRY_DSN }
+          catch { throw "SENTRY_DSN must be a valid absolute URL." }
+          if ($SentryUri.Scheme -ne "https" -or
+              [string]::IsNullOrWhiteSpace($SentryUri.UserInfo) -or
+              $SentryUri.Host -notmatch '(?i)(^|\.)ingest(?:\.[a-z0-9-]+)?\.sentry\.io$') {
+            throw "SENTRY_DSN must be an HTTPS Sentry ingest URL."
+          }
+          $Config = [ordered]@{
+            APP_ENV = "prod"
+            SUPABASE_URL = $env:SUPABASE_URL
+            SUPABASE_PUBLISHABLE_KEY = $env:SUPABASE_PUBLISHABLE_KEY
+            GOOGLE_WEB_CLIENT_ID = $env:GOOGLE_WEB_CLIENT_ID
+            SENTRY_ENABLED = $true
+            SENTRY_DSN = $env:SENTRY_DSN
+            SENTRY_TRACES_SAMPLE_RATE = "0.05"
+          } | ConvertTo-Json
+          New-Item -ItemType Directory -Path "config" -Force | Out-Null
+          [System.IO.File]::WriteAllText(
+            (Join-Path $PWD "config\prod.json"),
+            $Config,
+            (New-Object System.Text.UTF8Encoding($false))
+          )
+
+      - name: Restore Android upload signing credentials
+        shell: pwsh
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.PLAY_UPLOAD_KEYSTORE_BASE64 }}
+          ANDROID_KEY_ALIAS: ${{ secrets.PLAY_UPLOAD_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.PLAY_UPLOAD_KEY_PASSWORD }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.PLAY_UPLOAD_STORE_PASSWORD }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $Required = @{
+            ANDROID_KEYSTORE_BASE64 = $env:ANDROID_KEYSTORE_BASE64
+            ANDROID_KEY_ALIAS = $env:ANDROID_KEY_ALIAS
+            ANDROID_KEY_PASSWORD = $env:ANDROID_KEY_PASSWORD
+            ANDROID_STORE_PASSWORD = $env:ANDROID_STORE_PASSWORD
+          }
+          foreach ($Item in $Required.GetEnumerator()) {
+            if ([string]::IsNullOrWhiteSpace($Item.Value)) {
+              throw "Missing Android signing secret: $($Item.Key)"
+            }
+          }
+          [System.IO.File]::WriteAllBytes(
+            (Join-Path $PWD "android\app\owntend-release.jks"),
+            [Convert]::FromBase64String($env:ANDROID_KEYSTORE_BASE64)
+          )
+          $Properties = @(
+            "storePassword=$env:ANDROID_STORE_PASSWORD"
+            "keyPassword=$env:ANDROID_KEY_PASSWORD"
+            "keyAlias=$env:ANDROID_KEY_ALIAS"
+            "storeFile=owntend-release.jks"
+          )
+          [System.IO.File]::WriteAllLines(
+            (Join-Path $PWD "android\key.properties"),
+            $Properties,
+            (New-Object System.Text.UTF8Encoding($false))
+          )
+
+      - name: Build and test production AAB
+        shell: pwsh
+        run: .\tool\build_play_prod.ps1
+
+      - name: Prepare and verify AAB
+        id: release
+        shell: pwsh
+        env:
+          VERSION_NAME: ${{ steps.metadata.outputs.version_name }}
+          BUILD_NUMBER: ${{ steps.metadata.outputs.build_number }}
+          AAB_NAME: ${{ steps.metadata.outputs.aab_name }}
+          ANDROID_KEY_ALIAS: ${{ secrets.PLAY_UPLOAD_KEY_ALIAS }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.PLAY_UPLOAD_STORE_PASSWORD }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $EvidencePath = Join-Path $PWD "release\aab-evidence"
+          New-Item -ItemType Directory -Path $EvidencePath -Force | Out-Null
+          $Candidates = @(Get-ChildItem `
+            -LiteralPath "build\app\outputs\bundle\prodRelease" `
+            -File `
+            -Filter "*.aab")
+          if ($Candidates.Count -ne 1) {
+            throw "Expected exactly one prodRelease AAB, found $($Candidates.Count)."
+          }
+          New-Item -ItemType Directory -Path "release" -Force | Out-Null
+          $AabPath = Join-Path $PWD "release\$env:AAB_NAME"
+          Copy-Item -LiteralPath $Candidates[0].FullName -Destination $AabPath -Force
+          $Hash = (Get-FileHash -LiteralPath $AabPath -Algorithm SHA256).Hash.ToLowerInvariant()
+          $ChecksumPath = "$AabPath.sha256"
+          "$Hash  $env:AAB_NAME" | Set-Content -LiteralPath $ChecksumPath -Encoding utf8NoBOM
+
+          $SignaturePath = Join-Path $EvidencePath "aab-signature-verification.txt"
+          & jarsigner -verify -verbose -certs $AabPath 2>&1 |
+            Set-Content -LiteralPath $SignaturePath -Encoding utf8NoBOM
+          if ($LASTEXITCODE -ne 0 -or
+              (Get-Content -LiteralPath $SignaturePath -Raw) -notmatch 'jar verified') {
+            throw "AAB JAR signature verification failed."
+          }
+          $ArtifactCertificate = (& keytool -printcert -jarfile $AabPath 2>&1 | Out-String)
+          $UploadCertificate = (& keytool -list -v `
+            -keystore "android\app\owntend-release.jks" `
+            -storepass $env:ANDROID_STORE_PASSWORD `
+            -alias $env:ANDROID_KEY_ALIAS 2>&1 | Out-String)
+          if ($ArtifactCertificate -notmatch 'SHA256:\s*([0-9A-F:]+)' -or
+              $UploadCertificate -notmatch 'SHA256:\s*([0-9A-F:]+)') {
+            throw "Could not extract AAB and upload-key SHA-256 certificates."
+          }
+          $ArtifactDigest = ([regex]::Match($ArtifactCertificate, 'SHA256:\s*([0-9A-F:]+)').Groups[1].Value -replace ':', '').ToLowerInvariant()
+          $UploadDigest = ([regex]::Match($UploadCertificate, 'SHA256:\s*([0-9A-F:]+)').Groups[1].Value -replace ':', '').ToLowerInvariant()
+          if ($ArtifactDigest -ne $UploadDigest) {
+            throw "AAB signer does not match the configured upload certificate."
+          }
+          "AAB upload certificate SHA-256: $ArtifactDigest" |
+            Add-Content -LiteralPath $SignaturePath -Encoding utf8NoBOM
+
+          & ".\tool\collect_android_release_evidence.ps1" `
+            -ArtifactType aab `
+            -ArtifactPath $AabPath `
+            -OutputDirectory $EvidencePath `
+            -ExpectedVersion $env:VERSION_NAME `
+            -ExpectedBuild $env:BUILD_NUMBER
+          "aab_path=$AabPath" >> $env:GITHUB_OUTPUT
+          "checksum_path=$ChecksumPath" >> $env:GITHUB_OUTPUT
+          "evidence_path=$EvidencePath" >> $env:GITHUB_OUTPUT
+          "sha256=$Hash" >> $env:GITHUB_OUTPUT
+
+      - name: Upload verified production AAB
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: Owntend-production-aab-${{ github.run_number }}
+          path: |
+            ${{ steps.release.outputs.aab_path }}
+            ${{ steps.release.outputs.checksum_path }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Attest production AAB provenance
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
+        with:
+          subject-path: ${{ steps.release.outputs.aab_path }}
+
+      - name: Verify and record AAB provenance tuple
+        shell: pwsh
+        env:
+          AAB_PATH: ${{ steps.release.outputs.aab_path }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          & node .\tool\provenance_policy.mjs `
+            --artifact-path $env:AAB_PATH `
+            --workflow-context (Join-Path $PWD "release\aab-evidence\workflow-context.json") `
+            --release-evidence (Join-Path $PWD "release\aab-evidence\release-evidence-summary.json") `
+            --attestation-output (Join-Path $PWD "release\aab-evidence\provenance-attestation.json") `
+            --verification-output (Join-Path $PWD "release\aab-evidence\provenance-verification.json")
+
+      - name: Upload AAB evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: Owntend-production-aab-evidence-${{ github.run_number }}
+          path: |
+            release/aab-evidence
+            build/sentry-debug/dart
+            build/app/outputs/mapping/prodRelease
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Stop Gradle daemons
+        if: always()
+        shell: pwsh
+        run: |
+          Push-Location "android"
+          try { if (Test-Path ".\gradlew.bat") { .\gradlew.bat --stop } }
+          finally { Pop-Location }
+
+      - name: Remove temporary credentials
+        if: always()
+        shell: pwsh
+        run: |
+          Remove-Item -LiteralPath "android\app\owntend-release.jks" -Force -ErrorAction SilentlyContinue
+          Remove-Item -LiteralPath "android\key.properties" -Force -ErrorAction SilentlyContinue
+          Remove-Item -LiteralPath "config\prod.json" -Force -ErrorAction SilentlyContinue

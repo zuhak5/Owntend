@@ -1,0 +1,118 @@
+name: Deploy Supabase Migrations
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Exact current main commit to deploy
+        required: true
+        type: string
+      project_ref:
+        description: Exact Supabase project ref confirmation
+        required: true
+        type: string
+      confirmation:
+        description: Type apply-pending-migrations
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-supabase-migrations
+  cancel-in-progress: false
+
+jobs:
+  validate-source:
+    name: Validate migration deployment target
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      source_sha: ${{ steps.source.outputs.sha }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 0
+      - name: Require exact current main source and explicit target
+        id: source
+        env:
+          INPUT_SOURCE_SHA: ${{ inputs.source_sha }}
+          INPUT_CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main"
+          git fetch --no-tags origin main
+          source_sha="$(git rev-parse HEAD)"
+          remote_sha="$(git rev-parse origin/main)"
+          test "$source_sha" = "$INPUT_SOURCE_SHA"
+          test "$source_sha" = "$GITHUB_SHA"
+          test "$source_sha" = "$remote_sha"
+          test "$INPUT_CONFIRMATION" = "apply-pending-migrations"
+          echo "sha=$source_sha" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    name: Apply pending production migrations
+    needs: validate-source
+    runs-on: ubuntu-latest
+    environment: production-supabase-migrations
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ needs.validate-source.outputs.source_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Revalidate exact current main after approval
+        env:
+          EXPECTED_SOURCE_SHA: ${{ needs.validate-source.outputs.source_sha }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          source_sha="$(git rev-parse HEAD)"
+          remote_sha="$(git rev-parse origin/main)"
+          test "$source_sha" = "$EXPECTED_SOURCE_SHA"
+          test "$source_sha" = "$GITHUB_SHA"
+          test "$source_sha" = "$remote_sha"
+      - name: Confirm protected Supabase project
+        env:
+          INPUT_PROJECT_REF: ${{ inputs.project_ref }}
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+        run: |
+          set -euo pipefail
+          expected_ref="${SUPABASE_URL#https://}"
+          expected_ref="${expected_ref%%.*}"
+          test -n "$expected_ref"
+          test "$INPUT_PROJECT_REF" = "$expected_ref"
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - name: Link the confirmed hosted project
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_MIGRATION_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_MIGRATION_DB_PASSWORD }}
+          SUPABASE_PROJECT_REF: ${{ inputs.project_ref }}
+        run: npx supabase link --project-ref "$SUPABASE_PROJECT_REF"
+      - name: Show remote migration history
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_MIGRATION_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_MIGRATION_DB_PASSWORD }}
+        run: npx supabase migration list --linked
+      - name: Dry-run pending migrations
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_MIGRATION_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_MIGRATION_DB_PASSWORD }}
+        run: npx supabase db push --linked --dry-run
+      - name: Apply pending migrations
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_MIGRATION_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_MIGRATION_DB_PASSWORD }}
+        run: npx supabase db push --linked
+      - name: Verify no migration remains pending
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_MIGRATION_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_MIGRATION_DB_PASSWORD }}
+        run: npx supabase db push --linked --dry-run
