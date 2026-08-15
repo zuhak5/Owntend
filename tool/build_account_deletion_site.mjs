@@ -5,6 +5,12 @@ export const ACCOUNT_DELETION_SUPABASE_URL =
   "https://qvdccazlbpvsrzkxunxo.supabase.co";
 export const ACCOUNT_DELETION_SITE_URL =
   "https://owntend.app/account-deletion.html";
+export const ACCOUNT_DELETION_GITHUB_PAGES_SITE_URL =
+  "https://zuhak5.github.io/Owntend/account-deletion.html";
+export const ACCOUNT_DELETION_ALLOWED_SITE_URLS = Object.freeze([
+  ACCOUNT_DELETION_SITE_URL,
+  ACCOUNT_DELETION_GITHUB_PAGES_SITE_URL,
+]);
 
 export const INERT_ACCOUNT_DELETION_CONFIG = Object.freeze({
   enabled: false,
@@ -58,8 +64,8 @@ export function validateAccountDeletionPublicConfig(
   if (config.supabaseUrl !== ACCOUNT_DELETION_SUPABASE_URL) {
     throw new Error("PUBLIC_SUPABASE_URL does not match the allowlisted Supabase project URL.");
   }
-  if (config.accountDeletionSiteUrl !== ACCOUNT_DELETION_SITE_URL) {
-    throw new Error("ACCOUNT_DELETION_SITE_URL does not match the canonical deletion page.");
+  if (!ACCOUNT_DELETION_ALLOWED_SITE_URLS.includes(config.accountDeletionSiteUrl)) {
+    throw new Error("ACCOUNT_DELETION_SITE_URL does not match an allowlisted deletion page.");
   }
   if (!isPublicSupabaseKey(config.supabasePublishableKey)) {
     throw new Error("PUBLIC_SUPABASE_PUBLISHABLE_KEY is not a public anon/publishable key.");
