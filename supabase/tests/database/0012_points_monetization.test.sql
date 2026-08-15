@@ -1,0 +1,974 @@
+begin;
+
+create extension if not exists pgtap with schema extensions;
+set local role postgres;
+set search_path = public, extensions, pg_catalog;
+
+select extensions.plan(75);
+
+select extensions.has_table('public', 'point_wallets', 'point wallet table exists');
+select extensions.has_table('public', 'point_transactions', 'point ledger table exists');
+select extensions.has_table('public', 'reward_claim_requests', 'reward claim table exists');
+select extensions.hasnt_column(
+  'public',
+  'maintenance_plan_metadata',
+  'dependency_plan_ids_json',
+  'task dependency metadata is retired from the cloud schema'
+);
+select extensions.ok(
+  pg_catalog.strpos(
+    pg_catalog.pg_get_functiondef(
+      'owntend_monetization_private.create_task_with_point_debit_impl(jsonb)'::regprocedure
+    ),
+    'dependency_plan_ids'
+  ) = 0,
+  'task creation no longer reads or writes dependency metadata'
+);
+select extensions.ok(
+  pg_catalog.strpos(
+    pg_catalog.pg_get_functiondef(
+      'owntend_monetization_private.create_asset_with_point_debit_impl(jsonb)'::regprocedure
+    ),
+    'dependency_plan_ids'
+  ) = 0,
+  'initial asset tasks no longer read or write dependency metadata'
+);
+select extensions.ok(
+  (select bool_and(relrowsecurity)
+   from pg_class
+   where oid in (
+     'public.point_wallets'::regclass,
+     'public.point_transactions'::regclass,
+     'public.reward_claim_requests'::regclass,
+     'public.ad_reward_claims'::regclass,
+     'public.creation_point_operations'::regclass,
+     'public.monetization_config'::regclass,
+     'public.monetization_events'::regclass
+   )),
+  'every monetization table has RLS enabled'
+);
+select extensions.is(
+  (
+    select count(*)::integer
+    from (
+      values
+        ('ad_reward_claims'),
+        ('creation_point_operations'),
+        ('monetization_events')
+    ) as advisor_tables(table_name)
+    where not exists (
+      select 1
+      from pg_policy policies
+      join pg_class tables on tables.oid = policies.polrelid
+      join pg_namespace schemas on schemas.oid = tables.relnamespace
+      where schemas.nspname = 'public'
+        and tables.relname = advisor_tables.table_name
+    )
+  ),
+  0,
+  'internal monetization tables have explicit RLS policies'
+);
+select extensions.ok(
+  not has_table_privilege('authenticated', 'public.ad_reward_claims', 'SELECT')
+  and not has_table_privilege(
+    'authenticated',
+    'public.creation_point_operations',
+    'SELECT'
+  )
+  and not has_table_privilege(
+    'authenticated',
+    'public.monetization_events',
+    'SELECT'
+  ),
+  'advisor RLS policies do not grant client table reads'
+);
+select extensions.is(
+  (
+    select count(*)::integer
+    from pg_proc functions
+    join pg_namespace schemas on schemas.oid = functions.pronamespace
+    where schemas.nspname = 'public'
+      and functions.proname in (
+        'create_asset_with_point_debit',
+        'create_reward_claim_request',
+        'create_task_with_point_debit',
+        'is_authorized_point_creation',
+        'record_monetization_event'
+      )
+      and functions.prosecdef
+      and has_function_privilege('authenticated', functions.oid, 'EXECUTE')
+  ),
+  0,
+  'authenticated point RPCs are not security definer functions in public'
+);
+select extensions.is(
+  (
+    select count(*)::integer
+    from pg_proc functions
+    join pg_namespace schemas on schemas.oid = functions.pronamespace
+    where schemas.nspname = 'owntend_monetization_private'
+      and functions.proname in (
+        'create_asset_with_point_debit_impl',
+        'create_reward_claim_request_impl',
+        'create_task_with_point_debit_impl',
+        'is_authorized_point_creation_impl',
+        'record_monetization_event_impl'
+      )
+      and functions.prosecdef
+  ),
+  5,
+  'privileged point implementations live in the private schema'
+);
+select extensions.ok(
+  exists (
+    select 1
+    from pg_constraint constraints
+    join pg_class tables on tables.oid = constraints.conrelid
+    join pg_namespace schemas on schemas.oid = tables.relnamespace
+    join pg_index indexes on indexes.indrelid = constraints.conrelid
+    where schemas.nspname = 'public'
+      and tables.relname = 'ad_reward_claims'
+      and constraints.conname = 'ad_reward_claims_user_id_fkey'
+      and constraints.contype = 'f'
+      and indexes.indisvalid
+      and indexes.indisready
+      and (
+        string_to_array(indexes.indkey::text, ' ')::smallint[]
+      )[1] = constraints.conkey[1]
+  ),
+  'ad reward Auth foreign key has a covering index'
+);
+select extensions.ok(
+  has_table_privilege('authenticated', 'public.point_wallets', 'SELECT'),
+  'authenticated users can read their wallet'
+);
+select extensions.ok(
+  not has_table_privilege('authenticated', 'public.point_wallets', 'UPDATE'),
+  'clients cannot mutate wallet balances'
+);
+select extensions.ok(
+  not has_table_privilege(
+    'authenticated', 'public.monetization_config', 'UPDATE'
+  ),
+  'clients cannot alter monetization kill switches or limits'
+);
+select extensions.ok(
+  has_table_privilege('authenticated', 'public.assets', 'INSERT'),
+  'sync retains INSERT privilege while RLS requires an authorized debit'
+);
+select extensions.has_function(
+  'public', 'create_asset_with_point_debit', array['jsonb'],
+  'atomic asset creation RPC exists'
+);
+select extensions.has_function(
+  'public', 'create_task_with_point_debit', array['jsonb'],
+  'atomic task creation RPC exists'
+);
+select extensions.has_function(
+  'public', 'create_reward_claim_request', array['text', 'text'],
+  'reward claim request RPC exists'
+);
+select extensions.ok(
+  has_function_privilege(
+    'service_role',
+    'public.process_admob_ssv_reward(text,uuid,uuid,text,integer,text,timestamptz)',
+    'EXECUTE'
+  ) and not has_function_privilege(
+    'authenticated',
+    'public.process_admob_ssv_reward(text,uuid,uuid,text,integer,text,timestamptz)',
+    'EXECUTE'
+  ),
+  'SSV settlement is service-role only'
+);
+
+insert into auth.users (
+  instance_id, id, aud, role, email, encrypted_password,
+  email_confirmed_at, created_at, updated_at
+) values
+  (
+    '00000000-0000-0000-0000-000000000000',
+    '44444444-4444-4444-4444-444444444444',
+    'authenticated', 'authenticated', 'points-one@example.test', '',
+    now(), now(), now()
+  ),
+  (
+    '00000000-0000-0000-0000-000000000000',
+    '55555555-5555-5555-5555-555555555555',
+    'authenticated', 'authenticated', 'points-two@example.test', '',
+    now(), now(), now()
+  );
+
+insert into public.areas (
+  user_id, id, name, kind, sort_order, created_at, updated_at
+) values (
+  '44444444-4444-4444-4444-444444444444',
+  'points-area', 'Points test area', 'indoor', 0, now(), now()
+);
+insert into public.rooms (
+  user_id, id, area_id, name, room_type, sort_order, created_at, updated_at
+) values (
+  '44444444-4444-4444-4444-444444444444',
+  'points-room', 'points-area', 'Points test room', 'other', 0, now(), now()
+);
+
+create temporary table monetization_test_claim (payload jsonb);
+create temporary table monetization_test_claim_regular_two (payload jsonb);
+create temporary table monetization_test_claim_daily (payload jsonb);
+grant all on monetization_test_claim,
+  monetization_test_claim_regular_two,
+  monetization_test_claim_daily to authenticated, service_role;
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claim.sub',
+  '44444444-4444-4444-4444-444444444444',
+  true
+);
+select set_config('request.jwt.claim.role', 'authenticated', true);
+
+select extensions.is(
+  (select balance from public.point_wallets)::integer,
+  7,
+  'a new account starts with seven points'
+);
+select extensions.is(
+  (select count(*) from public.point_transactions
+   where transaction_type = 'initial_grant')::integer,
+  1,
+  'the starting grant is recorded exactly once'
+);
+
+select extensions.is(
+  (
+    public.create_asset_with_point_debit(
+      jsonb_build_object(
+        'operation_id', '44444444-0000-0000-0000-000000000001',
+        'asset', jsonb_build_object(
+          'id', 'points-general-asset',
+          'name', 'General item',
+          'asset_type', 'general',
+          'category_id', 'category_general',
+          'room_id', 'points-room'
+        ),
+        'initial_plans', jsonb_build_array(
+          jsonb_build_object(
+            'id', 'points-bundled-task-one',
+            'asset_id', 'points-general-asset',
+            'title', 'Bundled task one',
+            'recurrence_interval', 1,
+            'recurrence_unit', 'months',
+            'priority', 'medium',
+            'next_due_date', '2026-09-01T00:00:00Z',
+            'reminder_days_before', 0,
+            'health_group', 'other'
+          ),
+          jsonb_build_object(
+            'id', 'points-bundled-task-two',
+            'asset_id', 'points-general-asset',
+            'title', 'Bundled task two',
+            'recurrence_interval', 3,
+            'recurrence_unit', 'months',
+            'priority', 'low',
+            'next_due_date', '2026-09-02T00:00:00Z',
+            'reminder_days_before', 0,
+            'health_group', 'other'
+          )
+        )
+      )
+    )->>'charged'
+  )::integer,
+  0,
+  'ordinary asset creation is free (0 points)'
+);
+select extensions.is(
+  (select balance from public.point_wallets)::integer,
+  7,
+  'asset creation does not debit the wallet'
+);
+select extensions.is(
+  (select count(*) from public.maintenance_plans
+   where asset_id = 'points-general-asset'
+     and id in ('points-bundled-task-one', 'points-bundled-task-two'))::integer,
+  2,
+  'initial maintenance plans are committed in the asset transaction'
+);
+select extensions.is(
+  (select count(*) from public.point_transactions
+   where transaction_type = 'asset_creation'
+     and reference_id = 'points-general-asset')::integer,
+  0,
+  'free asset creation produces no negative point transaction'
+);
+select extensions.is(
+  (
+    public.create_asset_with_point_debit(
+      jsonb_build_object(
+        'operation_id', '44444444-0000-0000-0000-000000000001',
+        'asset', jsonb_build_object(
+          'id', 'points-general-asset',
+          'name', 'General item',
+          'asset_type', 'general',
+          'category_id', 'category_general',
+          'room_id', 'points-room'
+        ),
+        'initial_plans', jsonb_build_array(
+          jsonb_build_object(
+            'id', 'points-bundled-task-one',
+            'asset_id', 'points-general-asset',
+            'title', 'Bundled task one',
+            'recurrence_interval', 1,
+            'recurrence_unit', 'months',
+            'priority', 'medium',
+            'next_due_date', '2026-09-01T00:00:00Z',
+            'reminder_days_before', 0,
+            'health_group', 'other'
+          ),
+          jsonb_build_object(
+            'id', 'points-bundled-task-two',
+            'asset_id', 'points-general-asset',
+            'title', 'Bundled task two',
+            'recurrence_interval', 3,
+            'recurrence_unit', 'months',
+            'priority', 'low',
+            'next_due_date', '2026-09-02T00:00:00Z',
+            'reminder_days_before', 0,
+            'health_group', 'other'
+          )
+        )
+      )
+    )->>'already_processed'
+  )::boolean,
+  true,
+  'replaying an asset operation is idempotent'
+);
+select extensions.is(
+  (select count(*) from public.assets where id = 'points-general-asset')::integer,
+  1,
+  'an idempotent asset replay creates no duplicate'
+);
+
+select extensions.is(
+  (
+    public.create_task_with_point_debit(
+      jsonb_build_object(
+        'operation_id', '44444444-0000-0000-0000-000000000002',
+        'plan', jsonb_build_object(
+          'id', 'points-general-task',
+          'asset_id', 'points-general-asset',
+          'title', 'General task',
+          'instructions', 'Inspect the general asset',
+          'recurrence_interval', 1,
+          'recurrence_unit', 'months',
+          'priority', 'medium',
+          'next_due_date', now() + interval '1 day',
+          'reminder_days_before', 0,
+          'health_group', 'other'
+        )
+      )
+    )->>'charged'
+  )::integer,
+  1,
+  'ordinary task creation costs one point'
+);
+select extensions.is(
+  (select description from public.maintenance_plans where id = 'points-general-task'),
+  'Inspect the general asset',
+  'task creation preserves the Flutter instructions field in the cloud alias'
+);
+select extensions.is(
+  (select balance from public.point_wallets)::integer,
+  6,
+  'task creation debits the wallet atomically'
+);
+
+select extensions.is(
+  (
+    public.create_asset_with_point_debit(
+      jsonb_build_object(
+        'operation_id', '44444444-0000-0000-0000-000000000003',
+        'asset', jsonb_build_object(
+          'id', 'points-safety-asset',
+          'name', 'Smoke alarm',
+          'asset_type', 'safety',
+          'category_id', 'category_safety',
+          'room_id', 'points-room'
+        ),
+        'details', jsonb_build_object(
+          'safety_type', 'smoke_alarm',
+          'installed_at', '2026-08-15T10:00:00Z',
+          'expires_at', '2036-08-15T10:00:00Z',
+          'battery_type', 'AA',
+          'test_interval_days', 30
+        )
+      )
+    )->>'charged'
+  )::integer,
+  0,
+  'server-derived safety asset creation is free'
+);
+select extensions.is(
+  (
+    select jsonb_build_object(
+      'safety_type', safety_type,
+      'battery_type', battery_type,
+      'test_interval_days', test_interval_days
+    )
+    from public.safety_details
+    where asset_id = 'points-safety-asset'
+  ),
+  '{"safety_type":"smoke_alarm","battery_type":"AA","test_interval_days":30}'::jsonb,
+  'asset creation preserves Flutter safety detail fields'
+);
+select extensions.is(
+  (select balance from public.point_wallets)::integer,
+  6,
+  'a safety asset does not change the balance'
+);
+select extensions.is(
+  (
+    public.create_task_with_point_debit(
+      jsonb_build_object(
+        'operation_id', '44444444-0000-0000-0000-000000000004',
+        'plan', jsonb_build_object(
+          'id', 'points-safety-task',
+          'asset_id', 'points-safety-asset',
+          'title', 'Test smoke alarm',
+          'recurrence_interval', 1,
+          'recurrence_unit', 'months',
+          'priority', 'critical',
+          'next_due_date', now() + interval '1 day',
+          'reminder_days_before', 0,
+          'health_group', 'other'
+        )
+      )
+    )->>'charged'
+  )::integer,
+  0,
+  'task safety is derived from its owned asset and is free'
+);
+select extensions.is(
+  (select balance from public.point_wallets)::integer,
+  6,
+  'a safety task does not change the balance'
+);
+select extensions.is(
+  (select count(*) from public.point_transactions)::integer,
+  2,
+  'only the starting grant and one charged task creation enter the ledger'
+);
+
+select extensions.throws_ok(
+  $$insert into public.maintenance_plans (
+      user_id, id, asset_id, title, interval_count, interval_unit,
+      priority, created_at, updated_at
+    ) values (
+      '44444444-4444-4444-4444-444444444444', 'bypass-task',
+      'points-general-asset', 'Bypass task', 1, 'months', 'medium', now(), now()
+    )$$,
+  '42501',
+  null,
+  'direct charged task inserts are denied'
+);
+select extensions.lives_ok(
+  $$insert into public.maintenance_plans
+      select * from public.maintenance_plans
+      where user_id = '44444444-4444-4444-4444-444444444444'
+        and id = 'points-general-task'
+      on conflict (user_id, id) do update
+      set updated_at = excluded.updated_at$$,
+  'offline sync can reconcile a task already created by the atomic RPC'
+);
+
+insert into monetization_test_claim (payload)
+select public.create_reward_claim_request('rewarded_ad', 'Asia/Baghdad');
+select extensions.is(
+  (select (payload->>'reward_amount')::integer from monetization_test_claim),
+  1,
+  'a standard rewarded ad claim is worth one point'
+);
+
+set local role service_role;
+select set_config('request.jwt.claim.role', 'service_role', true);
+select set_config('request.jwt.claims', '{"role":"service_role"}', true);
+select extensions.is(
+  (
+    public.process_admob_ssv_reward(
+      'test-transaction-1',
+      (select (payload->>'claim_id')::uuid from monetization_test_claim),
+      '44444444-4444-4444-4444-444444444444',
+      'ca-app-pub-5274007212820203/4541482404',
+      1,
+      'points',
+      now()
+    )->>'credited'
+  )::boolean,
+  true,
+  'a valid verified SSV callback credits the wallet'
+);
+set local role postgres;
+select extensions.is(
+  (select balance from public.point_wallets
+   where user_id = '44444444-4444-4444-4444-444444444444')::integer,
+  7,
+  'the reward credit is persisted'
+);
+
+set local role service_role;
+select set_config('request.jwt.claim.role', 'service_role', true);
+select set_config('request.jwt.claims', '{"role":"service_role"}', true);
+select extensions.is(
+  (
+    public.process_admob_ssv_reward(
+      'test-transaction-1',
+      (select (payload->>'claim_id')::uuid from monetization_test_claim),
+      '44444444-4444-4444-4444-444444444444',
+      'ca-app-pub-5274007212820203/4541482404',
+      1,
+      'points',
+      now()
+    )->>'duplicate'
+  )::boolean,
+  true,
+  'an SSV retry creates no duplicate reward claim'
+);
+
+set local role authenticated;
+select set_config('request.jwt.claim.role', 'authenticated', true);
+select extensions.throws_ok(
+  $$select public.create_reward_claim_request('rewarded_ad', 'Asia/Baghdad')$$,
+  'P0001',
+  'REWARD_COOLDOWN',
+  'a regular reward is limited only by the configured cooldown'
+);
+
+set local role postgres;
+update public.reward_claim_requests
+set created_at = now() - interval '46 seconds'
+where user_id = '44444444-4444-4444-4444-444444444444';
+set local role authenticated;
+select set_config('request.jwt.claim.role', 'authenticated', true);
+insert into monetization_test_claim_regular_two (payload)
+select public.create_reward_claim_request('rewarded_ad', 'Asia/Baghdad');
+select extensions.is(
+  (
+    select (payload->>'reward_amount')::integer
+    from monetization_test_claim_regular_two
+  ),
+  1,
+  'regular rewarded ads remain renewable on the same local day'
+);
+
+set local role postgres;
+update public.reward_claim_requests
+set created_at = now() - interval '46 seconds'
+where user_id = '44444444-4444-4444-4444-444444444444';
+set local role authenticated;
+select set_config('request.jwt.claim.role', 'authenticated', true);
+select extensions.lives_ok(
+  $$select public.create_reward_claim_request('rewarded_ad', 'Asia/Baghdad')$$,
+  'a delayed SSV callback does not block a later claim after cooldown'
+);
+select extensions.is(
+  (select count(*) from public.reward_claim_requests
+   where status = 'pending')::integer,
+  2,
+  'multiple short-lived pending claims can coexist safely'
+);
+
+set local role postgres;
+update public.reward_claim_requests
+set created_at = now() - interval '46 seconds'
+where user_id = '44444444-4444-4444-4444-444444444444';
+set local role authenticated;
+select set_config('request.jwt.claim.role', 'authenticated', true);
+insert into monetization_test_claim_daily (payload)
+select public.create_reward_claim_request(
+  'rewarded_interstitial', 'Asia/Baghdad'
+);
+select extensions.is(
+  (select (payload->>'reward_amount')::integer from monetization_test_claim_daily),
+  2,
+  'the daily completion rewarded interstitial is worth two points'
+);
+
+set local role service_role;
+select set_config('request.jwt.claim.role', 'service_role', true);
+select set_config('request.jwt.claims', '{"role":"service_role"}', true);
+select extensions.is(
+  (
+    public.process_admob_ssv_reward(
+      'test-transaction-daily-1',
+      (select (payload->>'claim_id')::uuid from monetization_test_claim_daily),
+      '44444444-4444-4444-4444-444444444444',
+      'ca-app-pub-5274007212820203/7295784043',
+      2,
+      'points',
+      now()
+    )->>'credited'
+  )::boolean,
+  true,
+  'a verified daily completion callback credits exactly two points'
+);
+set local role postgres;
+select extensions.is(
+  (select balance from public.point_wallets
+   where user_id = '44444444-4444-4444-4444-444444444444')::integer,
+  9,
+  'the daily completion reward updates the cached wallet'
+);
+update public.reward_claim_requests
+set created_at = now() - interval '46 seconds'
+where user_id = '44444444-4444-4444-4444-444444444444';
+set local role authenticated;
+select set_config('request.jwt.claim.role', 'authenticated', true);
+select extensions.throws_ok(
+  $$select public.create_reward_claim_request(
+      'rewarded_interstitial', 'Asia/Baghdad'
+    )$$,
+  'P0001',
+  'REWARD_ALREADY_CLAIMED',
+  'the completion reward is limited to once per local calendar day'
+);
+
+select set_config(
+  'request.jwt.claim.sub',
+  '55555555-5555-5555-5555-555555555555',
+  true
+);
+select extensions.is(
+  (select count(*) from public.point_wallets)::integer,
+  1,
+  'RLS exposes only the caller wallet'
+);
+select set_config(
+  'request.jwt.claim.sub',
+  '44444444-4444-4444-4444-444444444444',
+  true
+);
+select extensions.lives_ok(
+  $$select public.record_monetization_event(
+      'points_debited', '{"source":"database_test"}'::jsonb
+    )$$,
+  'allowlisted analytics events can be recorded'
+);
+
+set local role postgres;
+select extensions.is(
+  (select count(*) from public.monetization_events
+   where event_name = 'points_debited')::integer,
+  1,
+  'analytics events are stored server-side'
+);
+select extensions.is(
+  (select wallet_cap from public.monetization_config where singleton),
+  20,
+  'the production wallet cap defaults to twenty'
+);
+select extensions.lives_ok(
+  $$update public.monetization_config set wallet_cap = 25 where singleton$$,
+  'the service-side wallet cap is remotely configurable'
+);
+select extensions.is(
+  (select wallet_cap from public.monetization_config where singleton),
+  25,
+  'a remote wallet cap update is persisted'
+);
+select extensions.lives_ok(
+  $$insert into public.point_transactions (
+      user_id, amount, balance_before, balance_after, transaction_type,
+      idempotency_key
+    ) values (
+      '44444444-4444-4444-4444-444444444444', 16, 8, 24,
+      'admin_adjustment', 'database-test-cap-24'
+    );
+    update public.point_wallets set balance = 24
+    where user_id = '44444444-4444-4444-4444-444444444444'$$,
+  'ledger and wallet storage accept a balance above the old fixed cap'
+);
+select extensions.is(
+  (select balance from public.point_wallets
+   where user_id = '44444444-4444-4444-4444-444444444444')::integer,
+  24,
+  'the remotely configured wallet cap is effective in storage'
+);
+delete from public.point_transactions
+where idempotency_key = 'database-test-cap-24';
+update public.point_wallets set balance = 8
+where user_id = '44444444-4444-4444-4444-444444444444';
+update public.monetization_config set wallet_cap = 20 where singleton;
+
+update public.point_wallets set balance = 0
+where user_id = '44444444-4444-4444-4444-444444444444';
+set local role authenticated;
+select set_config(
+  'request.jwt.claim.sub',
+  '44444444-4444-4444-4444-444444444444',
+  true
+);
+select set_config('request.jwt.claim.role', 'authenticated', true);
+select extensions.is(
+  (
+    public.create_task_with_point_debit(
+      jsonb_build_object(
+        'operation_id', '44444444-0000-0000-0000-000000000005',
+        'plan', jsonb_build_object(
+          'id', 'points-insufficient-task',
+          'asset_id', 'points-general-asset',
+          'title', 'Must not be created',
+          'recurrence_interval', 1,
+          'recurrence_unit', 'days',
+          'priority', 'low',
+          'next_due_date', now() + interval '1 day',
+          'health_group', 'other'
+        )
+      )
+    )->>'status'
+  ),
+  'insufficient_points',
+  'insufficient points are a structured task-creation business result'
+);
+select extensions.is(
+  (select count(*) from public.maintenance_plans
+   where id = 'points-insufficient-task')::integer,
+  0,
+  'a rejected debit leaves no task behind'
+);
+select extensions.is(
+  (
+    public.create_asset_with_point_debit(
+      jsonb_build_object(
+        'operation_id', '44444444-0000-0000-0000-000000000008',
+        'asset', jsonb_build_object(
+          'id', 'points-zero-wallet-asset',
+          'name', 'Created with zero points',
+          'asset_type', 'general',
+          'category_id', 'category_general',
+          'room_id', 'points-room'
+        )
+      )
+    )->>'charged'
+  )::integer,
+  0,
+  'asset creation succeeds with zero wallet balance at 0 points'
+);
+select extensions.is(
+  (select count(*) from public.assets
+   where id = 'points-zero-wallet-asset')::integer,
+  1,
+  'an asset is successfully created even with 0 points balance'
+);
+
+set local role postgres;
+update public.monetization_config
+set emergency_free_creation_mode = true
+where singleton;
+set local role authenticated;
+select set_config('request.jwt.claim.role', 'authenticated', true);
+select extensions.is(
+  (
+    public.create_task_with_point_debit(
+      jsonb_build_object(
+        'operation_id', '44444444-0000-0000-0000-000000000006',
+        'plan', jsonb_build_object(
+          'id', 'points-emergency-free-task',
+          'asset_id', 'points-general-asset',
+          'title', 'Emergency free task',
+          'recurrence_interval', 1,
+          'recurrence_unit', 'days',
+          'priority', 'low',
+          'next_due_date', now() + interval '1 day',
+          'health_group', 'other'
+        )
+      )
+    )->>'charged'
+  )::integer,
+  0,
+  'the emergency kill switch makes ordinary creation free'
+);
+select extensions.is(
+  (select count(*) from public.maintenance_plans
+   where id = 'points-emergency-free-task')::integer,
+  1,
+  'emergency free creation still commits the requested task atomically'
+);
+select extensions.is(
+  (select balance from public.point_wallets)::integer,
+  0,
+  'emergency free creation never creates point debt'
+);
+
+set local role postgres;
+update public.monetization_config
+set emergency_free_creation_mode = false, points_enabled = false
+where singleton;
+set local role authenticated;
+select set_config('request.jwt.claim.role', 'authenticated', true);
+select extensions.is(
+  (
+    public.create_task_with_point_debit(
+      jsonb_build_object(
+        'operation_id', '44444444-0000-0000-0000-000000000007',
+        'plan', jsonb_build_object(
+          'id', 'points-disabled-free-task',
+          'asset_id', 'points-general-asset',
+          'title', 'Points disabled free task',
+          'recurrence_interval', 1,
+          'recurrence_unit', 'days',
+          'priority', 'low',
+          'next_due_date', now() + interval '1 day',
+          'health_group', 'other'
+        )
+      )
+    )->>'charged'
+  )::integer,
+  0,
+  'the points kill switch makes ordinary creation free'
+);
+select extensions.is(
+  (select count(*) from public.maintenance_plans
+   where id = 'points-disabled-free-task')::integer,
+  1,
+  'points-disabled mode still commits the requested task'
+);
+
+set local role postgres;
+update public.monetization_config
+set points_enabled = true, rewarded_ads_enabled = false
+where singleton;
+update public.reward_claim_requests
+set created_at = now() - interval '46 seconds'
+where user_id = '44444444-4444-4444-4444-444444444444';
+set local role authenticated;
+select set_config('request.jwt.claim.role', 'authenticated', true);
+select extensions.throws_ok(
+  $$select public.create_reward_claim_request('rewarded_ad', 'Asia/Baghdad')$$,
+  'P0001',
+  'REWARDS_DISABLED',
+  'the rewarded-ad kill switch rejects new claims server-side'
+);
+set local role postgres;
+update public.monetization_config set rewarded_ads_enabled = true
+where singleton;
+set local role authenticated;
+select set_config('request.jwt.claim.role', 'authenticated', true);
+select extensions.throws_ok(
+  $$select public.record_monetization_event('not_allowed', '{}'::jsonb)$$,
+  '22023',
+  'INVALID_EVENT',
+  'analytics rejects unknown event names'
+);
+select extensions.throws_ok(
+  $$update public.point_wallets set balance = 20$$,
+  '42501',
+  null,
+  'clients cannot update their wallet through the Data API role'
+);
+
+-- CTC-001 & CTC-004 & CTR-003 tests
+set local role postgres;
+update public.point_wallets
+set balance = 1000
+where user_id = '44444444-4444-4444-4444-444444444444';
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '44444444-4444-4444-4444-444444444444', true);
+
+select extensions.is(
+  (
+    public.create_task_with_point_debit(
+      jsonb_build_object(
+        'operation_id', '44444444-0000-0000-0000-000000000088',
+        'plan', jsonb_build_object(
+          'id', 'ctc-001-metadata-task',
+          'asset_id', 'points-general-asset',
+          'title', 'Task with metadata',
+          'recurrence_interval', 1,
+          'recurrence_unit', 'days',
+          'priority', 'medium',
+          'next_due_date', now() + interval '1 day',
+          'health_group', 'other'
+        ),
+        'metadata', jsonb_build_object(
+          'task_type', 'inspection',
+          'location_label', 'Utility room',
+          'reminder_recommendation', 'Check monthly',
+          'required_materials', jsonb_build_array('Wrench', 'Screwdriver')
+        )
+      )
+    )->>'task_id'
+  ),
+  'ctc-001-metadata-task',
+  'create_task_with_point_debit handles metadata subquery without 42702 error (CTC-001)'
+);
+select extensions.is(
+  (
+    select jsonb_build_object(
+      'location_label', location_label,
+      'required_materials_json', required_materials_json,
+      'reminder_recommendation', reminder_recommendation
+    )
+    from public.maintenance_plan_metadata
+    where plan_id = 'ctc-001-metadata-task'
+  ),
+  '{"location_label":"Utility room","required_materials_json":"[\"Wrench\", \"Screwdriver\"]","reminder_recommendation":"Check monthly"}'::jsonb,
+  'task creation preserves Flutter maintenance metadata fields'
+);
+
+select extensions.throws_ok(
+  $$
+    with auth_setup as (
+      select set_config('request.jwt.claim.sub', '44444444-4444-4444-4444-444444444444', true)
+    )
+    select public.create_task_with_point_debit(
+      jsonb_build_object(
+        'operation_id', '44444444-0000-0000-0000-000000000088',
+        'plan', jsonb_build_object(
+          'id', 'different-task-id',
+          'asset_id', 'points-general-asset',
+          'title', 'Different task title',
+          'recurrence_interval', 1,
+          'recurrence_unit', 'days',
+          'priority', 'medium',
+          'next_due_date', now() + interval '1 day',
+          'health_group', 'other'
+        )
+      )
+    )
+    from auth_setup
+  $$,
+  '23505',
+  'OPERATION_ID_REUSED',
+  'reusing operation ID with a different payload is rejected (CTC-004)'
+);
+
+select extensions.throws_ok(
+  $$
+    with auth_setup as (
+      select set_config('request.jwt.claim.sub', '44444444-4444-4444-4444-444444444444', true)
+    )
+    select public.create_task_with_point_debit(
+      jsonb_build_object(
+        'operation_id', '44444444-0000-0000-0000-000000000089',
+        'plan', jsonb_build_object(
+          'id', 'ctr-003-invalid-meta-task',
+          'asset_id', 'points-general-asset',
+          'title', 'Invalid metadata task',
+          'recurrence_interval', 1,
+          'recurrence_unit', 'days',
+          'priority', 'medium',
+          'next_due_date', now() + interval '1 day',
+          'health_group', 'other'
+        ),
+        'metadata', jsonb_build_object(
+          'required_materials', 'not-an-array'
+        )
+      )
+    )
+    from auth_setup
+  $$,
+  '22023',
+  'INVALID_TASK_PAYLOAD',
+  'invalid non-array metadata fields are rejected (CTR-003)'
+);
+
+select * from extensions.finish();
+rollback;

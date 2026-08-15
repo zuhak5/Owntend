@@ -1,0 +1,108 @@
+/* Mobile sticky-download layout correction. */
+.sticky-inner {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+}
+
+.sticky-copy,
+.sticky-copy.has-build-context {
+  width: auto !important;
+  max-width: none !important;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "stable context"
+    "version version";
+  align-items: center;
+  column-gap: 8px;
+  row-gap: 2px;
+  line-height: 1.18;
+}
+
+.sticky-copy:not(.has-build-context) {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    "stable"
+    "version";
+}
+
+.sticky-copy small {
+  grid-area: stable;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.68rem;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sticky-copy strong {
+  grid-area: version;
+  min-width: 0;
+  max-width: 100%;
+  overflow: visible;
+  color: var(--ink);
+  font-size: clamp(0.9rem, 3.8vw, 1rem);
+  line-height: 1.2;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+
+.sticky-build-context {
+  grid-area: context;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sticky-build-context[hidden],
+.sticky-copy:not(.has-build-context) .sticky-build-context {
+  display: none !important;
+}
+
+.sticky-inner .button {
+  flex: none;
+  min-width: 142px;
+  white-space: nowrap;
+}
+
+@media (max-width: 460px) {
+  .sticky-inner {
+    gap: 10px;
+  }
+
+  .sticky-copy,
+  .sticky-copy.has-build-context {
+    width: auto !important;
+    max-width: none !important;
+  }
+
+  .sticky-inner .button {
+    min-width: 136px;
+    padding-inline: 12px;
+  }
+}
+
+@media (max-width: 360px) {
+  .sticky-build-context {
+    display: none !important;
+  }
+
+  .sticky-copy.has-build-context {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "stable"
+      "version";
+  }
+
+  .sticky-inner .button {
+    min-width: 126px;
+    font-size: 0.82rem;
+  }
+}

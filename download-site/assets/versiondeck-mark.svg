@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title">
+  <title id="title">VersionDeck</title>
+  <rect width="256" height="256" rx="58" fill="#111827"/>
+  <path d="M64 70 128 190 192 70" fill="none" stroke="#fff" stroke-width="27" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M92 59h72" fill="none" stroke="#3b82f6" stroke-width="18" stroke-linecap="round"/>
+</svg>

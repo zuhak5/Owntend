@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Owntend Canonical Toolchain Specification",
+  "schemaVersion": 1,
+  "lastReviewedUtc": "2026-08-15T00:00:00Z",
+  "reviewedBy": "zuhak5",
+  "description": "Authoritative machine-readable canonical toolchain specification for Owntend validation, APK, AAB, and VersionDeck release rails. All workflows, build scripts, and verification tools consume or validate against this specification to guarantee deterministic, reproducible release builds.",
+  "canonicalToolchain": {
+    "flutter": {
+      "version": "3.47.0",
+      "channel": "stable"
+    },
+    "dart": {
+      "sdkConstraint": "^3.13.0"
+    },
+    "java": {
+      "version": "17",
+      "distribution": "temurin"
+    },
+    "node": {
+      "version": "24"
+    },
+    "deno": {
+      "version": "2.9.3"
+    },
+    "android": {
+      "compileSdkVersion": 37,
+      "targetSdkVersion": 36,
+      "minSdkVersion": 24,
+      "buildToolsVersion": "36.0.0",
+      "agpVersion": "9.3.0",
+      "kotlinVersion": "2.4.10",
+      "gradleDistribution": "9.6.1-bin",
+      "gradleDistributionSha256": "9c0f7faeeb306cb14e4279a3e084ca6b596894089a0638e68a07c945a32c9e14"
+    },
+    "tools": {
+      "sentryCli": "2.58.6",
+      "supabaseCli": "2.114.0"
+    },
+    "runner": {
+      "os": "windows-latest",
+      "shell": "pwsh"
+    }
+  }
+}

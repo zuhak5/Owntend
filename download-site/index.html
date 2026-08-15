@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#111827">
+  <meta name="description" content="VersionDeck is the official download page for independently verified Owntend Android releases, changelogs, checksums, and signing details.">
+  <meta name="color-scheme" content="light dark">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'; upgrade-insecure-requests">
+  <meta property="og:title" content="VersionDeck — Owntend Releases">
+  <meta property="og:description" content="Download verified Owntend APK releases and inspect their checksums, signer identity, and commit.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://owntend.app/">
+  <meta property="og:image" content="https://owntend.app/assets/versiondeck-512.png">
+  <meta name="twitter:card" content="summary">
+  <link rel="canonical" href="https://owntend.app/">
+  <title>VersionDeck — Owntend Releases</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="assets/versiondeck-mark.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/versiondeck-192.png">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="enhancements.css">
+  <link rel="stylesheet" href="security.css?v=archive-actions-grid-1">
+  <link rel="stylesheet" href="build-status.css?v=live-card-2">
+  <link rel="stylesheet" href="build-status-ui.css?v=mobile-ui-1">
+  <link rel="stylesheet" href="build-status-timeline.css?v=timeline-1">
+  <link rel="stylesheet" href="sticky-download-fix.css?v=sticky-1">
+  <script type="module" src="app.js"></script>
+  <script type="module" src="build-status.js?v=live-card-2"></script>
+  <script type="module" src="build-status-ui.js?v=mobile-ui-1"></script>
+  <script type="module" src="build-status-timeline.js?v=timeline-1"></script>
+  <script type="module" src="sticky-download-fix.js?v=sticky-1"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="topbar">
+    <div class="container topbar-inner">
+      <a class="brand" href="./" aria-label="VersionDeck home">
+        <img src="assets/versiondeck-mark.svg" width="34" height="34" alt="">
+        <span>VersionDeck</span>
+      </a>
+
+      <nav class="topbar-actions" aria-label="Primary navigation">
+        <a href="#releases">Versions</a>
+        <button class="install-button text-button" type="button" hidden>Install</button>
+      </nav>
+    </div>
+  </header>
+
+  <p id="release-status" class="visually-hidden" role="status" aria-live="polite"></p>
+  <p id="build-announcer" class="visually-hidden" role="status" aria-live="polite"></p>
+
+  <div id="stale-banner" class="system-banner stale-banner" hidden>
+    <div class="container">
+      <strong>Cached release information</strong>
+      <span id="stale-banner-text"></span>
+    </div>
+  </div>
+
+  <div id="update-notice" class="system-banner update-banner" hidden>
+    <div class="container update-banner-inner">
+      <span>A new VersionDeck version is available.</span>
+      <button id="update-button" class="text-button" type="button">Update now</button>
+    </div>
+  </div>
+
+  <main id="main">
+    <section class="hero container">
+      <p class="kicker">Official Owntend releases</p>
+      <h1>Download Owntend.</h1>
+      <p class="hero-copy">
+        Get a verified Android APK, inspect its checksum, production signing identity, and release commit, or return to an earlier version.
+      </p>
+    </section>
+
+    <section id="build-progress-section" class="container build-progress-section" aria-labelledby="build-progress-heading" data-state="inactive" hidden>
+      <div class="build-progress-card">
+        <div class="build-progress-header">
+          <div>
+            <p class="section-label">Live production build</p>
+            <h2 id="build-progress-heading">Building Owntend APK</h2>
+          </div>
+          <div class="build-progress-run-group">
+            <span id="build-progress-meta" class="build-progress-meta">Waiting for live status</span>
+          </div>
+        </div>
+
+        <div class="build-progress-live">
+          <span class="build-progress-motion" aria-hidden="true"></span>
+          <div>
+            <span id="build-progress-status-label" class="build-progress-status-label">Production build in progress</span>
+            <strong id="build-progress-phase" class="build-progress-phase">Preparing the build</strong>
+            <small id="build-progress-step" class="build-progress-step">Preparing production build</small>
+          </div>
+        </div>
+
+        <div class="build-progress-track-row">
+          <div id="build-progress-track" class="build-progress-track" role="progressbar" aria-label="Production build progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-valuetext="Preparing step list">
+            <span id="build-progress-bar" class="build-progress-bar"></span>
+          </div>
+          <strong id="build-progress-percent" class="build-progress-percent">0%</strong>
+        </div>
+
+        <div class="build-progress-metrics">
+          <div class="build-progress-metric">
+            <span>Progress</span>
+            <strong id="build-progress-summary">Preparing step list</strong>
+            <small id="build-progress-remaining">Step count is loading</small>
+          </div>
+          <div class="build-progress-metric">
+            <span>Estimated time left</span>
+            <strong id="build-progress-eta">Calculating…</strong>
+            <small id="build-progress-basis">Estimate improves after successful builds</small>
+          </div>
+        </div>
+
+        <p id="build-progress-elapsed" class="build-progress-timing">Start time unavailable</p>
+
+        <ol id="build-progress-preview" class="build-progress-preview" aria-label="Current build step context"></ol>
+
+        <div class="build-progress-actions" aria-label="Build alert preferences">
+          <button id="build-progress-alerts" class="build-setting" type="button" aria-pressed="false">
+            <span class="build-setting-copy">
+              <strong>Spoken build updates</strong>
+              <small>Read step changes aloud while VersionDeck remains open.</small>
+            </span>
+            <span class="build-setting-control">
+              <span id="build-progress-alerts-state" class="build-setting-state">Off</span>
+              <span class="build-switch" aria-hidden="true"></span>
+            </span>
+          </button>
+
+          <button id="build-progress-notifications" class="build-setting" type="button" aria-pressed="false">
+            <span class="build-setting-copy">
+              <strong>Desktop notifications</strong>
+              <small>Show build updates when this page is open in the background.</small>
+            </span>
+            <span class="build-setting-control">
+              <span id="build-progress-notifications-state" class="build-setting-state">Off</span>
+              <span class="build-switch" aria-hidden="true"></span>
+            </span>
+          </button>
+
+          <p class="build-progress-privacy">Visual and screen-reader updates are always enabled. Spoken and desktop alerts are stored only in this browser.</p>
+        </div>
+
+        <details class="build-progress-details">
+          <summary id="build-progress-details-summary">View technical steps</summary>
+          <ol id="build-progress-step-list" class="build-progress-step-list"></ol>
+        </details>
+      </div>
+    </section>
+
+    <noscript>
+      <section class="container no-script-note">
+        <h2>JavaScript is required for verified release data</h2>
+        <p>VersionDeck validates its generated release manifest in your browser.</p>
+      </section>
+    </noscript>
+
+    <section class="container latest-section" aria-labelledby="latest-heading">
+      <div class="section-header">
+        <div>
+          <p class="section-label">Current version</p>
+          <h2 id="latest-heading">Latest stable release</h2>
+        </div>
+
+        <button id="refresh-button" class="refresh-button" type="button" aria-label="Refresh verified releases">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20 11a8 8 0 0 0-14.9-3M4 4v5h5M4 13a8 8 0 0 0 14.9 3M20 20v-5h-5"/>
+          </svg>
+          <span>Refresh</span>
+        </button>
+      </div>
+
+      <article id="latest-card" class="latest-card loading-card" aria-busy="true">
+        <div class="skeleton skeleton-small"></div>
+        <div class="skeleton skeleton-title"></div>
+        <div class="skeleton skeleton-line"></div>
+        <div class="skeleton skeleton-line skeleton-short"></div>
+        <div class="skeleton skeleton-button"></div>
+      </article>
+    </section>
+
+    <section id="releases" class="container releases-section" aria-labelledby="releases-heading">
+      <div class="section-header archive-header">
+        <div>
+          <p class="section-label">Archive</p>
+          <h2 id="releases-heading">Verified versions</h2>
+        </div>
+        <p id="release-count" class="release-count">Loading releases…</p>
+      </div>
+
+      <div id="release-list" class="release-list">
+        <article class="release-card loading-card">
+          <div class="skeleton skeleton-title"></div>
+          <div class="skeleton skeleton-line"></div>
+        </article>
+        <article class="release-card loading-card">
+          <div class="skeleton skeleton-title"></div>
+          <div class="skeleton skeleton-line"></div>
+        </article>
+      </div>
+    </section>
+
+    <aside class="container verification-note">
+      <div>
+        <strong>Verify before installing</strong>
+        <p>VersionDeck independently checks the APK hash, Android package metadata, production signer, and release commit before enabling a download.</p>
+      </div>
+    </aside>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-inner">
+      <p><strong>VersionDeck</strong> · Owntend releases and verified downloads</p>
+      <p><a href="account-deletion.html">Delete an Owntend account</a></p>
+    </div>
+  </footer>
+
+  <div id="sticky-download" class="sticky-download" hidden>
+    <div class="container sticky-inner">
+      <div class="sticky-copy">
+        <small>Current stable APK</small>
+        <strong id="sticky-version">Owntend</strong>
+      </div>
+      <a id="sticky-download-link" class="button button-primary" href="#latest-heading">Download APK</a>
+    </div>
+  </div>
+
+  <template id="release-template">
+    <article class="release-card">
+      <div class="release-row">
+        <div class="release-main">
+          <div class="release-title-row">
+            <h3 class="release-title"></h3>
+            <span class="release-label"></span>
+          </div>
+          <p class="release-meta"></p>
+        </div>
+
+        <div class="release-row-actions">
+          <a class="archive-download button button-secondary" href="./">Download</a>
+          <button class="details-toggle text-button" type="button" aria-expanded="false">Show changes</button>
+        </div>
+      </div>
+
+      <div class="release-details" hidden>
+        <p class="archive-exact-date exact-date"></p>
+        <div class="changelog"></div>
+        <div class="release-links"></div>
+        <div class="archive-verification"></div>
+      </div>
+    </article>
+  </template>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <div id="build-toast" class="build-toast" data-kind="info" role="status" aria-live="polite" aria-hidden="true">
+    <div class="build-toast-inner">
+      <span class="build-toast-indicator" aria-hidden="true"></span>
+      <span id="build-toast-message" class="build-toast-message"></span>
+      <button id="build-toast-dismiss" class="build-toast-dismiss" type="button">Dismiss</button>
+    </div>
+  </div>
+</body>
+</html>

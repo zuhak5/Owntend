@@ -1,0 +1,86 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# The .vscode folder contains launch configuration and tasks you configure in
+# VS Code which you may wish to be included in version control, so this line
+# is commented out by default.
+#.vscode/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+/android/build/
+/android/.kotlin/
+/coverage/
+/test/failures/
+/.tmp-owntend-build/
+/.tmp-*
+/artifacts/
+/output/
+/dist/
+/*.zip
+/.agents/
+/.codex-remote-attachments/
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+# Android release signing secrets
+/android/key.properties
+/android/app/*.jks
+/android/app/*.keystore
+/android/app/*.p12
+/android/app/google-services.json
+/android/app/src/*/google-services.json
+
+# JavaScript tooling
+/node_modules/
+
+# Supabase CLI state
+/supabase/.temp/
+/supabase/.branches/
+
+# Local build configuration. Commit examples and registries only.
+/config/*.json
+!/config/*.example.json
+!/config/toolchain.json
+!/config/asset_provenance.json
+/.env
+/.env.*
+/supabase/.env
+!/supabase/.env.example
+
+# JavaScript dependencies
+node_modules/
+
+/supabase/migration_backup/

@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 4,
+  "generatedAt": "2026-08-15T00:00:00.000Z",
+  "leaseExpiresAt": "2026-08-16T00:00:00.000Z",
+  "generatorCommit": "0000000000000000000000000000000000000000",
+  "repository": "owntend/mobile",
+  "package": {
+    "name": "app.owntend.mobile",
+    "signerCertificateSha256": "3E:98:0E:B5:BB:68:A5:19:90:E7:70:56:D4:E1:09:95:B2:E0:4F:B3:88:A7:34:42:B7:9A:46:C8:53:36:1E:51"
+  },
+  "publication": {
+    "status": "disabled",
+    "reasonCode": "pre-release",
+    "message": "Owntend 1.0.0 is in active pre-release preparation. Downloads will be enabled upon initial publication.",
+    "updatedAt": "2026-08-15T00:00:00Z"
+  },
+  "latestStableReleaseId": null,
+  "latestPrereleaseReleaseId": null,
+  "releases": []
+}

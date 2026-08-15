@@ -1,0 +1,396 @@
+import 'dart:io';
+
+import 'package:drift/drift.dart' hide isNull, isNotNull;
+import 'package:drift/native.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:owntend/src/core/data/repositories.dart';
+import 'package:owntend/src/core/database/app_database.dart';
+import 'package:owntend/src/core/domain/models.dart';
+import 'package:owntend/src/core/sync/local_sync_store.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
+
+class FakePathProviderPlatform extends PathProviderPlatform {
+  FakePathProviderPlatform(this.tempDir);
+  final Directory tempDir;
+
+  @override
+  Future<String?> getApplicationDocumentsPath() async => tempDir.path;
+  @override
+  Future<String?> getApplicationSupportPath() async => tempDir.path;
+  @override
+  Future<String?> getTemporaryPath() async => tempDir.path;
+}
+
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  late AppDatabase db;
+  late DriftAssetRepository assetRepo;
+  late DriftMaintenanceRepository maintenanceRepo;
+  late DriftSearchRepository searchRepo;
+  late LocalSyncStore syncStore;
+  late Directory tempDir;
+
+  setUp(() async {
+    tempDir = await Directory.systemTemp.createTemp('owntend_test_');
+    PathProviderPlatform.instance = FakePathProviderPlatform(tempDir);
+    db = AppDatabase(executor: NativeDatabase.memory());
+    assetRepo = DriftAssetRepository(db);
+    maintenanceRepo = DriftMaintenanceRepository(db);
+    searchRepo = DriftSearchRepository(db);
+    syncStore = LocalSyncStore(db);
+  });
+
+  tearDown(() async {
+    await db.close();
+    if (await tempDir.exists()) {
+      await tempDir.delete(recursive: true);
+    }
+  });
+
+  group('Trash and Empty Trash Lifecycle', () {
+    test('emptyTrash cascades across all trashed entities and purges photo files', () async {
+      // 1. Setup active area, room, asset, plan, and photo
+      final areaId = await assetRepo.saveArea(
+        name: 'Basement',
+        kind: AreaKind.indoor,
+      );
+      final roomId = await assetRepo.saveRoom(
+        areaId: areaId,
+        name: 'Storage Room',
+      );
+      final categories = await assetRepo.listCategories();
+      final assetId = await assetRepo.saveAsset(
+        name: 'Dehumidifier',
+        categoryId: categories.first.id,
+        roomId: roomId,
+        assetType: AssetType.device,
+        deviceDetails: const DeviceDetails(
+          brand: 'Frigidaire',
+          model: 'FFAD5033W1',
+        ),
+      );
+
+      // Create a fake photo file
+      final photoFile = File(p.join(tempDir.path, 'source_photo.jpg'));
+      await photoFile.writeAsString('fake_image_content');
+      await assetRepo.addPhoto(assetId, photoFile.path);
+
+      // Create a maintenance plan and complete it once
+      final planDueDate = DateTime.utc(2026, 8, 20, 10, 0, 0);
+      final planId = await maintenanceRepo.savePlan(
+        assetId: assetId,
+        title: 'Empty Water Bucket',
+        recurrence: const RecurrenceRule(
+          interval: 3,
+          unit: RecurrenceUnit.days,
+        ),
+        priority: PriorityLevel.high,
+        nextDueDate: planDueDate,
+        healthGroup: HealthGroup.appliances,
+      );
+      await maintenanceRepo.completePlan(
+        planId,
+        completedAt: DateTime.utc(2026, 8, 20, 9, 0, 0),
+      );
+
+      await searchRepo.rebuildIndex();
+      final initialSearchResults = await searchRepo.search('Dehumidifier');
+      expect(initialSearchResults, isNotEmpty);
+
+      // 2. Trash the area (cascading soft delete)
+      await assetRepo.trashArea(areaId);
+
+      // Verify soft delete state
+      final trashedAreas = await assetRepo.listArchivedAreas();
+      expect(trashedAreas.map((a) => a.id), contains(areaId));
+
+      final activeTasks = await maintenanceRepo.listTasks();
+      expect(activeTasks.any((t) => t.plan.id == planId), isFalse);
+
+      await searchRepo.rebuildIndex();
+      final searchAfterTrash = await searchRepo.search('Dehumidifier');
+      expect(searchAfterTrash, isEmpty);
+
+      // 3. Call emptyTrash
+      await assetRepo.emptyTrash();
+
+      // Verify all database tables are completely purged of the deleted records
+      expect(await assetRepo.listArchivedAreas(), isEmpty);
+      expect(await assetRepo.listArchivedRooms(), isEmpty);
+      expect(await assetRepo.listArchivedAssets(), isEmpty);
+      expect(await maintenanceRepo.listArchivedTasks(), isEmpty);
+      expect(
+        await (db.select(db.areas)..where((r) => r.id.equals(areaId))).get(),
+        isEmpty,
+      );
+      expect(
+        await (db.select(db.rooms)..where((r) => r.id.equals(roomId))).get(),
+        isEmpty,
+      );
+      expect(
+        await (db.select(db.assets)..where((r) => r.id.equals(assetId))).get(),
+        isEmpty,
+      );
+      expect(
+        await (db.select(
+          db.maintenancePlans,
+        )..where((r) => r.id.equals(planId))).get(),
+        isEmpty,
+      );
+      expect(
+        await (db.select(
+          db.maintenanceRecords,
+        )..where((r) => r.planId.equals(planId))).get(),
+        isEmpty,
+      );
+      expect(
+        await (db.select(
+          db.deviceDetailsTable,
+        )..where((r) => r.assetId.equals(assetId))).get(),
+        isEmpty,
+      );
+      expect(
+        await (db.select(
+          db.assetPhotos,
+        )..where((r) => r.assetId.equals(assetId))).get(),
+        isEmpty,
+      );
+
+      // Verify photo directory on disk was deleted
+      final assetPhotoDir = Directory(p.join(tempDir.path, 'photos', assetId));
+      expect(await assetPhotoDir.exists(), isFalse);
+    });
+  });
+
+  group('Recurrence Invariants & Early Completion', () {
+    test('Early completion advances nextDueDate past previousDueDate', () async {
+      final areaId = await assetRepo.saveArea(
+        name: 'Garage',
+        kind: AreaKind.indoor,
+      );
+      final roomId = await assetRepo.saveRoom(
+        areaId: areaId,
+        name: 'Main Garage',
+      );
+      final categories = await assetRepo.listCategories();
+      final assetId = await assetRepo.saveAsset(
+        name: 'Lawn Mower',
+        categoryId: categories.first.id,
+        roomId: roomId,
+      );
+
+      final scheduledDueDate = DateTime.utc(2026, 8, 30, 12, 0, 0);
+      final planId = await maintenanceRepo.savePlan(
+        assetId: assetId,
+        title: 'Oil Check',
+        recurrence: const RecurrenceRule(
+          interval: 7,
+          unit: RecurrenceUnit.days,
+        ),
+        priority: PriorityLevel.medium,
+        nextDueDate: scheduledDueDate,
+        healthGroup: HealthGroup.appliances,
+      );
+
+      // Complete 10 days early on Aug 20
+      final earlyCompletedAt = DateTime.utc(2026, 8, 20, 10, 0, 0);
+      final result = await maintenanceRepo.completePlanResult(
+        planId,
+        completedAt: earlyCompletedAt,
+        expectedNextDueDate: scheduledDueDate,
+      );
+
+      expect(result.isApplied, isTrue);
+
+      final updatedTask = await maintenanceRepo.getTask(planId);
+      expect(updatedTask, isNotNull);
+
+      // nextDueDate must be strictly after the scheduledDueDate being completed
+      expect(
+        updatedTask!.plan.nextDueDate.isAfter(scheduledDueDate),
+        isTrue,
+        reason:
+            'nextDueDate must strictly advance past the completed occurrence',
+      );
+      expect(
+        updatedTask.plan.nextDueDate.toUtc(),
+        equals(DateTime.utc(2026, 9, 6, 12, 0, 0)),
+      );
+    });
+  });
+
+  group('Undo Completion Pre-Sync and Post-Sync', () {
+    test(
+      'Undo pre-sync removes outbox composite and restores previousDueDate',
+      () async {
+        final areaId = await assetRepo.saveArea(
+          name: 'Living Room',
+          kind: AreaKind.indoor,
+        );
+        final roomId = await assetRepo.saveRoom(
+          areaId: areaId,
+          name: 'Living Room',
+        );
+        final categories = await assetRepo.listCategories();
+        final assetId = await assetRepo.saveAsset(
+          name: 'AC Unit',
+          categoryId: categories.first.id,
+          roomId: roomId,
+        );
+
+        final initialDue = DateTime.utc(2026, 8, 15, 10, 0, 0);
+        final planId = await maintenanceRepo.savePlan(
+          assetId: assetId,
+          title: 'Filter Cleaning',
+          recurrence: const RecurrenceRule(
+            interval: 14,
+            unit: RecurrenceUnit.days,
+          ),
+          priority: PriorityLevel.medium,
+          nextDueDate: initialDue,
+          healthGroup: HealthGroup.appliances,
+        );
+
+        await maintenanceRepo.completePlan(planId, completedAt: initialDue);
+
+        // Verify outbox has the completion mutation
+        final outboxBefore = await (db.select(
+          db.syncOutbox,
+        )..where((r) => r.entity.equals('maintenance_completion'))).get();
+        expect(outboxBefore, hasLength(1));
+
+        // Call undo
+        await maintenanceRepo.undoLastCompletion(planId, initialDue);
+
+        // Outbox composite must be deleted
+        final outboxAfter = await (db.select(
+          db.syncOutbox,
+        )..where((r) => r.entity.equals('maintenance_completion'))).get();
+        expect(outboxAfter, isEmpty);
+
+        // Records must be deleted and plan nextDueDate restored
+        final records = await maintenanceRepo.listRecordsForPlan(planId);
+        expect(records, isEmpty);
+
+        final restoredTask = await maintenanceRepo.getTask(planId);
+        expect(restoredTask!.plan.nextDueDate.toUtc(), equals(initialDue));
+      },
+    );
+
+    test('Undo post-sync deletes record locally, enqueues delete to sync outbox, and restores plan', () async {
+      final areaId = await assetRepo.saveArea(
+        name: 'Office',
+        kind: AreaKind.indoor,
+      );
+      final roomId = await assetRepo.saveRoom(areaId: areaId, name: 'Office');
+      final categories = await assetRepo.listCategories();
+      final assetId = await assetRepo.saveAsset(
+        name: 'Desk Lamp',
+        categoryId: categories.first.id,
+        roomId: roomId,
+      );
+
+      final initialDue = DateTime.utc(2026, 8, 15, 10, 0, 0);
+      final planId = await maintenanceRepo.savePlan(
+        assetId: assetId,
+        title: 'Bulb Check',
+        recurrence: const RecurrenceRule(
+          interval: 30,
+          unit: RecurrenceUnit.days,
+        ),
+        priority: PriorityLevel.low,
+        nextDueDate: initialDue,
+        healthGroup: HealthGroup.other,
+      );
+
+      await maintenanceRepo.completePlan(planId, completedAt: initialDue);
+
+      // Simulate that the sync outbox was already processed and purged
+      await db.delete(db.syncOutbox).go();
+
+      // Call undo post-sync
+      await maintenanceRepo.undoLastCompletion(planId, initialDue);
+
+      // Local maintenance record must be deleted
+      final records = await maintenanceRepo.listRecordsForPlan(planId);
+      expect(records, isEmpty);
+
+      // Plan nextDueDate must be restored
+      final task = await maintenanceRepo.getTask(planId);
+      expect(task!.plan.nextDueDate.toUtc(), equals(initialDue));
+
+      // Mutation outbox triggers must have captured the record deletion and plan update
+      final outboxMutations = await db.select(db.syncOutbox).get();
+      expect(
+        outboxMutations.any(
+          (r) => r.entity == 'maintenance_record' && r.operation == 'delete',
+        ),
+        isTrue,
+      );
+      expect(
+        outboxMutations.any(
+          (r) => r.entity == 'maintenance_plan' && r.operation == 'upsert',
+        ),
+        isTrue,
+      );
+    });
+  });
+
+  group('Account Deletion & Data Isolation', () {
+    test('clearAllAccountData purges all tables including reconciliation requests and search index', () async {
+      final areaId = await assetRepo.saveArea(
+        name: 'Kitchen',
+        kind: AreaKind.indoor,
+      );
+      final roomId = await assetRepo.saveRoom(areaId: areaId, name: 'Kitchen');
+      final categories = await assetRepo.listCategories();
+      final assetId = await assetRepo.saveAsset(
+        name: 'Refrigerator',
+        categoryId: categories.first.id,
+        roomId: roomId,
+      );
+
+      final planId = await maintenanceRepo.savePlan(
+        assetId: assetId,
+        title: 'Clean Coils',
+        recurrence: const RecurrenceRule(
+          interval: 6,
+          unit: RecurrenceUnit.months,
+        ),
+        priority: PriorityLevel.high,
+        nextDueDate: DateTime.utc(2026, 9, 1),
+        healthGroup: HealthGroup.appliances,
+      );
+
+      // Insert a notification reconciliation request
+      await db
+          .into(db.notificationReconciliationRequests)
+          .insert(
+            NotificationReconciliationRequestsCompanion.insert(
+              scopeKey: 'plan:$planId',
+              planId: Value(planId),
+              reason: 'test_reason',
+            ),
+          );
+
+      await searchRepo.rebuildIndex();
+      expect(await searchRepo.search('Refrigerator'), isNotEmpty);
+
+      // Clear all account data
+      await syncStore.clearAllAccountData();
+
+      // Verify all tables and indexes are empty
+      expect(await db.select(db.areas).get(), isEmpty);
+      expect(await db.select(db.rooms).get(), isEmpty);
+      expect(await db.select(db.assets).get(), isEmpty);
+      expect(await db.select(db.maintenancePlans).get(), isEmpty);
+      expect(
+        await db.select(db.notificationReconciliationRequests).get(),
+        isEmpty,
+      );
+      expect(await searchRepo.search('Refrigerator'), isEmpty);
+    });
+  });
+}

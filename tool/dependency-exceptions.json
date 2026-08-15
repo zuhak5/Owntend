@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Owntend Dependency Security and License Exception Registry",
+  "version": 1,
+  "lastReviewedUtc": "2026-08-14T00:00:00Z",
+  "reviewedBy": "zuhak5",
+  "description": "Authoritative registry for time-bounded, owner-approved dependency security and license exceptions. Every exception requires explicit business/technical rationale, named owner sign-off, maximum severity ceiling, and hard expiration date. Indefinite or unowned exceptions fail closed.",
+  "exceptions": [
+    {
+      "packageName": "dbus",
+      "ecosystem": "pub",
+      "reason": "Canonical dbus 0.7.13 is an LGPL-3.0-or-later transitive Linux desktop platform dependency required by flutter_secure_storage_linux and app_links_linux. It is scoped to Linux desktop support and is not compiled, linked, or bundled into Android production APK or AAB artifacts.",
+      "approvedBy": "zuhak5",
+      "expiresAtUtc": "2027-08-14T00:00:00Z",
+      "maxAllowedSeverity": "low"
+    }
+  ]
+}

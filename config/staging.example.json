@@ -1,0 +1,11 @@
+{
+  "APP_ENV": "staging",
+  "SUPABASE_URL": "https://YOUR_PROJECT.supabase.co",
+  "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_YOUR_KEY",
+  "GOOGLE_WEB_CLIENT_ID": "YOUR_CLIENT_ID.apps.googleusercontent.com",
+  "ADMOB_TEST_DEVICE_IDS": "",
+  "ADMOB_CONSENT_DEBUG_GEOGRAPHY": "",
+  "SENTRY_ENABLED": true,
+  "SENTRY_DSN": "https://PUBLIC_KEY@ORG.ingest.de.sentry.io/PROJECT_ID",
+  "SENTRY_TRACES_SAMPLE_RATE": "1.0"
+}

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="owntend_ad_surface">#0D2118</color>
+    <color name="owntend_ad_border">#234034</color>
+    <color name="owntend_ad_text_primary">#F4F8F5</color>
+    <color name="owntend_ad_text_secondary">#AAB8B0</color>
+    <color name="owntend_ad_badge_background">#104F2D</color>
+    <color name="owntend_ad_badge_text">#C5F8D6</color>
+    <color name="owntend_ad_cta_background">#54DA88</color>
+    <color name="owntend_ad_cta_text">#032B17</color>
+</resources>

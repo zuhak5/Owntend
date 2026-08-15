@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#111827">
+  <meta name="description" content="Permanently delete your Owntend cloud account and associated data without reinstalling the app.">
+  <meta name="color-scheme" content="light dark">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src https://iajvkvvvhwjdiuaufymh.supabase.co; base-uri 'none'; form-action 'none'; object-src 'none'; frame-src 'none'; manifest-src 'none'; upgrade-insecure-requests">
+  <link rel="canonical" href="https://owntend.app/account-deletion.html">
+  <title>Account Deletion &mdash; Owntend</title>
+  <link rel="icon" href="assets/versiondeck-mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="account-deletion.css?v=__ACCOUNT_DELETION_ASSET_REVISION__">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="topbar">
+    <div class="container topbar-inner">
+      <a class="brand" href="./" aria-label="VersionDeck home">
+        <img src="assets/versiondeck-mark.svg" width="34" height="34" alt="">
+        <span>Owntend</span>
+      </a>
+      <nav class="topbar-actions" aria-label="Navigation">
+        <a href="./">Releases</a>
+        <a href="PRIVACY.md" target="_blank" rel="noopener noreferrer">Privacy</a>
+        <a href="mailto:support@owntend.app" target="_blank" rel="noopener noreferrer">Support</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main" class="container deletion-container">
+    <section class="card deletion-card" aria-labelledby="deletion-heading">
+      <h1 id="deletion-heading">Owntend Account &amp; Data Deletion</h1>
+      <p class="lead">
+        Sign in with the Google account linked to Owntend to permanently delete its cloud account and synchronized data.
+      </p>
+
+      <div class="info-box">
+        <h2>What will be deleted?</h2>
+        <ul>
+          <li>Your Owntend authentication account and its link to your Google identity.</li>
+          <li>Your synchronized homes, rooms, assets, maintenance records, and related cloud data.</li>
+          <li>Your photos and other media stored in Owntend private cloud storage.</li>
+        </ul>
+
+        <h2>What is outside this request?</h2>
+        <p>
+          Backups you exported outside Owntend are not controlled by this request. Data independently processed by Google or other service providers is governed by their policies. This browser flow cannot remove Owntend authorization from your Google Account; you may revoke it separately in your Google Account settings.
+        </p>
+      </div>
+
+      <div class="instructions-box">
+        <h2>Other deletion method</h2>
+        <p>You can also delete your account in Owntend under Settings &rarr; Account &rarr; Delete Account.</p>
+      </div>
+
+      <div class="action-box">
+        <h2>Delete from the web</h2>
+        <p id="deletion-status" class="status-message" role="status" aria-live="polite">
+          Sign in to verify ownership before continuing.
+        </p>
+
+        <form id="deletion-form" novalidate>
+          <button type="button" id="btn-authenticate" class="btn primary-btn">
+            Continue with Google
+          </button>
+
+          <button type="button" id="btn-check-status" class="btn secondary-btn" hidden>
+            Check deletion status
+          </button>
+
+          <p id="authenticated-identity" class="authenticated-identity" hidden></p>
+
+          <fieldset id="deletion-confirmation" class="confirmation-group" hidden>
+            <legend>Permanent deletion confirmation</legend>
+            <label for="confirm-deletion" class="confirmation-label">
+              <input type="checkbox" id="confirm-deletion">
+              <span>I understand that this permanently deletes my Owntend cloud account and synchronized data and cannot be undone.</span>
+            </label>
+          </fieldset>
+
+          <button type="button" id="btn-delete" class="btn danger-btn" hidden disabled>
+            Permanently delete my account
+          </button>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-inner">
+      <p>Owntend &mdash; Household asset organization and maintenance.</p>
+      <p>
+        <a href="PRIVACY.md" target="_blank" rel="noopener noreferrer">Privacy policy</a>
+        <span aria-hidden="true">&middot;</span>
+        <a href="mailto:support@owntend.app" target="_blank" rel="noopener noreferrer">Contact support</a>
+      </p>
+    </div>
+  </footer>
+
+  <script src="account-deletion-config.js?v=__ACCOUNT_DELETION_ASSET_REVISION__"></script>
+  <script type="module" src="account-deletion.js?v=__ACCOUNT_DELETION_ASSET_REVISION__"></script>
+</body>
+</html>

@@ -1,0 +1,44 @@
+Owntend
+Copyright (c) 2026 Thulfiqar AL-Zamili and Owntend contributors.
+
+This product includes software developed by Owntend contributors and licensed
+under the MIT License. See the LICENSE file for details.
+
+================================================================================
+Trademarks and Brand Names
+================================================================================
+
+- "Owntend", the Owntend logo, and the VersionDeck name and logo are
+  trademarks of Thulfiqar AL-Zamili. All rights reserved.
+- "Google" and the Google "G" logo (`assets/brand/google-g-logo.png`) are
+  trademarks of Google LLC. The Google G logo is used in accordance with the
+  Google Brand Permissions and Google Identity Guidelines for third-party sign-in buttons.
+- "Android", "Google Play", and "AdMob" are trademarks of Google LLC.
+- "Supabase" is a trademark of Supabase, Inc.
+- "Sentry" is a trademark of Functional Software, Inc.
+
+================================================================================
+Fonts
+================================================================================
+
+- Geist Font Family (`assets/fonts/Geist-*.ttf`)
+  Copyright (c) 2023 Vercel, Inc.
+  Licensed under the SIL Open Font License, Version 1.1 (OFL-1.1).
+  https://openfontlicense.org/
+
+================================================================================
+Audio and Sound Effects
+================================================================================
+
+- Notification and task action sound effects (`assets/audio/task_*.wav`)
+  Copyright (c) 2026 Owntend Authors.
+  Dedicated to the public domain under CC0 1.0 Universal (CC0-1.0) or licensed
+  under the MIT License as part of Owntend.
+
+================================================================================
+Third-Party Dependencies and SBOM
+================================================================================
+
+A complete machine-readable Software Bill of Materials (SPDX 2.3) and human-readable
+Third-Party Notices document covering all Dart/Flutter, Node.js/npm, and Deno
+dependencies is maintained in `THIRD_PARTY_NOTICES.md` and `release/apk-evidence/sbom.spdx.json`.

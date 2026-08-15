@@ -1,0 +1,28 @@
+{
+  "name": "owntend-tooling",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:all": "node tool/test_inventory.mjs --run",
+    "test:account-deletion": "node --test tool/account-deletion-site.test.mjs",
+    "test:android-lint": "node --test tool/android-lint-gate.test.mjs",
+    "test:asset-provenance": "node --test tool/asset-provenance.test.mjs",
+    "test:dependency-security": "node --test tool/dependency-security-and-notices.test.mjs",
+    "test:supabase-advisors": "node --test tool/supabase-advisors.test.mjs",
+    "test:toolchain": "node --test tool/toolchain.test.mjs",
+    "validate:asset-provenance": "node tool/validate_asset_provenance.mjs",
+    "validate:dependency-policy": "node tool/dependency_review_policy.mjs",
+    "validate:google-contracts": "node tool/validate_google_release_contracts.mjs",
+    "validate:test-inventory": "node tool/test_inventory.mjs",
+    "validate:toolchain": "node tool/toolchain_manifest.mjs --enforce",
+    "generate:sbom-and-notices": "node tool/generate_sbom_and_notices.mjs",
+    "supabase:lint": "supabase db lint --local --level error --fail-on error",
+    "supabase:test": "supabase test db --local supabase/tests/database"
+  },
+  "devDependencies": {
+    "@supabase/supabase-js": "^2.112.3",
+    "esbuild": "^0.28.2",
+    "supabase": "^2.114.0",
+    "yaml": "^2.9.0"
+  }
+}

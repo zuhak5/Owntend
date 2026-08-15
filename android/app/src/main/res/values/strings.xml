@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Owntend</string>
+    <string name="native_ad_label">Ad</string>
+    <string name="native_ad_sponsored">Sponsored</string>
+</resources>

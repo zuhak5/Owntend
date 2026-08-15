@@ -1,0 +1,21 @@
+{
+  "id": "./",
+  "name": "VersionDeck — Owntend Releases",
+  "short_name": "VersionDeck",
+  "description": "Official independently verified Owntend APK releases, changelogs, checksums, signing details, and exact provenance tuples.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f7f7f5",
+  "theme_color": "#111827",
+  "categories": ["utilities", "productivity"],
+  "icons": [
+    {"src": "assets/versiondeck-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
+    {"src": "assets/versiondeck-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"},
+    {"src": "assets/versiondeck-mark.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any"}
+  ],
+  "shortcuts": [
+    {"name": "Latest Owntend APK", "short_name": "Latest APK", "url": "./#latest-heading", "icons": [{"src": "assets/versiondeck-192.png", "sizes": "192x192", "type": "image/png"}]},
+    {"name": "Owntend version archive", "short_name": "Versions", "url": "./#releases", "icons": [{"src": "assets/versiondeck-192.png", "sizes": "192x192", "type": "image/png"}]}
+  ]
+}

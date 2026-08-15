@@ -1,0 +1,566 @@
+const syncMetadataColumns = <String>['revision', 'updated_at'];
+
+enum SyncMode {
+  initialHydration,
+  incrementalPull,
+  pushOnly,
+  targetedPull,
+  fullReconcile,
+  manualRefresh,
+  conflictRecovery,
+}
+
+class SyncWork {
+  const SyncWork({
+    required this.mode,
+    this.pullTables,
+    this.enqueueReconciliation = false,
+  });
+
+  final SyncMode mode;
+  final Set<String>? pullTables;
+  final bool enqueueReconciliation;
+
+  bool get allowsPull => mode != SyncMode.pushOnly;
+
+  SyncWork asInitialHydration() => SyncWork(
+    mode: SyncMode.initialHydration,
+    pullTables: null,
+    enqueueReconciliation: enqueueReconciliation,
+  );
+}
+
+enum SyncRealtimeEventType { insert, update, delete }
+
+enum SyncMutationState {
+  pending,
+  inFlight,
+  conflictRecovery,
+  failedVisible;
+
+  static SyncMutationState fromStorage(String value) {
+    return SyncMutationState.values.firstWhere(
+      (state) => state.name == value,
+      orElse: () => SyncMutationState.pending,
+    );
+  }
+}
+
+class RealtimeSyncEvent {
+  const RealtimeSyncEvent({
+    required this.table,
+    required this.spec,
+    required this.type,
+    this.recordKey,
+    this.revision,
+    this.updatedAt,
+    this.originDeviceId,
+  });
+
+  final String table;
+  final SyncEntitySpec spec;
+  final SyncRealtimeEventType type;
+  final String? recordKey;
+  final int? revision;
+  final DateTime? updatedAt;
+  final String? originDeviceId;
+}
+
+enum SyncScope { shared, deviceScoped, catalog }
+
+class SyncEntitySpec {
+  const SyncEntitySpec({
+    required this.entity,
+    required this.localTable,
+    required this.remoteTable,
+    required this.keyColumns,
+    required this.localColumns,
+    required this.dateColumns,
+    required this.modifiedExpression,
+    this.boolColumns = const {},
+    this.jsonColumns = const {},
+    this.remoteRenames = const {},
+    this.scope = SyncScope.shared,
+    this.localWhere,
+  });
+
+  final String entity;
+  final String localTable;
+  final String remoteTable;
+  final List<String> keyColumns;
+  final List<String> localColumns;
+  final Set<String> dateColumns;
+  final Set<String> boolColumns;
+  final Set<String> jsonColumns;
+  final String modifiedExpression;
+  final Map<String, String> remoteRenames;
+  final SyncScope scope;
+  final String? localWhere;
+
+  List<String> get remoteDataColumns => [
+    for (final column in localColumns) remoteRenames[column] ?? column,
+  ];
+
+  List<String> get remoteSelectColumns => scope == SyncScope.catalog
+      ? remoteDataColumns
+      : [
+          'user_id',
+          if (scope == SyncScope.deviceScoped) 'device_id',
+          ...remoteDataColumns,
+          for (final column in syncMetadataColumns)
+            if (!remoteDataColumns.contains(column)) column,
+        ];
+
+  String get selectClause => remoteSelectColumns.join(',');
+
+  String remoteColumnFor(String localColumn) =>
+      remoteRenames[localColumn] ?? localColumn;
+
+  String localColumnFor(String remoteColumn) {
+    for (final entry in remoteRenames.entries) {
+      if (entry.value == remoteColumn) return entry.key;
+    }
+    return remoteColumn;
+  }
+}
+
+/// Device-scoped permission state (permission_education_device_state_v3) is
+/// deliberately unsynced and excluded from allowedRemoteSettingKeys because OS
+/// permissions are device-specific.
+const allowedRemoteSettingKeys = <String>{
+  'theme',
+  'app_language',
+  'app_language_explicit',
+  'theme_time_of_day_enabled',
+  'notifications_enabled',
+  'notification_preferences',
+  'onboarding_completed',
+  'permission_education_seen',
+  'permission_education_seen_v2',
+  'home_location',
+};
+
+const userSettingSyncSpec = SyncEntitySpec(
+  entity: 'user_setting',
+  localTable: 'settings',
+  remoteTable: 'user_settings',
+  keyColumns: ['key'],
+  localColumns: ['key', 'value', 'updated_at'],
+  dateColumns: {'updated_at'},
+  modifiedExpression: 'updated_at',
+  localWhere:
+      "key IN ('theme', 'app_language', 'app_language_explicit', 'theme_time_of_day_enabled', "
+      "'notifications_enabled', "
+      "'notification_preferences', 'onboarding_completed', "
+      "'permission_education_seen', 'permission_education_seen_v2', "
+      "'home_location')",
+);
+
+const syncEntitySpecs = <SyncEntitySpec>[
+  SyncEntitySpec(
+    entity: 'area',
+    localTable: 'areas',
+    remoteTable: 'areas',
+    keyColumns: ['id'],
+    localColumns: [
+      'id',
+      'name',
+      'kind',
+      'sort_order',
+      'created_at',
+      'updated_at',
+      'archived_at',
+    ],
+    dateColumns: {'created_at', 'updated_at', 'archived_at'},
+    modifiedExpression: 'updated_at',
+  ),
+  SyncEntitySpec(
+    entity: 'room',
+    localTable: 'rooms',
+    remoteTable: 'rooms',
+    keyColumns: ['id'],
+    localColumns: [
+      'id',
+      'area_id',
+      'name',
+      'room_type',
+      'notes',
+      'sort_order',
+      'created_at',
+      'updated_at',
+      'archived_at',
+    ],
+    dateColumns: {'created_at', 'updated_at', 'archived_at'},
+    modifiedExpression: 'updated_at',
+  ),
+  SyncEntitySpec(
+    entity: 'asset',
+    localTable: 'assets',
+    remoteTable: 'assets',
+    keyColumns: ['id'],
+    localColumns: [
+      'id',
+      'name',
+      'asset_type',
+      'category_id',
+      'room_id',
+      'placement',
+      'notes',
+      'purchase_date',
+      'created_at',
+      'updated_at',
+      'archived_at',
+    ],
+    dateColumns: {'purchase_date', 'created_at', 'updated_at', 'archived_at'},
+    modifiedExpression: 'updated_at',
+  ),
+  SyncEntitySpec(
+    entity: 'device_detail',
+    localTable: 'device_details',
+    remoteTable: 'device_details',
+    keyColumns: ['asset_id'],
+    localColumns: [
+      'asset_id',
+      'brand',
+      'model',
+      'serial_number',
+      'power_source',
+      'warranty_until',
+      'manual_url',
+      'consumable',
+    ],
+    dateColumns: {'warranty_until'},
+    modifiedExpression:
+        '(SELECT updated_at FROM assets WHERE assets.id = asset_id)',
+  ),
+  SyncEntitySpec(
+    entity: 'pet_detail',
+    localTable: 'pet_details',
+    remoteTable: 'pet_details',
+    keyColumns: ['asset_id'],
+    localColumns: [
+      'asset_id',
+      'species',
+      'breed',
+      'birth_date',
+      'microchip_id',
+      'vet_name',
+      'vet_phone',
+      'feeding_notes',
+      'medical_notes',
+    ],
+    dateColumns: {'birth_date'},
+    modifiedExpression:
+        '(SELECT updated_at FROM assets WHERE assets.id = asset_id)',
+  ),
+  SyncEntitySpec(
+    entity: 'plant_detail',
+    localTable: 'plant_details',
+    remoteTable: 'plant_details',
+    keyColumns: ['asset_id'],
+    localColumns: [
+      'asset_id',
+      'species',
+      'sunlight',
+      'watering_interval_days',
+      'pot_size',
+      'last_repotted_at',
+      'toxicity_notes',
+    ],
+    dateColumns: {'last_repotted_at'},
+    modifiedExpression:
+        '(SELECT updated_at FROM assets WHERE assets.id = asset_id)',
+  ),
+  SyncEntitySpec(
+    entity: 'safety_detail',
+    localTable: 'safety_details',
+    remoteTable: 'safety_details',
+    keyColumns: ['asset_id'],
+    localColumns: [
+      'asset_id',
+      'safety_type',
+      'installed_at',
+      'expires_at',
+      'battery_type',
+      'test_interval_days',
+    ],
+    dateColumns: {'installed_at', 'expires_at'},
+    modifiedExpression:
+        '(SELECT updated_at FROM assets WHERE assets.id = asset_id)',
+  ),
+  SyncEntitySpec(
+    entity: 'tag',
+    localTable: 'tags',
+    remoteTable: 'tags',
+    keyColumns: ['id'],
+    localColumns: ['id', 'name', 'created_at'],
+    dateColumns: {'created_at'},
+    modifiedExpression: 'created_at',
+  ),
+  SyncEntitySpec(
+    entity: 'asset_tag',
+    localTable: 'asset_tags',
+    remoteTable: 'asset_tags',
+    keyColumns: ['asset_id', 'tag_id'],
+    localColumns: ['asset_id', 'tag_id'],
+    dateColumns: {},
+    modifiedExpression:
+        '(SELECT updated_at FROM assets WHERE assets.id = asset_id)',
+  ),
+  SyncEntitySpec(
+    entity: 'asset_photo',
+    localTable: 'asset_photos',
+    remoteTable: 'asset_photos',
+    keyColumns: ['id'],
+    localColumns: [
+      'id',
+      'asset_id',
+      'relative_path',
+      'caption',
+      'is_primary',
+      'created_at',
+    ],
+    dateColumns: {'created_at'},
+    boolColumns: {'is_primary'},
+    modifiedExpression: 'created_at',
+    remoteRenames: {'relative_path': 'object_path'},
+  ),
+  SyncEntitySpec(
+    entity: 'maintenance_plan',
+    localTable: 'maintenance_plans',
+    remoteTable: 'maintenance_plans',
+    keyColumns: ['id'],
+    localColumns: [
+      'id',
+      'asset_id',
+      'title',
+      'instructions',
+      'recurrence_interval',
+      'recurrence_unit',
+      'priority',
+      'next_due_date',
+      'reminder_days_before',
+      'is_enabled',
+      'health_group',
+      'created_at',
+      'updated_at',
+      'archived_at',
+    ],
+    dateColumns: {'next_due_date', 'created_at', 'updated_at', 'archived_at'},
+    boolColumns: {'is_enabled'},
+    modifiedExpression: 'updated_at',
+    remoteRenames: {
+      'instructions': 'description',
+      'recurrence_interval': 'interval_count',
+      'recurrence_unit': 'interval_unit',
+    },
+  ),
+  SyncEntitySpec(
+    entity: 'maintenance_plan_metadata',
+    localTable: 'maintenance_plan_metadata',
+    remoteTable: 'maintenance_plan_metadata',
+    keyColumns: ['plan_id'],
+    localColumns: [
+      'plan_id',
+      'task_type',
+      'location_label',
+      'estimated_duration_minutes',
+      'required_materials_json',
+      'reminder_recommendation',
+      'sort_order',
+      'created_at',
+      'updated_at',
+    ],
+    dateColumns: {'created_at', 'updated_at'},
+    modifiedExpression: 'updated_at',
+  ),
+  SyncEntitySpec(
+    entity: 'maintenance_record',
+    localTable: 'maintenance_records',
+    remoteTable: 'maintenance_records',
+    keyColumns: ['id'],
+    localColumns: ['id', 'plan_id', 'due_date', 'completed_at', 'notes'],
+    dateColumns: {'due_date', 'completed_at'},
+    modifiedExpression: 'completed_at',
+  ),
+  SyncEntitySpec(
+    entity: 'notification_inbox',
+    localTable: 'notification_inbox',
+    remoteTable: 'notification_inbox',
+    keyColumns: ['id'],
+    localColumns: [
+      'id',
+      'title',
+      'body',
+      'kind',
+      'route',
+      'plan_id',
+      'message_code',
+      'message_args',
+      'dedupe_key',
+      'read_at',
+      'created_at',
+      'updated_at',
+    ],
+    dateColumns: {'read_at', 'created_at', 'updated_at'},
+    jsonColumns: {'message_args'},
+    modifiedExpression: 'updated_at',
+  ),
+  userSettingSyncSpec,
+  SyncEntitySpec(
+    entity: 'streak',
+    localTable: 'streaks',
+    remoteTable: 'streaks',
+    keyColumns: ['id'],
+    localColumns: [
+      'id',
+      'current_streak',
+      'best_streak',
+      'last_completed_date',
+      'updated_at',
+    ],
+    dateColumns: {'last_completed_date', 'updated_at'},
+    modifiedExpression: 'updated_at',
+    remoteRenames: {
+      'best_streak': 'longest_streak',
+      'last_completed_date': 'last_completion_date',
+    },
+  ),
+];
+
+const profileSyncSpec = SyncEntitySpec(
+  entity: 'profile',
+  localTable: 'settings',
+  remoteTable: 'profiles',
+  keyColumns: [],
+  localColumns: ['nickname'],
+  dateColumns: {},
+  modifiedExpression: "(SELECT updated_at FROM settings WHERE key = 'profile')",
+);
+
+final syncSpecByEntity = <String, SyncEntitySpec>{
+  for (final spec in syncEntitySpecs) spec.entity: spec,
+  profileSyncSpec.entity: profileSyncSpec,
+};
+
+class LocalSyncMutation {
+  const LocalSyncMutation({
+    required this.entity,
+    required this.recordKey,
+    required this.operation,
+    required this.changedAt,
+    required this.attempts,
+    this.generation = 1,
+    this.payloadJson,
+    this.userId,
+    this.createdAt,
+    this.state = SyncMutationState.pending,
+    this.lastErrorCode,
+    this.lastError,
+    this.nextRetryAt,
+  });
+
+  final String entity;
+  final String recordKey;
+  final String operation;
+  final DateTime changedAt;
+  final int attempts;
+  final int generation;
+  final String? payloadJson;
+  final String? userId;
+  final DateTime? createdAt;
+  final SyncMutationState state;
+  final String? lastErrorCode;
+  final String? lastError;
+  final DateTime? nextRetryAt;
+
+  String get operationId => recordKey;
+}
+
+class SyncRecord {
+  const SyncRecord({
+    required this.spec,
+    required this.recordKey,
+    required this.values,
+    required this.clientModifiedAt,
+    required this.originDeviceId,
+    this.revision,
+    this.syncSeq,
+    this.serverUpdatedAt,
+    this.deletedAt,
+  });
+
+  final SyncEntitySpec spec;
+  final String recordKey;
+  final Map<String, dynamic> values;
+  final DateTime clientModifiedAt;
+  final String originDeviceId;
+  final int? revision;
+  final int? syncSeq;
+  final DateTime? serverUpdatedAt;
+  final DateTime? deletedAt;
+
+  bool get isDeleted => deletedAt != null;
+
+  Map<String, dynamic> toRemotePayload(String userId, {String? deviceId}) {
+    final payload = {
+      'user_id': userId,
+      if (spec.scope == SyncScope.deviceScoped) 'device_id': deviceId,
+      for (final entry in values.entries)
+        spec.remoteColumnFor(entry.key): entry.value,
+    };
+    payload.putIfAbsent(
+      'updated_at',
+      () => clientModifiedAt.toUtc().toIso8601String(),
+    );
+    return payload;
+  }
+
+  factory SyncRecord.fromRemote(SyncEntitySpec spec, Map<String, dynamic> row) {
+    final values = <String, dynamic>{};
+    for (final remoteColumn in spec.remoteDataColumns) {
+      values[spec.localColumnFor(remoteColumn)] = row[remoteColumn];
+    }
+    final updatedAtText =
+        row['updated_at'] as String? ??
+        row['client_modified_at'] as String? ??
+        row['created_at'] as String? ??
+        DateTime.now().toUtc().toIso8601String();
+    final updatedAt = DateTime.parse(updatedAtText).toUtc();
+    final revision = row['revision'] is num
+        ? (row['revision'] as num).toInt()
+        : 1;
+    return SyncRecord(
+      spec: spec,
+      recordKey: _recordKey(
+        spec,
+        values,
+        fallbackUserId: row['user_id'] as String?,
+      ),
+      values: values,
+      clientModifiedAt: updatedAt,
+      originDeviceId: row['origin_device_id'] as String? ?? '',
+      revision: revision,
+      syncSeq: row['sync_seq'] is num
+          ? (row['sync_seq'] as num).toInt()
+          : updatedAt.microsecondsSinceEpoch,
+      serverUpdatedAt: row['server_updated_at'] == null
+          ? updatedAt
+          : DateTime.parse(row['server_updated_at'] as String).toUtc(),
+      deletedAt: row['deleted_at'] == null
+          ? null
+          : DateTime.parse(row['deleted_at'] as String).toUtc(),
+    );
+  }
+}
+
+String _recordKey(
+  SyncEntitySpec spec,
+  Map<String, dynamic> values, {
+  String? fallbackUserId,
+}) {
+  if (spec.keyColumns.isEmpty) {
+    return spec.entity;
+  }
+  return spec.keyColumns.map((column) => values[column].toString()).join('|');
+}

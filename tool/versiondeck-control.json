@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "leaseDurationHours": 24,
+  "publication": {
+    "status": "disabled",
+    "reasonCode": "pre-release",
+    "message": "Owntend 1.0.0 is in active pre-release preparation. Downloads will be enabled upon initial publication.",
+    "updatedAt": "2026-08-15T00:00:00Z"
+  },
+  "historicalReleaseDecisions": []
+}

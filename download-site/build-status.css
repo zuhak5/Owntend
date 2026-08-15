@@ -1,0 +1,699 @@
+.build-progress-section {
+  padding-block: 0 34px;
+}
+
+.build-progress-card {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: clamp(20px, 4vw, 30px);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.build-progress-card::before {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(circle at top right, color-mix(in srgb, var(--accent) 14%, transparent), transparent 42%);
+  content: "";
+}
+
+.build-progress-header,
+.build-progress-live,
+.build-progress-track-row,
+.build-progress-actions {
+  position: relative;
+}
+
+.build-progress-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 16px;
+}
+
+.build-progress-header h2 {
+  max-width: 620px;
+  font-size: clamp(1.45rem, 4vw, 1.95rem);
+  line-height: 1.08;
+}
+
+.build-progress-run-group {
+  display: grid;
+  justify-items: end;
+  gap: 5px;
+}
+
+.build-progress-run-link {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
+  border-radius: 10px;
+  padding-inline: 12px;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+  font-size: 0.78rem;
+  font-weight: 780;
+  text-decoration: none;
+}
+
+.build-progress-meta {
+  color: var(--muted);
+  font-size: 0.68rem;
+  text-align: right;
+}
+
+.build-progress-live {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  margin-top: 22px;
+}
+
+.build-progress-motion {
+  position: relative;
+  width: 42px;
+  height: 42px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
+  border-radius: 50%;
+}
+
+.build-progress-motion::before,
+.build-progress-motion::after {
+  position: absolute;
+  border-radius: 50%;
+  content: "";
+}
+
+.build-progress-motion::before {
+  inset: 8px;
+  border: 3px solid color-mix(in srgb, var(--accent) 25%, transparent);
+  border-top-color: var(--accent);
+  animation: build-spin 1.25s linear infinite;
+}
+
+.build-progress-motion::after {
+  inset: 16px;
+  background: var(--accent);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 30%, transparent);
+  animation: build-pulse 1.8s ease-out infinite;
+}
+
+.build-progress-status-label {
+  display: block;
+  color: var(--accent);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.065em;
+  text-transform: uppercase;
+}
+
+.build-progress-phase {
+  display: block;
+  margin-top: 3px;
+  font-size: clamp(1.02rem, 2.8vw, 1.18rem);
+  line-height: 1.25;
+}
+
+.build-progress-step {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 560;
+}
+
+.build-progress-track-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.build-progress-track {
+  position: relative;
+  height: 11px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-muted);
+}
+
+.build-progress-bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 55%, #ffffff));
+  transition: width 500ms ease;
+}
+
+.build-progress-bar::after {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 15%, rgba(255, 255, 255, 0.34) 48%, transparent 80%);
+  transform: translateX(-100%);
+  animation: build-shimmer 1.8s ease-in-out infinite;
+  content: "";
+}
+
+.build-progress-percent {
+  min-width: 3ch;
+  color: var(--accent);
+  font-size: 0.76rem;
+  font-weight: 800;
+  text-align: right;
+}
+
+.build-progress-metrics {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 17px;
+}
+
+.build-progress-metric {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 13px 14px;
+  background: color-mix(in srgb, var(--surface-muted) 50%, transparent);
+}
+
+.build-progress-metric > span {
+  color: var(--muted);
+  font-size: 0.66rem;
+  font-weight: 760;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+.build-progress-metric strong {
+  font-size: 0.94rem;
+  line-height: 1.3;
+}
+
+.build-progress-metric small {
+  color: var(--muted);
+  font-size: 0.7rem;
+  line-height: 1.4;
+}
+
+.build-progress-timing {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 11px;
+  color: var(--muted);
+  font-size: 0.69rem;
+}
+
+.build-progress-timing::before {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 7px;
+  border-radius: 50%;
+  background: var(--success);
+  content: "";
+}
+
+.build-progress-preview {
+  position: relative;
+  margin: 18px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+  list-style: none;
+}
+
+.build-preview-item {
+  display: grid;
+  grid-template-columns: 12px 58px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  min-height: 34px;
+  border-radius: 9px;
+  padding: 5px 8px;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.build-preview-item[data-state="active"] {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  font-weight: 700;
+}
+
+.build-preview-item[data-state="failed"] {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+}
+
+.build-preview-role {
+  color: var(--muted);
+  font-size: 0.62rem;
+  font-weight: 760;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.build-preview-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.build-step-marker {
+  width: 9px;
+  height: 9px;
+  border: 2px solid var(--line);
+  border-radius: 50%;
+}
+
+[data-state="completed"] .build-step-marker {
+  border-color: var(--success);
+  background: var(--success);
+}
+
+[data-state="active"] .build-step-marker {
+  border-color: var(--accent);
+  background: var(--accent);
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 13%, transparent);
+}
+
+[data-state="failed"] .build-step-marker {
+  border-color: var(--danger);
+  background: var(--danger);
+}
+
+.build-progress-actions {
+  display: grid;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.build-setting {
+  width: 100%;
+  min-height: 64px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  padding: 11px 13px;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--surface-muted) 48%, var(--surface));
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.build-setting:hover {
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface));
+}
+
+.build-setting[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--success) 48%, var(--line));
+  background: color-mix(in srgb, var(--success) 8%, var(--surface));
+}
+
+.build-setting:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.build-setting-copy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.build-setting-copy strong {
+  font-size: 0.82rem;
+}
+
+.build-setting-copy small {
+  color: var(--muted);
+  font-size: 0.69rem;
+  font-weight: 450;
+  line-height: 1.35;
+}
+
+.build-setting-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.build-setting-state {
+  min-width: 2.2rem;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 780;
+  text-align: right;
+}
+
+.build-setting[aria-pressed="true"] .build-setting-state {
+  color: var(--success);
+}
+
+.build-switch {
+  position: relative;
+  width: 38px;
+  height: 22px;
+  flex: 0 0 38px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-muted);
+  transition: background 160ms ease, border-color 160ms ease;
+}
+
+.build-switch::after {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: transform 160ms ease, background 160ms ease;
+  content: "";
+}
+
+.build-setting[aria-pressed="true"] .build-switch {
+  border-color: color-mix(in srgb, var(--success) 55%, var(--line));
+  background: color-mix(in srgb, var(--success) 28%, var(--surface));
+}
+
+.build-setting[aria-pressed="true"] .build-switch::after {
+  background: var(--success);
+  transform: translateX(16px);
+}
+
+.build-progress-privacy {
+  margin: 0 2px;
+  color: var(--muted);
+  font-size: 0.67rem;
+  line-height: 1.45;
+}
+
+.build-progress-details {
+  position: relative;
+  margin-top: 18px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+
+.build-progress-details summary {
+  width: fit-content;
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 760;
+  cursor: pointer;
+}
+
+.build-progress-step-list {
+  max-height: 330px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  margin: 13px 0 0;
+  padding: 2px 4px 4px 0;
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  scrollbar-width: thin;
+}
+
+.build-step-item {
+  display: grid;
+  grid-template-columns: 13px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
+.build-step-item[data-state="completed"] {
+  color: var(--ink);
+}
+
+.build-step-item[data-state="active"] {
+  color: var(--ink);
+  font-weight: 750;
+}
+
+.build-step-item[data-state="failed"] {
+  color: var(--danger);
+}
+
+.build-progress-run-link:focus-visible,
+.build-setting:focus-visible,
+.build-progress-details summary:focus-visible,
+.build-toast-dismiss:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  outline-offset: 3px;
+}
+
+.build-toast {
+  position: fixed;
+  z-index: 95;
+  right: 0;
+  bottom: calc(88px + env(safe-area-inset-bottom));
+  left: 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.24);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(105%);
+  transition: opacity 180ms ease, transform 220ms ease;
+  backdrop-filter: blur(18px);
+}
+
+.build-toast.visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.build-toast-inner {
+  width: min(100%, 1120px);
+  min-height: 58px;
+  margin-inline: auto;
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px max(16px, env(safe-area-inset-left)) 10px max(16px, env(safe-area-inset-right));
+}
+
+.build-toast-indicator {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 13%, transparent);
+}
+
+.build-toast[data-kind="success"] .build-toast-indicator {
+  background: var(--success);
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--success) 13%, transparent);
+}
+
+.build-toast[data-kind="error"] .build-toast-indicator {
+  background: var(--danger);
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--danger) 13%, transparent);
+}
+
+.build-toast-message {
+  min-width: 0;
+  font-size: 0.78rem;
+  font-weight: 620;
+  line-height: 1.4;
+}
+
+.build-toast-dismiss {
+  min-height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding-inline: 11px;
+  color: var(--muted);
+  background: transparent;
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 740;
+  cursor: pointer;
+}
+
+.build-progress-section[data-state="success"] .build-progress-motion::before,
+.build-progress-section[data-state="error"] .build-progress-motion::before,
+.build-progress-section[data-state="success"] .build-progress-motion::after,
+.build-progress-section[data-state="error"] .build-progress-motion::after {
+  animation: none;
+}
+
+.build-progress-section[data-state="success"] .build-progress-motion::before {
+  inset: 11px;
+  border: 0;
+  border-radius: 3px;
+  background: var(--success);
+  clip-path: polygon(12% 52%, 0 65%, 40% 100%, 100% 20%, 84% 7%, 38% 70%);
+}
+
+.build-progress-section[data-state="success"] .build-progress-motion::after {
+  display: none;
+}
+
+.build-progress-section[data-state="error"] .build-progress-motion::before,
+.build-progress-section[data-state="error"] .build-progress-motion::after {
+  inset: 19px 8px;
+  border: 0;
+  border-radius: 2px;
+  background: var(--danger);
+  transform: rotate(45deg);
+}
+
+.build-progress-section[data-state="error"] .build-progress-motion::after {
+  display: block;
+  transform: rotate(-45deg);
+}
+
+@keyframes build-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes build-pulse {
+  70% { box-shadow: 0 0 0 9px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+@keyframes build-shimmer {
+  55%, 100% { transform: translateX(100%); }
+}
+
+@media (max-width: 620px) {
+  .build-progress-card {
+    padding: 20px;
+  }
+
+  .build-progress-header {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .build-progress-header h2 {
+    font-size: clamp(1.4rem, 7vw, 1.75rem);
+  }
+
+  .build-progress-run-group {
+    justify-items: start;
+  }
+
+  .build-progress-meta {
+    text-align: left;
+  }
+
+  .build-progress-metrics {
+    grid-template-columns: 1fr;
+    gap: 9px;
+  }
+
+  .build-progress-metric {
+    padding: 11px 12px;
+  }
+
+  .build-preview-item {
+    grid-template-columns: 12px 52px minmax(0, 1fr);
+    gap: 7px;
+    padding-inline: 4px;
+  }
+
+  .build-progress-step-list {
+    max-height: 290px;
+  }
+
+  .build-toast {
+    bottom: calc(82px + env(safe-area-inset-bottom));
+  }
+
+  .build-toast-inner {
+    grid-template-columns: 10px minmax(0, 1fr) auto;
+    gap: 9px;
+  }
+
+  .build-toast-dismiss {
+    padding-inline: 9px;
+  }
+}
+
+@media (max-width: 390px) {
+  .build-progress-live {
+    grid-template-columns: 36px minmax(0, 1fr);
+    gap: 11px;
+  }
+
+  .build-progress-motion {
+    width: 36px;
+    height: 36px;
+  }
+
+  .build-progress-motion::before {
+    inset: 7px;
+  }
+
+  .build-progress-motion::after {
+    inset: 14px;
+  }
+
+  .build-setting {
+    min-height: 70px;
+  }
+
+  .build-setting-control {
+    gap: 6px;
+  }
+
+  .build-setting-state {
+    display: none;
+  }
+
+  .build-toast-dismiss {
+    min-width: 36px;
+    padding-inline: 8px;
+    font-size: 0;
+  }
+
+  .build-toast-dismiss::after {
+    font-size: 1rem;
+    content: "×";
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .build-progress-motion::before,
+  .build-progress-motion::after,
+  .build-progress-bar::after {
+    animation: none;
+  }
+
+  .build-progress-bar,
+  .build-switch,
+  .build-switch::after,
+  .build-toast {
+    transition: none;
+  }
+}

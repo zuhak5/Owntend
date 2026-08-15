@@ -1,0 +1,1531 @@
+{
+  "@@locale": "en",
+  "owntend": "Owntend",
+  "keepEveryHomeSystemUnderControl": "Keep every home system under control.",
+  "trackRoomsItemsRecurringCareRemindersAndBackupsFromAPrivateOfflineFirstCommandCe": "Track rooms, items, recurring care, reminders, and backups from a private offline-first command center.",
+  "startOwntend": "Start Owntend",
+  "home": "Home",
+  "rooms": "Rooms",
+  "tasks": "Tasks",
+  "calendar": "Calendar",
+  "tools": "Tools",
+  "settings": "Settings",
+  "backupAndRestore": "Backup & Restore",
+  "notifications": "Notifications",
+  "statistics": "Statistics",
+  "safety": "Safety",
+  "add": "Add",
+  "addTask": "Add task",
+  "addItem": "Add item",
+  "addArea": "Add area",
+  "addPhoto": "Add photo",
+  "create": "Create",
+  "createBackup": "Create backup",
+  "cancel": "Cancel",
+  "save": "Save",
+  "delete": "Delete",
+  "edit": "Edit",
+  "done": "Done",
+  "search": "Search",
+  "clearSearch": "Clear search",
+  "undo": "Undo",
+  "close": "Close",
+  "change": "Change",
+  "configure": "Configure",
+  "test": "Test",
+  "models": "Models",
+  "manual": "Manual",
+  "english": "English",
+  "arabic": "Arabic",
+  "language": "Language",
+  "appearance": "Appearance",
+  "automaticByTimeOfDay": "Automatic by time of day",
+  "manualTheme": "Manual theme",
+  "system": "System",
+  "light": "Light",
+  "dark": "Dark",
+  "shownOnHome": "Shown on Home",
+  "weatherLocation": "Weather location",
+  "setACityZipOrCurrentDeviceLocation": "Set a city, ZIP, or current device location.",
+  "changeAvatar": "Change avatar",
+  "searchLocation": "Search location",
+  "useDeviceLocation": "Use device location",
+  "permissions": "Permissions",
+  "pushNotifications": "Push notifications",
+  "alarmsAndReminders": "Alarms & reminders",
+  "allowed": "Allowed",
+  "blocked": "Blocked",
+  "needsAccess": "Needs access",
+  "limited": "Limited",
+  "unavailable": "Unavailable",
+  "configuredManually": "Configured manually",
+  "approximateTiming": "Approximate timing",
+  "preferences": "Preferences",
+  "enabled": "Enabled",
+  "maintenanceWeatherAndDigestAlerts": "Maintenance, weather, and digest alerts",
+  "deviceReminders": "Device reminders",
+  "scheduledAndroidReminderDelivery": "Scheduled Android reminder delivery",
+  "preciseReminderAlarms": "Precise reminder alarms",
+  "askAndroidForAlarmsAndRemindersAccess": "Ask Android for Alarms & reminders access",
+  "inAppInbox": "In-app inbox",
+  "unreadTaskWeatherAndDigestUpdates": "Unread task, weather, and digest updates",
+  "weatherAlerts": "Weather alerts",
+  "outdoorTaskAlertsDuringSevereWeather": "Outdoor task alerts during severe weather",
+  "quietHours": "Quiet hours",
+  "quietHoursStart": "Quiet hours start",
+  "quietHoursEnd": "Quiet hours end",
+  "criticalRemindersBypass": "Critical reminders bypass",
+  "criticalTasksCanStillAlertDuringQuietHours": "Critical tasks can still alert during quiet hours",
+  "hideLockScreenDetails": "Hide lock-screen details",
+  "showGenericReminderTextOutsideTheApp": "Show generic reminder text outside the app",
+  "dailyDigest": "Daily digest",
+  "groupedReminderSummary": "Grouped reminder summary",
+  "defaultSnooze": "Default snooze",
+  "maxRemindersPerDay": "Max reminders per day",
+  "reminderTime": "Reminder time",
+  "digestTime": "Digest time",
+  "sendTest": "Send test",
+  "saveReminderSettings": "Save reminder settings",
+  "displayName": "Display name",
+  "deviceLocationIsUnavailable": "Device location is unavailable.",
+  "weatherLocationUpdated": "Weather location updated.",
+  "notificationSettingsUpdated": "Notification settings updated.",
+  "homeLocation": "Home Location",
+  "searchForALocation": "Search for a location",
+  "todaySTasks": "Today''s tasks",
+  "homeReadiness": "Home readiness",
+  "maintenancePlan": "Maintenance plan",
+  "openAccount": "Open account",
+  "editAccount": "Edit account",
+  "sessionTitle": "Session title",
+  "sessionNotes": "Session notes",
+  "archiveSession": "Archive session",
+  "feels": "Feels",
+  "humidity": "Humidity",
+  "wind": "Wind",
+  "today": "Today",
+  "next7": "Next 7",
+  "overdue": "Overdue",
+  "upcoming": "Upcoming",
+  "completed": "Completed",
+  "dueToday": "Due today",
+  "noAreasYet": "No areas yet",
+  "noResultsFound": "No results found",
+  "searchRooms": "Search rooms",
+  "firstFloor": "First Floor",
+  "secondFloor": "Second Floor",
+  "outdoor": "Outdoor",
+  "indoor": "Indoor",
+  "outdoorZone": "Outdoor zone",
+  "kitchen": "Kitchen",
+  "garden": "Garden",
+  "general": "General",
+  "areaActions": "Area actions",
+  "editArea": "Edit area",
+  "moveEarlier": "Move earlier",
+  "moveLater": "Move later",
+  "deleteArea": "Delete area",
+  "roomActions": "Room actions",
+  "editRoom": "Edit room",
+  "moveUp": "Move up",
+  "moveDown": "Move down",
+  "deleteRoom": "Delete room",
+  "moveRoomToTrash": "Move room to Trash",
+  "room": "Room",
+  "noItemsInThisRoom": "No items in this room",
+  "item": "Item",
+  "task": "Task",
+  "taskNotFound": "Task not found.",
+  "itemNotFound": "Item not found.",
+  "roomNotFound": "Room not found.",
+  "discardChangesTitle": "Discard unsaved changes?",
+  "discardChangesMessage": "You have unsaved changes that will be lost if you leave now.",
+  "discardChangesAction": "Discard",
+  "keepEditingAction": "Keep editing",
+  "completeTask": "Complete task",
+  "taskActions": "Task actions",
+  "editTask": "Edit task",
+  "editPlan": "Edit plan",
+  "snooze": "Snooze",
+  "deleteTask": "Delete task",
+  "deleteItem": "Delete item",
+  "moveToTrash": "Move to Trash",
+  "moveTaskToTrash": "Move task to Trash",
+  "moveItemToTrash": "Move item to Trash",
+  "moveAreaToTrash": "Move area to Trash",
+  "nextDue": "Next due",
+  "category": "Category",
+  "instructions": "Instructions",
+  "openItem": "Open item",
+  "timeline": "Timeline",
+  "completionHistoryForThisTask": "Completion history for this task",
+  "typeLabel": "Type",
+  "placement": "Placement",
+  "notes": "Notes",
+  "tags": "Tags",
+  "purchased": "Purchased",
+  "brand": "Brand",
+  "model": "Model",
+  "consumable": "Consumable",
+  "species": "Species",
+  "feeding": "Feeding",
+  "watering": "Watering",
+  "safetyType": "Safety type",
+  "testInterval": "Test interval",
+  "noTimelineYet": "No timeline yet",
+  "photoActions": "Photo actions",
+  "setPrimary": "Set primary",
+  "noTasksDueToday": "No tasks due today",
+  "noOverdueTasks": "No overdue tasks",
+  "noTasksInTheNext7Days": "No tasks in the next 7 days",
+  "noTasks": "No tasks",
+  "viewUpcomingTasks": "View upcoming tasks",
+  "viewNext7Days": "View next 7 days",
+  "newTasks": "New tasks",
+  "alreadyExisting": "Already existing",
+  "newLabel": "New",
+  "existingUpdated": "Existing - updated",
+  "noTasksOnThisDay": "No tasks on this day",
+  "localDataBackupsAndExportVisibility": "Local data, backups, and export visibility",
+  "inventoryAndMaintenanceHistoryExports": "Inventory and maintenance history exports",
+  "completionTrendsAndTaskDistribution": "Completion trends and task distribution",
+  "exportOrRestoreZipBackups": "Export or restore ZIP backups",
+  "completeTaskTitleCase": "Complete Task",
+  "areaName": "Area name",
+  "areaType": "Area type",
+  "addRoom": "Add room",
+  "editItem": "Edit item",
+  "basic": "Basic",
+  "itemName": "Item name *",
+  "itemType": "Item type",
+  "location": "Location",
+  "roomOrZone": "Room or zone",
+  "details": "Details",
+  "shelfCornerBalconyKennelArea": "Shelf, corner, balcony, kennel area...",
+  "commaSeparated": "comma, separated",
+  "deviceDetails": "Device details",
+  "serialNumber": "Serial number",
+  "powerSource": "Power source",
+  "manualUrl": "Manual URL",
+  "filterBatteriesCartridges": "Filter, batteries, cartridges...",
+  "petDetails": "Pet details",
+  "petType": "Pet Type",
+  "fishType": "Fish Type",
+  "breed": "Breed",
+  "microchipId": "Microchip ID",
+  "vetName": "Vet name",
+  "vetPhone": "Vet phone",
+  "feedingNotes": "Feeding notes",
+  "medicalNotes": "Medical notes",
+  "plantDetails": "Plant details",
+  "sunlight": "Sunlight",
+  "wateringInterval": "Watering interval",
+  "potSize": "Pot size",
+  "toxicityNotes": "Toxicity notes",
+  "safetyDetails": "Safety details",
+  "batteryType": "Battery type",
+  "changeItemType": "Change item type?",
+  "createAnItemFirst": "Create an item first",
+  "taskTitle": "Task title",
+  "every": "Every",
+  "unit": "Unit",
+  "priority": "Priority",
+  "healthGroup": "Health group",
+  "createAndAddAnother": "Create & add another",
+  "taskCreated": "Task created.",
+  "deviceOrAppliance": "Device or appliance",
+  "pet": "Pet",
+  "plant": "Plant",
+  "safetyItem": "Safety item",
+  "generalItem": "General item",
+  "devicesAndAppliances": "Devices & Appliances",
+  "pets": "Pets",
+  "plants": "Plants",
+  "safetyItems": "Safety Items",
+  "generalItems": "General Items",
+  "mains": "Mains",
+  "battery": "Battery",
+  "solar": "Solar",
+  "none": "None",
+  "other": "Other",
+  "lowLight": "Low light",
+  "mediumLight": "Medium light",
+  "brightIndirect": "Bright indirect",
+  "fullSun": "Full sun",
+  "routine": "Routine",
+  "medium": "Medium",
+  "high": "High",
+  "critical": "Critical",
+  "hours": "Hours",
+  "days": "Days",
+  "weeks": "Weeks",
+  "months": "Months",
+  "years": "Years",
+  "dog": "Dog",
+  "cat": "Cat",
+  "fish": "Fish",
+  "bird": "Bird",
+  "rabbit": "Rabbit",
+  "reptile": "Reptile",
+  "smallMammal": "Small mammal",
+  "goldfish": "Goldfish",
+  "betta": "Betta",
+  "guppy": "Guppy",
+  "tetra": "Tetra",
+  "molly": "Molly",
+  "platy": "Platy",
+  "koi": "Koi",
+  "shareLatestBackup": "Share latest backup",
+  "automaticLocalBackups": "Automatic local backups",
+  "chooseBackupZip": "Choose backup ZIP",
+  "restoreThisBackup": "Restore this backup?",
+  "restoreBackup": "Restore backup",
+  "restoreThisBackup2": "Restore this backup",
+  "items": "Items",
+  "history": "History",
+  "files": "Files",
+  "message30Minutes": "30 minutes",
+  "message1Hour": "1 hour",
+  "message3Hours": "3 hours",
+  "customDateAndTime": "Custom date and time",
+  "thisTaskWasAlreadyUpdated": "This task was already updated.",
+  "taskCompleted": "Task completed.",
+  "completionUndone": "Completion undone.",
+  "deleteTask2": "Delete task?",
+  "deleteItem2": "Delete item?",
+  "deleteRoom2": "Delete room?",
+  "deleteArea2": "Delete area?",
+  "releaseToDelete": "Release to delete",
+  "swipeLeft": "Swipe left",
+  "swipeToMoveToTrash": "Swipe to move to Trash",
+  "releaseToMoveToTrash": "Release to move to Trash",
+  "notEnoughDataYet": "Not enough data yet",
+  "completeMoreTasksToSeeMonthlyTrends": "Complete more tasks to see monthly trends.",
+  "noTaskDistribution": "No task distribution",
+  "scheduledPlansWillAppearHere": "Scheduled plans will appear here.",
+  "previousMonth": "Previous month",
+  "nextMonth": "Next month",
+  "hour": "hour",
+  "hours2": "hours",
+  "day": "day",
+  "days2": "days",
+  "week": "week",
+  "weeks2": "weeks",
+  "month": "month",
+  "months2": "months",
+  "year": "year",
+  "years2": "years",
+  "recurrenceEveryOne": "Every {unit}",
+  "@recurrenceEveryOne": {
+    "placeholders": {
+      "unit": {
+        "type": "String"
+      }
+    }
+  },
+  "recurrenceEveryMany": "Every {count} {unit}",
+  "@recurrenceEveryMany": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "unit": {
+        "type": "String"
+      }
+    }
+  },
+  "statusOverdueBy": "Overdue by {duration}",
+  "@statusOverdueBy": {
+    "placeholders": {
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
+  "statusDueDate": "Due {date}",
+  "@statusDueDate": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "statusDueIn": "Due in {duration}",
+  "@statusDueIn": {
+    "placeholders": {
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
+  "durationDay": "{count} day",
+  "@durationDay": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "durationDays": "{count} days",
+  "@durationDays": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "durationMinutesShort": "{count}m",
+  "@durationMinutesShort": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "durationHoursMinutesShort": "{hours}h {minutes}m",
+  "@durationHoursMinutesShort": {
+    "placeholders": {
+      "hours": {
+        "type": "int"
+      },
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "taskUpdateCadence": "Cadence: {from} -> {to}",
+  "@taskUpdateCadence": {
+    "placeholders": {
+      "from": {
+        "type": "String"
+      },
+      "to": {
+        "type": "String"
+      }
+    }
+  },
+  "searchZones": "Search zones",
+  "cityOrZip": "City or ZIP",
+  "completionNotes": "Completion notes",
+  "whatChangedWhatWasReplacedOrWhatNeedsFollowUp": "What changed, what was replaced, or what needs follow-up?",
+  "zoneName": "Zone name *",
+  "roomName": "Room name *",
+  "zoneType": "Zone type",
+  "roomType": "Room type",
+  "area": "Area",
+  "purchaseDate": "Purchase date",
+  "warrantyDate": "Warranty date",
+  "birthDate": "Birth date",
+  "lastRepotted": "Last repotted",
+  "installedDate": "Installed date",
+  "expirationDate": "Expiration date",
+  "cleaning": "Cleaning",
+  "noExtraDetailsYet": "No extra details yet.",
+  "account": "Account",
+  "savedOnThisDevice": "Saved on this device",
+  "cloudBackupUnavailable": "Cloud backup unavailable",
+  "waitingForInternet": "Waiting for internet",
+  "worksOffline": "Works offline",
+  "backedUpPrivately": "Backed up privately",
+  "setUpCloudBackup": "Set up cloud backup",
+  "cloudBackup": "Cloud backup",
+  "recovery": "Recovery",
+  "welcomeToOwntend": "Welcome to Owntend",
+  "chooseHowYouWouldLikeToContinue": "Choose how you would like to continue.",
+  "continueWithGoogle": "Continue with Google",
+  "devices": "Devices",
+  "resumeCloudBackup": "Resume cloud backup",
+  "pauseCloudBackup": "Pause cloud backup",
+  "advancedSyncDiagnostics": "Advanced Sync Diagnostics",
+  "signOutOnThisDevice": "Sign out on this device",
+  "unlinkLocalData": "Unlink local data",
+  "deleteCloudAccount": "Delete cloud account",
+  "protectedWithGoogle": "Protected with Google",
+  "protectedAccount": "Protected account",
+  "accountAlreadyExists": "Account already exists",
+  "exportBackup": "Export Backup",
+  "useExistingAccount": "Use existing account",
+  "status": "Status",
+  "migrationState": "Migration state",
+  "pendingDataOperations": "Pending data operations",
+  "pendingMediaCleanup": "Pending media cleanup",
+  "clockSkewConflicts": "Clock-skew conflicts",
+  "realtime": "Realtime",
+  "lastAttempt": "Last attempt",
+  "lastSuccess": "Last success",
+  "lastFailure": "Last failure",
+  "nextRetry": "Next retry",
+  "backgroundResult": "Background result",
+  "blockedReason": "Blocked reason",
+  "technicalLastError": "Technical last error",
+  "retryIncrementalSync": "Retry incremental sync",
+  "fullReconciliation": "Full reconciliation",
+  "exportDiagnostics": "Export diagnostics",
+  "diagnosticExportDisclosure": "This bundle contains only Owntend events and redacted technical metadata. It does not include full system logs, account emails, tokens, device serials, coordinates, or media paths.",
+  "exportingDiagnostics": "Preparing private diagnostics…",
+  "owntendDiagnosticsShareText": "Owntend privacy-safe diagnostics",
+  "diagnosticExportFailed": "Diagnostics could not be exported.",
+  "notRecorded": "Not recorded",
+  "removeAvatar": "Remove avatar",
+  "avatarRemovalFailed": "Avatar removal failed",
+  "restoreLocallyAndPauseCloudBackup": "Restore locally and pause cloud backup",
+  "restoreAndUpdateCloudBackup": "Restore and update cloud backup",
+  "lastSaved": "Last saved",
+  "offlineChangesAreSavedOnThisDevice": "Offline — changes are saved on this device.",
+  "needsAttentionOpenAdvancedSyncDiagnostics": "Needs attention. Open Advanced Sync Diagnostics.",
+  "backingUpChanges": "Backing up changes…",
+  "cloudBackupComplete": "Cloud backup complete.",
+  "savedOnThisDeviceCloudBackupIsPaused": "Saved on this device. Cloud backup is paused.",
+  "offlineSafe": "Offline-safe",
+  "needsAttention": "Needs attention",
+  "backingUp": "Backing up",
+  "backupComplete": "Backup complete",
+  "yourTasks": "Your Tasks,",
+  "allInSync": "All in Sync",
+  "organizeTasksRoutinesAndRemindersAcrossAllYourDevicesAnytimeAnywhere": "Organize tasks, routines, and reminders across all your devices, anytime, anywhere.",
+  "anyDevice": "Any Device",
+  "accessTasksAnywhere": "Access tasks anywhere",
+  "smartRoutines": "Smart Routines",
+  "buildHabitsThatLast": "Build habits that last",
+  "progressInsights": "Progress Insights",
+  "stayMotivated": "Stay motivated",
+  "lightMode": "Light mode",
+  "darkMode": "Dark mode",
+  "englishUs": "English (US)",
+  "securelyBringingBackYourTasksRoutinesAndReminders": "Securely bringing back your tasks, routines, and reminders.",
+  "findingYourBackup": "Finding your backup",
+  "restoringTasks": "Restoring tasks",
+  "restoringRoutines": "Restoring routines",
+  "restoringReminders": "Restoring reminders",
+  "finalizingOwntend": "Finalizing Owntend",
+  "yourFlowIsReady": "Your flow is ready",
+  "tipYourTasksStayAvailableEvenWhenYouAreOffline": "Tip — Your tasks stay available even when you are offline.",
+  "yourTasksRoutinesAndRemindersRestoreInDependencyOrder": "Your tasks, routines, and reminders restore in dependency order.",
+  "otherSynchronizedDevices": "Other synchronized devices",
+  "deviceDetailsRemainSecurelySynchronized": "Device details remain securely synchronized.",
+  "itemsPhotosLocalDatabaseRecordsBackupsAndHistoryStayOnThisDeviceUnlessYouExportA": "Items, photos, local database records, backups, and history stay on this device unless you export a backup or enable cloud sync.",
+  "structuredExportsAreAvailableNowBrandedPdfPacketsArePlannedForALaterRelease": "Structured exports are available now. Branded PDF packets are planned for a later release.",
+  "tasksItemsHistoryTimelineStreaksStatisticsDataSettingsNotificationPreferencesPho": "Tasks, items, history, timeline, streaks, statistics data, settings, notification preferences, photos, and profile media are included.",
+  "keepRestorationVisible": "Keep restoration visible?",
+  "notNow": "Not now",
+  "continueLabel": "Continue",
+  "retry": "Retry",
+  "checkConnection": "Check connection",
+  "continueOffline": "Continue offline",
+  "addZone": "Add zone",
+  "appliances": "Appliances",
+  "disabled": "Disabled",
+  "taskDisabled": "Task disabled",
+  "enableTask": "Enable task",
+  "disableTask": "Disable task",
+  "completedToday": "Completed today",
+  "dueNow": "Due now",
+  "nextValue": "Next: {value}",
+  "@nextValue": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "roomCount": "{count, plural, =1{1 room} other{{count} rooms}}",
+  "@roomCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "zoneCount": "{count, plural, =1{1 zone} other{{count} zones}}",
+  "@zoneCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "calendarDaySummary": "{today, select, true{{date}, {count, plural, =0{no tasks due, today} =1{1 task due, today} other{{count} tasks due, today}}} other{{date}, {count, plural, =0{no tasks due} =1{1 task due} other{{count} tasks due}}}}",
+  "@calendarDaySummary": {
+    "placeholders": {
+      "today": {
+        "type": "String"
+      },
+      "date": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "searchOwntend": "Search Owntend",
+  "searchShort": "Search\u2026",
+  "searchRoomsItems": "Search rooms, items\u2026",
+  "itemActions": "Item actions",
+  "searchRoomsItemsTasksNotes": "Search rooms, items, tasks, notes",
+  "restore": "Restore",
+  "deleteForever": "Delete forever",
+  "emptyTrash": "Empty Trash",
+  "emptyTrashConfirmationTitle": "Empty Trash?",
+  "emptyTrashConfirmationMessage": "All items in Trash will be permanently deleted. This action cannot be undone.",
+  "trashEmptied": "Trash emptied.",
+  "emptyTrashAction": "Empty",
+  "trash": "Trash",
+  "inbox": "Inbox",
+  "markAllRead": "Mark all read",
+  "showAll": "Show all",
+  "taskIsNoLongerAvailable": "Task is no longer available.",
+  "notificationActions": "Notification actions",
+  "open": "Open",
+  "markRead": "Mark read",
+  "fishBreedOrType": "Fish breed or type",
+  "taskType": "Task type",
+  "inspectionCleaningFeeding": "Inspection, cleaning, feeding...",
+  "locationLabel": "Location label",
+  "topShelfLeftCabinet": "Top shelf, left cabinet...",
+  "estMinutes": "Est. minutes",
+  "use1OrMore": "Use 1 or more",
+  "remindDaysBefore": "Remind days before",
+  "use0OrMore": "Use 0 or more",
+  "requiredMaterials": "Required materials",
+  "commaSeparated2": "Comma-separated",
+  "reminderNote": "Reminder note",
+  "optionalContextForNotifications": "Optional context for notifications",
+  "photoSaved": "Photo saved.",
+  "enableThisTaskBeforeSnoozingIt": "Enable this task before snoozing it.",
+  "taskRestored": "Task restored.",
+  "move": "Move",
+  "copy": "Copy",
+  "includeRelatedTasks": "Include related tasks",
+  "includePhotos": "Include photos",
+  "nicknameUpdated": "Nickname updated.",
+  "nickname": "Nickname",
+  "clear": "Clear",
+  "signOut": "Sign out",
+  "deleteAccount": "Delete account",
+  "taskMovedToTrash": "Task moved to Trash.",
+  "themeUpdateFailedError": "Theme update failed: {error}",
+  "@themeUpdateFailedError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "locationUpdateFailedError": "Location update failed: {error}",
+  "@locationUpdateFailedError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "notificationSetupFailedError": "Notification setup failed: {error}",
+  "@notificationSetupFailedError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "testReminderFailedError": "Test reminder failed: {error}",
+  "@testReminderFailedError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "undoFailedError": "Undo failed: {error}",
+  "@undoFailedError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "backupCreatedFilename": "Backup created: {fileName}",
+  "@backupCreatedFilename": {
+    "placeholders": {
+      "fileName": {
+        "type": "String"
+      }
+    }
+  },
+  "photoSaveFailedError": "Photo save failed: {error}",
+  "@photoSaveFailedError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "snoozeTask": "Snooze {task}",
+  "@snoozeTask": {
+    "placeholders": {
+      "task": {
+        "type": "String"
+      }
+    }
+  },
+  "tomorrowAtTime": "Tomorrow at {time}",
+  "@tomorrowAtTime": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "taskSkippedForThisCycle": "{task} skipped for this cycle.",
+  "@taskSkippedForThisCycle": {
+    "placeholders": {
+      "task": {
+        "type": "String"
+      }
+    }
+  },
+  "couldNotSkipTaskError": "Could not skip task: {error}",
+  "@couldNotSkipTaskError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "couldNotPostponeTaskError": "Could not postpone task: {error}",
+  "@couldNotPostponeTaskError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "couldNotCompleteTaskError": "Could not complete task: {error}",
+  "@couldNotCompleteTaskError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "couldNotMoveTaskToTrashError": "Could not move task to Trash: {error}",
+  "@couldNotMoveTaskToTrashError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "taskMovedButRemindersCouldNotRefreshError": "Task moved, but reminders could not refresh: {error}",
+  "@taskMovedButRemindersCouldNotRefreshError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "nameMovedToTrash": "{name} moved to Trash.",
+  "@nameMovedToTrash": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "dueDate": "Due {date}",
+  "@dueDate": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "failedError": "Failed: {error}",
+  "@failedError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "nicknameUpdateFailedError": "Nickname update failed: {error}",
+  "@nicknameUpdateFailedError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "automatic": "Automatic",
+  "auto": "Auto",
+  "automaticUsesYourLocalTimeLightFrom6AmTo6PmDarkOvernight": "Automatic uses your local time: light from 6 AM to 6 PM, dark overnight.",
+  "manualSelectionStaysActiveUntilYouChooseAnotherMode": "Manual selection stays active until you choose another mode.",
+  "languageUpdateFailedPleaseTryAgain": "Language update failed. Please try again.",
+  "notificationWeatherAlertTitle": "Weather alert",
+  "notificationWeatherAlertBody": "{location}: {precipitation}% chance of precipitation, wind up to {wind} km/h.",
+  "@notificationWeatherAlertBody": {
+    "placeholders": {
+      "location": {
+        "type": "String"
+      },
+      "precipitation": {
+        "type": "int"
+      },
+      "wind": {
+        "type": "int"
+      }
+    }
+  },
+  "notificationTaskOverdueTitle": "{task} is overdue",
+  "@notificationTaskOverdueTitle": {
+    "placeholders": {
+      "task": {
+        "type": "String"
+      }
+    }
+  },
+  "notificationTaskDueTodayTitle": "{task} is due today",
+  "@notificationTaskDueTodayTitle": {
+    "placeholders": {
+      "task": {
+        "type": "String"
+      }
+    }
+  },
+  "notificationTaskBody": "Open Owntend to review this task.",
+  "notificationDailyDigestTitle": "Daily maintenance digest",
+  "notificationDailyDigestBody": "{overdue} overdue, {dueToday} due today, {upcoming} due this week",
+  "@notificationDailyDigestBody": {
+    "placeholders": {
+      "overdue": {
+        "type": "int"
+      },
+      "dueToday": {
+        "type": "int"
+      },
+      "upcoming": {
+        "type": "int"
+      }
+    }
+  },
+  "notificationGenericTitle": "Owntend update",
+  "notificationGenericBody": "Open Owntend to view this update.",
+  "accessYourTasksAndRoutinesAcrossAllYourDevices": "Access your tasks and routines across all your devices.",
+  "buildHabitsAndAutomateRoutinesThatKeepYouMoving": "Build habits and automate routines that keep you moving.",
+  "trackProgressStreaksAndGoalsToStayMotivated": "Track progress, streaks, and goals to stay motivated.",
+  "cloudRestorationInProgress": "Cloud restoration in progress",
+  "tomorrowSTasks": "Tomorrow''s tasks",
+  "upcomingTasks": "Upcoming tasks",
+  "skipThisOccurrence": "Skip this occurrence",
+  "postponeDueDate": "Postpone due date",
+  "reminder": "Reminder",
+  "duration": "Duration",
+  "materials": "Materials",
+  "moveOrCopy": "Move or copy",
+  "relatedTasks": "Related tasks",
+  "noTasksYet": "No tasks yet",
+  "completionHistoryAcrossRelatedTasks": "Completion history across related tasks",
+  "photos": "Photos",
+  "deletePhoto": "Delete photo?",
+  "tomorrow": "Tomorrow",
+  "next7Days": "Next 7 days",
+  "later": "Later",
+  "findRoomsItemsTagsNotesPhotosAndTasks": "Find rooms, items, tags, notes, photos, and tasks",
+  "insights": "Insights",
+  "data": "Data",
+  "accountAndCloudSync": "Account & Cloud Sync",
+  "optionalGoogleSignInAndPrivateDeviceSync": "Optional Google sign-in and private device sync",
+  "createShareOrRestoreLocalZipBackups": "Create, share, or restore local ZIP backups",
+  "restoreRecentlyRemovedRoomsItemsAndTasks": "Restore recently removed rooms, items, and tasks",
+  "themeRemindersPrivacyAndReleaseReadiness": "Theme, reminders, privacy, and release readiness",
+  "searchYourHome": "Search your home",
+  "noResults": "No results",
+  "nothingToRestore": "Nothing to restore",
+  "areas": "Areas",
+  "deleteAreaForever": "Delete area forever?",
+  "deleteRoomForever": "Delete room forever?",
+  "deleteItemForever": "Delete item forever?",
+  "deleteTaskForever": "Delete task forever?",
+  "noNotifications": "No notifications",
+  "unread": "Unread",
+  "monthlyCompletions": "Monthly Completions",
+  "taskDistribution": "Task Distribution",
+  "historyCompletion": "History completion",
+  "activeOverdue": "Active overdue",
+  "useThisDeviceLocation": "Use this device location?",
+  "allowOwntendReminders": "Allow Owntend reminders?",
+  "allowPreciseReminderTiming": "Allow precise reminder timing?",
+  "sendATestReminder": "Send a test reminder?",
+  "locationServicesAreOff": "Location services are off",
+  "permissionNeeded": "Permission needed",
+  "permissionBlocked": "Permission blocked",
+  "backupsAreSavedLocallyAsPrivateZipFiles": "Backups are saved locally as private ZIP files.",
+  "restoreFromABackup": "Restore from a backup",
+  "skipThisOccurrence2": "Skip this occurrence?",
+  "postponeTask": "Postpone task?",
+  "optional": "Optional",
+  "moveTaskToTrash2": "Move task to Trash?",
+  "moveItemToTrash2": "Move item to Trash?",
+  "moveRoomToTrash2": "Move room to Trash?",
+  "moveAreaToTrash2": "Move area to Trash?",
+  "moveOrCopyItem": "Move or copy item",
+  "createARoomFirst": "Create a room first",
+  "back": "Back",
+  "owntendTestReminder": "Owntend test reminder",
+  "signOut2": "Sign out?",
+  "deleteOwntendAccount": "Delete Owntend account?",
+  "editNickname": "Edit nickname",
+  "appearanceLocationAndNotifications": "Appearance, location, and notifications",
+  "exportOrRestoreAnEncryptedOwntendArchive": "Export or restore an encrypted Owntend archive",
+  "google": "Google",
+  "somethingWentWrongPleaseTryAgain": "Something went wrong. Please try again.",
+  "owntendIsFinishingAnotherLocalOperationPleaseTryAgainInAMoment": "Owntend is finishing another local operation. Please try again in a moment.",
+  "signInFailedPleaseTryAgain": "Sign in failed. Please try again.",
+  "themeUpdateFailedPleaseTryAgain": "Theme update failed. Please try again.",
+  "locationUpdateFailedPleaseTryAgain": "Location update failed. Please try again.",
+  "notificationSetupFailedPleaseTryAgain": "Notification setup failed. Please try again.",
+  "theTestReminderCouldNotBeSentPleaseTryAgain": "The test reminder could not be sent. Please try again.",
+  "thePhotoCouldNotBeSavedPleaseTryAgain": "The photo could not be saved. Please try again.",
+  "theTaskCouldNotBeUpdatedPleaseTryAgain": "The task could not be updated. Please try again.",
+  "undoFailedPleaseTryAgain": "Undo failed. Please try again.",
+  "cloudServicesAreUnavailablePleaseTryAgainLater": "Cloud services are unavailable. Please try again later.",
+  "thisBuildIsNotConfiguredCorrectly": "This build is not configured correctly.",
+  "activeTaskCount": "{count, plural, =0{No active tasks} =1{1 active task} other{{count} active tasks}}",
+  "@activeTaskCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "savedPhotoCount": "{count, plural, =0{No photos saved} =1{1 photo saved} other{{count} photos saved}}",
+  "@savedPhotoCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "warrantyUntilDate": "Warranty until {date}",
+  "@warrantyUntilDate": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "trashAreaType": "Area - {type}",
+  "@trashAreaType": {
+    "placeholders": {
+      "type": {
+        "type": "String"
+      }
+    }
+  },
+  "trashRoomType": "Room - {type}",
+  "@trashRoomType": {
+    "placeholders": {
+      "type": {
+        "type": "String"
+      }
+    }
+  },
+  "trashItemType": "Item - {type}",
+  "@trashItemType": {
+    "placeholders": {
+      "type": {
+        "type": "String"
+      }
+    }
+  },
+  "noMaintenancePlanYet": "No maintenance plan yet.",
+  "addAMaintenanceTask": "Add a maintenance task.",
+  "overdueTaskSentence": "{count, plural, =0{No overdue tasks.} =1{1 overdue task.} other{{count} overdue tasks.}}",
+  "@overdueTaskSentence": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "criticalTaskDueToday": "Critical task due today.",
+  "criticalCareIsDueSoon": "Critical care is due soon.",
+  "warrantyHasExpired": "Warranty has expired.",
+  "warrantyExpiresWithin30Days": "Warranty expires within 30 days.",
+  "maintenanceIsOnTrack": "Maintenance is on track.",
+  "reviewUpcomingMaintenance": "Review upcoming maintenance.",
+  "noItemsInThisRoomYet": "No items in this room yet.",
+  "addTheFirstItem": "Add the first item.",
+  "itemCountSentence": "{count, plural, =0{No items.} =1{1 item.} other{{count} items.}}",
+  "@itemCountSentence": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dueTodayTaskSentence": "{count, plural, =0{Nothing due today.} =1{1 task due today.} other{{count} tasks due today.}}",
+  "@dueTodayTaskSentence": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "roomIsOnTrack": "Room is on track.",
+  "addMaintenanceTasksForThisRoom": "Add maintenance tasks for this room.",
+  "homeSetupIsIncomplete": "Home setup is incomplete.",
+  "noSuccessfulBackupYet": "No successful backup yet.",
+  "warrantyAlertSentence": "{count, plural, =0{No warranty alerts.} =1{1 warranty alert.} other{{count} warranty alerts.}}",
+  "@warrantyAlertSentence": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "homeMaintenanceIsReady": "Home maintenance is ready.",
+  "reviewUpcomingTasks": "Review upcoming tasks.",
+  "owntendReminder": "Owntend reminder",
+  "snoozedReminderTask": "Snoozed reminder: {task}",
+  "@snoozedReminderTask": {
+    "placeholders": {
+      "task": {
+        "type": "String"
+      }
+    }
+  },
+  "openOwntendToViewThisReminder": "Open Owntend to view this reminder.",
+  "notificationsAreReadyThisScheduledTestShouldArriveNow": "Notifications are ready. This scheduled test should arrive now.",
+  "deviceLocation": "Device location",
+  "low": "Low",
+  "clearWeather": "Clear",
+  "partlyCloudy": "Partly cloudy",
+  "cloudy": "Cloudy",
+  "fog": "Fog",
+  "drizzle": "Drizzle",
+  "rain": "Rain",
+  "snow": "Snow",
+  "storms": "Storms",
+  "weather": "Weather",
+  "updatedTime": "Updated {time}",
+  "@updatedTime": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "excellent": "Excellent",
+  "good": "Good",
+  "needsSetup": "Needs setup",
+  "noBackup": "No backup",
+  "available": "Available",
+  "failed": "Failed",
+  "livingRoom": "Living room",
+  "bedroom": "Bedroom",
+  "bathroom": "Bathroom",
+  "utility": "Utility",
+  "storage": "Storage",
+  "office": "Office",
+  "diningRoom": "Dining room",
+  "hallway": "Hallway",
+  "entry": "Entry",
+  "garage": "Garage",
+  "patio": "Patio",
+  "balcony": "Balcony",
+  "pool": "Pool",
+  "lawn": "Lawn",
+  "shed": "Shed",
+  "driveway": "Driveway",
+  "itemStatusOverdue": "{count, plural, =1{1 overdue} other{{count} overdue}}",
+  "@itemStatusOverdue": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "itemStatusDueToday": "{count, plural, =1{1 due today} other{{count} due today}}",
+  "@itemStatusDueToday": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "itemStatusDueSoon": "{count, plural, =1{Due soon} other{{count} due soon}}",
+  "@itemStatusDueSoon": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "onTrack": "On track",
+  "taskEnabledConfirmation": "Task enabled.",
+  "taskDisabledConfirmation": "Task disabled.",
+  "taskAdded": "Task added",
+  "taskDone": "Task done",
+  "taskDeleted": "Task deleted",
+  "taskSnoozedForDuration": "{task} snoozed for {duration}.",
+  "@taskSnoozedForDuration": {
+    "placeholders": {
+      "task": {
+        "type": "String"
+      },
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
+  "hydrationConnectingSecurely": "Connecting securely",
+  "hydrationRestoringCloudData": "Restoring cloud data",
+  "hydrationRestoringPhotos": "Restoring photos",
+  "hydrationSyncingLocalChanges": "Syncing local changes",
+  "hydrationCheckingLatestUpdates": "Checking latest updates",
+  "noMaintenancePlansYet": "No maintenance plans yet",
+  "createYourFirstItem": "Create your first item",
+  "createYourFirstRoom": "Create your first room",
+  "scheduleRecurringCareForAnItemToStartTracking": "Schedule recurring care for an item to start tracking.",
+  "addAHomeItemFirst": "Add a device, plant, pet, safety item, or other home item first.",
+  "addARoomOrZoneBeforeAddingItems": "Add a room or zone before adding the items you maintain.",
+  "createFirstItem": "Create first item",
+  "createFirstRoom": "Create first room",
+  "seeAll": "See all",
+  "outdoorZones": "Outdoor zones",
+  "noZonesYet": "No zones yet",
+  "noRoomsYet": "No rooms yet",
+  "zonesOrganizeOutdoorCare": "Zones help organize outdoor items, tasks, and weather-aware reminders.",
+  "roomsOrganizeCareByLocation": "Rooms help organize items, tasks, and reminders by location.",
+  "tryADifferentNameOrType": "Try a different name or type.",
+  "createRecurringCareForThisItem": "Create recurring care for this item.",
+  "deleteSavedPhotoFromItem": "This removes the saved photo from {item}.",
+  "@deleteSavedPhotoFromItem": {"placeholders": {"item": {"type": "String"}}},
+  "completedTasksForThisItemAppearHere": "Completed tasks for this item will appear here.",
+  "completedWorkWillAppearHere": "Completed work will appear here.",
+  "yourMaintenancePlanIsClearToday": "Your maintenance plan is clear for today.",
+  "yourMaintenancePlanIsUpToDate": "Your maintenance plan is up to date.",
+  "upcomingMaintenanceWillAppearHere": "Upcoming maintenance will appear here.",
+  "createATaskToStartPlanningMaintenance": "Create a task to start planning maintenance.",
+  "taskCountLabel": "{count, plural, =0{No tasks} =1{1 task} other{{count} tasks}}",
+  "@taskCountLabel": {"placeholders": {"count": {"type": "int"}}},
+  "findAllHomeContent": "Find rooms, items, tags, serial numbers, notes, photo captions, and maintenance tasks.",
+  "tryAnotherSearchTerm": "Try another item name, task title, tag, or note.",
+  "result": "Result",
+  "searchResultWithSnippet": "{type} - {snippet}",
+  "@searchResultWithSnippet": {"placeholders": {"type": {"type": "String"}, "snippet": {"type": "String"}}},
+  "trashIsEmpty": "Trash is empty",
+  "trashItemCount": "{count, plural, =1{1 item} other{{count} items}}",
+  "@trashItemCount": {"placeholders": {"count": {"type": "int"}}},
+  "restoreOrDeleteForever": "Restore removed records or delete them forever.",
+  "trashedContentAppearsHere": "Rooms, items, and tasks moved to Trash appear here.",
+  "inboxMessagesAppearHere": "Maintenance reminders, digests, and system messages will appear here.",
+  "changeFilterForOtherUpdates": "Change the filter to see other inbox updates.",
+  "noUnreadNotifications": "No unread notifications",
+  "noTaskNotifications": "No task notifications",
+  "noSystemNotifications": "No system notifications",
+  "completedAtTime": "Completed {time}",
+  "@completedAtTime": {"placeholders": {"time": {"type": "String"}}},
+  "yesterday": "Yesterday",
+  "weatherContextImprovesOutdoorTasks": "Weather context improves outdoor and seasonal tasks.",
+  "noBackupCreatedOnThisDevice": "No backup has been created on this device yet.",
+  "manualBackup": "Manual backup",
+  "automaticBackup": "Automatic backup",
+  "safetyBackup": "Safety backup",
+  "lastBackupAt": "Last backup: {date}",
+  "@lastBackupAt": {"placeholders": {"date": {"type": "String"}}},
+  "lastBackupAtWithSize": "Last backup: {date} - {size}",
+  "@lastBackupAtWithSize": {"placeholders": {"date": {"type": "String"}, "size": {"type": "String"}}},
+  "backupFailedAt": "{action} failed {date}",
+  "@backupFailedAt": {"placeholders": {"action": {"type": "String"}, "date": {"type": "String"}}},
+  "latestBackup": "Latest backup",
+  "backupStatus": "Backup status",
+  "backupFailedPleaseTryAgain": "The backup could not be completed. Please try again.",
+  "hideBackupDetails": "Hide backup details",
+  "viewBackupDetails": "View backup details",
+  "allowNotificationsForReminders": "Allow notifications so Owntend can deliver this test and your enabled task reminders.",
+  "testReminderScheduled": "Test reminder scheduled for about 10 seconds from now.",
+  "turnOnLocationServices": "Turn on device location services, then return to Owntend.",
+  "allowInSystemSettings": "{message} You can allow it in system settings.",
+  "@allowInSystemSettings": {"placeholders": {"message": {"type": "String"}}},
+  "allowPermissionInSystemSettings": "Allow this permission in system settings to use the feature.",
+  "openSettings": "Open settings",
+  "reason": "Reason",
+  "skipOccurrence": "Skip occurrence",
+  "postpone": "Postpone",
+  "postponeCurrentCycleMessage": "This changes the due date for the current cycle. Add a reason if useful for the timeline.",
+  "taskPostponedUntil": "{task} postponed to {date}.",
+  "@taskPostponedUntil": {"placeholders": {"task": {"type": "String"}, "date": {"type": "String"}}},
+  "moveTaskToTrashMessage": "This removes ‘{name}’ from active tasks. You can restore it from Trash.",
+  "moveItemToTrashMessage": "This removes ‘{name}’ and its tasks from active views. You can restore them from Trash.",
+  "moveRoomToTrashMessage": "This removes ‘{name}’ and every item and task inside it from active views. You can restore them from Trash.",
+  "moveAreaToTrashMessage": "This removes ‘{name}’ and every room, item, and task inside it from active views. You can restore them from Trash.",
+  "@moveTaskToTrashMessage": {"placeholders": {"name": {"type": "String"}}},
+  "@moveItemToTrashMessage": {"placeholders": {"name": {"type": "String"}}},
+  "@moveRoomToTrashMessage": {"placeholders": {"name": {"type": "String"}}},
+  "@moveAreaToTrashMessage": {"placeholders": {"name": {"type": "String"}}},
+  "saving": "Saving...",
+  "copyItem": "Copy item",
+  "moveItem": "Move item",
+  "itemsNeedARoomToMoveOrCopy": "Items need a room before they can be moved or copied.",
+  "checkingAppBuild": "Checking app build...",
+  "appBuildInformationUnavailable": "App build information unavailable",
+  "notificationTaskSkippedTitle": "Task skipped",
+  "notificationTaskSkippedBody": "{mode, select, reason{{task} was skipped: {reason}} other{{task} was skipped for this occurrence.}}",
+  "@notificationTaskSkippedBody": {"placeholders": {"mode": {"type": "String"}, "task": {"type": "String"}, "reason": {"type": "String"}}},
+  "notificationTaskPostponedTitle": "Task postponed",
+  "notificationTaskPostponedBody": "{mode, select, reason{{task} was postponed: {reason}} other{{task} was postponed to {date}.}}",
+  "@notificationTaskPostponedBody": {"placeholders": {"mode": {"type": "String"}, "task": {"type": "String"}, "reason": {"type": "String"}, "date": {"type": "String"}}},
+  "noScheduledTasks": "No scheduled tasks",
+  "createRecurringPlanForMaintenanceQueue": "Create a recurring plan for any item to populate your maintenance queue.",
+  "maintenanceTasksNeedAnItem": "Maintenance tasks need an item so Owntend knows what the work belongs to.",
+  "addRoomOrZoneBeforeItemsAndTasks": "Add a room or zone before creating items and tasks.",
+  "tag": "Tag",
+  "skipCurrentCycleMessage": "This advances the next due date without marking the task complete. Add a reason if useful for the timeline.",
+  "goodMorning": "Good morning",
+  "goodAfternoon": "Good afternoon",
+  "goodEvening": "Good evening",
+  "there": "there",
+  "personalGreeting": "{greeting}, {name}.",
+  "@personalGreeting": {"placeholders": {"greeting": {"type": "String"}, "name": {"type": "String"}}},
+  "creatingBackup": "Creating backup...",
+  "updatingBackupSettings": "Updating backup settings...",
+  "checkingBackup": "Checking backup...",
+  "restoringBackup": "Restoring backup...",
+  "lastBackupFileMissing": "The last backup file is no longer on this device. Create a new backup.",
+  "owntendBackupShareText": "Owntend backup",
+  "restoreReplacesLocalData": "This replaces the current Owntend data on this device with the backup from {date}.",
+  "@restoreReplacesLocalData": {"placeholders": {"date": {"type": "String"}}},
+  "restoreReplacementWarning": "Current tasks, items, history, settings, notifications, streaks, and photos will be replaced. A safety copy is created before restore starts.",
+  "cloudRestoreSafetyNotice": "Cloud backup is active. Restoring locally and pausing cloud backup is the safest option.",
+  "backupRestored": "Backup restored. Owntend reloaded the restored data.",
+  "backupFromDate": "Backup from {date}",
+  "@backupFromDate": {"placeholders": {"date": {"type": "String"}}},
+  "backupFormatSummary": "Format {format}, schema {schema}, {size}",
+  "@backupFormatSummary": {"placeholders": {"format": {"type": "int"}, "schema": {"type": "int"}, "size": {"type": "String"}}},
+  "backupWillRestore": "Will restore: {details}.",
+  "backupNotIncluded": "Not included: {details}.",
+  "@backupWillRestore": {"placeholders": {"details": {"type": "String"}}},
+  "@backupNotIncluded": {"placeholders": {"details": {"type": "String"}}},
+  "backupIncludedTasks": "Tasks and due dates",
+  "backupIncludedItems": "Items, rooms, areas, categories, tags, and photos",
+  "backupIncludedHistory": "Task history, timeline, streaks, and statistics source data",
+  "backupIncludedNotifications": "Notification preferences, inbox history, and snooze defaults",
+  "backupIncludedSettings": "Theme, profile, weather location, and app settings",
+  "backupExcludedAlarms": "Android scheduled alarm handles are recreated from restored tasks and settings",
+  "backupOlderFormatWarning": "This is an older backup format. Owntend will migrate it during restore.",
+  "backupProfilePreviewWarning": "Profile settings could not be previewed.",
+  "backupGenericWarning": "This backup contains a compatibility warning. Review it before restoring.",
+  "startupStartingOwntend": "Starting Owntend",
+  "owntendSplashTagline": "Everything you own.\nWell tended.",
+  "@owntendSplashTagline": {
+    "description": "Decorative tagline shown on the process startup splash."
+  },
+  "startupLoadedPreferences": "Loaded preferences",
+  "startupOpeningOwntend": "Opening Owntend",
+  "startupRestoringSession": "Restoring session",
+  "startupCheckingSyncState": "Checking sync state",
+  "startupLoadingHomeData": "Loading Home data",
+  "startupUpdatingWeather": "Updating weather",
+  "restoreProgressNotificationPermission": "Allow notifications to see real Owntend restoration progress while the app is in the background.",
+  "cloudDataStillWaiting": "Cloud data is still waiting",
+  "hydrationStageFailureTitle": "{stage} needs attention",
+  "@hydrationStageFailureTitle": {
+    "placeholders": {
+      "stage": {"type": "String"}
+    }
+  },
+  "hydrationStageTimedOutMessage": "{stage} took longer than expected. Retry to continue.",
+  "@hydrationStageTimedOutMessage": {
+    "placeholders": {
+      "stage": {"type": "String"}
+    }
+  },
+  "hydrationStageFailedMessage": "Owntend could not complete {stage}. Retry to continue.",
+  "@hydrationStageFailedMessage": {
+    "placeholders": {
+      "stage": {"type": "String"}
+    }
+  },
+  "restoringYourFlow": "Restoring your flow",
+  "checkNetworkAndRetryWhenReady": "Check the network and retry when ready.",
+  "securelyRestoringTasksRoutinesAndReminders": "Securely bringing back your tasks,\nroutines, and reminders.",
+  "hydrationStepCompleted": "Completed",
+  "hydrationStepNeedsAttention": "Needs attention",
+  "hydrationStepInProgress": "In progress",
+  "hydrationStepPending": "Pending",
+  "homeReadinessNeedsAttention": "Needs attention",
+  "homeReadinessNextTaskReady": "Next task ready",
+  "homeReadinessReadyForToday": "Ready for today",
+  "weatherNotSet": "Weather not set",
+  "weatherUnavailable": "Weather unavailable",
+  "addHomeLocationInSettings": "Add a home location in Settings.",
+  "weatherWillUpdateWhenConnectionReturns": "Weather will update when connection returns.",
+  "switchToLightMode": "Switch to light mode",
+  "switchToDarkMode": "Switch to dark mode",
+  "createAreaToOrganizeRoomsAndZones": "Create a floor or outdoor area to start organizing rooms and zones.",
+  "matchingRoomCount": "{count, plural, =1{1 matching room} other{{count} matching rooms}}",
+  "@matchingRoomCount": {"placeholders": {"count": {"type": "int"}}},
+  "matchingZoneCount": "{count, plural, =1{1 matching zone} other{{count} matching zones}}",
+  "@matchingZoneCount": {"placeholders": {"count": {"type": "int"}}},
+  "itemCount": "{count, plural, =1{1 item} other{{count} items}}",
+  "@itemCount": {"placeholders": {"count": {"type": "int"}}},
+  "roomTaskStatusNoTasks": "No tasks",
+  "roomTaskStatusOverdue": "{count, plural, =1{1 overdue} other{{count} overdue}}",
+  "@roomTaskStatusOverdue": {"placeholders": {"count": {"type": "int"}}},
+  "roomTaskStatusDueToday": "{count, plural, =1{1 due today} other{{count} due today}}",
+  "@roomTaskStatusDueToday": {"placeholders": {"count": {"type": "int"}}},
+  "homeArea": "Home area",
+  "roomHealthSemantic": "Room health {score}% - {state}",
+  "@roomHealthSemantic": {"placeholders": {"score": {"type": "int"}, "state": {"type": "String"}}},
+  "itemHealthSemantic": "Item health {value}",
+  "@itemHealthSemantic": {"placeholders": {"value": {"type": "String"}}},
+  "itemHealthPercent": "{score}%",
+  "@itemHealthPercent": {"placeholders": {"score": {"type": "int"}}},
+  "addItemsToRoomBody": "Add devices, pets, plants, safety items, or general items here.",
+  "dueDateTimeLabel": "Due {date}",
+  "@dueDateTimeLabel": {"placeholders": {"date": {"type": "String"}}},
+  "primary": "Primary",
+  "createMaintenancePlanManually": "Create a maintenance plan manually",
+  "tasksNeedItemFirst": "Tasks need an item first",
+  "itemsNeedRoomFirst": "Items need a room first",
+  "calendarLegend": "Numbers show tasks due. Today is outlined. Selected dates are filled.",
+  "selectedDateLabel": "Selected: {date}",
+  "@selectedDateLabel": {"placeholders": {"date": {"type": "String"}}},
+  "permanentlyDeleteAreaMessage": "This permanently deletes \"{name}\" and every room, item, task, photo, and timeline inside it.",
+  "@permanentlyDeleteAreaMessage": {"placeholders": {"name": {"type": "String"}}},
+  "permanentlyDeleteRoomMessage": "This permanently deletes \"{name}\" and every item, task, photo, and timeline inside it.",
+  "@permanentlyDeleteRoomMessage": {"placeholders": {"name": {"type": "String"}}},
+  "permanentlyDeleteItemMessage": "This permanently deletes \"{name}\", its photos, fields, tasks, and maintenance history.",
+  "@permanentlyDeleteItemMessage": {"placeholders": {"name": {"type": "String"}}},
+  "permanentlyDeleteTaskMessage": "This permanently deletes \"{name}\" and its completion timeline.",
+  "@permanentlyDeleteTaskMessage": {"placeholders": {"name": {"type": "String"}}},
+  "nameRestored": "{name} restored.",
+  "@nameRestored": {"placeholders": {"name": {"type": "String"}}},
+  "nameDeletedForever": "{name} deleted forever.",
+  "@nameDeletedForever": {"placeholders": {"name": {"type": "String"}}},
+  "trashSectionItemCount": "{count, plural, =1{1 item} other{{count} items}}",
+  "@trashSectionItemCount": {"placeholders": {"count": {"type": "int"}}},
+  "all": "All",
+  "completeAction": "Complete",
+  "inboxUpdateCount": "{count, plural, =1{1 inbox update} other{{count} inbox updates}}",
+  "@inboxUpdateCount": {"placeholders": {"count": {"type": "int"}}},
+  "unreadCount": "{count, plural, =1{1 unread} other{{count} unread}}",
+  "@unreadCount": {"placeholders": {"count": {"type": "int"}}},
+  "taskReminderCount": "{count, plural, =1{1 task reminder} other{{count} task reminders}}",
+  "@taskReminderCount": {"placeholders": {"count": {"type": "int"}}},
+  "filterUnreadCount": "{label}, {count, plural, =1{1 unread} other{{count} unread}}",
+  "@filterUnreadCount": {"placeholders": {"label": {"type": "String"}, "count": {"type": "int"}}},
+  "reminderCountLabel": "{count, plural, =1{1 task reminder} other{{count} task reminders}}",
+  "@reminderCountLabel": {"placeholders": {"count": {"type": "int"}}},
+  "locationPermissionBody": "Owntend uses your location only to select local weather for household planning.",
+  "notificationsPermissionBody": "Notifications are used only for task reminders and the alerts you enable.",
+  "preciseAlarmsPermissionBody": "Precise alarms let Owntend deliver enabled reminders at the exact selected time.",
+  "approximateReminderTimingWarning": "Reminders will use approximate timing until precise alarms are allowed.",
+  "automaticBackupsDescription": "Creates one local backup per day when the app opens. Older automatic backups may be rotated by storage cleanup.",
+  "restorePreviewDescription": "Restoring will replace your current local data after you review the preview.",
+  "snoozeReminderDescription": "Delay the reminder without changing the due date.",
+  "createArea": "Create area",
+  "saveArea": "Save area",
+  "editZone": "Edit zone",
+  "createZone": "Create zone",
+  "saveZone": "Save zone",
+  "createRoom": "Create room",
+  "saveRoom": "Save room",
+  "createItem": "Create item",
+  "saveItem": "Save item",
+  "createTask": "Create task",
+  "saveTask": "Save task",
+  "trackItemBody": "Track an item, where it lives, and its maintenance.",
+  "purchasedDate": "Purchased {date}",
+  "@purchasedDate": {"placeholders": {"date": {"type": "String"}}},
+  "bornDate": "Born {date}",
+  "@bornDate": {"placeholders": {"date": {"type": "String"}}},
+  "repottedDate": "Repotted {date}",
+  "@repottedDate": {"placeholders": {"date": {"type": "String"}}},
+  "installedDateValue": "Installed {date}",
+  "@installedDateValue": {"placeholders": {"date": {"type": "String"}}},
+  "expiresDate": "Expires {date}",
+  "@expiresDate": {"placeholders": {"date": {"type": "String"}}},
+  "changeItemTypeWarning": "Type-specific fields from the previous type will not be saved.",
+  "maintenancePlansNeedItemBody": "Maintenance plans need an item so Owntend can organize the work.",
+  "planEditorIntro": "Set the cadence, priority, and next date for recurring work.",
+  "petTypeDog": "Dog",
+  "petTypeCat": "Cat",
+  "petTypeFish": "Fish",
+  "petTypeBird": "Bird",
+  "petTypeRabbit": "Rabbit",
+  "petTypeReptile": "Reptile",
+  "petTypeSmallMammal": "Small mammal",
+  "petTypeOther": "Other",
+  "fishTypeGoldfish": "Goldfish",
+  "fishTypeBetta": "Betta",
+  "fishTypeGuppy": "Guppy",
+  "fishTypeTetra": "Tetra",
+  "fishTypeMolly": "Molly",
+  "fishTypePlaty": "Platy",
+  "fishTypeKoi": "Koi",
+  "accountSignOutBody": "Owntend requires Google sign-in. You will return to the sign-in screen until you authenticate again.",
+  "signedOut": "Signed out.",
+  "deleteAccountBody": "This permanently deletes your Owntend account, cloud data, private media, local app data, and app-private backups. Owntend will verify the signed-in Google account and only show Google''s account chooser if silent verification is unavailable.",
+  "accountDeleted": "Account deleted.",
+  "accountDeletionFailed": "Account deletion could not be completed. Sign in again and retry.",
+  "notSet": "Not set",
+  "accountControls": "Account controls",
+  "accountControlsBody": "Account changes apply to your private Owntend data.",
+  "onboardingHeroSubtitle": "Organize tasks, routines, and reminders\nacross all your devices, anytime.",
+  "yourDataStaysPrivateAndSecure": "Your data stays private and secure.",
+  "worksOnlineAndOffline": "Works online and offline",
+  "restoreChannelName": "Owntend restoration",
+  "restoreChannelDescription": "Shows real progress while Owntend restores protected data.",
+  "restoringOwntend": "Restoring Owntend",
+  "restoreNotificationProgress": "{percentage}% · {stage}",
+  "@restoreNotificationProgress": {
+    "placeholders": {
+      "percentage": {"type": "int", "format": "decimalPattern"},
+      "stage": {"type": "String"}
+    }
+  },
+  "notificationChannelDueName": "Due reminders",
+  "notificationChannelDueDescription": "Maintenance tasks that are due soon or today.",
+  "notificationChannelOverdueName": "Overdue reminders",
+  "notificationChannelOverdueDescription": "Maintenance tasks that are overdue.",
+  "notificationChannelCriticalName": "Critical reminders",
+  "notificationChannelCriticalDescription": "Critical safety or pet care maintenance reminders.",
+  "notificationChannelDigestName": "Daily digests",
+  "notificationChannelDigestDescription": "Grouped maintenance summaries and reminder digests.",
+  "owntendReminderTicker": "Owntend reminder",
+  "earnFreePoints": "Earn free points",
+  "earnFreePointsSubtitle": "Watch an optional test-safe rewarded ad for 1 point.",
+  "privacyChoices": "Privacy choices",
+  "privacyChoicesSubtitle": "Review or change your advertising consent choices.",
+  "adInspector": "Ad Inspector",
+  "adInspectorSubtitle": "Launch Google''s test-device ad troubleshooting overlay after consent and ads initialization.",
+  "adInspectorUnavailable": "Ad Inspector becomes available after consent and the ads SDK are ready on a test device.",
+  "adInspectorOpenFailed": "Ad Inspector could not be opened right now.",
+  "todayCareComplete": "Today’s care is complete",
+  "optionalDailyRewardDescription": "Optionally watch a rewarded interstitial to earn 2 points. Your reward is credited only after secure server verification.",
+  "notNow": "Not now",
+  "earnTwoPoints": "Earn 2 points",
+  "rewardWatchedVerifyingTwo": "Reward watched. Verifying 2 points securely…",
+  "noRewardAvailable": "No reward is available right now.",
+  "dailyRewardAlreadyClaimed": "Today’s completion reward was already claimed or is unavailable.",
+  "pointsWallet": "Points wallet",
+  "pointsRuleExplanation": "Creating a new maintenance task costs 1 point. Creating items and safety tasks is always free. Completing and editing tasks never costs points.",
+  "recentActivity": "Recent activity",
+  "activityUnavailable": "Activity unavailable",
+  "noPointActivity": "No point activity yet.",
+  "startingPoints": "Starting points",
+  "taskCreatedPointTransaction": "Task created",
+  "itemCreatedPointTransaction": "Item created",
+  "rewardedAdPointTransaction": "Rewarded ad",
+  "dailyCompletionReward": "Daily completion reward",
+  "refundPointTransaction": "Refund",
+  "pointAdjustment": "Point adjustment",
+  "pointRewardsUnavailable": "Point rewards are temporarily unavailable.",
+  "walletAlreadyFull": "Your wallet is already full.",
+  "earnOnePoint": "Earn 1 point",
+  "earnOnePointDescription": "Watch an optional rewarded ad. The point is added only after Owntend verifies Google’s server callback.",
+  "watchAd": "Watch ad",
+  "loadingRewardedAd": "Loading rewarded ad…",
+  "adWatchedVerifyingPoint": "Ad watched. Verifying your point securely…",
+  "noRewardedAdAvailable": "No rewarded ad is available right now.",
+  "rewardUnavailableOrClaimed": "This reward is not available yet or was already claimed today.",
+  "rewardAdClosedEarly": "Ad closed early. No points were added.",
+  "rewardVerificationPending": "Reward verification is pending. Your confirmed balance will update automatically, even after reopening the app.",
+  "needOnePoint": "You need 1 point",
+  "pointShortageDescription": "Your task draft is still here. Earn a free point with an optional rewarded ad, or switch the task to a safety category when that accurately describes it. Completing, editing, and deleting remain free.",
+  "keepEditing": "Keep editing",
+  "earnAPoint": "Earn a point",
+  "offlineCopyDraftMessage": "This copy draft is kept open. Connect to create it securely.",
+  "offlineItemDraftMessage": "This draft is kept open. Connect to create the item securely.",
+  "offlineTaskDraftMessage": "This draft is kept open. Connect to create the task securely.",
+  "pointsUnavailable": "Points unavailable",
+  "pointsCount": "{count} points",
+  "@pointsCount": {
+    "placeholders": {"count": {"type": "int", "format": "decimalPattern"}}
+  },
+  "dashboardProductiveSubtitle": "Let''s make today productive",
+  "pointsLabel": "Points",
+  "setUpYourHome": "Set up your home",
+  "setupHomeSubtitle": "Complete a few steps so we can build your maintenance plan.",
+  "setupProgress": "{completed} of 3 complete",
+  "@setupProgress": {
+    "placeholders": {"completed": {"type": "int", "format": "decimalPattern"}}
+  },
+  "nextCreateFirstRoom": "Create your first room",
+  "nextAddMaintainedItem": "Add an item you want to maintain",
+  "nextScheduleMaintenanceTask": "Schedule your first maintenance task",
+  "getLocalMaintenanceTips": "Get local maintenance tips",
+  "locationEducationBody": "Choose a city or use your current approximate location to show local weather for maintenance planning.",
+  "locationEducationPrivacy": "If you use current location, Owntend saves an approximate home area. It does not continuously collect your location in the background.",
+  "enableLocation": "Enable location",
+  "neverMissImportantMaintenance": "Never miss important maintenance",
+  "notificationEducationBody": "Get reminders before tasks are due and alerts when something becomes overdue.",
+  "notificationEducationReassurance": "You can change notification preferences at any time.",
+  "enableNotificationsOnboarding": "Enable notifications",
+  "permissionStep": "Step {current} of {total}",
+  "@permissionStep": {
+    "placeholders": {
+      "current": {"type": "int", "format": "decimalPattern"},
+      "total": {"type": "int", "format": "decimalPattern"}
+    }
+  },
+  "exactAlarmEducationTitle": "Keep reminders on time",
+  "enableAlarmsAndRemindersOnboarding": "Enable reminders",
+  "permissionSetup": "Permissions & setup",
+  "permissionSetupSubtitle": "Choose a weather area, then control device reminders and optional precise timing.",
+  "permissionsAlreadyEnabled": "Location, notifications, and reminders are already set up.",
+  "permissionSetupFinishLater": "Finish later",
+  "permissionSetupChooseLocation": "Choose location",
+  "permissionSetupUseCurrentLocation": "Use current location",
+  "permissionSetupWeatherTitle": "Set your weather area",
+  "permissionSetupWeatherBody": "Choose a city or use your current approximate location to show local weather for maintenance planning.",
+  "permissionSetupWeatherPrivacy": "If you use current location, Owntend saves an approximate home area. It does not continuously collect your location in the background.",
+  "permissionSetupExactOptionalTitle": "Use precise reminder timing",
+  "permissionSetupExactOptionalBody": "Android requires special access for reminders at the exact selected time. Without it, Owntend will use approximate timing.",
+  "permissionSetupUseApproximateTiming": "Use approximate timing",
+  "permissionSetupAllowPreciseTiming": "Allow precise timing",
+  "permissionSetupManageInSettings": "Manage in settings"
+  ,"permissionSetupChangeLocation": "Change location"
+  ,"permissionSelectedArea": "Selected area: {area}"
+  ,"@permissionSelectedArea": {"placeholders": {"area": {"type": "String"}}}
+  ,"permissionUsingCurrentLocation": "Using current location"
+  ,"weatherCurrentLocationShort": "Current"
+  ,"permissionLocationAccessRequired": "Location access is required to use the current location."
+  ,"permissionNotificationAccessRequired": "Android notification access is required for device reminders."
+  ,"permissionDeviceRemindersOff": "Device reminders are off in Owntend."
+  ,"permissionExactRequiresDeviceReminders": "Turn on device reminders before enabling precise timing."
+  ,"permissionActionCouldNotComplete": "That action could not be completed. Try again."
+  ,"permissionSettingsCouldNotOpen": "Android settings could not be opened. Try again from device settings."
+  ,"owntendAlerts": "Owntend alerts"
+  ,"owntendAlertsDescription": "Controls every Owntend alert channel. Device reminders still require Android access."
+  ,"weatherAlertsInboxDescription": "Weather warnings shown in Owntend''s inbox; device delivery follows the reminder setting."
+  ,"fix": "Fix"
+  ,"quarantinedDataTitle": "Local Data Quarantine"
+  ,"quarantinedDataDescription": "Preserved data from a previous account or offline session was found on this device. To protect your data privacy, this local data cannot be uploaded to your account automatically."
+  ,"exportSafetyBackup": "Export Safety Backup"
+  ,"resetLocalData": "Reset Local Data"
+  ,"importLocalData": "Import Data into My Account"
+  ,"importLocalDataConfirmation": "Are you sure you want to merge and import all local items, rooms, and tasks into your account?"
+  ,"resetLocalDataConfirmation": "Are you sure you want to wipe local data? This will clear all un-synced items on this device. Create a backup first if you want to save them."
+  ,"reminderDaysBeforeDue": "{count, plural, =0{On the due date} =1{1 day before due} other{{count} days before due}}"
+  ,"@reminderDaysBeforeDue": {"placeholders": {"count": {"type": "int"}}}
+  ,"durationMinutes": "{count, plural, =1{1 minute} other{{count} minutes}}"
+  ,"@durationMinutes": {"placeholders": {"count": {"type": "int"}}}
+  ,"durationHours": "{count, plural, =1{1 hour} other{{count} hours}}"
+  ,"@durationHours": {"placeholders": {"count": {"type": "int"}}}
+  ,"durationDays": "{count, plural, =1{1 day} other{{count} days}}"
+  ,"@durationDays": {"placeholders": {"count": {"type": "int"}}}
+  ,"recurrenceHours": "{count, plural, =1{Every hour} other{Every {count} hours}}"
+  ,"@recurrenceHours": {"placeholders": {"count": {"type": "int"}}}
+  ,"recurrenceDays": "{count, plural, =1{Every day} other{Every {count} days}}"
+  ,"@recurrenceDays": {"placeholders": {"count": {"type": "int"}}}
+  ,"recurrenceWeeks": "{count, plural, =1{Every week} other{Every {count} weeks}}"
+  ,"@recurrenceWeeks": {"placeholders": {"count": {"type": "int"}}}
+  ,"recurrenceMonths": "{count, plural, =1{Every month} other{Every {count} months}}"
+  ,"@recurrenceMonths": {"placeholders": {"count": {"type": "int"}}}
+  ,"recurrenceYears": "{count, plural, =1{Every year} other{Every {count} years}}"
+  ,"@recurrenceYears": {"placeholders": {"count": {"type": "int"}}}
+}
