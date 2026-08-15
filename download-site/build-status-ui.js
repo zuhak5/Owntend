@@ -1,4 +1,4 @@
-const REPOSITORY = "owntend/mobile";
+const REPOSITORY = "zuhak5/Owntend";
 const TARGET_BUILD_CACHE_KEY = "versiondeck-target-build-v1";
 
 const TECHNICAL_PHASES = [

@@ -269,7 +269,7 @@ void main() {
 
   test('Android system bars use API-safe insets implementations', () {
     final activity = File(
-      'android/app/src/main/kotlin/app/owntend/mobile/MainActivity.kt',
+      'android/app/src/main/kotlin/app/zuhak5/Owntend/MainActivity.kt',
     ).readAsStringSync();
     expect(
       activity,

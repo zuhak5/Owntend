@@ -1,4 +1,4 @@
-const REPOSITORY = "owntend/mobile";
+const REPOSITORY = "zuhak5/Owntend";
 const WORKFLOW_FILE = "build-production-android.yml";
 const JOB_NAME = "Build signed production APK";
 const API_BASE = "";

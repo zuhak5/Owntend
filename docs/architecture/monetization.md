@@ -8,7 +8,7 @@ This document describes the behavior present in the repository as of 2026-08-15.
 
 - [`monetization.dart`](../../lib/src/features/monetization/monetization.dart) for consent, lifecycle integration, format orchestration, placement policy, and reward preflight.
 - [`ad_runtime.dart`](../../lib/src/features/monetization/ad_runtime.dart), [`ad_retry_policy.dart`](../../lib/src/features/monetization/ad_retry_policy.dart), and [`ad_cache.dart`](../../lib/src/features/monetization/ad_cache.dart) for eligibility generations, retry budgets, freshness, and ownership leases.
-- [`OwntendNativeAdFactory.kt`](../../android/app/src/main/kotlin/app/owntend/mobile/OwntendNativeAdFactory.kt) and [`owntend_native_ad.xml`](../../android/app/src/main/res/layout/owntend_native_ad.xml) for Android native-ad presentation.
+- [`OwntendNativeAdFactory.kt`](../../android/app/src/main/kotlin/app/zuhak5/Owntend/OwntendNativeAdFactory.kt) and [`owntend_native_ad.xml`](../../android/app/src/main/res/layout/owntend_native_ad.xml) for Android native-ad presentation.
 - [`proguard-rules.pro`](../../android/app/proguard-rules.pro) for Google Mobile Ads and native ad factory release retention.
 - [`app-ads.txt`](../../download-site/app-ads.txt) for developer root-domain publisher authorization.
 - The [points and monetization baseline migration](../../supabase/migrations/20260815000003_points_monetization.sql) for backend authority.

@@ -20,7 +20,7 @@ void main() {
     final flutter = File('lib/src/features/monetization/monetization.dart')
         .readAsStringSync();
     final kotlin = File(
-      'android/app/src/main/kotlin/app/owntend/mobile/'
+      'android/app/src/main/kotlin/app/zuhak5/Owntend/'
       'OwntendNativeAdFactory.kt',
     ).readAsStringSync();
 
@@ -35,7 +35,7 @@ void main() {
 
   test('factory validates and applies one complete palette before binding', () {
     final kotlin = File(
-      'android/app/src/main/kotlin/app/owntend/mobile/'
+      'android/app/src/main/kotlin/app/zuhak5/Owntend/'
       'OwntendNativeAdFactory.kt',
     ).readAsStringSync();
 
@@ -68,7 +68,7 @@ void main() {
     'factory preserves registered creative assets and hides absent data',
     () {
       final kotlin = File(
-        'android/app/src/main/kotlin/app/owntend/mobile/'
+        'android/app/src/main/kotlin/app/zuhak5/Owntend/'
         'OwntendNativeAdFactory.kt',
       ).readAsStringSync();
       final layout = File(

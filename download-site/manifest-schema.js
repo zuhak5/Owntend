@@ -1,5 +1,5 @@
 export const VERSIONDECK_SCHEMA_VERSION = 4;
-export const VERSIONDECK_REPOSITORY = "owntend/mobile";
+export const VERSIONDECK_REPOSITORY = "zuhak5/Owntend";
 export const VERSIONDECK_PACKAGE_NAME = "app.owntend.mobile";
 export const VERSIONDECK_SIGNER_SHA256 =
   "3E:98:0E:B5:BB:68:A5:19:90:E7:70:56:D4:E1:09:95:B2:E0:4F:B3:88:A7:34:42:B7:9A:46:C8:53:36:1E:51";
