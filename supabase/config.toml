@@ -40,7 +40,10 @@ allowed_mime_types = ["image/jpeg", "image/png", "image/webp"]
 [auth]
 enabled = true
 site_url = "http://127.0.0.1:55321"
-additional_redirect_urls = []
+additional_redirect_urls = [
+  "https://owntend.app/account-deletion.html",
+  "https://zuhak5.github.io/Owntend/account-deletion.html",
+]
 enable_signup = true
 
 [auth.email]
