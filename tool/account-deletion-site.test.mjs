@@ -21,6 +21,7 @@ import {
   validatePublicConfig,
 } from "../download-site/account-deletion.js";
 import {
+  ACCOUNT_DELETION_GITHUB_PAGES_SITE_URL,
   ACCOUNT_DELETION_SITE_URL,
   ACCOUNT_DELETION_SUPABASE_URL,
   accountDeletionConfigFromEnvironment,
@@ -37,6 +38,10 @@ const productionConfig = Object.freeze({
   supabaseUrl: ACCOUNT_DELETION_SUPABASE_URL,
   supabasePublishableKey: publishableKey,
   accountDeletionSiteUrl: ACCOUNT_DELETION_SITE_URL,
+});
+const githubPagesConfig = Object.freeze({
+  ...productionConfig,
+  accountDeletionSiteUrl: ACCOUNT_DELETION_GITHUB_PAGES_SITE_URL,
 });
 const browserConfig = validatePublicConfig(productionConfig);
 const recoveryKey = "A".repeat(43);
@@ -67,6 +72,35 @@ test("production public configuration is exact and fails closed", () => {
       supabasePublishableKey: "not-a-public-supabase-key",
     }),
     /public anon\/publishable key/,
+  );
+});
+
+test("browser accepts the custom-domain and GitHub Pages deletion URLs only", () => {
+  assert.equal(
+    validatePublicConfig(productionConfig).accountDeletionSiteUrl,
+    ACCOUNT_DELETION_SITE_URL,
+  );
+  assert.equal(
+    validatePublicConfig(githubPagesConfig).accountDeletionSiteUrl,
+    ACCOUNT_DELETION_GITHUB_PAGES_SITE_URL,
+  );
+  assert.throws(
+    () => validatePublicConfig({
+      ...productionConfig,
+      accountDeletionSiteUrl: "https://example.com/account-deletion.html",
+    }),
+    /unexpected_public_endpoint/,
+  );
+
+  const authorization = new URL(
+    createGoogleAuthorizationUrl(
+      validatePublicConfig(githubPagesConfig),
+      "A".repeat(43),
+    ),
+  );
+  assert.equal(
+    authorization.searchParams.get("redirect_to"),
+    ACCOUNT_DELETION_GITHUB_PAGES_SITE_URL,
   );
 });
 
