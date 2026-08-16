@@ -12,6 +12,7 @@ import '../core/domain/task_selectors.dart';
 import '../i18n/dynamic_text.dart';
 import '../core/utils/date_utils.dart' as hk_dates;
 import 'app_theme.dart';
+import 'domain_localization.dart';
 import 'feedback/feedback_coordinator.dart';
 import 'feedback/feedback_model.dart';
 
@@ -2408,9 +2409,9 @@ class _TaskCardState extends State<TaskCard>
     );
     final completed = task.status == TaskStatus.completed;
     final visuallyCompleted = completed || completionProgress > 0.52;
-    final locationText = '${task.asset.name} in ${task.room.name}';
+    final locationText = '${task.asset.name} · ${task.room.name}';
     final primaryMeta =
-        '${_localizedCategoryName(context, task.category.name)} · ${_localizedPriorityLabel(context, task.plan.priority)}';
+        '${localizedCategoryLabel(context, task.category)} · ${_localizedPriorityLabel(context, task.plan.priority)}';
     final statusText = _statusText(context, task);
     final card = PremiumCard(
       margin:
@@ -3077,24 +3078,8 @@ String _durationText(BuildContext context, Duration duration) {
       : context.l10n.durationDays(days);
 }
 
-String _recurrenceText(BuildContext context, RecurrenceRule rule) {
-  final unit = _localizedRecurrenceUnit(context, rule);
-  if (rule.interval == 1) {
-    return context.l10n.recurrenceEveryOne(unit);
-  }
-  return context.l10n.recurrenceEveryMany(rule.interval, unit);
-}
-
-String _localizedRecurrenceUnit(BuildContext context, RecurrenceRule rule) {
-  final plural = rule.interval != 1;
-  return switch (rule.unit) {
-    RecurrenceUnit.hours => plural ? context.l10n.hours2 : context.l10n.hour,
-    RecurrenceUnit.days => plural ? context.l10n.days2 : context.l10n.day,
-    RecurrenceUnit.weeks => plural ? context.l10n.weeks2 : context.l10n.week,
-    RecurrenceUnit.months => plural ? context.l10n.months2 : context.l10n.month,
-    RecurrenceUnit.years => plural ? context.l10n.years2 : context.l10n.year,
-  };
-}
+String _recurrenceText(BuildContext context, RecurrenceRule rule) =>
+    localizedRecurrenceLabel(context, rule);
 
 String _localizedPriorityLabel(BuildContext context, PriorityLevel priority) =>
     switch (priority) {
@@ -3102,17 +3087,6 @@ String _localizedPriorityLabel(BuildContext context, PriorityLevel priority) =>
       PriorityLevel.medium => context.l10n.medium,
       PriorityLevel.high => context.l10n.high,
       PriorityLevel.critical => context.l10n.critical,
-    };
-
-String _localizedCategoryName(BuildContext context, String name) =>
-    switch (name) {
-      'Safety' => context.l10n.safety,
-      'Pets' => context.l10n.pets,
-      'Appliances' => context.l10n.appliances,
-      'Plants' => context.l10n.plants,
-      'Cleaning' => context.l10n.cleaning,
-      'General' => context.l10n.general,
-      _ => name,
     };
 
 _TaskColors _taskColors(

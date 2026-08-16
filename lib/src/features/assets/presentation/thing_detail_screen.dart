@@ -179,8 +179,7 @@ List<Widget> _taskMetadataRows(BuildContext context, TaskMetadata? metadata) {
       _DetailRow(
         icon: Symbols.timer_rounded,
         label: context.l10n.duration,
-        value:
-            '${metadata.estimatedDurationMinutes} ${metadata.estimatedDurationMinutes == 1 ? 'minute' : 'minutes'}',
+        value: context.l10n.durationMinutes(metadata.estimatedDurationMinutes!),
       ),
     if (metadata.requiredMaterials.isNotEmpty)
       _DetailRow(
@@ -327,7 +326,8 @@ class _ThingDetailScreenState extends ConsumerState<ThingDetailScreen> {
                                           context,
                                           asset.assetType,
                                         ),
-                                        if (category != null) category.name,
+                                        if (category != null)
+                                          _categoryLabel(context, category),
                                         if (room != null) room.name,
                                         if (asset.placement != null)
                                           asset.placement!,
@@ -627,7 +627,7 @@ class _ThingDetailFields extends StatelessWidget {
         _DetailRow(
           icon: Symbols.pets_rounded,
           label: context.l10n.species,
-          value: pet!.species!,
+          value: _petSpeciesLabel(context, pet!.species!),
           contentType: 'asset.pet.species',
         ),
       if (pet?.feedingNotes != null)

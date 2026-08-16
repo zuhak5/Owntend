@@ -90,6 +90,56 @@ void main() {
   });
 
   test(
+    'controlled domain values use localization at presentation boundaries',
+    () {
+      final taskDetail = File(
+        'lib/src/features/maintenance/presentation/task_detail_screen.dart',
+      ).readAsStringSync();
+      expect(taskDetail, contains('_categoryLabel(context, task.category)'));
+      expect(taskDetail, contains('reminderDaysBeforeDue'));
+      expect(taskDetail, isNot(contains("'day' : 'days'")));
+      expect(taskDetail, isNot(contains(' before due')));
+
+      final thingDetail = File(
+        'lib/src/features/assets/presentation/thing_detail_screen.dart',
+      ).readAsStringSync();
+      expect(thingDetail, contains('_categoryLabel(context, category)'));
+      expect(thingDetail, contains('durationMinutes'));
+      expect(thingDetail, contains('_petSpeciesLabel(context, pet!.species!)'));
+      expect(thingDetail, isNot(contains("'minute' : 'minutes'")));
+
+      final assetDialogs = File(
+        'lib/src/features/assets/presentation/asset_dialogs.dart',
+      ).readAsStringSync();
+      expect(assetDialogs, contains('_categoryLabel(context, item)'));
+
+      final domainLocalization = File('lib/src/ui/domain_localization.dart')
+          .readAsStringSync();
+      expect(domainLocalization, contains("'category_cleaning'"));
+      expect(domainLocalization, contains('recurrenceDays(rule.interval)'));
+      expect(domainLocalization, contains('recurrenceWeeks(rule.interval)'));
+      expect(domainLocalization, contains('recurrenceMonths(rule.interval)'));
+      expect(domainLocalization, contains('recurrenceYears(rule.interval)'));
+
+      final components = File('lib/src/ui/components.dart').readAsStringSync();
+      expect(components, isNot(contains(" in \${task.room.name}")));
+      expect(
+        components,
+        contains('localizedCategoryLabel(context, task.category)'),
+      );
+      expect(components, contains('localizedRecurrenceLabel(context, rule)'));
+      expect(components, isNot(contains('_localizedCategoryName')));
+      expect(components, isNot(contains('recurrenceEveryMany(rule.interval')));
+
+      final search = File('lib/src/core/data/search_repository.dart')
+          .readAsStringSync();
+      expect(search, contains('category_cleaning'));
+      expect(search, contains('تنظيف'));
+      expect(search, contains('حيوانات أليفة'));
+    },
+  );
+
+  test(
     'unknown controlled notifications use the localized generic fallback',
     () {
       final english = lookupAppLocalizations(const Locale('en'));

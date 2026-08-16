@@ -86,7 +86,10 @@ void main() {
           )
           .get();
       expect(rows, hasLength(1));
-      expect(rows.first.read<String>('sql'), contains('fts5'));
+      final definition = rows.first.read<String>('sql');
+      expect(definition, contains('fts5'));
+      expect(definition, contains('display_body'));
+      expect(definition, contains('search_terms'));
     });
 
     test('creates required indexes and foreign keys', () async {

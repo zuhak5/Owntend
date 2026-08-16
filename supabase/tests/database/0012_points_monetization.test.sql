@@ -4,7 +4,7 @@ create extension if not exists pgtap with schema extensions;
 set local role postgres;
 set search_path = public, extensions, pg_catalog;
 
-select extensions.plan(75);
+select extensions.plan(80);
 
 select extensions.has_table('public', 'point_wallets', 'point wallet table exists');
 select extensions.has_table('public', 'point_transactions', 'point ledger table exists');
@@ -345,6 +345,63 @@ select extensions.is(
   (select count(*) from public.assets where id = 'points-general-asset')::integer,
   1,
   'an idempotent asset replay creates no duplicate'
+);
+
+select extensions.is(
+  (
+    select data_type
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'device_details'
+      and column_name = 'consumable'
+  ),
+  'text',
+  'device consumable uses the same text contract as Flutter and Drift'
+);
+select extensions.is(
+  (
+    select is_nullable
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'device_details'
+      and column_name = 'consumable'
+  ),
+  'YES',
+  'device consumable remains optional'
+);
+select extensions.is(
+  (
+    public.create_asset_with_point_debit(
+      jsonb_build_object(
+        'operation_id', '44444444-0000-0000-0000-000000000009',
+        'asset', jsonb_build_object(
+          'id', 'points-device-asset',
+          'name', 'Air purifier',
+          'asset_type', 'device',
+          'category_id', 'category_appliances',
+          'room_id', 'points-room',
+          'placement', 'Utility shelf'
+        ),
+        'details', jsonb_build_object(
+          'brand', 'Example',
+          'power_source', 'mains',
+          'consumable', 'HEPA filter'
+        )
+      )
+    )->>'asset_id'
+  ),
+  'points-device-asset',
+  'device creation accepts descriptive consumable text'
+);
+select extensions.is(
+  (select placement from public.assets where id = 'points-device-asset'),
+  'Utility shelf',
+  'asset creation RPC persists placement'
+);
+select extensions.is(
+  (select consumable from public.device_details where asset_id = 'points-device-asset'),
+  'HEPA filter',
+  'asset creation RPC preserves descriptive consumable text'
 );
 
 select extensions.is(

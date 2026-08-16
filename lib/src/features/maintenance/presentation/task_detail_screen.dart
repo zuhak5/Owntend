@@ -229,14 +229,15 @@ class TaskDetailScreen extends ConsumerWidget {
                           _DetailRow(
                             icon: Symbols.category_rounded,
                             label: context.l10n.category,
-                            value: task.category.name,
+                            value: _categoryLabel(context, task.category),
                           ),
                           if (task.plan.reminderDaysBefore > 0)
                             _DetailRow(
                               icon: Symbols.notifications_active_rounded,
                               label: context.l10n.reminder,
-                              value:
-                                  '${task.plan.reminderDaysBefore} ${task.plan.reminderDaysBefore == 1 ? 'day' : 'days'} before due',
+                              value: context.l10n.reminderDaysBeforeDue(
+                                task.plan.reminderDaysBefore,
+                              ),
                             ),
                           if (task.plan.instructions?.trim().isNotEmpty ??
                               false)

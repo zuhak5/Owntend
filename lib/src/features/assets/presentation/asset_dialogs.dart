@@ -826,7 +826,10 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
                 decoration: InputDecoration(labelText: context.l10n.category),
                 items: [
                   for (final item in items)
-                    DropdownMenuItem(value: item.id, child: Text(item.name)),
+                    DropdownMenuItem(
+                      value: item.id,
+                      child: Text(_categoryLabel(context, item)),
+                    ),
                 ],
                 onChanged: (value) => setState(() => _categoryId = value),
               );

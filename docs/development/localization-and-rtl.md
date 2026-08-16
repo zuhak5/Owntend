@@ -33,6 +33,14 @@ flutter gen-l10n
 - Keep capability status distinct from permission outcome in user-facing wording: an application preference is not proof that Android delivery, location service, or exact-alarm access is effective.
 - Treat permission, account-deletion, ads/consent, backup, permanent deletion, and Undo strings as high-impact translations that require semantic review in both languages.
 
+## Controlled domain values
+
+Stable stored identifiers and wire values remain locale-neutral. Built-in category IDs, enum names, pet/fish tokens, and similar controlled values must be converted to localized display labels at the presentation boundary; user-entered names, notes, species, breeds, placement, and other free text remain exactly as entered.
+
+Shared controlled-value presenters live in `lib/src/ui/domain_localization.dart`. Category presentation is centralized and keyed by stable category ID rather than English category spelling. Quantity and recurrence text must use the existing ICU messages rather than manually composing English singular/plural fragments. Search indexes include English and Arabic aliases for controlled values so either language can discover the same canonical record without translating persisted data. User-authored display text and machine search aliases live in separate FTS columns, so snippets never expose canonical aliases merely because an Arabic synonym matched. Controlled search results must render through the same localized presenters used by the rest of the UI.
+
+For relationship metadata that is not a sentence, use a direction-neutral separator such as `·` instead of embedding English grammar such as `in` or manually concatenating translated sentence fragments.
+
 ## RTL layout
 
 Use directional APIs:
