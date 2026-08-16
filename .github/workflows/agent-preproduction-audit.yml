@@ -17,17 +17,17 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           fetch-depth: 0
-      - name: Apply operation-specific undo fixes
+      - name: Apply task-state consistency fixes
         shell: bash
         run: |
-          python .github/agent-preproduction-phase2.py
+          python .github/agent-preproduction-phase3.py
           git diff --check
           if git diff --quiet; then
-            echo "No phase-two changes to commit."
+            echo "No phase-three changes to commit."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -m "fix: make completion undo causally safe"
+          git commit -m "fix: keep task state and history consistent"
           git push
