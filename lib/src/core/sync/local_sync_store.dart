@@ -1134,6 +1134,8 @@ WHERE next_attempt_at IS NULL OR next_attempt_at <= ?
       profileSyncSpec.entity: syncEntitySpecs.length,
     };
 
+    dependencyOrder['asset_photo_primary'] = syncEntitySpecs.length + 1;
+
     final maintenancePlanOrder = dependencyOrder['maintenance_plan'];
     if (maintenancePlanOrder != null) {
       dependencyOrder['maintenance_completion'] = maintenancePlanOrder;
@@ -1879,6 +1881,51 @@ ON CONFLICT(key) DO UPDATE SET
     return db.allTables.firstWhere(
       (table) => table.actualTableName == tableName,
     );
+  }
+
+  Future<void> markAssetPhotoPrimarySucceeded(
+    LocalSyncMutation mutation, {
+    required List<SyncRecord> photos,
+  }) async {
+    if (mutation.entity != 'asset_photo_primary' ||
+        photos.any((record) => record.spec.entity != 'asset_photo')) {
+      throw StateError('Invalid primary-photo acknowledgement.');
+    }
+    await db.transaction(() async {
+      await withOutboxSuppressed(() async {
+        for (final canonical in photos) {
+          final local = await (db.select(db.assetPhotos)..where(
+                (row) => row.id.equals(canonical.recordKey),
+              )).getSingleOrNull();
+          if (local == null) {
+            // A photo created by another device will be materialized by the
+            // normal pull path. Remembering its remote row here is unnecessary.
+            continue;
+          }
+          final localized = SyncRecord(
+            spec: canonical.spec,
+            recordKey: canonical.recordKey,
+            values: {
+              ...canonical.values,
+              'relative_path': local.relativePath,
+            },
+            clientModifiedAt: canonical.clientModifiedAt,
+            originDeviceId: canonical.originDeviceId,
+            revision: canonical.revision,
+            syncSeq: canonical.syncSeq,
+            serverUpdatedAt: canonical.serverUpdatedAt,
+            deletedAt: canonical.deletedAt,
+          );
+          await _upsertLocal(localized);
+          await _saveShadow(localized);
+        }
+      });
+      await (db.delete(db.syncOutbox)..where(
+            (row) =>
+                row.entity.equals('asset_photo_primary') &
+                row.recordKey.equals(mutation.recordKey),
+          )).go();
+    });
   }
 
   Future<void> markMaintenanceUndoSucceeded(

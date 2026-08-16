@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:drift/drift.dart' hide isNull, isNotNull;
@@ -442,6 +443,39 @@ void main() {
       await expectLater(assetRepo.restoreRoom(roomId), throwsStateError);
       expect((await assetRepo.listArchivedAreas()).map((a) => a.id), contains(areaId));
       expect((await assetRepo.listArchivedRooms()).map((r) => r.id), contains(roomId));
+    });
+  });
+
+
+  group('Primary photo mutation routing', () {
+    test('make primary queues one atomic operation instead of photo upserts', () async {
+      final areaId = await assetRepo.saveArea(name: 'Photos', kind: AreaKind.indoor);
+      final roomId = await assetRepo.saveRoom(areaId: areaId, name: 'Photos');
+      final categoryId = (await assetRepo.listCategories()).first.id;
+      final assetId = await assetRepo.saveAsset(
+        name: 'Photo asset',
+        categoryId: categoryId,
+        roomId: roomId,
+      );
+      final sourceA = File(p.join(tempDir.path, 'a.jpg'))..writeAsBytesSync([1, 2, 3]);
+      final sourceB = File(p.join(tempDir.path, 'b.jpg'))..writeAsBytesSync([4, 5, 6]);
+      final first = await assetRepo.addPhoto(assetId, sourceA.path);
+      final second = await assetRepo.addPhoto(assetId, sourceB.path);
+      await db.delete(db.syncOutbox).go();
+
+      await assetRepo.setPrimaryPhoto(assetId, second.id);
+
+      final outbox = await db.select(db.syncOutbox).get();
+      expect(outbox.where((row) => row.entity == 'asset_photo'), isEmpty);
+      final operation = outbox.singleWhere(
+        (row) => row.entity == 'asset_photo_primary',
+      );
+      final payload = jsonDecode(operation.payloadJson!) as Map<String, dynamic>;
+      expect(payload['asset_id'], assetId);
+      expect(payload['photo_id'], second.id);
+      final photos = await assetRepo.listPhotosForAsset(assetId);
+      expect(photos.singleWhere((photo) => photo.id == first.id).isPrimary, isFalse);
+      expect(photos.singleWhere((photo) => photo.id == second.id).isPrimary, isTrue);
     });
   });
 

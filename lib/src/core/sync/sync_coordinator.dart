@@ -1268,34 +1268,73 @@ class SyncCoordinator implements CloudSyncRepository {
           continue;
         }
 
-        if (mutation.entity == 'maintenance_undo') {
+        if (mutation.entity == 'asset_photo_primary') {
           final payloadJson = mutation.payloadJson;
           if (mutation.operation != 'execute' ||
               payloadJson == null ||
               payloadJson.trim().isEmpty) {
             const failure = SupabaseFailure(
               kind: SupabaseFailureKind.incompatibleSchema,
-              message:
-                  'A queued maintenance undo has an invalid payload. '
-                  'Update Owntend before synchronizing again.',
+              message: 'A queued primary-photo operation has an invalid payload.',
             );
             await _recordMutationFailure(mutation, failure);
             throw failure;
           }
           try {
-            await _pushMaintenanceUndo(
-              mutation,
-              payloadJson: payloadJson,
-              userId: userId,
-              deviceId: deviceId,
-              scope: scope,
+            final payload = Map<String, dynamic>.from(
+              jsonDecode(payloadJson) as Map,
             );
-            if (trackHydration) {
-              await _localStore.addHydrationUnits(1);
+            final assetId = payload['asset_id'] as String?;
+            final photoId = payload['photo_id'] as String?;
+            if (assetId == null || photoId == null || assetId != mutation.recordKey) {
+              throw const SupabaseFailure(
+                kind: SupabaseFailureKind.incompatibleSchema,
+                message: 'A queued primary-photo operation is malformed.',
+              );
             }
-            // The undo acknowledgement removes any generic plan/delete guard
-            // rows that were already present in this in-memory batch. Re-read
-            // the outbox on the next sync pass rather than pushing stale rows.
+            await _localStore.markMutationInFlight(mutation, userId: userId);
+            final response = await _remoteGateway.setPrimaryAssetPhoto(
+              assetId: assetId,
+              photoId: photoId,
+            );
+            await _ensureActiveAccountScope(scope);
+            final rawPhotos = response['photos'];
+            if (rawPhotos is! List) {
+              throw const FormatException(
+                'The primary-photo RPC omitted canonical photo rows.',
+              );
+            }
+            final spec = syncSpecByEntity['asset_photo']!;
+            final photos = <SyncRecord>[];
+            for (final raw in rawPhotos) {
+              if (raw is! Map) {
+                throw const FormatException(
+                  'The primary-photo RPC returned an invalid photo row.',
+                );
+              }
+              final row = Map<String, dynamic>.from(raw);
+              if (row['user_id'] != userId || row['asset_id'] != assetId) {
+                throw const SupabaseFailure(
+                  kind: SupabaseFailureKind.permissionDenied,
+                  message: 'The cloud returned primary-photo data for another scope.',
+                );
+              }
+              photos.add(SyncRecord.fromRemote(spec, row));
+            }
+            if (!photos.any(
+              (record) =>
+                  record.recordKey == photoId &&
+                  record.values['is_primary'] == true,
+            )) {
+              throw const FormatException(
+                'The primary-photo RPC did not confirm the selected photo.',
+              );
+            }
+            await _localStore.markAssetPhotoPrimarySucceeded(
+              mutation,
+              photos: photos,
+            );
+            if (trackHydration) await _localStore.addHydrationUnits(1);
             return true;
           } on _AccountScopeInactive {
             rethrow;

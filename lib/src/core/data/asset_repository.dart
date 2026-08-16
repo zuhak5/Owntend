@@ -1012,6 +1012,7 @@ class DriftAssetRepository implements AssetRepository {
 
   @override
   Future<void> setPrimaryPhoto(String assetId, String photoId) async {
+    final now = DateTime.now();
     await db.transaction(() async {
       final target =
           await (db.select(db.assetPhotos)..where(
@@ -1019,16 +1020,40 @@ class DriftAssetRepository implements AssetRepository {
                     photo.id.equals(photoId) & photo.assetId.equals(assetId),
               ))
               .getSingleOrNull();
-      if (target == null) {
-        return;
+      if (target == null) return;
+
+      await (db.update(db.syncRuntime)..where((row) => row.id.equals(1)))
+          .write(const SyncRuntimeCompanion(suppressOutbox: Value(true)));
+      try {
+        await (db.update(db.assetPhotos)
+              ..where((photo) => photo.assetId.equals(assetId)))
+            .write(const AssetPhotosCompanion(isPrimary: Value(false)));
+        await (db.update(db.assetPhotos)..where(
+              (photo) => photo.id.equals(photoId) & photo.assetId.equals(assetId),
+            ))
+            .write(const AssetPhotosCompanion(isPrimary: Value(true)));
+      } finally {
+        await (db.update(db.syncRuntime)..where((row) => row.id.equals(1)))
+            .write(const SyncRuntimeCompanion(suppressOutbox: Value(false)));
       }
-      await (db.update(db.assetPhotos)
-            ..where((photo) => photo.assetId.equals(assetId)))
-          .write(const AssetPhotosCompanion(isPrimary: Value(false)));
-      await (db.update(db.assetPhotos)..where(
-            (photo) => photo.id.equals(photoId) & photo.assetId.equals(assetId),
-          ))
-          .write(const AssetPhotosCompanion(isPrimary: Value(true)));
+
+      final account = await (db.select(
+        db.syncAccount,
+      )..where((row) => row.id.equals(1))).getSingleOrNull();
+      await db.into(db.syncOutbox).insertOnConflictUpdate(
+        SyncOutboxCompanion.insert(
+          entity: 'asset_photo_primary',
+          recordKey: assetId,
+          operation: 'execute',
+          changedAt: Value(now),
+          payloadJson: Value(jsonEncode({
+            'version': 1,
+            'asset_id': assetId,
+            'photo_id': photoId,
+          })),
+          userId: Value(account?.boundUserId),
+        ),
+      );
     });
   }
 
