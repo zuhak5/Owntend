@@ -7,7 +7,7 @@
   <meta name="description" content="VersionDeck is the official download page for independently verified Owntend Android releases, changelogs, checksums, and signing details.">
   <meta name="color-scheme" content="light dark">
   <meta name="referrer" content="strict-origin-when-cross-origin">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'; upgrade-insecure-requests">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://api.github.com; manifest-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'; upgrade-insecure-requests">
   <meta property="og:title" content="VersionDeck — Owntend Releases">
   <meta property="og:description" content="Download verified Owntend APK releases and inspect their checksums, signer identity, and commit.">
   <meta property="og:type" content="website">
@@ -83,6 +83,7 @@
             <h2 id="build-progress-heading">Building Owntend APK</h2>
           </div>
           <div class="build-progress-run-group">
+            <a id="build-progress-run-link" class="build-progress-run-link" href="https://github.com/zuhak5/Owntend/actions/workflows/build-production-android.yml" target="_blank" rel="noopener noreferrer">Workflow run</a>
             <span id="build-progress-meta" class="build-progress-meta">Waiting for live status</span>
           </div>
         </div>
