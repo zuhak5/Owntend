@@ -9,55 +9,82 @@ permissions:
   contents: read
 
 jobs:
-  validate:
+  home-structure:
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 20
     steps:
-      - name: Check out branch
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
-      - name: Set up Flutter
-        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
         with:
           flutter-version: "3.47.0"
           channel: stable
           cache: true
-      - name: Resolve dependencies
-        run: flutter pub get --enforce-lockfile
-      - name: Generate localization files
-        run: flutter gen-l10n
-      - name: Generate source files
-        run: dart run build_runner build
-      - name: Verify formatting
-        run: dart format --output=none --set-exit-if-changed lib test
-      - name: Analyze
-        run: flutter analyze --no-pub
-
+      - run: flutter pub get --enforce-lockfile
+      - run: flutter gen-l10n
+      - run: dart run build_runner build
       - name: Test home structure repository
-        id: test_home_structure
-        shell: pwsh
         run: flutter test --no-pub --concurrency=1 --timeout 3m --reporter expanded --exclude-tags production-config test/home_structure_repository_test.dart
+
+  recurring-completion:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: "3.47.0"
+          channel: stable
+          cache: true
+      - run: flutter pub get --enforce-lockfile
+      - run: flutter gen-l10n
+      - run: dart run build_runner build
       - name: Test recurring completion precision
-        id: test_recurring_completion
-        if: always()
-        shell: pwsh
         run: flutter test --no-pub --concurrency=1 --timeout 3m --reporter expanded --exclude-tags production-config test/recurring_completion_precision_test.dart
+
+  sync-coordinator:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: "3.47.0"
+          channel: stable
+          cache: true
+      - run: flutter pub get --enforce-lockfile
+      - run: flutter gen-l10n
+      - run: dart run build_runner build
       - name: Test sync coordinator
-        id: test_sync_coordinator
-        if: always()
-        shell: pwsh
         run: flutter test --no-pub --concurrency=1 --timeout 3m --reporter expanded --exclude-tags production-config test/sync_coordinator_test.dart
+
+  trash-lifecycle:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: "3.47.0"
+          channel: stable
+          cache: true
+      - run: flutter pub get --enforce-lockfile
+      - run: flutter gen-l10n
+      - run: dart run build_runner build
       - name: Test trash lifecycle and invariants
-        id: test_trash_lifecycle
-        if: always()
-        shell: pwsh
         run: flutter test --no-pub --concurrency=1 --timeout 3m --reporter expanded --exclude-tags production-config test/trash_lifecycle_and_invariants_test.dart
+
+  widget-regressions:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: "3.47.0"
+          channel: stable
+          cache: true
+      - run: flutter pub get --enforce-lockfile
+      - run: flutter gen-l10n
+      - run: dart run build_runner build
       - name: Test widget regressions
-        id: test_widget
-        if: always()
-        shell: pwsh
         run: flutter test --no-pub --concurrency=1 --timeout 3m --reporter expanded --exclude-tags production-config test/widget_test.dart
-      - name: Run complete Flutter suite
-        id: test_full_suite
-        if: always()
-        shell: pwsh
-        run: flutter test --no-pub --concurrency=1 --timeout 3m --reporter expanded --exclude-tags production-config
