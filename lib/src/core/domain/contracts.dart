@@ -222,6 +222,10 @@ abstract interface class SettingsRepository {
   Future<NotificationPreferences> notificationPreferences();
   Stream<NotificationPreferences> watchNotificationPreferences();
   Future<void> setNotificationPreferences(NotificationPreferences preferences);
+  Future<void> mergeNotificationPreferences({
+    required NotificationPreferences baseline,
+    required NotificationPreferences desired,
+  });
 }
 
 abstract interface class NotificationInboxRepository {

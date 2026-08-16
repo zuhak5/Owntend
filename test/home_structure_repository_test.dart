@@ -1714,6 +1714,26 @@ void main() {
       expect(valid, isNotEmpty);
     });
 
+
+    test('concurrent notification preference changes merge independent fields', () async {
+      final settings = DriftSettingsRepository(db);
+      const baseline = NotificationPreferences();
+      await settings.setNotificationPreferences(baseline);
+      await Future.wait([
+        settings.mergeNotificationPreferences(
+          baseline: baseline,
+          desired: baseline.copyWith(quietHoursEnabled: true),
+        ),
+        settings.mergeNotificationPreferences(
+          baseline: baseline,
+          desired: baseline.copyWith(privacyMode: true),
+        ),
+      ]);
+      final saved = await settings.notificationPreferences();
+      expect(saved.quietHoursEnabled, isTrue);
+      expect(saved.privacyMode, isTrue);
+    });
+
   });
 }
 
