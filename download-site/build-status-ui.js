@@ -1,5 +1,4 @@
 const REPOSITORY = "zuhak5/Owntend";
-const TARGET_BUILD_CACHE_KEY = "versiondeck-target-build-v1";
 
 const TECHNICAL_PHASES = [
   {
@@ -24,7 +23,7 @@ const TECHNICAL_PHASES = [
   },
   {
     id: "publish",
-    label: "Publishing release",
+    label: "Packaging verified build evidence",
     match: /publish and verify sentry release|upload production apk|attest production apk provenance|publish (?:github )?release/i,
   },
   {
@@ -70,29 +69,7 @@ export function shouldShowStarting(summary, percentText) {
   return /^Step 1 of \d+$/i.test(cleanText(summary)) && ["0%", "Starting"].includes(cleanText(percentText));
 }
 
-function safeSessionStorage() {
-  try {
-    return window.sessionStorage;
-  } catch {
-    return null;
-  }
-}
-
-function decodeBase64Utf8(content) {
-  const binary = window.atob(String(content || "").replace(/\s+/g, ""));
-  const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
-  return new TextDecoder().decode(bytes);
-}
-
 async function fetchTargetBuild() {
-  const storage = safeSessionStorage();
-  try {
-    const cached = JSON.parse(storage?.getItem(TARGET_BUILD_CACHE_KEY) || "null");
-    if (cached?.version && Number.isFinite(cached?.build)) return cached;
-  } catch {
-    // Continue with the network lookup.
-  }
-
   const response = await fetch("build-info.json", {
     cache: "no-store",
     referrerPolicy: "no-referrer",
@@ -102,11 +79,6 @@ async function fetchTargetBuild() {
   const target = payload?.target || { version: payload?.versionName, build: payload?.versionCode };
   if (!target?.version || !Number.isFinite(target?.build)) {
     throw new Error("Target build version is unavailable.");
-  }
-  try {
-    storage?.setItem(TARGET_BUILD_CACHE_KEY, JSON.stringify(target));
-  } catch {
-    // The target label remains available for the current page.
   }
   return target;
 }
@@ -231,6 +203,10 @@ function initializeBuildStatusUi() {
 
   function enhance() {
     frame = 0;
+    const success = !section.hidden && section.dataset.state === "success";
+    if (success && phaseName.textContent !== "Verified build evidence ready") {
+      phaseName.textContent = "Verified build evidence ready";
+    }
     const active = !section.hidden && section.dataset.state === "active";
     if (!active) {
       progressTrack.classList.remove("is-indeterminate");
