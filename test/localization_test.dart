@@ -96,7 +96,7 @@ void main() {
     expect(taskDetail, contains('_categoryLabel(context, task.category)'));
     expect(taskDetail, contains('reminderDaysBeforeDue'));
     expect(taskDetail, isNot(contains("'day' : 'days'")));
-    expect(taskDetail, isNot(contains(' before due')));
+    expect(taskDetail, isNot(contains(' before due'));
 
     final thingDetail = File(
       'lib/src/features/assets/presentation/thing_detail_screen.dart',
@@ -111,11 +111,14 @@ void main() {
     ).readAsStringSync();
     expect(assetDialogs, contains('_categoryLabel(context, item)'));
 
-    final recurrence = File('lib/src/ui/enum_formatters.dart').readAsStringSync();
-    expect(recurrence, contains('recurrenceDays(rule.interval)'));
-    expect(recurrence, contains('recurrenceWeeks(rule.interval)'));
-    expect(recurrence, contains('recurrenceMonths(rule.interval)'));
-    expect(recurrence, contains('recurrenceYears(rule.interval)'));
+    final domainLocalization = File(
+      'lib/src/ui/domain_localization.dart',
+    ).readAsStringSync();
+    expect(domainLocalization, contains("'category_cleaning'"));
+    expect(domainLocalization, contains('recurrenceDays(rule.interval)'));
+    expect(domainLocalization, contains('recurrenceWeeks(rule.interval)'));
+    expect(domainLocalization, contains('recurrenceMonths(rule.interval)'));
+    expect(domainLocalization, contains('recurrenceYears(rule.interval)'));
 
     final components = File('lib/src/ui/components.dart').readAsStringSync();
     expect(components, isNot(contains(" in \${task.room.name}")));
