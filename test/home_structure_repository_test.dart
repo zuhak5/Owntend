@@ -1506,6 +1506,135 @@ void main() {
         await root.delete(recursive: true);
       }
     }
+
+    test('editing clears optional metadata and does not acknowledge Inbox', () async {
+      final maintenance = DriftMaintenanceRepository(db);
+      final roomId = await repo.saveRoom(
+        areaId: 'area_first_floor',
+        name: 'Metadata room',
+      );
+      final categoryId = (await repo.listCategories()).first.id;
+      final assetId = await repo.saveAsset(
+        name: 'Metadata asset',
+        categoryId: categoryId,
+        roomId: roomId,
+      );
+      final planId = await maintenance.savePlan(
+        assetId: assetId,
+        title: 'Metadata task',
+        recurrence: const RecurrenceRule(interval: 1, unit: RecurrenceUnit.months),
+        priority: PriorityLevel.medium,
+        nextDueDate: DateTime(2026, 8, 16, 9),
+        healthGroup: HealthGroup.other,
+        metadata: const TaskMetadata(
+          taskType: 'Inspect',
+          locationLabel: 'Garage',
+          requiredMaterials: ['Filter'],
+        ),
+      );
+      final inbox = DriftNotificationInboxRepository(db);
+      await inbox.createNotification(
+        title: 'Due',
+        body: 'Metadata task is due',
+        kind: 'task',
+        route: '/maintenance/$planId',
+        planId: planId,
+      );
+      expect(await inbox.unreadCount(), 1);
+
+      await maintenance.savePlan(
+        id: planId,
+        assetId: assetId,
+        title: 'Metadata task edited',
+        recurrence: const RecurrenceRule(interval: 1, unit: RecurrenceUnit.months),
+        priority: PriorityLevel.medium,
+        nextDueDate: DateTime(2026, 8, 16, 9),
+        healthGroup: HealthGroup.other,
+        metadata: null,
+      );
+
+      expect((await maintenance.getTask(planId))!.plan.metadata, isNull);
+      expect(await inbox.unreadCount(), 1);
+    });
+
+    test('postpone is forward-only and repeated same-target action is rejected', () async {
+      final now = DateTime(2026, 8, 16, 12);
+      final maintenance = DriftMaintenanceRepository(db, now: () => now);
+      final roomId = await repo.saveRoom(
+        areaId: 'area_first_floor',
+        name: 'Postpone room',
+      );
+      final categoryId = (await repo.listCategories()).first.id;
+      final assetId = await repo.saveAsset(
+        name: 'Postpone asset',
+        categoryId: categoryId,
+        roomId: roomId,
+      );
+      final due = DateTime(2026, 8, 17, 9);
+      final planId = await maintenance.savePlan(
+        assetId: assetId,
+        title: 'Postpone task',
+        recurrence: const RecurrenceRule(interval: 1, unit: RecurrenceUnit.days),
+        priority: PriorityLevel.medium,
+        nextDueDate: due,
+        healthGroup: HealthGroup.other,
+      );
+      await expectLater(
+        maintenance.postponePlan(planId, DateTime(2026, 8, 15, 9)),
+        throwsA(isA<MaintenancePlanValidationException>()),
+      );
+      final target = DateTime(2026, 8, 18, 9);
+      await maintenance.postponePlan(planId, target, reason: 'Travel');
+      expect((await maintenance.getTask(planId))!.plan.nextDueDate, target);
+      await expectLater(
+        maintenance.postponePlan(planId, target, reason: 'Duplicate'),
+        throwsA(isA<MaintenancePlanValidationException>()),
+      );
+    });
+
+    test('completion Undo repairs same-day streak and best streak', () async {
+      final now = DateTime(2026, 8, 16, 12);
+      final maintenance = DriftMaintenanceRepository(db, now: () => now);
+      final streaks = DatabaseStreakService(db);
+      final roomId = await repo.saveRoom(
+        areaId: 'area_first_floor',
+        name: 'Streak room',
+      );
+      final categoryId = (await repo.listCategories()).first.id;
+      final assetId = await repo.saveAsset(
+        name: 'Streak asset',
+        categoryId: categoryId,
+        roomId: roomId,
+      );
+      final due = DateTime(2026, 8, 16, 9);
+      final planId = await maintenance.savePlan(
+        assetId: assetId,
+        title: 'Streak task',
+        recurrence: const RecurrenceRule(interval: 1, unit: RecurrenceUnit.days),
+        priority: PriorityLevel.medium,
+        nextDueDate: due,
+        healthGroup: HealthGroup.other,
+      );
+      final completion = await maintenance.completePlanResult(
+        planId,
+        completedAt: now,
+        expectedNextDueDate: due,
+      );
+      var streak = await streaks.refresh(now);
+      expect(streak.currentStreak, 1);
+      expect(streak.bestStreak, 1);
+
+      await maintenance.undoCompletion(
+        planId: planId,
+        completionId: completion.operationId!,
+        previousDueDate: completion.previousDueDate!,
+        expectedCurrentNextDueDate: completion.nextDueDate!,
+      );
+      streak = await streaks.refresh(now);
+      expect(streak.currentStreak, 0);
+      expect(streak.bestStreak, 0);
+    });
+
   });
 }
 

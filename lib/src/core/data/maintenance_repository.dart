@@ -241,8 +241,12 @@ class DriftMaintenanceRepository
         );
         if (metadata != null) {
           await _savePlanMetadata(planId, metadata, now);
+        } else {
+          await (db.delete(db.maintenancePlanMetadata)..where(
+                (row) => row.planId.equals(planId),
+              ))
+              .go();
         }
-        await _markPlanInboxRead(planId);
       }
     });
     return planId;
@@ -656,14 +660,18 @@ class DriftMaintenanceRepository
 
   @override
   Future<void> archivePlan(String planId) async {
-    await (db.update(
-      db.maintenancePlans,
-    )..where((plan) => plan.id.equals(planId))).write(
-      MaintenancePlansCompanion(
-        archivedAt: Value(_now()),
-        updatedAt: Value(_now()),
-      ),
-    );
+    final now = _now();
+    await db.transaction(() async {
+      await (db.update(
+        db.maintenancePlans,
+      )..where((plan) => plan.id.equals(planId))).write(
+        MaintenancePlansCompanion(
+          archivedAt: Value(now),
+          updatedAt: Value(now),
+        ),
+      );
+      await _markPlanInboxRead(planId);
+    });
   }
 
   @override
@@ -801,12 +809,19 @@ class DriftMaintenanceRepository
               ))
               .getSingleOrNull();
       if (plan == null) return;
+      final now = _now();
+      if (!nextDueDate.isAfter(now) || !nextDueDate.isAfter(plan.nextDueDate)) {
+        throw const MaintenancePlanValidationException(
+          'Postpone must move the task to a later future time.',
+          code: 'invalid_postpone',
+        );
+      }
       await (db.update(
         db.maintenancePlans,
       )..where((row) => row.id.equals(planId))).write(
         MaintenancePlansCompanion(
           nextDueDate: Value(nextDueDate),
-          updatedAt: Value(_now()),
+          updatedAt: Value(now),
         ),
       );
       await _markPlanInboxRead(planId);

@@ -1347,18 +1347,26 @@ Future<bool> postponeTaskWithDialog(
   WidgetRef ref,
   TaskItem task,
 ) async {
+  final now = DateTime.now();
+  final initialPostponeDate = task.plan.nextDueDate.isAfter(now)
+      ? task.plan.nextDueDate
+      : now;
   final date = await showDatePicker(
     context: context,
-    initialDate: task.plan.nextDueDate,
-    firstDate: DateTime.now().subtract(const Duration(days: 365)),
-    lastDate: DateTime.now().add(const Duration(days: 3650)),
+    initialDate: initialPostponeDate,
+    firstDate: DateTime(now.year, now.month, now.day),
+    lastDate: now.add(const Duration(days: 3650)),
   );
   if (date == null || !context.mounted) {
     return false;
   }
   final time = await showTimePicker(
     context: context,
-    initialTime: TimeOfDay.fromDateTime(task.plan.nextDueDate),
+    initialTime: TimeOfDay.fromDateTime(
+      task.plan.nextDueDate.isAfter(now)
+          ? task.plan.nextDueDate
+          : now.add(const Duration(hours: 1)),
+    ),
   );
   if (time == null || !context.mounted) {
     return false;
