@@ -228,9 +228,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                         return AppLanguage.values
                             .map(
                               (option) => PopupMenuItem<AppLanguage>(
-                                key: ValueKey(
-                                  'language-option-${option.name}',
-                                ),
+                                key: ValueKey('language-option-${option.name}'),
                                 value: option,
                                 child: Row(
                                   children: [
@@ -263,12 +261,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                                               ?.copyWith(
                                                 fontWeight:
                                                     option ==
-                                                        localePreference.language
+                                                        localePreference
+                                                            .language
                                                     ? FontWeight.w700
                                                     : FontWeight.w500,
                                                 color:
                                                     option ==
-                                                        localePreference.language
+                                                        localePreference
+                                                            .language
                                                     ? menuScheme.primary
                                                     : menuScheme.onSurface,
                                               ),
