@@ -40,6 +40,18 @@ async function sha256(filePath) {
   return crypto.createHash("sha256").update(await fs.readFile(filePath)).digest("hex");
 }
 
+export function parseVersionDeckTarget(pubspec) {
+  const match = String(pubspec || "").match(/^version:\s*(\d+\.\d+\.\d+)\+(\d+)\s*$/m);
+  if (!match) {
+    throw new Error("pubspec.yaml must contain a version in X.Y.Z+N format.");
+  }
+  const build = Number(match[2]);
+  if (!Number.isSafeInteger(build) || build < 1) {
+    throw new Error("pubspec.yaml build number must be a positive integer.");
+  }
+  return Object.freeze({ version: match[1], build });
+}
+
 export async function buildVersionDeckSite({
   source,
   output,
@@ -57,6 +69,9 @@ export async function buildVersionDeckSite({
     : validateAccountDeletionPublicConfig(accountDeletionConfig, {
       allowInert: allowInertAccountDeletionConfig,
     });
+  const target = parseVersionDeckTarget(
+    await fs.readFile(path.resolve(source, "..", "pubspec.yaml"), "utf8"),
+  );
   await fs.rm(output, { recursive: true, force: true });
   await fs.cp(source, output, { recursive: true });
   await fs.rm(path.join(output, "release-diagnostics.json"), { force: true });
@@ -132,6 +147,7 @@ export async function buildVersionDeckSite({
     schemaVersion: 1,
     sourceRevision: revision.toLowerCase(),
     builtAt: new Date().toISOString(),
+    target,
   };
   await fs.writeFile(
     path.join(output, "build-info.json"),
