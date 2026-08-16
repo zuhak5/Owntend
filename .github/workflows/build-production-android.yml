@@ -286,11 +286,11 @@ jobs:
               throw "Missing production variable: $($Item.Key)"
             }
           }
-          if ($env:SENTRY_ORG -ne "owntend-qt") {
-            throw "SENTRY_ORG must be owntend-qt."
+          if ($env:SENTRY_ORG -ne "owntend") {
+            throw "SENTRY_ORG must be owntend."
           }
-          if ($env:SENTRY_PROJECT -ne "owntend") {
-            throw "SENTRY_PROJECT must be owntend."
+          if ($env:SENTRY_PROJECT -ne "owntend-mobile") {
+            throw "SENTRY_PROJECT must be owntend-mobile."
           }
 
           try {

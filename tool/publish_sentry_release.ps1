@@ -24,11 +24,11 @@ foreach ($name in $requiredEnvironment) {
     # Normalize accidental surrounding whitespace from copied secrets and variables.
     [System.Environment]::SetEnvironmentVariable($name, $value.Trim())
 }
-if ($env:SENTRY_ORG -ne 'owntend-qt') {
-    throw 'SENTRY_ORG must be owntend-qt.'
+if ($env:SENTRY_ORG -ne 'owntend') {
+    throw 'SENTRY_ORG must be owntend.'
 }
-if ($env:SENTRY_PROJECT -ne 'owntend') {
-    throw 'SENTRY_PROJECT must be owntend.'
+if ($env:SENTRY_PROJECT -ne 'owntend-mobile') {
+    throw 'SENTRY_PROJECT must be owntend-mobile.'
 }
 if ([string]::IsNullOrWhiteSpace($Release) -or
     $Release -notmatch '^app\.owntend\.mobile@\d+\.\d+\.\d+\+\d+$') {
@@ -59,7 +59,7 @@ function Invoke-NativeCommand {
     if ($exitCode -ne 0) {
         if ($output -match '(?i)(Invalid token|http status:\s*401|Unauthorized)') {
             throw [System.UnauthorizedAccessException]::new(
-                'Sentry authentication failed. Replace the GitHub production environment secret SENTRY_AUTH_TOKEN with a valid token for organization owntend-qt and project owntend. The token must support sentry-cli release management and include org:read plus project:releases (or org:ci).'
+                'Sentry authentication failed. Replace the GitHub production environment secret SENTRY_AUTH_TOKEN with a valid token for organization owntend and project owntend-mobile. The token must support sentry-cli release management and include org:read plus project:releases (or org:ci).'
             )
         }
 
