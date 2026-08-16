@@ -24,12 +24,13 @@ on:
   workflow_dispatch:
     inputs:
       publication_mode:
-        description: "Publish the explicit disabled manifest while production publication is contained"
+        description: "Choose disabled containment or independently verified release publication"
         required: true
         default: disabled
         type: choice
         options:
           - disabled
+          - verified
 
 
 concurrency:
@@ -143,10 +144,22 @@ jobs:
           echo "- Trigger: \`${{ github.event_name }}\`" >> "$GITHUB_STEP_SUMMARY"
 
           publication_mode="${{ inputs.publication_mode }}"
-          test "$publication_mode" = "disabled"
-          echo "- Production build run: public release publication is contained" >> "$GITHUB_STEP_SUMMARY"
+          case "$publication_mode" in
+            disabled)
+              expected_publication_status="disabled"
+              echo "- Production build run: public release publication is contained" >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            verified)
+              expected_publication_status="active"
+              echo "- Production build run: independently verified release publication is enabled" >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            *)
+              echo "Unsupported publication mode: $publication_mode" >&2
+              exit 1
+              ;;
+          esac
           echo "publication_mode=$publication_mode" >> "$GITHUB_OUTPUT"
-          echo "expected_publication_status=disabled" >> "$GITHUB_OUTPUT"
+          echo "expected_publication_status=$expected_publication_status" >> "$GITHUB_OUTPUT"
           echo "- Publication mode: \`$publication_mode\`" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Set up Node.js
