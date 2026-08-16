@@ -1,4 +1,4 @@
-name: Agent preproduction audit formatting
+name: Agent preproduction audit patch
 
 on:
   push:
@@ -9,30 +9,25 @@ permissions:
   contents: write
 
 jobs:
-  format:
+  patch:
     if: ${{ github.actor != 'github-actions[bot]' }}
-    runs-on: windows-latest
-    timeout-minutes: 30
+    runs-on: ubuntu-latest
     steps:
       - name: Check out branch
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
-      - name: Set up Flutter
-        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
         with:
-          flutter-version: "3.47.0"
-          channel: stable
-          cache: true
-      - name: Format source and tests
-        shell: pwsh
+          fetch-depth: 0
+      - name: Apply action-clock duplicate guard fix
+        shell: bash
         run: |
-          dart format lib test
-          $changes = git status --porcelain -- lib test
-          if ([string]::IsNullOrWhiteSpace(($changes | Out-String))) {
-            Write-Host "No formatting changes needed."
+          python .github/agent-preproduction-phase8.py
+          git diff --check
+          if git diff --quiet; then
+            echo "No duplicate-guard changes to commit."
             exit 0
-          }
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add lib test
-          git commit -m "style: format completion regression coverage"
+          git add -A
+          git commit -m "fix: separate completion tap guard from recurrence time"
           git push
