@@ -3,9 +3,20 @@ BEGIN;
 ALTER TABLE public.profiles
   ADD COLUMN IF NOT EXISTS revision BIGINT;
 
+-- Existing production profiles predate the revision column. The shared
+-- BEFORE UPDATE metadata trigger derives revision from OLD.revision, so a
+-- normal backfill would turn NULL + 1 back into NULL. Disable only that
+-- trigger while seeding legacy rows, then restore it before enforcing the
+-- steady-state constraints.
+ALTER TABLE public.profiles
+  DISABLE TRIGGER set_row_metadata;
+
 UPDATE public.profiles
 SET revision = 1
 WHERE revision IS NULL;
+
+ALTER TABLE public.profiles
+  ENABLE TRIGGER set_row_metadata;
 
 ALTER TABLE public.profiles
   ALTER COLUMN revision SET DEFAULT 1,
