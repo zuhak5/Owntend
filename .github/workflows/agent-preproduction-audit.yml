@@ -6,14 +6,19 @@ on:
       - fix/preproduction-state-integrity-audit
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  home-structure:
+  repair-and-validate:
     runs-on: windows-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          fetch-depth: 0
+      - name: Apply fail-closed repair patch
+        shell: pwsh
+        run: python .github/agent-preproduction-phase11.py
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
         with:
           flutter-version: "3.47.0"
@@ -22,69 +27,34 @@ jobs:
       - run: flutter pub get --enforce-lockfile
       - run: flutter gen-l10n
       - run: dart run build_runner build
-      - name: Test home structure repository
+      - name: Format repaired sources
+        run: dart format lib test
+      - name: Format check
+        run: dart format --output=none --set-exit-if-changed lib test
+      - name: Analyze
+        run: flutter analyze
+      - name: Home structure regressions
         run: flutter test --no-pub --concurrency=1 --timeout 3m --reporter expanded --exclude-tags production-config test/home_structure_repository_test.dart
-
-  recurring-completion:
-    runs-on: windows-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
-      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
-        with:
-          flutter-version: "3.47.0"
-          channel: stable
-          cache: true
-      - run: flutter pub get --enforce-lockfile
-      - run: flutter gen-l10n
-      - run: dart run build_runner build
-      - name: Test recurring completion precision
+      - name: Recurring completion precision
         run: flutter test --no-pub --concurrency=1 --timeout 3m --reporter expanded --exclude-tags production-config test/recurring_completion_precision_test.dart
-
-  sync-coordinator:
-    runs-on: windows-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
-      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
-        with:
-          flutter-version: "3.47.0"
-          channel: stable
-          cache: true
-      - run: flutter pub get --enforce-lockfile
-      - run: flutter gen-l10n
-      - run: dart run build_runner build
-      - name: Test sync coordinator
+      - name: Sync coordinator regressions
         run: flutter test --no-pub --concurrency=1 --timeout 3m --reporter expanded --exclude-tags production-config test/sync_coordinator_test.dart
-
-  trash-lifecycle:
-    runs-on: windows-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
-      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
-        with:
-          flutter-version: "3.47.0"
-          channel: stable
-          cache: true
-      - run: flutter pub get --enforce-lockfile
-      - run: flutter gen-l10n
-      - run: dart run build_runner build
-      - name: Test trash lifecycle and invariants
+      - name: Trash lifecycle regressions
         run: flutter test --no-pub --concurrency=1 --timeout 3m --reporter expanded --exclude-tags production-config test/trash_lifecycle_and_invariants_test.dart
-
-  widget-regressions:
-    runs-on: windows-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
-      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
-        with:
-          flutter-version: "3.47.0"
-          channel: stable
-          cache: true
-      - run: flutter pub get --enforce-lockfile
-      - run: flutter gen-l10n
-      - run: dart run build_runner build
-      - name: Test widget regressions
+      - name: Widget regressions
         run: flutter test --no-pub --concurrency=1 --timeout 3m --reporter expanded --exclude-tags production-config test/widget_test.dart
+      - name: Diff check
+        shell: bash
+        run: git diff --check
+      - name: Commit repaired product head
+        shell: bash
+        run: |
+          if git diff --quiet -- lib test; then
+            echo "No product changes to commit."
+            exit 0
+          fi
+          git config user.name "owntend-audit-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add lib test
+          git commit -m "fix: harden preproduction state integrity"
+          git push origin HEAD:fix/preproduction-state-integrity-audit
