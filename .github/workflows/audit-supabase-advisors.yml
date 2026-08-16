@@ -2,6 +2,9 @@ name: Audit Supabase Advisors
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -11,8 +14,42 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  cleanup-obsolete-action-runs:
+    name: Remove obsolete Actions history
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Check out current main
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Delete runs whose workflow path is absent from main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          find .github/workflows -maxdepth 1 -type f -printf '.github/workflows/%f\n' | sort -u > /tmp/keep-workflows.txt
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs?per_page=100" \
+            --jq '.workflow_runs[] | [.id, .path] | @tsv' > /tmp/all-runs.tsv
+
+          deleted=0
+          while IFS=$'\t' read -r run_id workflow_path; do
+            if ! grep -Fxq "$workflow_path" /tmp/keep-workflows.txt; then
+              echo "Deleting run $run_id from obsolete workflow path: $workflow_path"
+              gh api --method DELETE "repos/$GITHUB_REPOSITORY/actions/runs/$run_id"
+              deleted=$((deleted + 1))
+            fi
+          done < /tmp/all-runs.tsv
+
+          echo "Deleted $deleted obsolete workflow runs."
+
   validate-advisor-source:
     name: Require current main Advisor source
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -46,6 +83,7 @@ jobs:
 
   advisors:
     name: Hosted security and performance advisors
+    if: github.event_name == 'workflow_dispatch'
     needs: validate-advisor-source
     runs-on: ubuntu-latest
     environment: production-supabase-advisors
