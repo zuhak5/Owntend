@@ -129,6 +129,42 @@ class DriftAssetRepository implements AssetRepository {
 
   final AppDatabase db;
 
+  Future<DateTime> _nextTrashCascadeTimestamp() async {
+    final usedSeconds = <int>{};
+    void remember(DateTime? value) {
+      if (value != null) {
+        usedSeconds.add(value.millisecondsSinceEpoch ~/ 1000);
+      }
+    }
+
+    for (final row in await (db.select(
+      db.areas,
+    )..where((row) => row.archivedAt.isNotNull())).get()) {
+      remember(row.archivedAt);
+    }
+    for (final row in await (db.select(
+      db.rooms,
+    )..where((row) => row.archivedAt.isNotNull())).get()) {
+      remember(row.archivedAt);
+    }
+    for (final row in await (db.select(
+      db.assets,
+    )..where((row) => row.archivedAt.isNotNull())).get()) {
+      remember(row.archivedAt);
+    }
+    for (final row in await (db.select(
+      db.maintenancePlans,
+    )..where((row) => row.archivedAt.isNotNull())).get()) {
+      remember(row.archivedAt);
+    }
+
+    var candidateSecond = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    while (usedSeconds.contains(candidateSecond)) {
+      candidateSecond += 1;
+    }
+    return DateTime.fromMillisecondsSinceEpoch(candidateSecond * 1000);
+  }
+
   @override
   Stream<List<domain.Area>> watchAreas() {
     final query = db.select(db.areas)
@@ -269,42 +305,48 @@ class DriftAssetRepository implements AssetRepository {
 
   @override
   Future<void> trashArea(String id) async {
-    final now = DateTime.now();
-    final roomRows = await (db.select(
-      db.rooms,
-    )..where((room) => room.areaId.equals(id))).get();
-    final roomIds = roomRows.map((row) => row.id).toList();
-    final assetRows = roomIds.isEmpty
-        ? <AssetRow>[]
-        : await (db.select(
-            db.assets,
-          )..where((asset) => asset.roomId.isIn(roomIds))).get();
-    final assetIds = assetRows.map((row) => row.id).toList();
     await db.transaction(() async {
-      await (db.update(db.areas)..where((area) => area.id.equals(id))).write(
+      final now = await _nextTrashCascadeTimestamp();
+      final area = await (db.select(
+        db.areas,
+      )..where((row) => row.id.equals(id))).getSingleOrNull();
+      if (area == null || area.archivedAt != null) return;
+      final activeRooms =
+          await (db.select(db.rooms)..where(
+                (room) => room.areaId.equals(id) & room.archivedAt.isNull(),
+              ))
+              .get();
+      final roomIds = activeRooms.map((row) => row.id).toList();
+      final activeAssets = roomIds.isEmpty
+          ? <AssetRow>[]
+          : await (db.select(db.assets)..where(
+                  (row) => row.roomId.isIn(roomIds) & row.archivedAt.isNull(),
+                ))
+                .get();
+      final assetIds = activeAssets.map((row) => row.id).toList();
+      await (db.update(db.areas)..where((row) => row.id.equals(id))).write(
         AreasCompanion(archivedAt: Value(now), updatedAt: Value(now)),
       );
       if (roomIds.isNotEmpty) {
-        await (db.update(
-          db.rooms,
-        )..where((room) => room.id.isIn(roomIds))).write(
+        await (db.update(db.rooms)..where((row) => row.id.isIn(roomIds))).write(
           RoomsCompanion(archivedAt: Value(now), updatedAt: Value(now)),
         );
       }
       if (assetIds.isNotEmpty) {
         await (db.update(
           db.assets,
-        )..where((asset) => asset.id.isIn(assetIds))).write(
+        )..where((row) => row.id.isIn(assetIds))).write(
           AssetsCompanion(archivedAt: Value(now), updatedAt: Value(now)),
         );
-        await (db.update(
-          db.maintenancePlans,
-        )..where((plan) => plan.assetId.isIn(assetIds))).write(
-          MaintenancePlansCompanion(
-            archivedAt: Value(now),
-            updatedAt: Value(now),
-          ),
-        );
+        await (db.update(db.maintenancePlans)..where(
+              (plan) => plan.assetId.isIn(assetIds) & plan.archivedAt.isNull(),
+            ))
+            .write(
+              MaintenancePlansCompanion(
+                archivedAt: Value(now),
+                updatedAt: Value(now),
+              ),
+            );
       }
     });
   }
@@ -312,41 +354,53 @@ class DriftAssetRepository implements AssetRepository {
   @override
   Future<void> restoreArea(String id) async {
     final now = DateTime.now();
-    final roomRows = await (db.select(
-      db.rooms,
-    )..where((room) => room.areaId.equals(id))).get();
-    final roomIds = roomRows.map((row) => row.id).toList();
-    final assetRows = roomIds.isEmpty
-        ? <AssetRow>[]
-        : await (db.select(
-            db.assets,
-          )..where((asset) => asset.roomId.isIn(roomIds))).get();
-    final assetIds = assetRows.map((row) => row.id).toList();
     await db.transaction(() async {
-      await (db.update(db.areas)..where((area) => area.id.equals(id))).write(
+      final area = await (db.select(
+        db.areas,
+      )..where((row) => row.id.equals(id))).getSingleOrNull();
+      final cascadeAt = area?.archivedAt;
+      if (area == null || cascadeAt == null) return;
+      final cascadeRooms =
+          await (db.select(db.rooms)..where(
+                (room) =>
+                    room.areaId.equals(id) & room.archivedAt.equals(cascadeAt),
+              ))
+              .get();
+      final roomIds = cascadeRooms.map((row) => row.id).toList();
+      final cascadeAssets = roomIds.isEmpty
+          ? <AssetRow>[]
+          : await (db.select(db.assets)..where(
+                  (row) =>
+                      row.roomId.isIn(roomIds) &
+                      row.archivedAt.equals(cascadeAt),
+                ))
+                .get();
+      final assetIds = cascadeAssets.map((row) => row.id).toList();
+      await (db.update(db.areas)..where((row) => row.id.equals(id))).write(
         AreasCompanion(archivedAt: const Value(null), updatedAt: Value(now)),
       );
       if (roomIds.isNotEmpty) {
-        await (db.update(
-          db.rooms,
-        )..where((room) => room.id.isIn(roomIds))).write(
+        await (db.update(db.rooms)..where((row) => row.id.isIn(roomIds))).write(
           RoomsCompanion(archivedAt: const Value(null), updatedAt: Value(now)),
         );
       }
       if (assetIds.isNotEmpty) {
         await (db.update(
           db.assets,
-        )..where((asset) => asset.id.isIn(assetIds))).write(
+        )..where((row) => row.id.isIn(assetIds))).write(
           AssetsCompanion(archivedAt: const Value(null), updatedAt: Value(now)),
         );
-        await (db.update(
-          db.maintenancePlans,
-        )..where((plan) => plan.assetId.isIn(assetIds))).write(
-          MaintenancePlansCompanion(
-            archivedAt: const Value(null),
-            updatedAt: Value(now),
-          ),
-        );
+        await (db.update(db.maintenancePlans)..where(
+              (plan) =>
+                  plan.assetId.isIn(assetIds) &
+                  plan.archivedAt.equals(cascadeAt),
+            ))
+            .write(
+              MaintenancePlansCompanion(
+                archivedAt: const Value(null),
+                updatedAt: Value(now),
+              ),
+            );
       }
     });
   }
@@ -501,29 +555,34 @@ class DriftAssetRepository implements AssetRepository {
 
   @override
   Future<void> trashRoom(String id) async {
-    final now = DateTime.now();
-    final assetRows = await (db.select(
-      db.assets,
-    )..where((asset) => asset.roomId.equals(id))).get();
-    final assetIds = assetRows.map((row) => row.id).toList();
     await db.transaction(() async {
-      await (db.update(db.rooms)..where((room) => room.id.equals(id))).write(
+      final now = await _nextTrashCascadeTimestamp();
+      final room = await (db.select(
+        db.rooms,
+      )..where((row) => row.id.equals(id))).getSingleOrNull();
+      if (room == null || room.archivedAt != null) return;
+      final activeAssets = await (db.select(
+        db.assets,
+      )..where((row) => row.roomId.equals(id) & row.archivedAt.isNull())).get();
+      final assetIds = activeAssets.map((row) => row.id).toList();
+      await (db.update(db.rooms)..where((row) => row.id.equals(id))).write(
         RoomsCompanion(archivedAt: Value(now), updatedAt: Value(now)),
       );
       if (assetIds.isNotEmpty) {
         await (db.update(
           db.assets,
-        )..where((asset) => asset.id.isIn(assetIds))).write(
+        )..where((row) => row.id.isIn(assetIds))).write(
           AssetsCompanion(archivedAt: Value(now), updatedAt: Value(now)),
         );
-        await (db.update(
-          db.maintenancePlans,
-        )..where((plan) => plan.assetId.isIn(assetIds))).write(
-          MaintenancePlansCompanion(
-            archivedAt: Value(now),
-            updatedAt: Value(now),
-          ),
-        );
+        await (db.update(db.maintenancePlans)..where(
+              (plan) => plan.assetId.isIn(assetIds) & plan.archivedAt.isNull(),
+            ))
+            .write(
+              MaintenancePlansCompanion(
+                archivedAt: Value(now),
+                updatedAt: Value(now),
+              ),
+            );
       }
     });
   }
@@ -531,37 +590,45 @@ class DriftAssetRepository implements AssetRepository {
   @override
   Future<void> restoreRoom(String id) async {
     final now = DateTime.now();
-    final room = await (db.select(
-      db.rooms,
-    )..where((row) => row.id.equals(id))).getSingleOrNull();
-    if (room == null) return;
-    final assetRows = await (db.select(
-      db.assets,
-    )..where((asset) => asset.roomId.equals(id))).get();
-    final assetIds = assetRows.map((row) => row.id).toList();
     await db.transaction(() async {
-      await (db.update(
+      final room = await (db.select(
+        db.rooms,
+      )..where((row) => row.id.equals(id))).getSingleOrNull();
+      final cascadeAt = room?.archivedAt;
+      if (room == null || cascadeAt == null) return;
+      final area = await (db.select(
         db.areas,
-      )..where((area) => area.id.equals(room.areaId))).write(
-        AreasCompanion(archivedAt: const Value(null), updatedAt: Value(now)),
-      );
+      )..where((row) => row.id.equals(room.areaId))).getSingleOrNull();
+      if (area == null || area.archivedAt != null) {
+        throw StateError('Restore the parent area before restoring this room.');
+      }
+      final cascadeAssets =
+          await (db.select(db.assets)..where(
+                (row) =>
+                    row.roomId.equals(id) & row.archivedAt.equals(cascadeAt),
+              ))
+              .get();
+      final assetIds = cascadeAssets.map((row) => row.id).toList();
       await (db.update(db.rooms)..where((row) => row.id.equals(id))).write(
         RoomsCompanion(archivedAt: const Value(null), updatedAt: Value(now)),
       );
       if (assetIds.isNotEmpty) {
         await (db.update(
           db.assets,
-        )..where((asset) => asset.id.isIn(assetIds))).write(
+        )..where((row) => row.id.isIn(assetIds))).write(
           AssetsCompanion(archivedAt: const Value(null), updatedAt: Value(now)),
         );
-        await (db.update(
-          db.maintenancePlans,
-        )..where((plan) => plan.assetId.isIn(assetIds))).write(
-          MaintenancePlansCompanion(
-            archivedAt: const Value(null),
-            updatedAt: Value(now),
-          ),
-        );
+        await (db.update(db.maintenancePlans)..where(
+              (plan) =>
+                  plan.assetId.isIn(assetIds) &
+                  plan.archivedAt.equals(cascadeAt),
+            ))
+            .write(
+              MaintenancePlansCompanion(
+                archivedAt: const Value(null),
+                updatedAt: Value(now),
+              ),
+            );
       }
     });
   }
@@ -866,120 +933,105 @@ class DriftAssetRepository implements AssetRepository {
 
   @override
   Future<void> trashAsset(String id) async {
-    final now = DateTime.now();
     await db.transaction(() async {
-      await (db.update(db.assets)..where((asset) => asset.id.equals(id))).write(
+      final now = await _nextTrashCascadeTimestamp();
+      final asset = await (db.select(
+        db.assets,
+      )..where((row) => row.id.equals(id))).getSingleOrNull();
+      if (asset == null || asset.archivedAt != null) return;
+      await (db.update(db.assets)..where((row) => row.id.equals(id))).write(
         AssetsCompanion(archivedAt: Value(now), updatedAt: Value(now)),
       );
-      await (db.update(
-        db.maintenancePlans,
-      )..where((plan) => plan.assetId.equals(id))).write(
-        MaintenancePlansCompanion(
-          archivedAt: Value(now),
-          updatedAt: Value(now),
-        ),
-      );
+      await (db.update(db.maintenancePlans)..where(
+            (plan) => plan.assetId.equals(id) & plan.archivedAt.isNull(),
+          ))
+          .write(
+            MaintenancePlansCompanion(
+              archivedAt: Value(now),
+              updatedAt: Value(now),
+            ),
+          );
     });
   }
 
   @override
   Future<void> restoreAsset(String id) async {
     final now = DateTime.now();
-    final asset = await (db.select(
-      db.assets,
-    )..where((row) => row.id.equals(id))).getSingleOrNull();
-    if (asset == null) return;
-    final room = await (db.select(
-      db.rooms,
-    )..where((row) => row.id.equals(asset.roomId))).getSingleOrNull();
     await db.transaction(() async {
-      if (room != null) {
-        await (db.update(
-          db.areas,
-        )..where((area) => area.id.equals(room.areaId))).write(
-          AreasCompanion(archivedAt: const Value(null), updatedAt: Value(now)),
-        );
-        await (db.update(
-          db.rooms,
-        )..where((row) => row.id.equals(asset.roomId))).write(
-          RoomsCompanion(archivedAt: const Value(null), updatedAt: Value(now)),
+      final asset = await (db.select(
+        db.assets,
+      )..where((row) => row.id.equals(id))).getSingleOrNull();
+      final cascadeAt = asset?.archivedAt;
+      if (asset == null || cascadeAt == null) return;
+      final room = await (db.select(
+        db.rooms,
+      )..where((row) => row.id.equals(asset.roomId))).getSingleOrNull();
+      final area = room == null
+          ? null
+          : await (db.select(
+              db.areas,
+            )..where((row) => row.id.equals(room.areaId))).getSingleOrNull();
+      if (room == null ||
+          room.archivedAt != null ||
+          area == null ||
+          area.archivedAt != null) {
+        throw StateError(
+          'Restore the parent room and area before restoring this item.',
         );
       }
       await (db.update(db.assets)..where((row) => row.id.equals(id))).write(
         AssetsCompanion(archivedAt: const Value(null), updatedAt: Value(now)),
       );
-      await (db.update(
-        db.maintenancePlans,
-      )..where((plan) => plan.assetId.equals(id))).write(
-        MaintenancePlansCompanion(
-          archivedAt: const Value(null),
-          updatedAt: Value(now),
-        ),
-      );
+      await (db.update(db.maintenancePlans)..where(
+            (plan) =>
+                plan.assetId.equals(id) & plan.archivedAt.equals(cascadeAt),
+          ))
+          .write(
+            MaintenancePlansCompanion(
+              archivedAt: const Value(null),
+              updatedAt: Value(now),
+            ),
+          );
     });
   }
 
   @override
   Future<void> emptyTrash() async {
-    final trashedAreas = await (db.select(
-      db.areas,
-    )..where((a) => a.archivedAt.isNotNull())).get();
-    final trashedAreaIds = trashedAreas.map((a) => a.id).toList();
-
-    final trashedRooms =
-        await (db.select(db.rooms)..where(
-              (r) =>
-                  r.archivedAt.isNotNull() |
-                  (trashedAreaIds.isEmpty
-                      ? const Constant(false)
-                      : r.areaId.isIn(trashedAreaIds)),
-            ))
-            .get();
-    final trashedRoomIds = trashedRooms.map((r) => r.id).toList();
-
-    final trashedAssets =
-        await (db.select(db.assets)..where(
-              (a) =>
-                  a.archivedAt.isNotNull() |
-                  (trashedRoomIds.isEmpty
-                      ? const Constant(false)
-                      : a.roomId.isIn(trashedRoomIds)),
-            ))
-            .get();
-    final trashedAssetIds = trashedAssets.map((a) => a.id).toList();
-
-    final trashedPlans =
-        await (db.select(db.maintenancePlans)..where(
-              (p) =>
-                  p.archivedAt.isNotNull() |
-                  (trashedAssetIds.isEmpty
-                      ? const Constant(false)
-                      : p.assetId.isIn(trashedAssetIds)),
-            ))
-            .get();
-    final trashedPlanIds = trashedPlans.map((p) => p.id).toList();
-
-    final photoRows = await _photoRowsForAssets(trashedAssetIds);
-
-    await db.transaction(() async {
-      if (trashedPlanIds.isNotEmpty) {
-        await _deletePlansCascade(db, trashedPlanIds);
+    final photoRows = await db.transaction(() async {
+      // Select the deletion set only after the transaction has begun. A restore
+      // that commits before this point is spared; a concurrent restore cannot
+      // race a stale pre-transaction snapshot into hard deletion.
+      final trashedAreas = await (db.select(
+        db.areas,
+      )..where((row) => row.archivedAt.isNotNull())).get();
+      final trashedRooms = await (db.select(
+        db.rooms,
+      )..where((row) => row.archivedAt.isNotNull())).get();
+      final trashedAssets = await (db.select(
+        db.assets,
+      )..where((row) => row.archivedAt.isNotNull())).get();
+      final trashedPlans = await (db.select(
+        db.maintenancePlans,
+      )..where((row) => row.archivedAt.isNotNull())).get();
+      final areaIds = trashedAreas.map((row) => row.id).toList();
+      final roomIds = trashedRooms.map((row) => row.id).toList();
+      final assetIds = trashedAssets.map((row) => row.id).toList();
+      final planIds = trashedPlans.map((row) => row.id).toList();
+      final photos = await _photoRowsForAssets(assetIds);
+      if (planIds.isNotEmpty) {
+        await _deletePlansCascade(db, planIds);
       }
-      if (trashedAssetIds.isNotEmpty) {
-        await _deleteAssetsCascadeInTransaction(trashedAssetIds);
+      if (assetIds.isNotEmpty) {
+        await _deleteAssetsCascadeInTransaction(assetIds);
       }
-      if (trashedRoomIds.isNotEmpty) {
-        await (db.delete(
-          db.rooms,
-        )..where((r) => r.id.isIn(trashedRoomIds))).go();
+      if (roomIds.isNotEmpty) {
+        await (db.delete(db.rooms)..where((row) => row.id.isIn(roomIds))).go();
       }
-      if (trashedAreaIds.isNotEmpty) {
-        await (db.delete(
-          db.areas,
-        )..where((a) => a.id.isIn(trashedAreaIds))).go();
+      if (areaIds.isNotEmpty) {
+        await (db.delete(db.areas)..where((row) => row.id.isIn(areaIds))).go();
       }
+      return photos;
     });
-
     await _deletePhotoFiles(photoRows);
   }
 
@@ -1054,6 +1106,7 @@ class DriftAssetRepository implements AssetRepository {
 
   @override
   Future<void> setPrimaryPhoto(String assetId, String photoId) async {
+    final now = DateTime.now();
     await db.transaction(() async {
       final target =
           await (db.select(db.assetPhotos)..where(
@@ -1061,16 +1114,46 @@ class DriftAssetRepository implements AssetRepository {
                     photo.id.equals(photoId) & photo.assetId.equals(assetId),
               ))
               .getSingleOrNull();
-      if (target == null) {
-        return;
+      if (target == null) return;
+
+      await (db.update(db.syncRuntime)..where((row) => row.id.equals(1))).write(
+        const SyncRuntimeCompanion(suppressOutbox: Value(true)),
+      );
+      try {
+        await (db.update(db.assetPhotos)
+              ..where((photo) => photo.assetId.equals(assetId)))
+            .write(const AssetPhotosCompanion(isPrimary: Value(false)));
+        await (db.update(db.assetPhotos)..where(
+              (photo) =>
+                  photo.id.equals(photoId) & photo.assetId.equals(assetId),
+            ))
+            .write(const AssetPhotosCompanion(isPrimary: Value(true)));
+      } finally {
+        await (db.update(db.syncRuntime)..where((row) => row.id.equals(1)))
+            .write(const SyncRuntimeCompanion(suppressOutbox: Value(false)));
       }
-      await (db.update(db.assetPhotos)
-            ..where((photo) => photo.assetId.equals(assetId)))
-          .write(const AssetPhotosCompanion(isPrimary: Value(false)));
-      await (db.update(db.assetPhotos)..where(
-            (photo) => photo.id.equals(photoId) & photo.assetId.equals(assetId),
-          ))
-          .write(const AssetPhotosCompanion(isPrimary: Value(true)));
+
+      final account = await (db.select(
+        db.syncAccount,
+      )..where((row) => row.id.equals(1))).getSingleOrNull();
+      await db
+          .into(db.syncOutbox)
+          .insertOnConflictUpdate(
+            SyncOutboxCompanion.insert(
+              entity: 'asset_photo_primary',
+              recordKey: assetId,
+              operation: 'execute',
+              changedAt: Value(now),
+              payloadJson: Value(
+                jsonEncode({
+                  'version': 1,
+                  'asset_id': assetId,
+                  'photo_id': photoId,
+                }),
+              ),
+              userId: Value(account?.boundUserId),
+            ),
+          );
     });
   }
 

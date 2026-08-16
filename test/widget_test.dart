@@ -6836,6 +6836,14 @@ class FakeSettingsRepository implements SettingsRepository {
     _notificationPreferencesController.add(preferences);
   }
 
+  @override
+  Future<void> mergeNotificationPreferences({
+    required NotificationPreferences baseline,
+    required NotificationPreferences desired,
+  }) async {
+    await setNotificationPreferences(desired);
+  }
+
   Future<void> close() async {
     await _appLanguageController.close();
     await _appLocalePreferenceController.close();
@@ -7057,18 +7065,25 @@ class FakeMaintenanceRepository implements MaintenanceRepository {
       expectedNextDueDate: expectedNextDueDate,
       notes: notes,
     );
+    final completed = completedAt ?? DateTime.now();
+    final previousDue = expectedNextDueDate ?? completed;
     return LocalMaintenanceCompletionResult(
       status: ok
           ? LocalMaintenanceCompletionStatus.applied
           : LocalMaintenanceCompletionStatus.occurrenceChanged,
+      operationId: ok ? 'fake-completion-$planId' : null,
+      previousDueDate: ok ? previousDue : null,
+      nextDueDate: ok ? previousDue.add(const Duration(days: 1)) : null,
     );
   }
 
   @override
-  Future<void> undoLastCompletion(
-    String planId,
-    DateTime previousDueDate,
-  ) async {
+  Future<void> undoCompletion({
+    required String planId,
+    required String completionId,
+    required DateTime previousDueDate,
+    required DateTime expectedCurrentNextDueDate,
+  }) async {
     undoCount++;
   }
 

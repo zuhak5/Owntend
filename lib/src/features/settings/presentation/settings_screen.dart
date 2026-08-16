@@ -563,6 +563,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                                   _saveNotificationPreferences(
                                     context,
                                     ref,
+                                    notificationPreferences,
                                     notificationPreferences.copyWith(
                                       enabled: value,
                                     ),
@@ -607,6 +608,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                                           : _saveNotificationPreferences(
                                               context,
                                               ref,
+                                              notificationPreferences,
                                               notificationPreferences.copyWith(
                                                 localReminders: false,
                                                 preferExactReminders: false,
@@ -657,6 +659,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                                           : _saveNotificationPreferences(
                                               context,
                                               ref,
+                                              notificationPreferences,
                                               notificationPreferences.copyWith(
                                                 preferExactReminders: false,
                                               ),
@@ -678,6 +681,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                                   ? (value) => _saveNotificationPreferences(
                                       context,
                                       ref,
+                                      notificationPreferences,
                                       notificationPreferences.copyWith(
                                         inAppInbox: value,
                                       ),
@@ -698,6 +702,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                                   ? (value) => _saveNotificationPreferences(
                                       context,
                                       ref,
+                                      notificationPreferences,
                                       notificationPreferences.copyWith(
                                         weatherAlerts: value,
                                       ),
@@ -721,6 +726,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                                   ? (value) => _saveNotificationPreferences(
                                       context,
                                       ref,
+                                      notificationPreferences,
                                       notificationPreferences.copyWith(
                                         quietHoursEnabled: value,
                                       ),
@@ -810,6 +816,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                                             ) => _saveNotificationPreferences(
                                               context,
                                               ref,
+                                              notificationPreferences,
                                               notificationPreferences.copyWith(
                                                 criticalBypassQuietHours: value,
                                               ),
@@ -838,6 +845,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                                   ? (value) => _saveNotificationPreferences(
                                       context,
                                       ref,
+                                      notificationPreferences,
                                       notificationPreferences.copyWith(
                                         privacyMode: value,
                                       ),
@@ -858,6 +866,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                                   ? (value) => _saveNotificationPreferences(
                                       context,
                                       ref,
+                                      notificationPreferences,
                                       notificationPreferences.copyWith(
                                         dailyDigest: value,
                                       ),
@@ -901,6 +910,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                                         _saveNotificationPreferences(
                                           context,
                                           ref,
+                                          notificationPreferences,
                                           notificationPreferences.copyWith(
                                             defaultSnoozeMinutes: minutes,
                                           ),
@@ -947,6 +957,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                                         _saveNotificationPreferences(
                                           context,
                                           ref,
+                                          notificationPreferences,
                                           notificationPreferences.copyWith(
                                             maxRemindersPerDay: count,
                                           ),
@@ -982,6 +993,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                                         _saveNotificationPreferences(
                                           context,
                                           ref,
+                                          notificationPreferences,
                                           notificationPreferences.copyWith(
                                             reminderHour: hour,
                                           ),
@@ -1017,6 +1029,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                                         _saveNotificationPreferences(
                                           context,
                                           ref,
+                                          notificationPreferences,
                                           notificationPreferences.copyWith(
                                             digestHour: hour,
                                           ),
@@ -1201,6 +1214,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     await _saveNotificationPreferences(
       context,
       ref,
+      preferences,
       start
           ? preferences.copyWith(quietHoursStartMinutes: minutes)
           : preferences.copyWith(quietHoursEndMinutes: minutes),
@@ -1210,12 +1224,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   Future<void> _saveNotificationPreferences(
     BuildContext context,
     WidgetRef ref,
+    NotificationPreferences baseline,
     NotificationPreferences preferences,
   ) async {
     try {
       await ref
           .read(settingsRepositoryProvider)
-          .setNotificationPreferences(preferences);
+          .mergeNotificationPreferences(
+            baseline: baseline,
+            desired: preferences,
+          );
       ref.invalidate(notificationPreferencesProvider);
       final scheduler = ref.read(notificationSchedulerProvider);
       await scheduler.initialize();

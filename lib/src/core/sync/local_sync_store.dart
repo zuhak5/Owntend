@@ -1134,12 +1134,22 @@ WHERE next_attempt_at IS NULL OR next_attempt_at <= ?
       profileSyncSpec.entity: syncEntitySpecs.length,
     };
 
+    dependencyOrder['asset_photo_primary'] = syncEntitySpecs.length + 1;
+
     final maintenancePlanOrder = dependencyOrder['maintenance_plan'];
     if (maintenancePlanOrder != null) {
       dependencyOrder['maintenance_completion'] = maintenancePlanOrder;
+      dependencyOrder['maintenance_undo'] = maintenancePlanOrder;
     }
 
     mutations.sort((a, b) {
+      if (a.entity == 'maintenance_undo' && b.entity != 'maintenance_undo') {
+        return -1;
+      }
+      if (b.entity == 'maintenance_undo' && a.entity != 'maintenance_undo') {
+        return 1;
+      }
+
       final aDelete = a.operation == 'delete';
       final bDelete = b.operation == 'delete';
       if (aDelete != bDelete) {
@@ -1390,11 +1400,13 @@ WHERE entity = 'profile'
       );
     }
     final values = _toRemoteCompatible(spec, result.data);
+    final semanticModifiedAt =
+        _semanticClientModifiedAt(spec, values) ?? mutation.changedAt.toUtc();
     return SyncRecord(
       spec: spec,
       recordKey: mutation.recordKey,
       values: values,
-      clientModifiedAt: mutation.changedAt.toUtc(),
+      clientModifiedAt: semanticModifiedAt,
       originDeviceId: deviceId,
     );
   }
@@ -1405,7 +1417,7 @@ WHERE entity = 'profile'
   ) async {
     final row = await db
         .customSelect(
-          "SELECT value FROM settings WHERE key = 'profile' LIMIT 1",
+          "SELECT value, updated_at FROM settings WHERE key = 'profile' LIMIT 1",
         )
         .getSingleOrNull();
     if (row == null) {
@@ -1424,7 +1436,9 @@ WHERE entity = 'profile'
       spec: profileSyncSpec,
       recordKey: 'profile',
       values: {'nickname': decoded['nickname'] as String?},
-      clientModifiedAt: mutation.changedAt.toUtc(),
+      clientModifiedAt:
+          _dateTimeFromStorage(row.data['updated_at']) ??
+          mutation.changedAt.toUtc(),
       originDeviceId: deviceId,
     );
   }
@@ -1878,6 +1892,87 @@ ON CONFLICT(key) DO UPDATE SET
     );
   }
 
+  Future<void> markAssetPhotoPrimarySucceeded(
+    LocalSyncMutation mutation, {
+    required List<SyncRecord> photos,
+  }) async {
+    if (mutation.entity != 'asset_photo_primary' ||
+        photos.any((record) => record.spec.entity != 'asset_photo')) {
+      throw StateError('Invalid primary-photo acknowledgement.');
+    }
+    await db.transaction(() async {
+      await withOutboxSuppressed(() async {
+        for (final canonical in photos) {
+          final local =
+              await (db.select(db.assetPhotos)
+                    ..where((row) => row.id.equals(canonical.recordKey)))
+                  .getSingleOrNull();
+          if (local == null) {
+            // A photo created by another device will be materialized by the
+            // normal pull path. Remembering its remote row here is unnecessary.
+            continue;
+          }
+          final localized = SyncRecord(
+            spec: canonical.spec,
+            recordKey: canonical.recordKey,
+            values: {...canonical.values, 'relative_path': local.relativePath},
+            clientModifiedAt: canonical.clientModifiedAt,
+            originDeviceId: canonical.originDeviceId,
+            revision: canonical.revision,
+            syncSeq: canonical.syncSeq,
+            serverUpdatedAt: canonical.serverUpdatedAt,
+            deletedAt: canonical.deletedAt,
+          );
+          await _upsertLocal(localized);
+          await _saveShadow(localized);
+        }
+      });
+      await (db.delete(db.syncOutbox)..where(
+            (row) =>
+                row.entity.equals('asset_photo_primary') &
+                row.recordKey.equals(mutation.recordKey),
+          ))
+          .go();
+    });
+  }
+
+  Future<void> markMaintenanceUndoSucceeded(
+    LocalSyncMutation mutation, {
+    required SyncRecord plan,
+    required String completionId,
+  }) async {
+    if (mutation.entity != 'maintenance_undo' ||
+        plan.spec.entity != 'maintenance_plan' ||
+        mutation.recordKey != completionId) {
+      throw StateError('Invalid maintenance undo acknowledgement.');
+    }
+    await db.transaction(() async {
+      await (db.delete(db.syncOutbox)..where(
+            (row) =>
+                (row.entity.equals('maintenance_undo') &
+                    row.recordKey.equals(completionId)) |
+                (row.entity.equals('maintenance_plan') &
+                    row.recordKey.equals(plan.recordKey)) |
+                (row.entity.equals('maintenance_record') &
+                    row.recordKey.equals(completionId)),
+          ))
+          .go();
+      await withOutboxSuppressed(() async {
+        await _upsertLocal(plan);
+        await _saveShadow(plan);
+        await (db.delete(
+          db.maintenanceRecords,
+        )..where((row) => row.id.equals(completionId))).go();
+        await (db.delete(db.syncShadows)..where(
+              (row) =>
+                  row.entity.equals('maintenance_record') &
+                  row.recordKey.equals(completionId),
+            ))
+            .go();
+      });
+    });
+  }
+
   Future<void> markMaintenanceCompletionSucceeded(
     LocalSyncMutation mutation, {
     required SyncRecord plan,
@@ -2257,9 +2352,11 @@ ON CONFLICT(key) DO UPDATE SET
     required SyncRecord record,
   }) async {
     await db.transaction(() async {
-      await (db.delete(
-        db.maintenanceRecords,
-      )..where((row) => row.id.equals(mutation.operationId))).go();
+      await withOutboxSuppressed(() async {
+        await (db.delete(
+          db.maintenanceRecords,
+        )..where((row) => row.id.equals(mutation.operationId))).go();
+      });
       await applyRemoteRecords([plan, record]);
 
       await db
@@ -2752,6 +2849,26 @@ DateTime? _nullableDateValue(
   if (value == null) return null;
   if (value is DateTime) return value.toUtc();
   return DateTime.tryParse(value.toString())?.toUtc() ?? fallback;
+}
+
+DateTime? _dateTimeFromStorage(dynamic value) {
+  if (value == null) return null;
+  if (value is DateTime) return value.toUtc();
+  if (value is int) {
+    return DateTime.fromMillisecondsSinceEpoch(value * 1000, isUtc: true);
+  }
+  return DateTime.tryParse(value.toString())?.toUtc();
+}
+
+DateTime? _semanticClientModifiedAt(
+  SyncEntitySpec spec,
+  Map<String, dynamic> values,
+) {
+  final expression = spec.modifiedExpression.trim();
+  if (!RegExp(r'^[A-Za-z_][A-Za-z0-9_]*$').hasMatch(expression)) {
+    return null;
+  }
+  return _dateTimeFromStorage(values[expression]);
 }
 
 Map<String, dynamic> _toRemoteCompatible(

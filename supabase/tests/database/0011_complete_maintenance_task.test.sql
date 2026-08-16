@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(46);
+select plan(50);
 
 select has_function(
   'public',
@@ -225,8 +225,91 @@ insert into public.creation_point_operations (
   1
 );
 
+insert into public.maintenance_plans (
+  user_id,
+  id,
+  asset_id,
+  title,
+  interval_count,
+  interval_unit,
+  priority,
+  next_due_date,
+  reminder_days_before,
+  health_group,
+  is_enabled,
+  revision,
+  created_at,
+  updated_at
+)
+values (
+  '33333333-3333-3333-3333-333333333333',
+  'rpc-early-plan',
+  'rpc-asset',
+  'Early daily task',
+  1,
+  'days',
+  'medium',
+  '2026-08-18 09:00:00+00',
+  0,
+  'other',
+  true,
+  1,
+  '2026-08-01 00:00:00+00',
+  '2026-08-01 00:00:00+00'
+);
+
 set local request.jwt.claims =
   '{"sub":"33333333-3333-3333-3333-333333333333","role":"authenticated"}';
+set local role authenticated;
+
+select is(
+  (
+    public.complete_maintenance_task(
+      jsonb_build_object(
+        'version', 2,
+        'operation_id', 'rpc-early-record',
+        'expected_next_due_date', '2026-08-18T09:00:00.000Z',
+        'plan', jsonb_build_object(
+          'id', 'rpc-early-plan',
+          'asset_id', 'rpc-asset',
+          'title', 'Early daily task',
+          'recurrence_interval', 1,
+          'recurrence_unit', 'days',
+          'priority', 'medium',
+          'next_due_date', '2026-08-14T14:30:00.000Z',
+          'reminder_days_before', 0,
+          'is_enabled', true,
+          'health_group', 'other',
+          'created_at', '2026-08-01T00:00:00.000Z',
+          'updated_at', '2026-08-13T14:30:00.000Z'
+        ),
+        'record', jsonb_build_object(
+          'id', 'rpc-early-record',
+          'plan_id', 'rpc-early-plan',
+          'due_date', '2026-08-18T09:00:00.000Z',
+          'completed_at', '2026-08-13T14:30:00.000Z'
+        )
+      ),
+      'rpc-device-early'
+    ) ->> 'status'
+  ),
+  'applied',
+  'early completion accepts a next due date based on actual completion even when it precedes the old due date'
+);
+
+set local role postgres;
+
+select is(
+  (
+    select next_due_date
+    from public.maintenance_plans
+    where user_id = '33333333-3333-3333-3333-333333333333'
+      and id = 'rpc-early-plan'
+  ),
+  '2026-08-14 14:30:00+00'::timestamptz,
+  'early daily completion stores actual completedAt plus one day'
+);
+
 set local role authenticated;
 
 select lives_ok(
@@ -349,6 +432,78 @@ select is(
   ),
   'rpc-record-1',
   'an idempotent retry returns the canonical record'
+);
+
+select is(
+  (
+    public.complete_maintenance_task(
+      jsonb_build_object(
+        'version', 2,
+        'operation_id', 'rpc-record-1',
+        'expected_next_due_date', '2026-07-01T00:00:00.000Z',
+        'plan', jsonb_build_object(
+          'id', 'rpc-plan',
+          'asset_id', 'rpc-asset',
+          'title', 'Replace RPC filter',
+          'recurrence_interval', 1,
+          'recurrence_unit', 'months',
+          'priority', 'medium',
+          'next_due_date', '2026-08-01T00:00:00.000Z',
+          'reminder_days_before', 3,
+          'is_enabled', true,
+          'health_group', 'other',
+          'created_at', '2026-06-01T00:00:00.000Z',
+          'updated_at', '2026-07-01T10:00:00.000Z'
+        ),
+        'record', jsonb_build_object(
+          'id', 'rpc-record-1',
+          'plan_id', 'rpc-plan',
+          'due_date', '2026-07-01T00:00:00.000Z',
+          'completed_at', '2026-07-01T09:01:00.000Z',
+          'notes', 'First completion'
+        )
+      ),
+      'rpc-device'
+    ) ->> 'status'
+  ),
+  'conflict',
+  'reusing a completion operation with a different completedAt is rejected'
+);
+
+select is(
+  (
+    public.complete_maintenance_task(
+      jsonb_build_object(
+        'version', 2,
+        'operation_id', 'rpc-record-1',
+        'expected_next_due_date', '2026-07-01T00:00:00.000Z',
+        'plan', jsonb_build_object(
+          'id', 'rpc-plan',
+          'asset_id', 'rpc-asset',
+          'title', 'Replace RPC filter',
+          'recurrence_interval', 1,
+          'recurrence_unit', 'months',
+          'priority', 'medium',
+          'next_due_date', '2026-08-01T00:00:00.000Z',
+          'reminder_days_before', 3,
+          'is_enabled', true,
+          'health_group', 'other',
+          'created_at', '2026-06-01T00:00:00.000Z',
+          'updated_at', '2026-07-01T10:00:00.000Z'
+        ),
+        'record', jsonb_build_object(
+          'id', 'rpc-record-1',
+          'plan_id', 'rpc-plan',
+          'due_date', '2026-07-01T00:00:00.000Z',
+          'completed_at', '2026-07-01T09:01:00.000Z',
+          'notes', 'First completion'
+        )
+      ),
+      'rpc-device'
+    ) ->> 'conflict_reason'
+  ),
+  'operation_id_reused',
+  'completedAt mismatch reports operation_id_reused'
 );
 
 select is(

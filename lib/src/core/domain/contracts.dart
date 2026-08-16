@@ -105,12 +105,14 @@ class LocalMaintenanceCompletionResult {
     this.operationId,
     this.previousDueDate,
     this.nextDueDate,
+    this.duplicateIgnored = false,
   });
 
   final LocalMaintenanceCompletionStatus status;
   final String? operationId;
   final DateTime? previousDueDate;
   final DateTime? nextDueDate;
+  final bool duplicateIgnored;
 
   bool get isApplied => status == LocalMaintenanceCompletionStatus.applied;
 }
@@ -152,7 +154,12 @@ abstract interface class MaintenanceRepository {
     String? notes,
     DateTime? expectedNextDueDate,
   });
-  Future<void> undoLastCompletion(String planId, DateTime previousDueDate);
+  Future<void> undoCompletion({
+    required String planId,
+    required String completionId,
+    required DateTime previousDueDate,
+    required DateTime expectedCurrentNextDueDate,
+  });
   Future<void> archivePlan(String planId);
   Future<void> restorePlan(String planId);
   Future<void> setTaskEnabled(String planId, bool enabled);
@@ -215,6 +222,10 @@ abstract interface class SettingsRepository {
   Future<NotificationPreferences> notificationPreferences();
   Stream<NotificationPreferences> watchNotificationPreferences();
   Future<void> setNotificationPreferences(NotificationPreferences preferences);
+  Future<void> mergeNotificationPreferences({
+    required NotificationPreferences baseline,
+    required NotificationPreferences desired,
+  });
 }
 
 abstract interface class NotificationInboxRepository {

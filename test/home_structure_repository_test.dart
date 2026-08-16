@@ -706,13 +706,15 @@ void main() {
 
       final active = (await maintenance.listTasks()).single;
       expect(active.plan.isEnabled, isTrue);
-      expect(active.plan.nextDueDate.isAfter(clock), isTrue);
-      expect(active.plan.nextDueDate, DateTime(2026, 6, 19, 12));
+      expect(active.plan.nextDueDate, originalDue);
       expect(await maintenance.listRecordsForPlan(planId), hasLength(1));
     });
 
     test('skips and postpones one task occurrence with reason notes', () async {
-      final maintenance = DriftMaintenanceRepository(db);
+      final maintenance = DriftMaintenanceRepository(
+        db,
+        now: () => DateTime(2026, 1, 1, 8),
+      );
       final categories = await repo.listCategories();
       final roomId = await repo.saveRoom(
         areaId: 'area_first_floor',
@@ -1506,6 +1508,299 @@ void main() {
         await root.delete(recursive: true);
       }
     }
+  });
+
+  group('preproduction state integrity', () {
+    late AppDatabase db;
+    late DriftAssetRepository repo;
+
+    setUp(() async {
+      db = AppDatabase(executor: NativeDatabase.memory());
+      repo = DriftAssetRepository(db);
+      await _seedTestAreas(repo);
+    });
+
+    tearDown(() async {
+      await db.close();
+    });
+
+    test(
+      'editing clears optional metadata and does not acknowledge Inbox',
+      () async {
+        final maintenance = DriftMaintenanceRepository(db);
+        final roomId = await repo.saveRoom(
+          areaId: 'area_first_floor',
+          name: 'Metadata room',
+        );
+        final categoryId = (await repo.listCategories()).first.id;
+        final assetId = await repo.saveAsset(
+          name: 'Metadata asset',
+          categoryId: categoryId,
+          roomId: roomId,
+        );
+        final planId = await maintenance.savePlan(
+          assetId: assetId,
+          title: 'Metadata task',
+          recurrence: const RecurrenceRule(
+            interval: 1,
+            unit: RecurrenceUnit.months,
+          ),
+          priority: PriorityLevel.medium,
+          nextDueDate: DateTime(2026, 8, 16, 9),
+          healthGroup: HealthGroup.other,
+          metadata: const TaskMetadata(
+            taskType: 'Inspect',
+            locationLabel: 'Garage',
+            requiredMaterials: ['Filter'],
+          ),
+        );
+        final inbox = DriftNotificationInboxRepository(db);
+        await inbox.createNotification(
+          title: 'Due',
+          body: 'Metadata task is due',
+          kind: 'task',
+          route: '/maintenance/$planId',
+          planId: planId,
+        );
+        expect(await inbox.unreadCount(), 1);
+
+        await maintenance.savePlan(
+          id: planId,
+          assetId: assetId,
+          title: 'Metadata task edited',
+          recurrence: const RecurrenceRule(
+            interval: 1,
+            unit: RecurrenceUnit.months,
+          ),
+          priority: PriorityLevel.medium,
+          nextDueDate: DateTime(2026, 8, 16, 9),
+          healthGroup: HealthGroup.other,
+          metadata: null,
+        );
+
+        expect((await maintenance.getTask(planId))!.plan.metadata, isNull);
+        expect(await inbox.unreadCount(), 1);
+      },
+    );
+
+    test(
+      'postpone is forward-only and repeated same-target action is rejected',
+      () async {
+        final now = DateTime(2026, 8, 16, 12);
+        final maintenance = DriftMaintenanceRepository(db, now: () => now);
+        final roomId = await repo.saveRoom(
+          areaId: 'area_first_floor',
+          name: 'Postpone room',
+        );
+        final categoryId = (await repo.listCategories()).first.id;
+        final assetId = await repo.saveAsset(
+          name: 'Postpone asset',
+          categoryId: categoryId,
+          roomId: roomId,
+        );
+        final due = DateTime(2026, 8, 17, 9);
+        final planId = await maintenance.savePlan(
+          assetId: assetId,
+          title: 'Postpone task',
+          recurrence: const RecurrenceRule(
+            interval: 1,
+            unit: RecurrenceUnit.days,
+          ),
+          priority: PriorityLevel.medium,
+          nextDueDate: due,
+          healthGroup: HealthGroup.other,
+        );
+        await expectLater(
+          maintenance.postponePlan(planId, DateTime(2026, 8, 15, 9)),
+          throwsA(isA<MaintenancePlanValidationException>()),
+        );
+        final target = DateTime(2026, 8, 18, 9);
+        await maintenance.postponePlan(planId, target, reason: 'Travel');
+        expect((await maintenance.getTask(planId))!.plan.nextDueDate, target);
+        await expectLater(
+          maintenance.postponePlan(planId, target, reason: 'Duplicate'),
+          throwsA(isA<MaintenancePlanValidationException>()),
+        );
+      },
+    );
+
+    test('completion Undo repairs same-day streak and best streak', () async {
+      final now = DateTime(2026, 8, 16, 12);
+      final maintenance = DriftMaintenanceRepository(db, now: () => now);
+      final streaks = DatabaseStreakService(db);
+      final roomId = await repo.saveRoom(
+        areaId: 'area_first_floor',
+        name: 'Streak room',
+      );
+      final categoryId = (await repo.listCategories()).first.id;
+      final assetId = await repo.saveAsset(
+        name: 'Streak asset',
+        categoryId: categoryId,
+        roomId: roomId,
+      );
+      final due = DateTime(2026, 8, 16, 9);
+      final planId = await maintenance.savePlan(
+        assetId: assetId,
+        title: 'Streak task',
+        recurrence: const RecurrenceRule(
+          interval: 1,
+          unit: RecurrenceUnit.days,
+        ),
+        priority: PriorityLevel.medium,
+        nextDueDate: due,
+        healthGroup: HealthGroup.other,
+      );
+      final completion = await maintenance.completePlanResult(
+        planId,
+        completedAt: now,
+        expectedNextDueDate: due,
+      );
+      var streak = await streaks.refresh(now);
+      expect(streak.currentStreak, 1);
+      expect(streak.bestStreak, 1);
+
+      await maintenance.undoCompletion(
+        planId: planId,
+        completionId: completion.operationId!,
+        previousDueDate: completion.previousDueDate!,
+        expectedCurrentNextDueDate: completion.nextDueDate!,
+      );
+      streak = await streaks.refresh(now);
+      expect(streak.currentStreak, 0);
+      expect(streak.bestStreak, 0);
+    });
+
+    test(
+      'task dedupe reopens read reminder and digest dedupe updates counts',
+      () async {
+        final roomId = await repo.saveRoom(
+          areaId: 'area_first_floor',
+          name: 'Dedupe room',
+        );
+        final categoryId = (await repo.listCategories()).first.id;
+        final assetId = await repo.saveAsset(
+          name: 'Dedupe asset',
+          categoryId: categoryId,
+          roomId: roomId,
+        );
+        final planId = await DriftMaintenanceRepository(db).savePlan(
+          id: 'plan-dedupe',
+          assetId: assetId,
+          title: 'Dedupe task',
+          recurrence: const RecurrenceRule(
+            interval: 1,
+            unit: RecurrenceUnit.days,
+          ),
+          priority: PriorityLevel.medium,
+          nextDueDate: DateTime(2026, 8, 17, 9),
+          healthGroup: HealthGroup.other,
+        );
+        final inbox = DriftNotificationInboxRepository(db);
+        await inbox.createNotification(
+          title: 'Task due',
+          body: 'Open Owntend',
+          kind: 'task',
+          route: '/maintenance/$planId',
+          planId: planId,
+        );
+        final first = (await inbox.listNotifications()).single;
+        await inbox.markRead(first.id);
+        expect(await inbox.unreadCount(), 0);
+        await inbox.createNotification(
+          title: 'Task due',
+          body: 'Open Owntend',
+          kind: 'task',
+          route: '/maintenance/plan-dedupe',
+          planId: 'plan-dedupe',
+        );
+        expect(await inbox.unreadCount(), 1);
+        expect(await inbox.listNotifications(), hasLength(1));
+
+        await inbox.createNotification(
+          title: 'Daily digest',
+          body: '5 due today',
+          kind: 'digest',
+          route: '/maintenance',
+          messageArgs: const {'dueToday': 5},
+        );
+        await inbox.createNotification(
+          title: 'Daily digest',
+          body: '2 due today',
+          kind: 'digest',
+          route: '/maintenance',
+          messageArgs: const {'dueToday': 2},
+        );
+        final digest = (await inbox.listNotifications()).firstWhere(
+          (item) => item.kind == 'digest',
+        );
+        expect(digest.body, '2 due today');
+        expect(digest.messageArgs['dueToday'], 2);
+      },
+    );
+
+    test('reminder lead must fit inside recurrence cadence', () async {
+      final maintenance = DriftMaintenanceRepository(db);
+      final roomId = await repo.saveRoom(
+        areaId: 'area_first_floor',
+        name: 'Reminder cadence room',
+      );
+      final categoryId = (await repo.listCategories()).first.id;
+      final assetId = await repo.saveAsset(
+        name: 'Reminder cadence asset',
+        categoryId: categoryId,
+        roomId: roomId,
+      );
+      await expectLater(
+        maintenance.savePlan(
+          assetId: assetId,
+          title: 'Daily impossible reminder',
+          recurrence: const RecurrenceRule(
+            interval: 1,
+            unit: RecurrenceUnit.days,
+          ),
+          priority: PriorityLevel.medium,
+          nextDueDate: DateTime(2026, 8, 17, 9),
+          reminderDaysBefore: 2,
+          healthGroup: HealthGroup.other,
+        ),
+        throwsA(isA<MaintenancePlanValidationException>()),
+      );
+      final valid = await maintenance.savePlan(
+        assetId: assetId,
+        title: 'Weekly reminder',
+        recurrence: const RecurrenceRule(
+          interval: 1,
+          unit: RecurrenceUnit.weeks,
+        ),
+        priority: PriorityLevel.medium,
+        nextDueDate: DateTime(2026, 8, 23, 9),
+        reminderDaysBefore: 2,
+        healthGroup: HealthGroup.other,
+      );
+      expect(valid, isNotEmpty);
+    });
+
+    test(
+      'concurrent notification preference changes merge independent fields',
+      () async {
+        final settings = DriftSettingsRepository(db);
+        const baseline = NotificationPreferences();
+        await settings.setNotificationPreferences(baseline);
+        await Future.wait([
+          settings.mergeNotificationPreferences(
+            baseline: baseline,
+            desired: baseline.copyWith(quietHoursEnabled: true),
+          ),
+          settings.mergeNotificationPreferences(
+            baseline: baseline,
+            desired: baseline.copyWith(privacyMode: true),
+          ),
+        ]);
+        final saved = await settings.notificationPreferences();
+        expect(saved.quietHoursEnabled, isTrue);
+        expect(saved.privacyMode, isTrue);
+      },
+    );
   });
 }
 

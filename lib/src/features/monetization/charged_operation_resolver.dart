@@ -24,9 +24,22 @@ class ChargedOperationResolver {
         try {
           final status = await monetizationRepo.getChargedOperationStatus(
             op.operationId,
-            requestHash: op.requestHash,
           );
           if (status.status == 'completed') {
+            final expectsTask = op.requestPayload.containsKey('plan');
+            final expectedType = expectsTask ? 'task' : 'asset';
+            if (status.entityType != expectedType ||
+                status.entityId != op.planId) {
+              await operationStore.saveOperation(
+                op.copyWith(
+                  state: TaskCreationOperationState.permanentRejected,
+                  updatedAt: DateTime.now(),
+                  lastErrorCode: 'operation_identity_mismatch',
+                  lastErrorMessage: 'Recovered operation identity did not match the local request.',
+                ),
+              );
+              continue;
+            }
             if (op.requestPayload.containsKey('plan') || status.plan != null) {
               await localSyncStore.reconcileTaskCreationComposite(
                 planId: op.planId,

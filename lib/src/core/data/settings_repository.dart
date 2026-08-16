@@ -4,6 +4,7 @@ class DriftSettingsRepository implements SettingsRepository {
   DriftSettingsRepository(this.db);
 
   final AppDatabase db;
+  Future<void> _notificationPreferencesWriteQueue = Future<void>.value();
 
   @override
   Future<domain.AppLanguage> appLanguage() async {
@@ -246,13 +247,104 @@ class DriftSettingsRepository implements SettingsRepository {
   @override
   Future<void> setNotificationPreferences(
     domain.NotificationPreferences preferences,
+  ) {
+    return _queueNotificationPreferencesWrite(
+      () => _writeNotificationPreferences(preferences),
+    );
+  }
+
+  @override
+  Future<void> mergeNotificationPreferences({
+    required domain.NotificationPreferences baseline,
+    required domain.NotificationPreferences desired,
+  }) {
+    return _queueNotificationPreferencesWrite(() async {
+      final current = await notificationPreferences();
+      final merged = current.copyWith(
+        enabled: desired.enabled != baseline.enabled ? desired.enabled : null,
+        localReminders: desired.localReminders != baseline.localReminders
+            ? desired.localReminders
+            : null,
+        inAppInbox: desired.inAppInbox != baseline.inAppInbox
+            ? desired.inAppInbox
+            : null,
+        weatherAlerts: desired.weatherAlerts != baseline.weatherAlerts
+            ? desired.weatherAlerts
+            : null,
+        quietHoursEnabled:
+            desired.quietHoursEnabled != baseline.quietHoursEnabled
+            ? desired.quietHoursEnabled
+            : null,
+        quietHoursStartMinutes:
+            desired.quietHoursStartMinutes != baseline.quietHoursStartMinutes
+            ? desired.quietHoursStartMinutes
+            : null,
+        quietHoursEndMinutes:
+            desired.quietHoursEndMinutes != baseline.quietHoursEndMinutes
+            ? desired.quietHoursEndMinutes
+            : null,
+        criticalBypassQuietHours:
+            desired.criticalBypassQuietHours !=
+                baseline.criticalBypassQuietHours
+            ? desired.criticalBypassQuietHours
+            : null,
+        privacyMode: desired.privacyMode != baseline.privacyMode
+            ? desired.privacyMode
+            : null,
+        dailyDigest: desired.dailyDigest != baseline.dailyDigest
+            ? desired.dailyDigest
+            : null,
+        digestHour: desired.digestHour != baseline.digestHour
+            ? desired.digestHour
+            : null,
+        reminderHour: desired.reminderHour != baseline.reminderHour
+            ? desired.reminderHour
+            : null,
+        maxRemindersPerDay:
+            desired.maxRemindersPerDay != baseline.maxRemindersPerDay
+            ? desired.maxRemindersPerDay
+            : null,
+        defaultSnoozeMinutes:
+            desired.defaultSnoozeMinutes != baseline.defaultSnoozeMinutes
+            ? desired.defaultSnoozeMinutes
+            : null,
+        preferExactReminders:
+            desired.preferExactReminders != baseline.preferExactReminders
+            ? desired.preferExactReminders
+            : null,
+      );
+      await _writeNotificationPreferences(merged);
+    });
+  }
+
+  Future<void> _queueNotificationPreferencesWrite(
+    Future<void> Function() operation,
+  ) {
+    final next = _notificationPreferencesWriteQueue.then(
+      (_) => operation(),
+      onError: (_) => operation(),
+    );
+    _notificationPreferencesWriteQueue = next;
+    return next;
+  }
+
+  Future<void> _writeNotificationPreferences(
+    domain.NotificationPreferences preferences,
   ) async {
     final normalized = _normalizeNotificationPreferences(preferences);
-    await _setSetting(
-      'notification_preferences',
-      jsonEncode(_notificationPreferencesToJson(normalized)),
-    );
-    await _setSetting('notifications_enabled', normalized.enabled.toString());
+    final now = DateTime.now();
+    await db.transaction(() async {
+      await _setSettingAt(
+        'notification_preferences',
+        jsonEncode(_notificationPreferencesToJson(normalized)),
+        now,
+      );
+      await _setSettingAt(
+        'notifications_enabled',
+        normalized.enabled.toString(),
+        now,
+      );
+    });
   }
 
   Future<SettingRow?> _setting(String key) {

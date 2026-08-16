@@ -6,11 +6,22 @@ class DriftMaintenanceRepository
     this.db, {
     this._recurrenceEngine = const OwntendRecurrenceEngine(),
     DateTime Function()? now,
-  }) : _now = now ?? DateTime.now;
+    Duration Function()? actionElapsed,
+  }) : _now = now ?? DateTime.now,
+       _actionElapsedOverride = actionElapsed;
 
   final AppDatabase db;
   final RecurrenceEngine _recurrenceEngine;
   final DateTime Function() _now;
+  final Duration Function()? _actionElapsedOverride;
+  final Stopwatch _completionActionClock = Stopwatch()..start();
+  static const _completionDuplicateWindow = Duration(seconds: 4);
+  final Map<String, Duration> _lastCompletionActionAt = {};
+  final Map<String, LocalMaintenanceCompletionResult> _lastCompletionResult =
+      {};
+
+  Duration get _actionElapsed =>
+      _actionElapsedOverride?.call() ?? _completionActionClock.elapsed;
 
   @override
   Stream<List<domain.TaskItem>> watchTasks() {
@@ -193,6 +204,12 @@ class DriftMaintenanceRepository
         code: 'invalid_reminder',
       );
     }
+    if (!_reminderLeadFitsRecurrence(recurrence, reminderDaysBefore)) {
+      throw const MaintenancePlanValidationException(
+        'Reminder lead time must be shorter than the recurrence interval.',
+        code: 'invalid_reminder_cadence',
+      );
+    }
     final planId = id ?? _uuid.v7();
     final now = _now();
     await db.transaction(() async {
@@ -240,8 +257,11 @@ class DriftMaintenanceRepository
         );
         if (metadata != null) {
           await _savePlanMetadata(planId, metadata, now);
+        } else {
+          await (db.delete(
+            db.maintenancePlanMetadata,
+          )..where((row) => row.planId.equals(planId))).go();
         }
-        await _markPlanInboxRead(planId);
       }
     });
     return planId;
@@ -306,7 +326,7 @@ class DriftMaintenanceRepository
       notes: notes,
       expectedNextDueDate: expectedNextDueDate,
     );
-    return result.isApplied;
+    return result.isApplied && !result.duplicateIgnored;
   }
 
   DateTime canonicalSyncSecond(DateTime value) {
@@ -339,6 +359,24 @@ class DriftMaintenanceRepository
           status: LocalMaintenanceCompletionStatus.planInactive,
         );
       }
+      final actionAt = _now();
+      final actionElapsed = _actionElapsed;
+      final lastActionAt = _lastCompletionActionAt[planId];
+      final lastResult = _lastCompletionResult[planId];
+      if (lastActionAt != null && lastResult != null) {
+        final sinceLastAction = actionElapsed - lastActionAt;
+        if (!sinceLastAction.isNegative &&
+            sinceLastAction < _completionDuplicateWindow) {
+          return LocalMaintenanceCompletionResult(
+            status: lastResult.status,
+            operationId: lastResult.operationId,
+            previousDueDate: lastResult.previousDueDate,
+            nextDueDate: lastResult.nextDueDate,
+            duplicateIgnored: true,
+          );
+        }
+      }
+
       final canonicalExpectedNextDue = expectedNextDueDate != null
           ? canonicalSyncSecond(expectedNextDueDate)
           : null;
@@ -351,14 +389,13 @@ class DriftMaintenanceRepository
         );
       }
 
-      final completed = canonicalSyncSecond(completedAt ?? _now());
+      final completionInstant = completedAt ?? actionAt;
+      final completed = canonicalSyncSecond(completionInstant);
       final previousDueDate = canonicalPlanNextDue;
-      final baseDate = completed.isAfter(previousDueDate)
-          ? completed
-          : previousDueDate;
+
       final nextDue = canonicalSyncSecond(
         _recurrenceEngine.nextDueDate(
-          baseDate,
+          completionInstant,
           domain.RecurrenceRule(
             interval: plan.recurrenceInterval,
             unit: _recurrenceUnit(plan.recurrenceUnit),
@@ -367,7 +404,7 @@ class DriftMaintenanceRepository
       );
       final completionId = _uuid.v7();
       final completionNotes = _blankToNull(notes);
-      final planUpdatedAt = canonicalSyncSecond(_now());
+      final planUpdatedAt = canonicalSyncSecond(actionAt);
 
       // Identify unresolved predecessor for same plan for CT-003 causal ordering
       final pendingCompletions =
@@ -509,73 +546,116 @@ class DriftMaintenanceRepository
         ),
       );
 
-      return LocalMaintenanceCompletionResult(
+      final result = LocalMaintenanceCompletionResult(
         status: LocalMaintenanceCompletionStatus.applied,
         operationId: completionId,
         previousDueDate: previousDueDate,
         nextDueDate: nextDue,
       );
+      _lastCompletionActionAt[planId] = actionElapsed;
+      _lastCompletionResult[planId] = result;
+      return result;
     });
   }
 
   @override
-  Future<void> undoLastCompletion(
-    String planId,
-    DateTime previousDueDate,
-  ) async {
-    final latestRecord =
-        await (db.select(db.maintenanceRecords)
-              ..where((record) => record.planId.equals(planId))
-              ..orderBy([(record) => OrderingTerm.desc(record.completedAt)])
-              ..limit(1))
-            .getSingleOrNull();
-    if (latestRecord == null) {
-      return;
-    }
+  Future<void> undoCompletion({
+    required String planId,
+    required String completionId,
+    required DateTime previousDueDate,
+    required DateTime expectedCurrentNextDueDate,
+  }) async {
     final canonicalPreviousDue = canonicalSyncSecond(previousDueDate);
+    final canonicalExpectedCurrent = canonicalSyncSecond(
+      expectedCurrentNextDueDate,
+    );
     final now = canonicalSyncSecond(_now());
+
     await db.transaction(() async {
-      final outboxDeleted =
-          await (db.delete(db.syncOutbox)..where(
-                (row) =>
-                    row.entity.equals('maintenance_completion') &
-                    row.recordKey.equals(latestRecord.id),
+      final target =
+          await (db.select(db.maintenanceRecords)..where(
+                (record) =>
+                    record.id.equals(completionId) &
+                    record.planId.equals(planId),
               ))
-              .go();
-      if (outboxDeleted > 0) {
-        await (db.update(db.syncRuntime)..where((row) => row.id.equals(1)))
-            .write(const SyncRuntimeCompanion(suppressOutbox: Value(true)));
-        try {
-          await (db.delete(
-            db.maintenanceRecords,
-          )..where((record) => record.id.equals(latestRecord.id))).go();
-          await (db.update(
-            db.maintenancePlans,
-          )..where((plan) => plan.id.equals(planId))).write(
-            MaintenancePlansCompanion(
-              nextDueDate: Value(canonicalPreviousDue),
-              updatedAt: Value(now),
-            ),
-          );
-        } finally {
-          await (db.update(db.syncRuntime)..where((row) => row.id.equals(1)))
-              .write(const SyncRuntimeCompanion(suppressOutbox: Value(false)));
-        }
-      } else {
-        await (db.delete(
-          db.maintenanceRecords,
-        )..where((record) => record.id.equals(latestRecord.id))).go();
+              .getSingleOrNull();
+      if (target == null) {
+        return;
+      }
+      final plan = await (db.select(
+        db.maintenancePlans,
+      )..where((row) => row.id.equals(planId))).getSingleOrNull();
+      if (plan == null) {
+        return;
+      }
+      final latest =
+          await (db.select(db.maintenanceRecords)
+                ..where((record) => record.planId.equals(planId))
+                ..orderBy([
+                  (record) => OrderingTerm.desc(record.completedAt),
+                  (record) => OrderingTerm.desc(record.id),
+                ])
+                ..limit(1))
+              .getSingleOrNull();
+      final shouldRewind =
+          latest?.id == completionId &&
+          canonicalSyncSecond(plan.nextDueDate)
+              .isAtSameMomentAs(canonicalExpectedCurrent);
+
+      await (db.delete(db.syncOutbox)..where(
+            (row) =>
+                row.entity.equals('maintenance_completion') &
+                row.recordKey.equals(completionId),
+          ))
+          .go();
+
+      // Keep ordinary outbox triggers enabled here. If the completion RPC is
+      // already in flight, the exact-record delete protects local history and
+      // the plan mutation protects the local rewind until the guarded undo RPC
+      // reaches the server.
+      await (db.delete(
+        db.maintenanceRecords,
+      )..where((record) => record.id.equals(completionId))).go();
+      if (shouldRewind) {
         await (db.update(
           db.maintenancePlans,
-        )..where((plan) => plan.id.equals(planId))).write(
+        )..where((row) => row.id.equals(planId))).write(
           MaintenancePlansCompanion(
             nextDueDate: Value(canonicalPreviousDue),
             updatedAt: Value(now),
           ),
         );
       }
-      await _markPlanInboxRead(planId);
 
+      final syncAccount = await (db.select(
+        db.syncAccount,
+      )..where((row) => row.id.equals(1))).getSingleOrNull();
+      final payload = jsonEncode({
+        'version': 1,
+        'operation_id': 'undo:$completionId',
+        'plan_id': planId,
+        'completion_id': completionId,
+        'completion_completed_at': canonicalSyncSecond(target.completedAt)
+            .toUtc()
+            .toIso8601String(),
+        'previous_due_date': canonicalPreviousDue.toUtc().toIso8601String(),
+        'expected_current_next_due_date': canonicalExpectedCurrent
+            .toUtc()
+            .toIso8601String(),
+      });
+      await db
+          .into(db.syncOutbox)
+          .insertOnConflictUpdate(
+            SyncOutboxCompanion.insert(
+              entity: 'maintenance_undo',
+              recordKey: completionId,
+              operation: 'execute',
+              changedAt: Value(now.subtract(const Duration(microseconds: 1))),
+              payloadJson: Value(payload),
+              userId: Value(syncAccount?.boundUserId),
+            ),
+          );
+      await _reopenPlanInbox(planId, now);
       await db
           .into(db.notificationReconciliationRequests)
           .insertOnConflictUpdate(
@@ -588,53 +668,57 @@ class DriftMaintenanceRepository
             ),
           );
     });
+    if (_lastCompletionResult[planId]?.operationId == completionId) {
+      _lastCompletionActionAt.remove(planId);
+      _lastCompletionResult.remove(planId);
+    }
   }
 
   @override
   Future<void> archivePlan(String planId) async {
-    await (db.update(
-      db.maintenancePlans,
-    )..where((plan) => plan.id.equals(planId))).write(
-      MaintenancePlansCompanion(
-        archivedAt: Value(_now()),
-        updatedAt: Value(_now()),
-      ),
-    );
+    final now = _now();
+    await db.transaction(() async {
+      await (db.update(
+        db.maintenancePlans,
+      )..where((plan) => plan.id.equals(planId))).write(
+        MaintenancePlansCompanion(
+          archivedAt: Value(now),
+          updatedAt: Value(now),
+        ),
+      );
+      await _markPlanInboxRead(planId);
+    });
   }
 
   @override
   Future<void> restorePlan(String planId) async {
     final now = _now();
-    final plan = await (db.select(
-      db.maintenancePlans,
-    )..where((row) => row.id.equals(planId))).getSingleOrNull();
-    if (plan == null) return;
-    final asset = await (db.select(
-      db.assets,
-    )..where((row) => row.id.equals(plan.assetId))).getSingleOrNull();
-    final room = asset == null
-        ? null
-        : await (db.select(
-            db.rooms,
-          )..where((row) => row.id.equals(asset.roomId))).getSingleOrNull();
     await db.transaction(() async {
-      if (asset != null) {
-        await (db.update(
-          db.assets,
-        )..where((row) => row.id.equals(asset.id))).write(
-          AssetsCompanion(archivedAt: const Value(null), updatedAt: Value(now)),
-        );
-      }
-      if (room != null) {
-        await (db.update(
-          db.rooms,
-        )..where((row) => row.id.equals(room.id))).write(
-          RoomsCompanion(archivedAt: const Value(null), updatedAt: Value(now)),
-        );
-        await (db.update(
-          db.areas,
-        )..where((row) => row.id.equals(room.areaId))).write(
-          AreasCompanion(archivedAt: const Value(null), updatedAt: Value(now)),
+      final plan = await (db.select(
+        db.maintenancePlans,
+      )..where((row) => row.id.equals(planId))).getSingleOrNull();
+      if (plan == null || plan.archivedAt == null) return;
+      final asset = await (db.select(
+        db.assets,
+      )..where((row) => row.id.equals(plan.assetId))).getSingleOrNull();
+      final room = asset == null
+          ? null
+          : await (db.select(
+              db.rooms,
+            )..where((row) => row.id.equals(asset.roomId))).getSingleOrNull();
+      final area = room == null
+          ? null
+          : await (db.select(
+              db.areas,
+            )..where((row) => row.id.equals(room.areaId))).getSingleOrNull();
+      if (asset == null ||
+          asset.archivedAt != null ||
+          room == null ||
+          room.archivedAt != null ||
+          area == null ||
+          area.archivedAt != null) {
+        throw StateError(
+          'Restore the parent item, room, and area before restoring this task.',
         );
       }
       await (db.update(
@@ -660,19 +744,11 @@ class DriftMaintenanceRepository
         return;
       }
       final now = _now();
-      final recurrence = domain.RecurrenceRule(
-        interval: plan.recurrenceInterval,
-        unit: _recurrenceUnit(plan.recurrenceUnit),
-      );
-      final nextDueDate = enabled && !plan.nextDueDate.isAfter(now)
-          ? _recurrenceEngine.nextDueDate(now, recurrence)
-          : plan.nextDueDate;
       await (db.update(
         db.maintenancePlans,
       )..where((row) => row.id.equals(planId))).write(
         MaintenancePlansCompanion(
           isEnabled: Value(enabled),
-          nextDueDate: Value(nextDueDate),
           updatedAt: Value(now),
         ),
       );
@@ -745,12 +821,19 @@ class DriftMaintenanceRepository
               ))
               .getSingleOrNull();
       if (plan == null) return;
+      final now = _now();
+      if (!nextDueDate.isAfter(now) || !nextDueDate.isAfter(plan.nextDueDate)) {
+        throw const MaintenancePlanValidationException(
+          'Postpone must move the task to a later future time.',
+          code: 'invalid_postpone',
+        );
+      }
       await (db.update(
         db.maintenancePlans,
       )..where((row) => row.id.equals(planId))).write(
         MaintenancePlansCompanion(
           nextDueDate: Value(nextDueDate),
-          updatedAt: Value(_now()),
+          updatedAt: Value(now),
         ),
       );
       await _markPlanInboxRead(planId);
@@ -837,6 +920,29 @@ class DriftMaintenanceRepository
     await (db.update(db.inboxNotifications)
           ..where((row) => row.planId.equals(planId) & row.readAt.isNull()))
         .write(InboxNotificationsCompanion(readAt: Value(DateTime.now())));
+  }
+
+  Future<void> _reopenPlanInbox(String planId, DateTime now) async {
+    final latest =
+        await (db.select(db.inboxNotifications)
+              ..where(
+                (row) => row.planId.equals(planId) & row.kind.equals('task'),
+              )
+              ..orderBy([
+                (row) => OrderingTerm.desc(row.createdAt),
+                (row) => OrderingTerm.desc(row.id),
+              ])
+              ..limit(1))
+            .getSingleOrNull();
+    if (latest == null) return;
+    await (db.update(
+      db.inboxNotifications,
+    )..where((row) => row.id.equals(latest.id))).write(
+      InboxNotificationsCompanion(
+        readAt: const Value(null),
+        updatedAt: Value(now),
+      ),
+    );
   }
 
   Future<void> _recordTaskSystemNote({
@@ -939,4 +1045,20 @@ class DriftMaintenanceRepository
           (value) => taskListFingerprint(value as List<domain.TaskItem>),
     );
   }
+}
+
+bool _reminderLeadFitsRecurrence(
+  domain.RecurrenceRule recurrence,
+  int reminderDaysBefore,
+) {
+  if (reminderDaysBefore == 0) return true;
+  final leadHours = reminderDaysBefore * 24;
+  final minimumCycleHours = switch (recurrence.unit) {
+    domain.RecurrenceUnit.hours => recurrence.interval,
+    domain.RecurrenceUnit.days => recurrence.interval * 24,
+    domain.RecurrenceUnit.weeks => recurrence.interval * 7 * 24,
+    domain.RecurrenceUnit.months => recurrence.interval * 28 * 24,
+    domain.RecurrenceUnit.years => recurrence.interval * 365 * 24,
+  };
+  return leadHours < minimumCycleHours;
 }

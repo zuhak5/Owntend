@@ -90,7 +90,29 @@ class DriftNotificationInboxRepository implements NotificationInboxRepository {
         return predicate;
       })
       ..limit(1);
-    if (await duplicateQuery.getSingleOrNull() != null) {
+    final duplicate = await duplicateQuery.getSingleOrNull();
+    if (duplicate != null) {
+      final contentChanged =
+          duplicate.body != cleanBody ||
+          duplicate.messageCode != messageCode?.wireValue ||
+          duplicate.messageArgs != jsonEncode(messageArgs);
+      final shouldReopen =
+          normalizedKind == 'task' && duplicate.readAt != null ||
+          normalizedKind == 'digest' && contentChanged;
+      if (contentChanged || shouldReopen) {
+        await (db.update(
+          db.inboxNotifications,
+        )..where((row) => row.id.equals(duplicate.id))).write(
+          InboxNotificationsCompanion(
+            title: Value(cleanTitle.isEmpty ? 'Owntend update' : cleanTitle),
+            body: Value(cleanBody),
+            messageCode: Value(messageCode?.wireValue),
+            messageArgs: Value(jsonEncode(messageArgs)),
+            readAt: shouldReopen ? const Value(null) : Value(duplicate.readAt),
+            updatedAt: Value(now),
+          ),
+        );
+      }
       return;
     }
     await db

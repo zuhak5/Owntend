@@ -23,6 +23,8 @@ class DatabaseStreakService implements StreakService {
   @override
   Future<domain.StreakState> refresh(DateTime now) async {
     final today = dateOnly(now);
+    final tomorrow = DateTime(today.year, today.month, today.day + 1);
+    final yesterday = DateTime(today.year, today.month, today.day - 1);
     final plans =
         await (db.select(db.maintenancePlans)..where(
               (plan) => plan.archivedAt.isNull() & plan.isEnabled.equals(true),
@@ -32,6 +34,42 @@ class DatabaseStreakService implements StreakService {
     final missedObligation = plans.any(
       (plan) => compareDateOnly(plan.nextDueDate, today) < 0,
     );
+    final recordsCompletedToday =
+        await (db.select(db.maintenanceRecords)..where(
+              (record) =>
+                  record.completedAt.isBiggerOrEqualValue(today) &
+                  record.completedAt.isSmallerThanValue(tomorrow),
+            ))
+            .get();
+    final hasOpenDueToday = plans.any(
+      (plan) => isSameDate(plan.nextDueDate, today),
+    );
+    final wasAwardedToday =
+        existing.lastCompletedDate != null &&
+        isSameDate(existing.lastCompletedDate!, today);
+
+    if (wasAwardedToday &&
+        (recordsCompletedToday.isEmpty ||
+            hasOpenDueToday ||
+            missedObligation)) {
+      final repairedCurrent = existing.currentStreak > 0
+          ? existing.currentStreak - 1
+          : 0;
+      final priorBest = await _longestCompletionRun(beforeExclusive: today);
+      final repairedBestCandidate = priorBest > repairedCurrent
+          ? priorBest
+          : repairedCurrent;
+      final repairedBest = repairedBestCandidate < existing.bestStreak
+          ? repairedBestCandidate
+          : existing.bestStreak;
+      return _write(
+        currentStreak: repairedCurrent,
+        bestStreak: repairedBest,
+        lastCompletedDate: repairedCurrent > 0 ? yesterday : null,
+        now: now,
+      );
+    }
+
     if (missedObligation) {
       return _write(
         currentStreak: 0,
@@ -41,24 +79,10 @@ class DatabaseStreakService implements StreakService {
       );
     }
 
-    final tomorrow = DateTime(today.year, today.month, today.day + 1);
-    final recordsDueToday =
-        await (db.select(db.maintenanceRecords)..where(
-              (record) =>
-                  record.dueDate.isBiggerOrEqualValue(today) &
-                  record.dueDate.isSmallerThanValue(tomorrow),
-            ))
-            .get();
-    final hasOpenDueToday = plans.any(
-      (plan) => isSameDate(plan.nextDueDate, today),
-    );
-    if (recordsDueToday.isEmpty ||
-        hasOpenDueToday ||
-        isSameDate(existing.lastCompletedDate ?? DateTime(1900), today)) {
+    if (recordsCompletedToday.isEmpty || hasOpenDueToday || wasAwardedToday) {
       return existing;
     }
 
-    final yesterday = DateTime(today.year, today.month, today.day - 1);
     final nextCurrent =
         existing.lastCompletedDate != null &&
             isSameDate(existing.lastCompletedDate!, yesterday)
@@ -72,6 +96,37 @@ class DatabaseStreakService implements StreakService {
       lastCompletedDate: today,
       now: now,
     );
+  }
+
+  Future<int> _longestCompletionRun({required DateTime beforeExclusive}) async {
+    final rows =
+        await (db.select(db.maintenanceRecords)
+              ..where(
+                (record) =>
+                    record.completedAt.isSmallerThanValue(beforeExclusive),
+              )
+              ..orderBy([(record) => OrderingTerm.asc(record.completedAt)]))
+            .get();
+    final days = <DateTime>[];
+    DateTime? lastDay;
+    for (final row in rows) {
+      final day = dateOnly(row.completedAt.toLocal());
+      if (lastDay == null || !isSameDate(lastDay, day)) {
+        days.add(day);
+        lastDay = day;
+      }
+    }
+    var best = 0;
+    var currentRun = 0;
+    DateTime? previous;
+    for (final day in days) {
+      final consecutive =
+          previous != null && daysBetweenDates(previous, day) == 1;
+      currentRun = consecutive ? currentRun + 1 : 1;
+      if (currentRun > best) best = currentRun;
+      previous = day;
+    }
+    return best;
   }
 
   Future<domain.StreakState> _write({

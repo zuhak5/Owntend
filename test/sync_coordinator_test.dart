@@ -28,6 +28,8 @@ class _StatefulGateway implements SupabaseSyncGateway {
   var materializeMediaCalls = 0;
   var startRealtimeCalls = 0;
   var maintenanceCompletionCalls = 0;
+  var maintenanceUndoCalls = 0;
+  Completer<void>? maintenanceCompletionGate;
   String? maintenanceCanonicalPlanTitle;
   int? failMaintenanceCompletionCall;
   bool maintenanceConflictOnce = false;
@@ -144,6 +146,7 @@ class _StatefulGateway implements SupabaseSyncGateway {
     required String deviceId,
   }) async {
     maintenanceCompletionCalls++;
+    await maintenanceCompletionGate?.future;
 
     if (maintenanceCompletionCalls == failMaintenanceCompletionCall) {
       throw const SupabaseFailure(
@@ -211,6 +214,10 @@ class _StatefulGateway implements SupabaseSyncGateway {
       );
     }
 
+    final planId = planValues['id']! as String;
+    final expectedDue = DateTime.parse(
+      payload['expected_next_due_date']! as String,
+    ).toUtc();
     final existingRecord = await fetch(
       spec: recordSpec,
       userId: userId,
@@ -233,6 +240,44 @@ class _StatefulGateway implements SupabaseSyncGateway {
         plan: existingPlan,
         record: existingRecord,
       );
+    }
+
+    final existingPlan = await fetch(
+      spec: planSpec,
+      userId: userId,
+      deviceId: deviceId,
+      recordKey: planId,
+    );
+    if (existingPlan != null) {
+      final currentDue = DateTime.parse(
+        existingPlan.values['next_due_date']! as String,
+      ).toUtc();
+      if (!currentDue.isAtSameMomentAs(expectedDue)) {
+        final matchingOccurrence = _records
+            .where(
+              (item) =>
+                  item.userId == userId &&
+                  item.record.spec.entity == 'maintenance_record' &&
+                  item.record.values['plan_id'] == planId &&
+                  DateTime.parse(item.record.values['due_date']! as String)
+                      .toUtc()
+                      .isAtSameMomentAs(expectedDue),
+            )
+            .map((item) => item.record)
+            .firstOrNull;
+        if (matchingOccurrence != null) {
+          return MaintenanceCompletionResult(
+            status: MaintenanceCompletionStatus.conflict,
+            retryable: false,
+            plan: existingPlan,
+            record: matchingOccurrence,
+            currentPlanRevision: existingPlan.revision,
+            resultingRecordId: matchingOccurrence.recordKey,
+            resultingNextDueDate: currentDue,
+            conflictReason: 'occurrence_completed_elsewhere',
+          );
+        }
+      }
     }
 
     SyncRecord storeCanonical(SyncRecord local) {
@@ -288,6 +333,87 @@ class _StatefulGateway implements SupabaseSyncGateway {
       retryable: false,
       plan: plan,
       record: record,
+    );
+  }
+
+  @override
+  Future<MaintenanceUndoResult> undoMaintenanceCompletion({
+    required String payloadJson,
+    required String userId,
+    required String deviceId,
+  }) async {
+    maintenanceUndoCalls++;
+    final payload = Map<String, dynamic>.from(jsonDecode(payloadJson) as Map);
+    final planId = payload['plan_id']! as String;
+    final completionId = payload['completion_id']! as String;
+    final previousDue = DateTime.parse(payload['previous_due_date']! as String)
+        .toUtc();
+    final expectedCurrent = DateTime.parse(
+      payload['expected_current_next_due_date']! as String,
+    ).toUtc();
+    final planIndex = _records.indexWhere(
+      (item) =>
+          item.userId == userId &&
+          item.record.spec.entity == 'maintenance_plan' &&
+          item.record.recordKey == planId,
+    );
+    if (planIndex < 0) {
+      return const MaintenanceUndoResult(
+        status: MaintenanceCompletionStatus.invalid,
+        retryable: false,
+        conflictReason: 'plan_missing',
+      );
+    }
+    final completionIndex = _records.indexWhere(
+      (item) =>
+          item.userId == userId &&
+          item.record.spec.entity == 'maintenance_record' &&
+          item.record.recordKey == completionId,
+    );
+    if (completionIndex >= 0) {
+      _records.removeAt(completionIndex);
+    }
+    var plan =
+        _records[planIndex > completionIndex && completionIndex >= 0
+                ? planIndex - 1
+                : planIndex]
+            .record;
+    final currentDue = DateTime.parse(plan.values['next_due_date']! as String)
+        .toUtc();
+    var rewound = false;
+    final newerCompletionExists = _records.any(
+      (item) =>
+          item.userId == userId &&
+          item.record.spec.entity == 'maintenance_record' &&
+          item.record.values['plan_id'] == planId,
+    );
+    if (!newerCompletionExists &&
+        currentDue.isAtSameMomentAs(expectedCurrent)) {
+      final updated = SyncRecord(
+        spec: plan.spec,
+        recordKey: plan.recordKey,
+        values: {
+          ...plan.values,
+          'next_due_date': previousDue.toIso8601String(),
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        },
+        clientModifiedAt: DateTime.now().toUtc(),
+        originDeviceId: deviceId,
+      );
+      final result = await write(
+        record: updated,
+        userId: userId,
+        deviceId: deviceId,
+        expectedRevision: plan.revision,
+      );
+      plan = result.canonical!;
+      rewound = true;
+    }
+    return MaintenanceUndoResult(
+      status: MaintenanceCompletionStatus.applied,
+      retryable: false,
+      plan: plan,
+      rewound: rewound,
     );
   }
 
@@ -455,11 +581,7 @@ class _StatefulGateway implements SupabaseSyncGateway {
       originDeviceId: record.originDeviceId,
       revision: revision < syncSeq ? syncSeq : revision,
       syncSeq: syncSeq,
-      serverUpdatedAt: DateTime.utc(
-        2026,
-        6,
-        29,
-      ).add(Duration(seconds: syncSeq)),
+      serverUpdatedAt: DateTime.now().toUtc(),
       deletedAt: record.deletedAt,
     );
   }
@@ -2113,6 +2235,7 @@ void main() {
       await db.delete(db.syncOutbox).go();
 
       var repositoryNow = DateTime.utc(2026, 7, 1, 10);
+      var actionElapsed = Duration.zero;
 
       final maintenance = DriftMaintenanceRepository(
         db,
@@ -2121,6 +2244,7 @@ void main() {
           repositoryNow = repositoryNow.add(const Duration(hours: 1));
           return value;
         },
+        actionElapsed: () => actionElapsed,
       );
 
       final firstApplied = await maintenance.completePlan(
@@ -2130,6 +2254,7 @@ void main() {
       );
 
       expect(firstApplied, isTrue);
+      actionElapsed += const Duration(seconds: 5);
 
       final afterFirst =
           await (db.select(db.maintenancePlans)
@@ -2330,6 +2455,326 @@ void main() {
     expect(gateway.startRealtimeCalls, 1);
   });
   test(
+    'offline maintenance completion syncs when connectivity returns',
+    () async {
+      final db = AppDatabase(executor: NativeDatabase.memory());
+      addTearDown(db.close);
+      final store = LocalSyncStore(db);
+      await store.account();
+      await store.setEnabled(enabled: true, boundUserId: 'user-1');
+      await store.recordSyncSuccess(DateTime.now().toUtc());
+      await _seedMaintenancePlanForSync(db, suffix: 'offline');
+      await db.delete(db.syncOutbox).go();
+
+      final auth = _FakeAuthRepository(const AuthSession(userId: 'user-1'));
+      addTearDown(auth.controller.close);
+      final connectivity = _FakeConnectivity(false);
+      addTearDown(connectivity.controller.close);
+      final gateway = _StatefulGateway();
+      final coordinator = SyncCoordinator(
+        auth,
+        store,
+        gateway,
+        connectivity: connectivity,
+        realtime: gateway,
+      );
+      addTearDown(coordinator.dispose);
+
+      final due = DateTime.utc(2026, 8, 18, 9);
+      final completedAt = DateTime.utc(2026, 8, 13, 14, 30);
+      final completion = await DriftMaintenanceRepository(db)
+          .completePlanResult(
+            'maintenance-plan-offline',
+            completedAt: completedAt,
+            expectedNextDueDate: due,
+          );
+      expect(completion.isApplied, isTrue);
+      expect(await store.pendingCount(), 1);
+      expect(gateway.maintenanceCompletionCalls, 0);
+
+      connectivity.setOnline(true);
+      await _eventually(() async {
+        return gateway.maintenanceCompletionCalls == 1 &&
+            await store.pendingCount() == 0;
+      });
+
+      final remotePlan = await gateway.fetch(
+        spec: syncSpecByEntity['maintenance_plan']!,
+        userId: 'user-1',
+        deviceId: (await store.account()).deviceId,
+        recordKey: 'maintenance-plan-offline',
+      );
+      expect(remotePlan, isNotNull);
+      expect(
+        DateTime.parse(remotePlan!.values['next_due_date']! as String).toUtc(),
+        DateTime.utc(2026, 9, 13, 14, 30),
+      );
+      final remoteRecord = gateway._records.singleWhere(
+        (item) =>
+            item.userId == 'user-1' &&
+            item.record.spec.entity == 'maintenance_record',
+      );
+      expect(
+        DateTime.parse(remoteRecord.record.values['completed_at']! as String)
+            .toUtc(),
+        completedAt,
+      );
+    },
+  );
+
+  test('two devices completing one occurrence converge on the first canonical completion', () async {
+    final dbA = AppDatabase(executor: NativeDatabase.memory());
+    final dbB = AppDatabase(executor: NativeDatabase.memory());
+    addTearDown(dbA.close);
+    addTearDown(dbB.close);
+    final storeA = LocalSyncStore(dbA);
+    final storeB = LocalSyncStore(dbB);
+    await storeA.account();
+    await storeB.account();
+    await storeA.setEnabled(enabled: true, boundUserId: 'user-1');
+    await storeB.setEnabled(enabled: true, boundUserId: 'user-1');
+    await storeA.recordSyncSuccess(DateTime.now().toUtc());
+    await storeB.recordSyncSuccess(DateTime.now().toUtc());
+    await _seedMaintenancePlanForSync(dbA, suffix: 'race');
+    await _seedMaintenancePlanForSync(dbB, suffix: 'race');
+    await dbA.delete(dbA.syncOutbox).go();
+    await dbB.delete(dbB.syncOutbox).go();
+
+    final due = DateTime.utc(2026, 8, 18, 9);
+    final repoA = DriftMaintenanceRepository(dbA);
+    final repoB = DriftMaintenanceRepository(dbB);
+    final first = await repoA.completePlanResult(
+      'maintenance-plan-race',
+      completedAt: DateTime.utc(2026, 8, 18, 10),
+      expectedNextDueDate: due,
+    );
+    final second = await repoB.completePlanResult(
+      'maintenance-plan-race',
+      completedAt: DateTime.utc(2026, 8, 18, 10, 5),
+      expectedNextDueDate: due,
+    );
+    expect(first.isApplied, isTrue);
+    expect(second.isApplied, isTrue);
+
+    final authA = _FakeAuthRepository(const AuthSession(userId: 'user-1'));
+    final authB = _FakeAuthRepository(const AuthSession(userId: 'user-1'));
+    addTearDown(authA.controller.close);
+    addTearDown(authB.controller.close);
+    final gateway = _StatefulGateway();
+    final coordinatorA = SyncCoordinator(
+      authA,
+      storeA,
+      gateway,
+      listenToAuthChanges: false,
+    );
+    final coordinatorB = SyncCoordinator(
+      authB,
+      storeB,
+      gateway,
+      listenToAuthChanges: false,
+    );
+    addTearDown(coordinatorA.dispose);
+    addTearDown(coordinatorB.dispose);
+
+    await coordinatorA.syncNow();
+    await coordinatorB.syncNow();
+
+    expect(await storeA.pendingCount(), 0);
+    expect(await storeB.pendingCount(), 0);
+    final recordsA = await repoA.listRecordsForPlan('maintenance-plan-race');
+    final recordsB = await repoB.listRecordsForPlan('maintenance-plan-race');
+    expect(recordsA, hasLength(1));
+    expect(recordsB, hasLength(1));
+    expect(recordsA.single.id, first.operationId);
+    expect(recordsB.single.id, first.operationId);
+    expect(recordsB.single.id, isNot(second.operationId));
+    expect(recordsB.single.completedAt.toUtc(), DateTime.utc(2026, 8, 18, 10));
+    expect(
+      (await repoB.getTask('maintenance-plan-race'))!.plan.nextDueDate.toUtc(),
+      (await repoA.getTask('maintenance-plan-race'))!.plan.nextDueDate.toUtc(),
+    );
+  });
+
+  test(
+    'Undo while completion RPC is in flight compensates the cloud atomically',
+    () async {
+      final db = AppDatabase(executor: NativeDatabase.memory());
+      addTearDown(db.close);
+      final store = LocalSyncStore(db);
+      await store.account();
+      await store.setEnabled(enabled: true, boundUserId: 'user-1');
+      await store.recordSyncSuccess(DateTime.now().toUtc());
+      await _seedMaintenancePlanForSync(db, suffix: 'undo-race');
+      await db.delete(db.syncOutbox).go();
+
+      final due = DateTime.utc(2026, 8, 18, 9);
+      final repo = DriftMaintenanceRepository(db);
+      final completion = await repo.completePlanResult(
+        'maintenance-plan-undo-race',
+        completedAt: DateTime.utc(2026, 8, 18, 10),
+        expectedNextDueDate: due,
+      );
+      expect(completion.isApplied, isTrue);
+
+      final auth = _FakeAuthRepository(const AuthSession(userId: 'user-1'));
+      addTearDown(auth.controller.close);
+      final gateway = _StatefulGateway()
+        ..maintenanceCompletionGate = Completer<void>();
+      final coordinator = SyncCoordinator(
+        auth,
+        store,
+        gateway,
+        listenToAuthChanges: false,
+      );
+      addTearDown(coordinator.dispose);
+
+      final syncFuture = coordinator.syncNow();
+      await _eventually(() async => gateway.maintenanceCompletionCalls == 1);
+
+      await repo.undoCompletion(
+        planId: 'maintenance-plan-undo-race',
+        completionId: completion.operationId!,
+        previousDueDate: completion.previousDueDate!,
+        expectedCurrentNextDueDate: completion.nextDueDate!,
+      );
+      final queuedAfterUndo = await store.pendingMutations();
+      expect(queuedAfterUndo.first.entity, 'maintenance_undo');
+      expect(
+        queuedAfterUndo.any(
+          (mutation) =>
+              mutation.entity == 'maintenance_record' &&
+              mutation.operation == 'delete',
+        ),
+        isTrue,
+      );
+      gateway.maintenanceCompletionGate!.complete();
+      await syncFuture;
+      await _eventually(() async {
+        return gateway.maintenanceUndoCalls == 1 &&
+            await store.pendingCount() == 0;
+      });
+
+      expect(
+        await repo.listRecordsForPlan('maintenance-plan-undo-race'),
+        isEmpty,
+      );
+      expect(
+        (await repo.getTask('maintenance-plan-undo-race'))!.plan.nextDueDate
+            .toUtc(),
+        due,
+      );
+      expect(
+        gateway._records.where(
+          (item) =>
+              item.userId == 'user-1' &&
+              item.record.spec.entity == 'maintenance_record',
+        ),
+        isEmpty,
+      );
+      final remotePlan = gateway._records.singleWhere(
+        (item) =>
+            item.userId == 'user-1' &&
+            item.record.spec.entity == 'maintenance_plan' &&
+            item.record.recordKey == 'maintenance-plan-undo-race',
+      );
+      expect(
+        DateTime.parse(remotePlan.record.values['next_due_date']! as String)
+            .toUtc(),
+        due,
+      );
+    },
+  );
+
+  test('old offline timestamps remain normal conflicts while a fast local clock cannot win', () async {
+    Future<String> runScenario({required bool fastLocalClock}) async {
+      final db = AppDatabase(executor: NativeDatabase.memory());
+      addTearDown(db.close);
+      final store = LocalSyncStore(db);
+      final account = await store.account();
+      await store.setEnabled(enabled: true, boundUserId: 'user-1');
+      await store.recordSyncSuccess(DateTime.now().toUtc());
+      await db.delete(db.syncOutbox).go();
+      final gateway = _StatefulGateway();
+      final spec = syncSpecByEntity['user_setting']!;
+      final now = DateTime.now().toUtc();
+      final initialAt = now.subtract(const Duration(hours: 3));
+      final remoteEditAt = now.subtract(const Duration(hours: 2));
+      final localEditAt = fastLocalClock
+          ? now.add(const Duration(hours: 1))
+          : now.subtract(const Duration(hours: 1));
+
+      final initialWrite = await gateway.write(
+        record: SyncRecord(
+          spec: spec,
+          recordKey: 'theme',
+          values: {
+            'key': 'theme',
+            'value': 'light',
+            'updated_at': initialAt.toIso8601String(),
+          },
+          clientModifiedAt: initialAt,
+          originDeviceId: 'seed-device',
+        ),
+        userId: 'user-1',
+        deviceId: 'seed-device',
+        expectedRevision: null,
+      );
+      await store.applyRemoteRecords([initialWrite.canonical!]);
+      await db.delete(db.syncOutbox).go();
+
+      final remoteWrite = await gateway.write(
+        record: SyncRecord(
+          spec: spec,
+          recordKey: 'theme',
+          values: {
+            'key': 'theme',
+            'value': 'dark',
+            'updated_at': remoteEditAt.toIso8601String(),
+          },
+          clientModifiedAt: remoteEditAt,
+          originDeviceId: 'remote-device',
+        ),
+        userId: 'user-1',
+        deviceId: 'remote-device',
+        expectedRevision: initialWrite.canonical!.revision,
+      );
+      expect(remoteWrite.conflict, isFalse);
+
+      await (db.update(
+        db.settings,
+      )..where((row) => row.key.equals('theme'))).write(
+        SettingsCompanion(
+          value: const Value('system'),
+          updatedAt: Value(localEditAt),
+        ),
+      );
+      expect(await store.pendingCount(), 1);
+
+      final auth = _FakeAuthRepository(const AuthSession(userId: 'user-1'));
+      addTearDown(auth.controller.close);
+      final coordinator = SyncCoordinator(
+        auth,
+        store,
+        gateway,
+        listenToAuthChanges: false,
+      );
+      addTearDown(coordinator.dispose);
+      await coordinator.syncNow();
+
+      final remoteFinal = await gateway.fetch(
+        spec: spec,
+        userId: 'user-1',
+        deviceId: account.deviceId,
+        recordKey: 'theme',
+      );
+      return remoteFinal!.values['value']! as String;
+    }
+
+    expect(await runScenario(fastLocalClock: false), 'system');
+    expect(await runScenario(fastLocalClock: true), 'dark');
+  });
+
+  test(
     'network restoration pushes queued edits and realtime pulls remote edits',
     () async {
       final db = AppDatabase(executor: NativeDatabase.memory());
@@ -2496,6 +2941,54 @@ void main() {
       });
     },
   );
+}
+
+Future<void> _seedMaintenancePlanForSync(
+  AppDatabase db, {
+  required String suffix,
+}) async {
+  final store = LocalSyncStore(db);
+  await store.withOutboxSuppressed(() async {
+    await DriftAssetRepository(db).saveArea(
+      id: 'area-$suffix',
+      name: 'Area $suffix',
+      kind: AreaKind.indoor,
+      sortOrder: 0,
+    );
+    await db
+        .into(db.rooms)
+        .insert(
+          RoomsCompanion.insert(
+            id: 'maintenance-room-$suffix',
+            areaId: 'area-$suffix',
+            name: 'Maintenance room $suffix',
+          ),
+        );
+    await db
+        .into(db.assets)
+        .insert(
+          AssetsCompanion.insert(
+            id: 'maintenance-asset-$suffix',
+            name: 'Maintenance asset $suffix',
+            categoryId: 'category_general',
+            roomId: 'maintenance-room-$suffix',
+          ),
+        );
+    await db
+        .into(db.maintenancePlans)
+        .insert(
+          MaintenancePlansCompanion.insert(
+            id: 'maintenance-plan-$suffix',
+            assetId: 'maintenance-asset-$suffix',
+            title: 'Maintenance task $suffix',
+            recurrenceInterval: 1,
+            recurrenceUnit: 'months',
+            priority: 'medium',
+            nextDueDate: DateTime.utc(2026, 8, 18, 9),
+            healthGroup: 'other',
+          ),
+        );
+  });
 }
 
 Future<void> _eventually(Future<bool> Function() condition) async {

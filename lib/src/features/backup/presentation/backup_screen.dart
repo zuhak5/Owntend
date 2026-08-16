@@ -1347,18 +1347,26 @@ Future<bool> postponeTaskWithDialog(
   WidgetRef ref,
   TaskItem task,
 ) async {
+  final now = DateTime.now();
+  final initialPostponeDate = task.plan.nextDueDate.isAfter(now)
+      ? task.plan.nextDueDate
+      : now;
   final date = await showDatePicker(
     context: context,
-    initialDate: task.plan.nextDueDate,
-    firstDate: DateTime.now().subtract(const Duration(days: 365)),
-    lastDate: DateTime.now().add(const Duration(days: 3650)),
+    initialDate: initialPostponeDate,
+    firstDate: DateTime(now.year, now.month, now.day),
+    lastDate: now.add(const Duration(days: 3650)),
   );
   if (date == null || !context.mounted) {
     return false;
   }
   final time = await showTimePicker(
     context: context,
-    initialTime: TimeOfDay.fromDateTime(task.plan.nextDueDate),
+    initialTime: TimeOfDay.fromDateTime(
+      task.plan.nextDueDate.isAfter(now)
+          ? task.plan.nextDueDate
+          : now.add(const Duration(hours: 1)),
+    ),
   );
   if (time == null || !context.mounted) {
     return false;
@@ -2017,6 +2025,12 @@ Future<bool> completeTaskWithFeedback(
   if (!_prefersReducedMotion(context)) {
     await Future<void>.delayed(const Duration(milliseconds: 450));
   }
+  if (result.duplicateIgnored) {
+    return true;
+  }
+  if (result.duplicateIgnored) {
+    return true;
+  }
   if (!context.mounted) {
     return true;
   }
@@ -2025,9 +2039,21 @@ Future<bool> completeTaskWithFeedback(
     content: Text(context.l10n.taskCompleted),
     onUndo: () async {
       try {
+        final completionId = result.operationId;
+        final completedNextDue = result.nextDueDate;
+        if (completionId == null || completedNextDue == null) {
+          throw StateError(
+            'Completion acknowledgement is missing undo identity.',
+          );
+        }
         await ref
             .read(maintenanceRepositoryProvider)
-            .undoLastCompletion(task.plan.id, previousDueDate);
+            .undoCompletion(
+              planId: task.plan.id,
+              completionId: completionId,
+              previousDueDate: result.previousDueDate ?? previousDueDate,
+              expectedCurrentNextDueDate: completedNextDue,
+            );
         try {
           await ref.read(streakServiceProvider).refresh(DateTime.now());
           await refreshNotificationSchedules(ref);

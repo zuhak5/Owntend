@@ -66,6 +66,26 @@ enum MaintenanceCompletionStatus {
   unauthorized,
 }
 
+class MaintenanceUndoResult {
+  const MaintenanceUndoResult({
+    required this.status,
+    required this.retryable,
+    this.plan,
+    this.rewound = false,
+    this.conflictReason,
+  });
+
+  final MaintenanceCompletionStatus status;
+  final bool retryable;
+  final SyncRecord? plan;
+  final bool rewound;
+  final String? conflictReason;
+
+  bool get acknowledged =>
+      status == MaintenanceCompletionStatus.applied ||
+      status == MaintenanceCompletionStatus.alreadyApplied;
+}
+
 class MaintenanceCompletionResult {
   const MaintenanceCompletionResult({
     required this.status,
@@ -431,7 +451,13 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
     required int? expectedRevision,
   }) async {
     try {
-      final payload = await _preparePayload(record, userId, deviceId);
+      final payload = await _preparePayload(
+        record,
+        userId,
+        deviceId,
+        uploadMedia:
+            !(record.spec.entity == 'asset_photo' && expectedRevision != null),
+      );
       if (record.isDeleted) {
         if (expectedRevision == null) {
           final existing = await fetch(
@@ -688,6 +714,66 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
     }
   }
 
+  Future<MaintenanceUndoResult> undoMaintenanceCompletion({
+    required String payloadJson,
+    required String userId,
+    required String deviceId,
+  }) async {
+    try {
+      final decoded = jsonDecode(payloadJson);
+      if (decoded is! Map) {
+        throw const FormatException(
+          'The queued maintenance undo payload is invalid.',
+        );
+      }
+      final operation = Map<String, dynamic>.from(decoded);
+      final Object? response = await _withDataTimeout<Object?>(
+        () async => _client.rpc<Map<String, dynamic>>(
+          'undo_maintenance_completion',
+          params: {'p_operation': operation, 'p_device_id': deviceId},
+        ),
+      );
+      if (response is! Map) {
+        throw const FormatException(
+          'The maintenance undo RPC returned an invalid result.',
+        );
+      }
+      final body = Map<String, dynamic>.from(response);
+      final status = _maintenanceCompletionStatus(body['status']);
+      final rawPlan = body['plan'];
+      final planData = rawPlan is Map
+          ? Map<String, dynamic>.from(rawPlan)
+          : null;
+      if (planData != null && planData['user_id'] != userId) {
+        throw const SupabaseFailure(
+          kind: SupabaseFailureKind.permissionDenied,
+          message: 'The cloud returned maintenance data for another account.',
+        );
+      }
+      if ((status == MaintenanceCompletionStatus.applied ||
+              status == MaintenanceCompletionStatus.alreadyApplied) &&
+          planData == null) {
+        throw const FormatException(
+          'The maintenance undo RPC omitted the canonical plan.',
+        );
+      }
+      return MaintenanceUndoResult(
+        status: status,
+        retryable: body['retryable'] == true,
+        plan: planData == null
+            ? null
+            : SyncRecord.fromRemote(
+                syncSpecByEntity['maintenance_plan']!,
+                planData,
+              ),
+        rewound: body['rewound'] == true,
+        conflictReason: body['conflict_reason'] as String?,
+      );
+    } on Object catch (error) {
+      throw SupabaseFailure.from(error);
+    }
+  }
+
   Future<SyncRecord?> fetch({
     required SyncEntitySpec spec,
     required String userId,
@@ -726,26 +812,33 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
   Future<Map<String, dynamic>> _preparePayload(
     SyncRecord record,
     String userId,
-    String deviceId,
-  ) async {
+    String deviceId, {
+    bool uploadMedia = true,
+  }) async {
     final payload = record.toRemotePayload(userId, deviceId: deviceId);
     if (record.isDeleted) {
       return payload;
     }
     if (record.spec.entity == 'asset_photo') {
-      final localPath = record.values['relative_path'] as String;
-      final assetId = record.values['asset_id'] as String;
-      final photoId = record.values['id'] as String;
-      final upload = await _uploadMedia(
-        userId: userId,
-        localRelativePath: localPath,
-        remoteDirectory: '$userId/assets/$assetId',
-        remoteBaseName: photoId,
-        assetId: assetId,
-        photoId: photoId,
-        revision: record.revision,
-      );
-      payload['object_path'] = upload.objectPath;
+      if (uploadMedia) {
+        final localPath = record.values['relative_path'] as String;
+        final assetId = record.values['asset_id'] as String;
+        final photoId = record.values['id'] as String;
+        final upload = await _uploadMedia(
+          userId: userId,
+          localRelativePath: localPath,
+          remoteDirectory: '$userId/assets/$assetId',
+          remoteBaseName: photoId,
+          assetId: assetId,
+          photoId: photoId,
+          revision: record.revision,
+        );
+        payload['object_path'] = upload.objectPath;
+      } else {
+        // The local relative path is device-specific and must never overwrite
+        // the immutable cloud object path during a metadata-only update.
+        payload.remove('object_path');
+      }
     }
     return payload;
   }

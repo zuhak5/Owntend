@@ -1268,6 +1268,124 @@ class SyncCoordinator implements CloudSyncRepository {
           continue;
         }
 
+        if (mutation.entity == 'asset_photo_primary') {
+          final payloadJson = mutation.payloadJson;
+          if (mutation.operation != 'execute' ||
+              payloadJson == null ||
+              payloadJson.trim().isEmpty) {
+            const failure = SupabaseFailure(
+              kind: SupabaseFailureKind.incompatibleSchema,
+              message:
+                  'A queued primary-photo operation has an invalid payload.',
+            );
+            await _recordMutationFailure(mutation, failure);
+            throw failure;
+          }
+          try {
+            final payload = Map<String, dynamic>.from(
+              jsonDecode(payloadJson) as Map,
+            );
+            final assetId = payload['asset_id'] as String?;
+            final photoId = payload['photo_id'] as String?;
+            if (assetId == null ||
+                photoId == null ||
+                assetId != mutation.recordKey) {
+              throw const SupabaseFailure(
+                kind: SupabaseFailureKind.incompatibleSchema,
+                message: 'A queued primary-photo operation is malformed.',
+              );
+            }
+            await _localStore.markMutationInFlight(mutation, userId: userId);
+            final response = await _remoteGateway.setPrimaryAssetPhoto(
+              assetId: assetId,
+              photoId: photoId,
+            );
+            await _ensureActiveAccountScope(scope);
+            final rawPhotos = response['photos'];
+            if (rawPhotos is! List) {
+              throw const FormatException(
+                'The primary-photo RPC omitted canonical photo rows.',
+              );
+            }
+            final spec = syncSpecByEntity['asset_photo']!;
+            final photos = <SyncRecord>[];
+            for (final raw in rawPhotos) {
+              if (raw is! Map) {
+                throw const FormatException(
+                  'The primary-photo RPC returned an invalid photo row.',
+                );
+              }
+              final row = Map<String, dynamic>.from(raw);
+              if (row['user_id'] != userId || row['asset_id'] != assetId) {
+                throw const SupabaseFailure(
+                  kind: SupabaseFailureKind.permissionDenied,
+                  message: 'The cloud returned primary-photo data for another scope.',
+                );
+              }
+              photos.add(SyncRecord.fromRemote(spec, row));
+            }
+            if (!photos.any(
+              (record) =>
+                  record.recordKey == photoId &&
+                  record.values['is_primary'] == true,
+            )) {
+              throw const FormatException(
+                'The primary-photo RPC did not confirm the selected photo.',
+              );
+            }
+            await _localStore.markAssetPhotoPrimarySucceeded(
+              mutation,
+              photos: photos,
+            );
+            if (trackHydration) await _localStore.addHydrationUnits(1);
+            return true;
+          } on _AccountScopeInactive {
+            rethrow;
+          } on Object catch (error) {
+            final failure = SupabaseFailure.from(error);
+            await _recordMutationFailure(mutation, failure);
+            rethrow;
+          }
+        }
+
+        if (mutation.entity == 'maintenance_undo') {
+          final payloadJson = mutation.payloadJson;
+          if (mutation.operation != 'execute' ||
+              payloadJson == null ||
+              payloadJson.trim().isEmpty) {
+            const failure = SupabaseFailure(
+              kind: SupabaseFailureKind.incompatibleSchema,
+              message:
+                  'A queued maintenance undo has an invalid payload. '
+                  'Update Owntend before synchronizing again.',
+            );
+            await _recordMutationFailure(mutation, failure);
+            throw failure;
+          }
+          try {
+            await _pushMaintenanceUndo(
+              mutation,
+              payloadJson: payloadJson,
+              userId: userId,
+              deviceId: deviceId,
+              scope: scope,
+            );
+            if (trackHydration) {
+              await _localStore.addHydrationUnits(1);
+            }
+            // The undo acknowledgement removes generic guard rows that may
+            // already be present in this in-memory batch. Stop using this snapshot
+            // and re-read the outbox immediately.
+            break;
+          } on _AccountScopeInactive {
+            rethrow;
+          } on Object catch (error) {
+            final failure = SupabaseFailure.from(error);
+            await _recordMutationFailure(mutation, failure);
+            rethrow;
+          }
+        }
+
         if (mutation.operation == 'upsert') {
           final shadow = await _localStore.shadow(
             mutation.entity,
@@ -1427,8 +1545,47 @@ class SyncCoordinator implements CloudSyncRepository {
         }
         index++;
       }
-      if (mutations.length < 200) return pushedSomething;
+      if (mutations.length < 200) {
+        final remaining = await _localStore.pendingMutations();
+        if (remaining.isEmpty) return pushedSomething;
+      }
     }
+  }
+
+  Future<void> _pushMaintenanceUndo(
+    LocalSyncMutation mutation, {
+    required String payloadJson,
+    required String userId,
+    required String deviceId,
+    required _ActiveAccountScope scope,
+  }) async {
+    await _localStore.markMutationInFlight(mutation, userId: userId);
+    final result = await _remoteGateway.undoMaintenanceCompletion(
+      payloadJson: payloadJson,
+      userId: userId,
+      deviceId: deviceId,
+    );
+    await _ensureActiveAccountScope(scope);
+    if (result.acknowledged && result.plan != null) {
+      await _localStore.markMaintenanceUndoSucceeded(
+        mutation,
+        plan: result.plan!,
+        completionId: mutation.recordKey,
+      );
+      await _reconcileMaintenanceCompletionReminders(mutation);
+      return;
+    }
+    throw SupabaseFailure(
+      kind: result.status == MaintenanceCompletionStatus.unauthorized
+          ? SupabaseFailureKind.permissionDenied
+          : result.status == MaintenanceCompletionStatus.invalid
+          ? SupabaseFailureKind.incompatibleSchema
+          : SupabaseFailureKind.conflict,
+      message:
+          result.conflictReason ??
+          'The completion undo could not be reconciled.',
+      retryable: result.retryable,
+    );
   }
 
   Future<void> _pushMaintenanceCompletion(
@@ -1723,7 +1880,14 @@ class SyncCoordinator implements CloudSyncRepository {
       return;
     }
     final remote = result.canonical;
-    if (remote != null && _hasClockSkew(local, remote)) {
+    final now = DateTime.now().toUtc();
+    final localFutureClock =
+        remote != null && _isFutureClockSkew(local.clientModifiedAt, now);
+    final remoteFutureClock =
+        remote != null &&
+        remote.serverUpdatedAt != null &&
+        _isFutureClockSkew(remote.clientModifiedAt, remote.serverUpdatedAt!);
+    if (localFutureClock || remoteFutureClock) {
       _clockSkewConflicts++;
     }
     if (remote != null &&
@@ -1739,6 +1903,22 @@ class SyncCoordinator implements CloudSyncRepository {
         userId: userId,
         deviceId: deviceId,
         expectedRevision: null,
+      );
+      await _ensureActiveAccountScope(scope);
+    } else if (localFutureClock) {
+      // A fast local clock must not make an older local edit win solely by
+      // timestamp. Keep the server-authoritative conflicting revision.
+      await _localStore.applyRemoteRecords([remote]);
+      await _localStore.markMutationSucceeded(mutation, remote);
+      return;
+    } else if (remoteFutureClock) {
+      // Conversely, do not let a remote client's future clock dominate a
+      // legitimate local mutation. Retry against the server revision once.
+      result = await _remoteGateway.write(
+        record: local,
+        userId: userId,
+        deviceId: deviceId,
+        expectedRevision: remote.revision,
       );
       await _ensureActiveAccountScope(scope);
     } else if (local.clientModifiedAt.isAfter(remote.clientModifiedAt) ||
@@ -1771,18 +1951,9 @@ class SyncCoordinator implements CloudSyncRepository {
     await _completeMutation(userId, mutation, result);
   }
 
-  bool _hasClockSkew(SyncRecord local, SyncRecord remote) {
+  bool _isFutureClockSkew(DateTime clientTime, DateTime referenceTime) {
     const tolerance = Duration(minutes: 5);
-    final now = DateTime.now().toUtc();
-    final localDelta = local.clientModifiedAt.toUtc().difference(now).abs();
-    final remoteServerTime = remote.serverUpdatedAt;
-    final remoteDelta = remoteServerTime == null
-        ? Duration.zero
-        : remote.clientModifiedAt
-              .toUtc()
-              .difference(remoteServerTime.toUtc())
-              .abs();
-    return localDelta > tolerance || remoteDelta > tolerance;
+    return clientTime.toUtc().isAfter(referenceTime.toUtc().add(tolerance));
   }
 
   Future<void> _completeMutation(
