@@ -209,3 +209,17 @@ test("remaining time formatting remains concise for announcements", () => {
   assert.equal(formatRemainingTime(600), "About 10 minutes");
   assert.equal(formatRemainingTime(5_400), "About 1 hr 30 min");
 });
+test("live build status uses the GitHub REST API origin", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const source = await readFile(
+    new URL("../download-site/build-status.js", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(
+    source,
+    /const API_BASE = `https:\/\/api\.github\.com\/repos\/\$\{REPOSITORY\}`;/,
+  );
+  assert.doesNotMatch(source, /const API_BASE = "";/);
+  assert.doesNotMatch(source, /Â·/);
+});
