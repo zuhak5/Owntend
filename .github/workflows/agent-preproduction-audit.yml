@@ -17,17 +17,17 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           fetch-depth: 0
-      - name: Apply notification preference merge fixes
+      - name: Apply trash provenance fixes
         shell: bash
         run: |
-          python .github/agent-preproduction-phase4b.py
+          python .github/agent-preproduction-phase5.py
           git diff --check
           if git diff --quiet; then
-            echo "No preference changes to commit."
+            echo "No trash changes to commit."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -m "fix: merge concurrent notification preferences"
+          git commit -m "fix: preserve trash provenance and atomic deletion"
           git push
