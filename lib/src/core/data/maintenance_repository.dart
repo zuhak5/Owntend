@@ -12,6 +12,8 @@ class DriftMaintenanceRepository
   final RecurrenceEngine _recurrenceEngine;
   final DateTime Function() _now;
   static const _completionDuplicateWindow = Duration(seconds: 4);
+  final Map<String, DateTime> _lastCompletionActionAt = {};
+  final Map<String, LocalMaintenanceCompletionResult> _lastCompletionResult = {};
 
   @override
   Stream<List<domain.TaskItem>> watchTasks() {
@@ -349,6 +351,23 @@ class DriftMaintenanceRepository
           status: LocalMaintenanceCompletionStatus.planInactive,
         );
       }
+      final actionAt = _now();
+      final lastActionAt = _lastCompletionActionAt[planId];
+      final lastResult = _lastCompletionResult[planId];
+      if (lastActionAt != null && lastResult != null) {
+        final sinceLastAction = actionAt.difference(lastActionAt);
+        if (!sinceLastAction.isNegative &&
+            sinceLastAction < _completionDuplicateWindow) {
+          return LocalMaintenanceCompletionResult(
+            status: lastResult.status,
+            operationId: lastResult.operationId,
+            previousDueDate: lastResult.previousDueDate,
+            nextDueDate: lastResult.nextDueDate,
+            duplicateIgnored: true,
+          );
+        }
+      }
+
       final canonicalExpectedNextDue = expectedNextDueDate != null
           ? canonicalSyncSecond(expectedNextDueDate)
           : null;
@@ -361,34 +380,9 @@ class DriftMaintenanceRepository
         );
       }
 
-      final completionInstant = completedAt ?? _now();
+      final completionInstant = completedAt ?? actionAt;
       final completed = canonicalSyncSecond(completionInstant);
       final previousDueDate = canonicalPlanNextDue;
-
-      final latestRecord =
-          await (db.select(db.maintenanceRecords)
-                ..where((record) => record.planId.equals(planId))
-                ..orderBy([
-                  (record) => OrderingTerm.desc(record.completedAt),
-                  (record) => OrderingTerm.desc(record.id),
-                ])
-                ..limit(1))
-              .getSingleOrNull();
-      if (latestRecord != null) {
-        final sinceLatest = completed.difference(
-          canonicalSyncSecond(latestRecord.completedAt),
-        );
-        if (sinceLatest.compareTo(Duration.zero) >= 0 &&
-            sinceLatest.compareTo(_completionDuplicateWindow) < 0) {
-          return LocalMaintenanceCompletionResult(
-            status: LocalMaintenanceCompletionStatus.applied,
-            operationId: latestRecord.id,
-            previousDueDate: canonicalSyncSecond(latestRecord.dueDate),
-            nextDueDate: canonicalPlanNextDue,
-            duplicateIgnored: true,
-          );
-        }
-      }
 
       final nextDue = canonicalSyncSecond(
         _recurrenceEngine.nextDueDate(
@@ -401,7 +395,7 @@ class DriftMaintenanceRepository
       );
       final completionId = _uuid.v7();
       final completionNotes = _blankToNull(notes);
-      final planUpdatedAt = canonicalSyncSecond(_now());
+      final planUpdatedAt = canonicalSyncSecond(actionAt);
 
       // Identify unresolved predecessor for same plan for CT-003 causal ordering
       final pendingCompletions =
@@ -543,12 +537,15 @@ class DriftMaintenanceRepository
         ),
       );
 
-      return LocalMaintenanceCompletionResult(
+      final result = LocalMaintenanceCompletionResult(
         status: LocalMaintenanceCompletionStatus.applied,
         operationId: completionId,
         previousDueDate: previousDueDate,
         nextDueDate: nextDue,
       );
+      _lastCompletionActionAt[planId] = actionAt;
+      _lastCompletionResult[planId] = result;
+      return result;
     });
   }
 

@@ -204,7 +204,12 @@ void main() {
     },
   );
 
-  test('rapid repeated completions are idempotent but a later completion is allowed', () async {
+  test('rapid repeated completions use the action clock while a later action is allowed', () async {
+    var actionNow = DateTime(2026, 8, 16, 14, 30, 10);
+    final guardedMaintenance = DriftMaintenanceRepository(
+      db,
+      now: () => actionNow,
+    );
     await assetRepo.saveArea(
       id: 'area_repeat',
       name: 'Repeat',
@@ -222,7 +227,7 @@ void main() {
       roomId: roomId,
     );
     final due = DateTime(2026, 8, 17, 9);
-    final planId = await maintenance.savePlan(
+    final planId = await guardedMaintenance.savePlan(
       assetId: assetId,
       title: 'Rapid task',
       recurrence: const RecurrenceRule(interval: 1, unit: RecurrenceUnit.days),
@@ -231,39 +236,43 @@ void main() {
       healthGroup: HealthGroup.other,
     );
     final firstAt = DateTime(2026, 8, 16, 14, 30, 10);
-    final first = await maintenance.completePlanResult(
+    final first = await guardedMaintenance.completePlanResult(
       planId,
       completedAt: firstAt,
       expectedNextDueDate: due,
     );
     expect(first.isApplied, isTrue);
     for (var i = 1; i <= 4; i++) {
-      final repeat = await maintenance.completePlanResult(
+      actionNow = firstAt.add(Duration(milliseconds: 500 * i));
+      final repeat = await guardedMaintenance.completePlanResult(
         planId,
-        completedAt: firstAt.add(Duration(milliseconds: 500 * i)),
+        completedAt: i == 2
+            ? firstAt.add(const Duration(hours: 1))
+            : firstAt.add(Duration(milliseconds: 500 * i)),
         expectedNextDueDate: first.nextDueDate,
       );
       expect(repeat.isApplied, isTrue);
       expect(repeat.duplicateIgnored, isTrue);
       expect(repeat.operationId, first.operationId);
     }
-    expect(await maintenance.listRecordsForPlan(planId), hasLength(1));
+    expect(await guardedMaintenance.listRecordsForPlan(planId), hasLength(1));
     expect(
-      (await maintenance.getTask(planId))!.plan.nextDueDate.toLocal(),
+      (await guardedMaintenance.getTask(planId))!.plan.nextDueDate.toLocal(),
       DateTime(2026, 8, 17, 14, 30, 10),
     );
 
     final afterWindowAt = firstAt.add(const Duration(seconds: 5));
-    final second = await maintenance.completePlanResult(
+    actionNow = afterWindowAt;
+    final second = await guardedMaintenance.completePlanResult(
       planId,
       completedAt: afterWindowAt,
       expectedNextDueDate: first.nextDueDate,
     );
     expect(second.isApplied, isTrue);
     expect(second.duplicateIgnored, isFalse);
-    expect(await maintenance.listRecordsForPlan(planId), hasLength(2));
+    expect(await guardedMaintenance.listRecordsForPlan(planId), hasLength(2));
     expect(
-      (await maintenance.getTask(planId))!.plan.nextDueDate.toLocal(),
+      (await guardedMaintenance.getTask(planId))!.plan.nextDueDate.toLocal(),
       DateTime(2026, 8, 17, 14, 30, 15),
     );
   });
