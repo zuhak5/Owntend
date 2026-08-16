@@ -70,6 +70,7 @@ import 'src/features/maintenance/application/task_creation_controller.dart';
 import 'src/features/maintenance/data/task_creation_operation_store.dart';
 import 'src/features/maintenance/domain/task_creation.dart';
 import 'src/features/maintenance/presentation/task_completion_controller.dart';
+import 'src/features/startup/presentation/startup_route_host.dart';
 import 'src/i18n/dynamic_text.dart';
 import 'src/core/utils/date_utils.dart' as hk_dates;
 import 'src/ui/app_theme.dart';
@@ -268,19 +269,21 @@ class _OwntendAppState extends ConsumerState<OwntendApp>
                 startupState.status ??
                 _syntheticStartupStatus(RestoreRunState.running);
             if (startupState.kind != StartupBootstrapKind.authenticatedReady) {
-              return _StartupHome(
-                state: startupState,
-                status: effectiveStartupStatus,
-                language: appLanguage,
-                onLanguageChanged: (language) => ref
-                    .read(settingsRepositoryProvider)
-                    .setAppLocalePreference(language),
-                onRetry: startupController.retryStartupRestore,
-                onCheckConnection: startupController.retryStartupRestore,
-                onContinueOffline: startupState.canContinueOffline
-                    ? startupController.continueStartupOffline
-                    : null,
-                onSignOut: startupController.signOutFromStartup,
+              return StartupRouteHost(
+                child: _StartupHome(
+                  state: startupState,
+                  status: effectiveStartupStatus,
+                  language: appLanguage,
+                  onLanguageChanged: (language) => ref
+                      .read(settingsRepositoryProvider)
+                      .setAppLocalePreference(language),
+                  onRetry: startupController.retryStartupRestore,
+                  onCheckConnection: startupController.retryStartupRestore,
+                  onContinueOffline: startupState.canContinueOffline
+                      ? startupController.continueStartupOffline
+                      : null,
+                  onSignOut: startupController.signOutFromStartup,
+                ),
               );
             }
             return MonetizationBootstrap(
