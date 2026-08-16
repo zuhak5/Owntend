@@ -197,6 +197,7 @@ BEGIN
     IF current_record.id <> record_id_value
         OR current_record.plan_id <> plan_id_value
         OR date_trunc('second', current_record.due_date) IS DISTINCT FROM record_due_date
+        OR date_trunc('second', current_record.completed_at) IS DISTINCT FROM record_completed_at
         OR COALESCE(NULLIF(TRIM(current_record.notes), ''), '') IS DISTINCT FROM COALESCE(NULLIF(TRIM(record_payload ->> 'notes'), ''), '') THEN
       RETURN jsonb_build_object(
         'status', 'conflict',

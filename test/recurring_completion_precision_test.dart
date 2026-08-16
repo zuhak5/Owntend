@@ -267,4 +267,209 @@ void main() {
       DateTime(2026, 8, 17, 14, 30, 15),
     );
   });
+  test('completion recurrence matrix anchors every supported unit to completedAt', () async {
+    await assetRepo.saveArea(
+      id: 'area_matrix',
+      name: 'Matrix',
+      kind: AreaKind.indoor,
+      sortOrder: 0,
+    );
+    final roomId = await assetRepo.saveRoom(
+      areaId: 'area_matrix',
+      name: 'Matrix',
+    );
+    final categoryId = (await assetRepo.listCategories()).first.id;
+    final assetId = await assetRepo.saveAsset(
+      name: 'Matrix asset',
+      categoryId: categoryId,
+      roomId: roomId,
+    );
+    final due = DateTime(2026, 8, 18, 9);
+    final completedAt = DateTime(2026, 8, 13, 14, 30);
+    final cases = <(String, RecurrenceRule, DateTime)>[
+      (
+        'hours',
+        const RecurrenceRule(interval: 6, unit: RecurrenceUnit.hours),
+        DateTime(2026, 8, 13, 20, 30),
+      ),
+      (
+        'days',
+        const RecurrenceRule(interval: 1, unit: RecurrenceUnit.days),
+        DateTime(2026, 8, 14, 14, 30),
+      ),
+      (
+        'weeks',
+        const RecurrenceRule(interval: 1, unit: RecurrenceUnit.weeks),
+        DateTime(2026, 8, 20, 14, 30),
+      ),
+      (
+        'months',
+        const RecurrenceRule(interval: 1, unit: RecurrenceUnit.months),
+        DateTime(2026, 9, 13, 14, 30),
+      ),
+      (
+        'years',
+        const RecurrenceRule(interval: 1, unit: RecurrenceUnit.years),
+        DateTime(2027, 8, 13, 14, 30),
+      ),
+    ];
+
+    for (final (name, rule, expected) in cases) {
+      final planId = await maintenance.savePlan(
+        id: 'plan_matrix_$name',
+        assetId: assetId,
+        title: 'Matrix $name',
+        recurrence: rule,
+        priority: PriorityLevel.medium,
+        nextDueDate: due,
+        healthGroup: HealthGroup.other,
+      );
+      final result = await maintenance.completePlanResult(
+        planId,
+        completedAt: completedAt,
+        expectedNextDueDate: due,
+      );
+      expect(result.isApplied, isTrue, reason: name);
+      expect(
+        (await maintenance.getTask(planId))!.plan.nextDueDate.toLocal(),
+        expected,
+        reason: name,
+      );
+      final record = (await maintenance.listRecordsForPlan(planId)).single;
+      expect(record.completedAt.toLocal(), completedAt, reason: name);
+      expect(record.dueDate.toLocal(), due, reason: name);
+    }
+  });
+
+  test('exact and late completions preserve actual date and time', () async {
+    await assetRepo.saveArea(
+      id: 'area_timing',
+      name: 'Timing',
+      kind: AreaKind.indoor,
+      sortOrder: 0,
+    );
+    final roomId = await assetRepo.saveRoom(
+      areaId: 'area_timing',
+      name: 'Timing',
+    );
+    final categoryId = (await assetRepo.listCategories()).first.id;
+    final assetId = await assetRepo.saveAsset(
+      name: 'Timing asset',
+      categoryId: categoryId,
+      roomId: roomId,
+    );
+
+    final exactDue = DateTime(2026, 8, 18, 9, 12, 34);
+    final exactPlan = await maintenance.savePlan(
+      id: 'plan_exact',
+      assetId: assetId,
+      title: 'Exact',
+      recurrence: const RecurrenceRule(
+        interval: 1,
+        unit: RecurrenceUnit.days,
+      ),
+      priority: PriorityLevel.medium,
+      nextDueDate: exactDue,
+      healthGroup: HealthGroup.other,
+    );
+    await maintenance.completePlanResult(
+      exactPlan,
+      completedAt: exactDue,
+      expectedNextDueDate: exactDue,
+    );
+    expect(
+      (await maintenance.getTask(exactPlan))!.plan.nextDueDate.toLocal(),
+      DateTime(2026, 8, 19, 9, 12, 34),
+    );
+
+    final lateDue = DateTime(2026, 8, 18, 9);
+    final lateAt = DateTime(2026, 8, 20, 10, 45, 17);
+    final latePlan = await maintenance.savePlan(
+      id: 'plan_late',
+      assetId: assetId,
+      title: 'Late',
+      recurrence: const RecurrenceRule(
+        interval: 1,
+        unit: RecurrenceUnit.months,
+      ),
+      priority: PriorityLevel.medium,
+      nextDueDate: lateDue,
+      healthGroup: HealthGroup.other,
+    );
+    await maintenance.completePlanResult(
+      latePlan,
+      completedAt: lateAt,
+      expectedNextDueDate: lateDue,
+    );
+    expect(
+      (await maintenance.getTask(latePlan))!.plan.nextDueDate.toLocal(),
+      DateTime(2026, 9, 20, 10, 45, 17),
+    );
+  });
+
+  test('month-end, leap-year, and UTC date-boundary recurrence remain precise', () async {
+    await assetRepo.saveArea(
+      id: 'area_calendar_edges',
+      name: 'Calendar edges',
+      kind: AreaKind.indoor,
+      sortOrder: 0,
+    );
+    final roomId = await assetRepo.saveRoom(
+      areaId: 'area_calendar_edges',
+      name: 'Calendar edges',
+    );
+    final categoryId = (await assetRepo.listCategories()).first.id;
+    final assetId = await assetRepo.saveAsset(
+      name: 'Calendar asset',
+      categoryId: categoryId,
+      roomId: roomId,
+    );
+
+    Future<void> verify({
+      required String id,
+      required DateTime completedAt,
+      required RecurrenceRule rule,
+      required DateTime expected,
+    }) async {
+      final planId = await maintenance.savePlan(
+        id: id,
+        assetId: assetId,
+        title: id,
+        recurrence: rule,
+        priority: PriorityLevel.medium,
+        nextDueDate: completedAt,
+        healthGroup: HealthGroup.other,
+      );
+      await maintenance.completePlanResult(
+        planId,
+        completedAt: completedAt,
+        expectedNextDueDate: completedAt,
+      );
+      expect(
+        (await maintenance.getTask(planId))!.plan.nextDueDate.toUtc(),
+        expected.toUtc(),
+        reason: id,
+      );
+    }
+
+    await verify(
+      id: 'month_end',
+      completedAt: DateTime(2026, 1, 31, 23, 15),
+      rule: const RecurrenceRule(interval: 1, unit: RecurrenceUnit.months),
+      expected: DateTime(2026, 2, 28, 23, 15),
+    );
+    await verify(
+      id: 'leap_year',
+      completedAt: DateTime(2024, 2, 29, 6, 5),
+      rule: const RecurrenceRule(interval: 1, unit: RecurrenceUnit.years),
+      expected: DateTime(2025, 2, 28, 6, 5),
+    );
+    await verify(
+      id: 'utc_boundary',
+      completedAt: DateTime.utc(2026, 8, 13, 21, 30),
+      rule: const RecurrenceRule(interval: 1, unit: RecurrenceUnit.days),
+      expected: DateTime.utc(2026, 8, 14, 21, 30),
+    );
+  });
+
 }
