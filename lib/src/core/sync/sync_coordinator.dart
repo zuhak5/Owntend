@@ -1877,8 +1877,16 @@ class SyncCoordinator implements CloudSyncRepository {
       return;
     }
     final remote = result.canonical;
-    final hasClockSkew = remote != null && _hasClockSkew(local, remote);
-    if (hasClockSkew) {
+    final now = DateTime.now().toUtc();
+    final localFutureClock = remote != null &&
+        _isFutureClockSkew(local.clientModifiedAt, now);
+    final remoteFutureClock = remote != null &&
+        remote.serverUpdatedAt != null &&
+        _isFutureClockSkew(
+          remote.clientModifiedAt,
+          remote.serverUpdatedAt!,
+        );
+    if (localFutureClock || remoteFutureClock) {
       _clockSkewConflicts++;
     }
     if (remote != null &&
@@ -1896,14 +1904,22 @@ class SyncCoordinator implements CloudSyncRepository {
         expectedRevision: null,
       );
       await _ensureActiveAccountScope(scope);
-    } else if (hasClockSkew) {
+    } else if (localFutureClock) {
+      // A fast local clock must not make an older local edit win solely by
+      // timestamp. Keep the server-authoritative conflicting revision.
       await _localStore.applyRemoteRecords([remote]);
       await _localStore.markMutationSucceeded(mutation, remote);
       return;
-    } else if (hasClockSkew) {
-      await _localStore.applyRemoteRecords([remote]);
-      await _localStore.markMutationSucceeded(mutation, remote);
-      return;
+    } else if (remoteFutureClock) {
+      // Conversely, do not let a remote client's future clock dominate a
+      // legitimate local mutation. Retry against the server revision once.
+      result = await _remoteGateway.write(
+        record: local,
+        userId: userId,
+        deviceId: deviceId,
+        expectedRevision: remote.revision,
+      );
+      await _ensureActiveAccountScope(scope);
     } else if (local.clientModifiedAt.isAfter(remote.clientModifiedAt) ||
         (local.clientModifiedAt.isAtSameMomentAs(remote.clientModifiedAt) &&
             local.originDeviceId.compareTo(remote.originDeviceId) > 0)) {
@@ -1934,18 +1950,9 @@ class SyncCoordinator implements CloudSyncRepository {
     await _completeMutation(userId, mutation, result);
   }
 
-  bool _hasClockSkew(SyncRecord local, SyncRecord remote) {
+  bool _isFutureClockSkew(DateTime clientTime, DateTime referenceTime) {
     const tolerance = Duration(minutes: 5);
-    final now = DateTime.now().toUtc();
-    final localDelta = local.clientModifiedAt.toUtc().difference(now).abs();
-    final remoteServerTime = remote.serverUpdatedAt;
-    final remoteDelta = remoteServerTime == null
-        ? Duration.zero
-        : remote.clientModifiedAt
-              .toUtc()
-              .difference(remoteServerTime.toUtc())
-              .abs();
-    return localDelta > tolerance || remoteDelta > tolerance;
+    return clientTime.toUtc().isAfter(referenceTime.toUtc().add(tolerance));
   }
 
   Future<void> _completeMutation(
