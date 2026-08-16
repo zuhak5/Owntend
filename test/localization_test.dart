@@ -119,6 +119,8 @@ void main() {
 
     final components = File('lib/src/ui/components.dart').readAsStringSync();
     expect(components, isNot(contains(" in \${task.room.name}")));
+    expect(components, contains('recurrenceDays(rule.interval)'));
+    expect(components, isNot(contains('recurrenceEveryMany(rule.interval')));
 
     final search = File(
       'lib/src/core/data/search_repository.dart',

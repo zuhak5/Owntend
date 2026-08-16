@@ -72,6 +72,7 @@ void main() {
 
     final arabic = lookupAppLocalizations(const Locale('ar'));
     expect(find.textContaining(arabic.cleaning), findsOneWidget);
+    expect(find.text(arabic.recurrenceDays(2)), findsOneWidget);
     expect(find.text('HEPA Purifier · المطبخ'), findsOneWidget);
     expect(find.textContaining('Cleaning'), findsNothing);
     expect(find.textContaining(' in '), findsNothing);

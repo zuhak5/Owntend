@@ -3078,21 +3078,12 @@ String _durationText(BuildContext context, Duration duration) {
 }
 
 String _recurrenceText(BuildContext context, RecurrenceRule rule) {
-  final unit = _localizedRecurrenceUnit(context, rule);
-  if (rule.interval == 1) {
-    return context.l10n.recurrenceEveryOne(unit);
-  }
-  return context.l10n.recurrenceEveryMany(rule.interval, unit);
-}
-
-String _localizedRecurrenceUnit(BuildContext context, RecurrenceRule rule) {
-  final plural = rule.interval != 1;
   return switch (rule.unit) {
-    RecurrenceUnit.hours => plural ? context.l10n.hours2 : context.l10n.hour,
-    RecurrenceUnit.days => plural ? context.l10n.days2 : context.l10n.day,
-    RecurrenceUnit.weeks => plural ? context.l10n.weeks2 : context.l10n.week,
-    RecurrenceUnit.months => plural ? context.l10n.months2 : context.l10n.month,
-    RecurrenceUnit.years => plural ? context.l10n.years2 : context.l10n.year,
+    RecurrenceUnit.hours => context.l10n.recurrenceHours(rule.interval),
+    RecurrenceUnit.days => context.l10n.recurrenceDays(rule.interval),
+    RecurrenceUnit.weeks => context.l10n.recurrenceWeeks(rule.interval),
+    RecurrenceUnit.months => context.l10n.recurrenceMonths(rule.interval),
+    RecurrenceUnit.years => context.l10n.recurrenceYears(rule.interval),
   };
 }
 
