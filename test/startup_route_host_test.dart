@@ -63,16 +63,12 @@ void main() {
       // makes PopupMenuButton usable.
       expect(find.byType(Navigator), findsOneWidget);
       expect(
-        find.byKey(
-          const ValueKey('onboarding-language-selector-hit-target'),
-        ),
+        find.byKey(const ValueKey('onboarding-language-selector-hit-target')),
         findsOneWidget,
       );
 
       await tester.tap(
-        find.byKey(
-          const ValueKey('onboarding-language-selector-hit-target'),
-        ),
+        find.byKey(const ValueKey('onboarding-language-selector-hit-target')),
       );
       await tester.pumpAndSettle();
 
