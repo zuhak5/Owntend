@@ -353,6 +353,49 @@ void main() {
     });
   });
 
+  test('restoring a task refuses to resurrect a trashed parent hierarchy', () async {
+    final areaId = await assetRepo.saveArea(
+      name: 'Restore hierarchy',
+      kind: AreaKind.indoor,
+    );
+    final roomId = await assetRepo.saveRoom(
+      areaId: areaId,
+      name: 'Restore hierarchy room',
+    );
+    final assetId = await assetRepo.saveAsset(
+      name: 'Restore hierarchy asset',
+      categoryId: (await assetRepo.listCategories()).first.id,
+      roomId: roomId,
+    );
+    final planId = await maintenanceRepo.savePlan(
+      assetId: assetId,
+      title: 'Restore hierarchy task',
+      recurrence: const RecurrenceRule(
+        interval: 1,
+        unit: RecurrenceUnit.months,
+      ),
+      priority: PriorityLevel.medium,
+      nextDueDate: DateTime(2026, 9, 1, 9),
+      healthGroup: HealthGroup.other,
+    );
+
+    await maintenanceRepo.archivePlan(planId);
+    await assetRepo.trashAsset(assetId);
+    await expectLater(
+      maintenanceRepo.restorePlan(planId),
+      throwsA(isA<StateError>()),
+    );
+
+    final assetRow = await (db.select(
+      db.assets,
+    )..where((row) => row.id.equals(assetId))).getSingle();
+    final planRow = await (db.select(
+      db.maintenancePlans,
+    )..where((row) => row.id.equals(planId))).getSingle();
+    expect(assetRow.archivedAt, isNotNull);
+    expect(planRow.archivedAt, isNotNull);
+  });
+
   group('Account Deletion & Data Isolation', () {
     test('clearAllAccountData purges all tables including reconciliation requests and search index', () async {
       final areaId = await assetRepo.saveArea(

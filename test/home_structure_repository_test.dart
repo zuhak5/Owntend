@@ -1506,6 +1506,21 @@ void main() {
         await root.delete(recursive: true);
       }
     }
+  });
+
+  group('preproduction state integrity', () {
+    late AppDatabase db;
+    late DriftAssetRepository repo;
+
+    setUp(() async {
+      db = AppDatabase(executor: NativeDatabase.memory());
+      repo = DriftAssetRepository(db);
+      await _seedTestAreas(repo);
+    });
+
+    tearDown(() async {
+      await db.close();
+    });
 
     test(
       'editing clears optional metadata and does not acknowledge Inbox',

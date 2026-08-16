@@ -6836,6 +6836,14 @@ class FakeSettingsRepository implements SettingsRepository {
     _notificationPreferencesController.add(preferences);
   }
 
+  @override
+  Future<void> mergeNotificationPreferences({
+    required NotificationPreferences baseline,
+    required NotificationPreferences desired,
+  }) async {
+    await setNotificationPreferences(desired);
+  }
+
   Future<void> close() async {
     await _appLanguageController.close();
     await _appLocalePreferenceController.close();
@@ -7065,10 +7073,12 @@ class FakeMaintenanceRepository implements MaintenanceRepository {
   }
 
   @override
-  Future<void> undoLastCompletion(
-    String planId,
-    DateTime previousDueDate,
-  ) async {
+  Future<void> undoCompletion({
+    required String planId,
+    required String completionId,
+    required DateTime previousDueDate,
+    required DateTime expectedCurrentNextDueDate,
+  }) async {
     undoCount++;
   }
 

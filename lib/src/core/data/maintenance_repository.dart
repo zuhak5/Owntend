@@ -6,15 +6,22 @@ class DriftMaintenanceRepository
     this.db, {
     this._recurrenceEngine = const OwntendRecurrenceEngine(),
     DateTime Function()? now,
-  }) : _now = now ?? DateTime.now;
+    Duration Function()? actionElapsed,
+  }) : _now = now ?? DateTime.now,
+       _actionElapsedOverride = actionElapsed;
 
   final AppDatabase db;
   final RecurrenceEngine _recurrenceEngine;
   final DateTime Function() _now;
+  final Duration Function()? _actionElapsedOverride;
+  final Stopwatch _completionActionClock = Stopwatch()..start();
   static const _completionDuplicateWindow = Duration(seconds: 4);
-  final Map<String, DateTime> _lastCompletionActionAt = {};
+  final Map<String, Duration> _lastCompletionActionAt = {};
   final Map<String, LocalMaintenanceCompletionResult> _lastCompletionResult =
       {};
+
+  Duration get _actionElapsed =>
+      _actionElapsedOverride?.call() ?? _completionActionClock.elapsed;
 
   @override
   Stream<List<domain.TaskItem>> watchTasks() {
@@ -353,10 +360,11 @@ class DriftMaintenanceRepository
         );
       }
       final actionAt = _now();
+      final actionElapsed = _actionElapsed;
       final lastActionAt = _lastCompletionActionAt[planId];
       final lastResult = _lastCompletionResult[planId];
       if (lastActionAt != null && lastResult != null) {
-        final sinceLastAction = actionAt.difference(lastActionAt);
+        final sinceLastAction = actionElapsed - lastActionAt;
         if (!sinceLastAction.isNegative &&
             sinceLastAction < _completionDuplicateWindow) {
           return LocalMaintenanceCompletionResult(
@@ -544,7 +552,7 @@ class DriftMaintenanceRepository
         previousDueDate: previousDueDate,
         nextDueDate: nextDue,
       );
-      _lastCompletionActionAt[planId] = actionAt;
+      _lastCompletionActionAt[planId] = actionElapsed;
       _lastCompletionResult[planId] = result;
       return result;
     });
@@ -660,6 +668,10 @@ class DriftMaintenanceRepository
             ),
           );
     });
+    if (_lastCompletionResult[planId]?.operationId == completionId) {
+      _lastCompletionActionAt.remove(planId);
+      _lastCompletionResult.remove(planId);
+    }
   }
 
   @override
@@ -681,36 +693,32 @@ class DriftMaintenanceRepository
   @override
   Future<void> restorePlan(String planId) async {
     final now = _now();
-    final plan = await (db.select(
-      db.maintenancePlans,
-    )..where((row) => row.id.equals(planId))).getSingleOrNull();
-    if (plan == null) return;
-    final asset = await (db.select(
-      db.assets,
-    )..where((row) => row.id.equals(plan.assetId))).getSingleOrNull();
-    final room = asset == null
-        ? null
-        : await (db.select(
-            db.rooms,
-          )..where((row) => row.id.equals(asset.roomId))).getSingleOrNull();
     await db.transaction(() async {
-      if (asset != null) {
-        await (db.update(
-          db.assets,
-        )..where((row) => row.id.equals(asset.id))).write(
-          AssetsCompanion(archivedAt: const Value(null), updatedAt: Value(now)),
-        );
-      }
-      if (room != null) {
-        await (db.update(
-          db.rooms,
-        )..where((row) => row.id.equals(room.id))).write(
-          RoomsCompanion(archivedAt: const Value(null), updatedAt: Value(now)),
-        );
-        await (db.update(
-          db.areas,
-        )..where((row) => row.id.equals(room.areaId))).write(
-          AreasCompanion(archivedAt: const Value(null), updatedAt: Value(now)),
+      final plan = await (db.select(
+        db.maintenancePlans,
+      )..where((row) => row.id.equals(planId))).getSingleOrNull();
+      if (plan == null || plan.archivedAt == null) return;
+      final asset = await (db.select(
+        db.assets,
+      )..where((row) => row.id.equals(plan.assetId))).getSingleOrNull();
+      final room = asset == null
+          ? null
+          : await (db.select(
+              db.rooms,
+            )..where((row) => row.id.equals(asset.roomId))).getSingleOrNull();
+      final area = room == null
+          ? null
+          : await (db.select(
+              db.areas,
+            )..where((row) => row.id.equals(room.areaId))).getSingleOrNull();
+      if (asset == null ||
+          asset.archivedAt != null ||
+          room == null ||
+          room.archivedAt != null ||
+          area == null ||
+          area.archivedAt != null) {
+        throw StateError(
+          'Restore the parent item, room, and area before restoring this task.',
         );
       }
       await (db.update(
@@ -912,29 +920,6 @@ class DriftMaintenanceRepository
     await (db.update(db.inboxNotifications)
           ..where((row) => row.planId.equals(planId) & row.readAt.isNull()))
         .write(InboxNotificationsCompanion(readAt: Value(DateTime.now())));
-  }
-
-  Future<void> _reopenPlanInbox(String planId, DateTime now) async {
-    final latest =
-        await (db.select(db.inboxNotifications)
-              ..where(
-                (row) => row.planId.equals(planId) & row.kind.equals('task'),
-              )
-              ..orderBy([
-                (row) => OrderingTerm.desc(row.createdAt),
-                (row) => OrderingTerm.desc(row.id),
-              ])
-              ..limit(1))
-            .getSingleOrNull();
-    if (latest == null) return;
-    await (db.update(
-      db.inboxNotifications,
-    )..where((row) => row.id.equals(latest.id))).write(
-      InboxNotificationsCompanion(
-        readAt: const Value(null),
-        updatedAt: Value(now),
-      ),
-    );
   }
 
   Future<void> _reopenPlanInbox(String planId, DateTime now) async {

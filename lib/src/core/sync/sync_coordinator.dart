@@ -1585,42 +1585,6 @@ class SyncCoordinator implements CloudSyncRepository {
     );
   }
 
-  Future<void> _pushMaintenanceUndo(
-    LocalSyncMutation mutation, {
-    required String payloadJson,
-    required String userId,
-    required String deviceId,
-    required _ActiveAccountScope scope,
-  }) async {
-    await _localStore.markMutationInFlight(mutation, userId: userId);
-    final result = await _remoteGateway.undoMaintenanceCompletion(
-      payloadJson: payloadJson,
-      userId: userId,
-      deviceId: deviceId,
-    );
-    await _ensureActiveAccountScope(scope);
-    if (result.acknowledged && result.plan != null) {
-      await _localStore.markMaintenanceUndoSucceeded(
-        mutation,
-        plan: result.plan!,
-        completionId: mutation.recordKey,
-      );
-      await _reconcileMaintenanceCompletionReminders(mutation);
-      return;
-    }
-    throw SupabaseFailure(
-      kind: result.status == MaintenanceCompletionStatus.unauthorized
-          ? SupabaseFailureKind.permissionDenied
-          : result.status == MaintenanceCompletionStatus.invalid
-          ? SupabaseFailureKind.incompatibleSchema
-          : SupabaseFailureKind.conflict,
-      message:
-          result.conflictReason ??
-          'The completion undo could not be reconciled.',
-      retryable: result.retryable,
-    );
-  }
-
   Future<void> _pushMaintenanceCompletion(
     LocalSyncMutation mutation, {
     required String payloadJson,

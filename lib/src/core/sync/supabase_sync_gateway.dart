@@ -774,66 +774,6 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
     }
   }
 
-  Future<MaintenanceUndoResult> undoMaintenanceCompletion({
-    required String payloadJson,
-    required String userId,
-    required String deviceId,
-  }) async {
-    try {
-      final decoded = jsonDecode(payloadJson);
-      if (decoded is! Map) {
-        throw const FormatException(
-          'The queued maintenance undo payload is invalid.',
-        );
-      }
-      final operation = Map<String, dynamic>.from(decoded);
-      final Object? response = await _withDataTimeout<Object?>(
-        () async => _client.rpc<Map<String, dynamic>>(
-          'undo_maintenance_completion',
-          params: {'p_operation': operation, 'p_device_id': deviceId},
-        ),
-      );
-      if (response is! Map) {
-        throw const FormatException(
-          'The maintenance undo RPC returned an invalid result.',
-        );
-      }
-      final body = Map<String, dynamic>.from(response);
-      final status = _maintenanceCompletionStatus(body['status']);
-      final rawPlan = body['plan'];
-      final planData = rawPlan is Map
-          ? Map<String, dynamic>.from(rawPlan)
-          : null;
-      if (planData != null && planData['user_id'] != userId) {
-        throw const SupabaseFailure(
-          kind: SupabaseFailureKind.permissionDenied,
-          message: 'The cloud returned maintenance data for another account.',
-        );
-      }
-      if ((status == MaintenanceCompletionStatus.applied ||
-              status == MaintenanceCompletionStatus.alreadyApplied) &&
-          planData == null) {
-        throw const FormatException(
-          'The maintenance undo RPC omitted the canonical plan.',
-        );
-      }
-      return MaintenanceUndoResult(
-        status: status,
-        retryable: body['retryable'] == true,
-        plan: planData == null
-            ? null
-            : SyncRecord.fromRemote(
-                syncSpecByEntity['maintenance_plan']!,
-                planData,
-              ),
-        rewound: body['rewound'] == true,
-        conflictReason: body['conflict_reason'] as String?,
-      );
-    } on Object catch (error) {
-      throw SupabaseFailure.from(error);
-    }
-  }
-
   Future<SyncRecord?> fetch({
     required SyncEntitySpec spec,
     required String userId,

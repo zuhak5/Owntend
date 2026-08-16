@@ -1964,43 +1964,6 @@ ON CONFLICT(key) DO UPDATE SET
     });
   }
 
-  Future<void> markMaintenanceUndoSucceeded(
-    LocalSyncMutation mutation, {
-    required SyncRecord plan,
-    required String completionId,
-  }) async {
-    if (mutation.entity != 'maintenance_undo' ||
-        plan.spec.entity != 'maintenance_plan' ||
-        mutation.recordKey != completionId) {
-      throw StateError('Invalid maintenance undo acknowledgement.');
-    }
-    await db.transaction(() async {
-      await (db.delete(db.syncOutbox)..where(
-            (row) =>
-                (row.entity.equals('maintenance_undo') &
-                    row.recordKey.equals(completionId)) |
-                (row.entity.equals('maintenance_plan') &
-                    row.recordKey.equals(plan.recordKey)) |
-                (row.entity.equals('maintenance_record') &
-                    row.recordKey.equals(completionId)),
-          ))
-          .go();
-      await withOutboxSuppressed(() async {
-        await _upsertLocal(plan);
-        await _saveShadow(plan);
-        await (db.delete(
-          db.maintenanceRecords,
-        )..where((row) => row.id.equals(completionId))).go();
-        await (db.delete(db.syncShadows)..where(
-              (row) =>
-                  row.entity.equals('maintenance_record') &
-                  row.recordKey.equals(completionId),
-            ))
-            .go();
-      });
-    });
-  }
-
   Future<void> markMaintenanceCompletionSucceeded(
     LocalSyncMutation mutation, {
     required SyncRecord plan,

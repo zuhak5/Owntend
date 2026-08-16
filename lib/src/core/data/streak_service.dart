@@ -121,7 +121,7 @@ class DatabaseStreakService implements StreakService {
     DateTime? previous;
     for (final day in days) {
       final consecutive =
-          previous != null && day.difference(previous).inDays == 1;
+          previous != null && daysBetweenDates(previous, day) == 1;
       currentRun = consecutive ? currentRun + 1 : 1;
       if (currentRun > best) best = currentRun;
       previous = day;

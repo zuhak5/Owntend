@@ -982,9 +982,12 @@ class DriftAssetRepository implements AssetRepository {
       final assetIds = trashedAssets.map((row) => row.id).toList();
       final planIds = trashedPlans.map((row) => row.id).toList();
       final photos = await _photoRowsForAssets(assetIds);
-      if (planIds.isNotEmpty) await _deletePlansCascade(db, planIds);
-      if (assetIds.isNotEmpty)
+      if (planIds.isNotEmpty) {
+        await _deletePlansCascade(db, planIds);
+      }
+      if (assetIds.isNotEmpty) {
         await _deleteAssetsCascadeInTransaction(assetIds);
+      }
       if (roomIds.isNotEmpty) {
         await (db.delete(db.rooms)..where((row) => row.id.isIn(roomIds))).go();
       }
