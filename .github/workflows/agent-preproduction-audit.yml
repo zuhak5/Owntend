@@ -20,7 +20,7 @@ jobs:
       - name: Apply verified phase-one fixes
         shell: bash
         run: |
-          python .github/agent-preproduction-patch.py
+          python .github/agent-preproduction-patch-v2.py
           git diff --check
           if git diff --quiet; then
             echo "No phase-one changes to commit."
