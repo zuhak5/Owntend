@@ -188,6 +188,7 @@ class OfflineCreationDraftStore {
       await _storage.write(key: _storageKey(key), value: jsonEncode(value));
     } on Object catch (error) {
       AppLogger.warning('offline_creation_draft_save', error: error);
+      rethrow;
     }
   }
 

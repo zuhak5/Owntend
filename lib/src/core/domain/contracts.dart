@@ -105,12 +105,14 @@ class LocalMaintenanceCompletionResult {
     this.operationId,
     this.previousDueDate,
     this.nextDueDate,
+    this.duplicateIgnored = false,
   });
 
   final LocalMaintenanceCompletionStatus status;
   final String? operationId;
   final DateTime? previousDueDate;
   final DateTime? nextDueDate;
+  final bool duplicateIgnored;
 
   bool get isApplied => status == LocalMaintenanceCompletionStatus.applied;
 }

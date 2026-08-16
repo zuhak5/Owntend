@@ -1723,7 +1723,8 @@ class SyncCoordinator implements CloudSyncRepository {
       return;
     }
     final remote = result.canonical;
-    if (remote != null && _hasClockSkew(local, remote)) {
+    final hasClockSkew = remote != null && _hasClockSkew(local, remote);
+    if (hasClockSkew) {
       _clockSkewConflicts++;
     }
     if (remote != null &&
@@ -1741,6 +1742,10 @@ class SyncCoordinator implements CloudSyncRepository {
         expectedRevision: null,
       );
       await _ensureActiveAccountScope(scope);
+    } else if (hasClockSkew) {
+      await _localStore.applyRemoteRecords([remote]);
+      await _localStore.markMutationSucceeded(mutation, remote);
+      return;
     } else if (local.clientModifiedAt.isAfter(remote.clientModifiedAt) ||
         (local.clientModifiedAt.isAtSameMomentAs(remote.clientModifiedAt) &&
             local.originDeviceId.compareTo(remote.originDeviceId) > 0)) {

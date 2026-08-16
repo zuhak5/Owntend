@@ -2017,6 +2017,9 @@ Future<bool> completeTaskWithFeedback(
   if (!_prefersReducedMotion(context)) {
     await Future<void>.delayed(const Duration(milliseconds: 450));
   }
+  if (result.duplicateIgnored) {
+    return true;
+  }
   if (!context.mounted) {
     return true;
   }

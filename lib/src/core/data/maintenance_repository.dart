@@ -11,6 +11,7 @@ class DriftMaintenanceRepository
   final AppDatabase db;
   final RecurrenceEngine _recurrenceEngine;
   final DateTime Function() _now;
+  static const _completionDuplicateWindow = Duration(seconds: 4);
 
   @override
   Stream<List<domain.TaskItem>> watchTasks() {
@@ -351,14 +352,38 @@ class DriftMaintenanceRepository
         );
       }
 
-      final completed = canonicalSyncSecond(completedAt ?? _now());
+      final completionInstant = completedAt ?? _now();
+      final completed = canonicalSyncSecond(completionInstant);
       final previousDueDate = canonicalPlanNextDue;
-      final baseDate = completed.isAfter(previousDueDate)
-          ? completed
-          : previousDueDate;
+
+      final latestRecord =
+          await (db.select(db.maintenanceRecords)
+                ..where((record) => record.planId.equals(planId))
+                ..orderBy([
+                  (record) => OrderingTerm.desc(record.completedAt),
+                  (record) => OrderingTerm.desc(record.id),
+                ])
+                ..limit(1))
+              .getSingleOrNull();
+      if (latestRecord != null) {
+        final sinceLatest = completed.difference(
+          canonicalSyncSecond(latestRecord.completedAt),
+        );
+        if (sinceLatest.compareTo(Duration.zero) >= 0 &&
+            sinceLatest.compareTo(_completionDuplicateWindow) < 0) {
+          return LocalMaintenanceCompletionResult(
+            status: LocalMaintenanceCompletionStatus.applied,
+            operationId: latestRecord.id,
+            previousDueDate: canonicalSyncSecond(latestRecord.dueDate),
+            nextDueDate: canonicalPlanNextDue,
+            duplicateIgnored: true,
+          );
+        }
+      }
+
       final nextDue = canonicalSyncSecond(
         _recurrenceEngine.nextDueDate(
-          baseDate,
+          completionInstant,
           domain.RecurrenceRule(
             interval: plan.recurrenceInterval,
             unit: _recurrenceUnit(plan.recurrenceUnit),
@@ -660,19 +685,11 @@ class DriftMaintenanceRepository
         return;
       }
       final now = _now();
-      final recurrence = domain.RecurrenceRule(
-        interval: plan.recurrenceInterval,
-        unit: _recurrenceUnit(plan.recurrenceUnit),
-      );
-      final nextDueDate = enabled && !plan.nextDueDate.isAfter(now)
-          ? _recurrenceEngine.nextDueDate(now, recurrence)
-          : plan.nextDueDate;
       await (db.update(
         db.maintenancePlans,
       )..where((row) => row.id.equals(planId))).write(
         MaintenancePlansCompanion(
           isEnabled: Value(enabled),
-          nextDueDate: Value(nextDueDate),
           updatedAt: Value(now),
         ),
       );
