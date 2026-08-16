@@ -52,7 +52,9 @@ void main() {
       (result) => result.entityId == 'search-device',
     );
     expect(purifier.title, 'Purifier');
-    expect(purifier.snippet, isEmpty);
+    expect(purifier.snippet, contains('Quiet'));
+    expect(purifier.snippet, isNot(contains('جهاز')));
+    expect(purifier.snippet, isNot(contains('device appliance')));
 
     final byUserNote = await repository.search('Quiet');
     final noteMatch = byUserNote.singleWhere(
