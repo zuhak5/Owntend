@@ -45,3 +45,14 @@ test("zero percent on the first active step is presented as starting", () => {
   assert.equal(shouldShowStarting("Step 2 of 18", "0%"), false);
   assert.equal(shouldShowStarting("Step 1 of 18", "4%"), false);
 });
+
+test("target build metadata is always read from the current deployment", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const source = await readFile(
+    new URL("../download-site/build-status-ui.js", import.meta.url),
+    "utf8",
+  );
+  assert.match(source, /fetch\("build-info\.json", \{/);
+  assert.match(source, /cache: "no-store"/);
+  assert.doesNotMatch(source, /sessionStorage|TARGET_BUILD_CACHE_KEY/);
+});
