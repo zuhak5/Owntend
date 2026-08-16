@@ -96,7 +96,7 @@ void main() {
     expect(taskDetail, contains('_categoryLabel(context, task.category)'));
     expect(taskDetail, contains('reminderDaysBeforeDue'));
     expect(taskDetail, isNot(contains("'day' : 'days'")));
-    expect(taskDetail, isNot(contains(' before due'));
+    expect(taskDetail, isNot(contains(' before due')));
 
     final thingDetail = File(
       'lib/src/features/assets/presentation/thing_detail_screen.dart',
