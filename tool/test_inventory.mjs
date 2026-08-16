@@ -18,6 +18,7 @@ export const CANONICAL_NODE_TESTS = [
   'tool/release-workflows.test.mjs',
   'tool/sticky-download-fix.test.mjs',
   'tool/supabase-advisors.test.mjs',
+  'tool/supabase-migration-contracts.test.mjs',
   'tool/toolchain.test.mjs',
   'tool/versiondeck.test.mjs',
 ];
