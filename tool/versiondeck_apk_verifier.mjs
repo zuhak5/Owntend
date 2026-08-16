@@ -10,6 +10,11 @@ import {
   VERSIONDECK_PACKAGE_NAME,
   VERSIONDECK_REPOSITORY,
 } from "../download-site/manifest-schema.js";
+import {
+  buildAndroidProvenancePolicy,
+  buildGhAttestationVerifyArgs,
+  verifyAttestationVerificationJson,
+} from "./provenance_policy.mjs";
 
 const execFileAsync = promisify(execFile);
 const MAX_APK_SIZE_BYTES = 1024 * 1024 * 1024;
@@ -160,6 +165,20 @@ async function resolveReleaseCommit(tag, historicalDecision) {
   return commitSha;
 }
 
+export function buildVersionDeckApkProvenancePolicy({ commitSha, apkAsset, sha256 }) {
+  return buildAndroidProvenancePolicy({
+    artifactType: "apk",
+    repository: VERSIONDECK_REPOSITORY,
+    sourceDigest: commitSha,
+    sourceRef: "refs/heads/main",
+    workflowTrigger: "workflow_dispatch",
+    runnerEnvironment: "github-hosted",
+    sourceRepositoryVisibilityAtSigning: "public",
+    artifactName: apkAsset?.name || "",
+    artifactSha256: sha256,
+  });
+}
+
 export async function verifyReleaseArtifact({ release, apkAsset, historicalDecision }, token) {
   const temporaryDirectory = await fsPromises.mkdtemp(path.join(os.tmpdir(), "versiondeck-"));
   const apkPath = path.join(temporaryDirectory, apkAsset.name);
@@ -182,6 +201,19 @@ export async function verifyReleaseArtifact({ release, apkAsset, historicalDecis
     if (/^application-debuggable/m.test(badging.stdout)) throw new Error("APK is debuggable.");
 
     const commitSha = await resolveReleaseCommit(release.tag_name, historicalDecision);
+    const provenancePolicy = buildVersionDeckApkProvenancePolicy({
+      commitSha,
+      apkAsset,
+      sha256,
+    });
+    const { stdout: attestationJson } = await runChecked(
+      "gh",
+      buildGhAttestationVerifyArgs(provenancePolicy, apkPath, { formatJson: true }),
+      {
+        env: { ...process.env, GH_TOKEN: token },
+      },
+    );
+    const provenance = verifyAttestationVerificationJson(attestationJson, provenancePolicy);
 
     return {
       sha256,
@@ -191,6 +223,7 @@ export async function verifyReleaseArtifact({ release, apkAsset, historicalDecis
       signerCertificateSha256: normalizedSigner(signerMatch[1]),
       commitSha,
       attestationVerified: true,
+      provenance,
     };
   } finally {
     await fsPromises.rm(temporaryDirectory, { recursive: true, force: true });
