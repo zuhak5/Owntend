@@ -12,20 +12,23 @@ test("technical steps map to distinct user-readable phases", () => {
   assert.equal(phaseForTechnicalStep("Set up Flutter").label, "Configuring production build");
   assert.equal(phaseForTechnicalStep("Build and test production APK").label, "Building and testing APK");
   assert.equal(phaseForTechnicalStep("Verify package, version, checksum, and signer").label, "Verifying APK and release");
-  assert.equal(phaseForTechnicalStep("Publish GitHub Release").label, "Publishing release");
+  assert.equal(
+    phaseForTechnicalStep("Upload production APK handoff").label,
+    "Packaging verified build evidence",
+  );
   assert.equal(phaseForTechnicalStep("Remove temporary credentials").label, "Finalizing securely");
 });
 
 test("technical steps are grouped without changing source order", () => {
   const groups = groupTechnicalSteps([
     { name: "Check out repository" },
-    { name: "Set up Java 17" },
+    { name: "Set up Java 21" },
     { name: "Set up Flutter" },
     { name: "Build and test production APK" },
-    { name: "Publish GitHub Release" },
+    { name: "Upload production APK handoff" },
   ]);
   assert.deepEqual(groups.map((group) => group.id), ["source", "configure", "build", "publish"]);
-  assert.deepEqual(groups[1].steps.map((step) => step.name), ["Set up Java 17", "Set up Flutter"]);
+  assert.deepEqual(groups[1].steps.map((step) => step.name), ["Set up Java 21", "Set up Flutter"]);
 });
 
 test("pubspec version parsing returns release and build numbers", () => {
