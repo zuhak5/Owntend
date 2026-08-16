@@ -381,7 +381,7 @@ test('release runbook names every required backend check exactly', async () => {
   assert.match(runbook, /`Supabase database tests`/);
 });
 
-test('VersionDeck stays disabled while public publication is contained', async () => {
+test('VersionDeck exposes only reviewed disabled and verified publication modes', async () => {
   const workflow = await read('.github/workflows/deploy-download-site.yml');
 
   assert.doesNotMatch(workflow, /^  push:/m);
@@ -390,7 +390,8 @@ test('VersionDeck stays disabled while public publication is contained', async (
 
   assert.match(workflow, /publication_mode:/);
   assert.match(workflow, /default: disabled/);
-  assert.doesNotMatch(workflow, /^\s+- verified$/m);
+  assert.match(workflow, /^\s+- disabled$/m);
+  assert.match(workflow, /^\s+- verified$/m);
   assert.doesNotMatch(workflow, /^\s+production_run_id:/m);
 
   assert.match(
@@ -398,8 +399,12 @@ test('VersionDeck stays disabled while public publication is contained', async (
     /if: github\.event_name == 'workflow_dispatch' && github\.ref == 'refs\/heads\/main'/,
   );
 
-  assert.match(workflow, /test "\$publication_mode" = "disabled"/);
-  assert.match(workflow, /expected_publication_status=disabled/);
+  assert.match(workflow, /disabled\)\s+[\s\S]*expected_publication_status="disabled"/);
+  assert.match(workflow, /verified\)\s+[\s\S]*expected_publication_status="active"/);
+  assert.match(workflow, /publication_mode == 'verified'/);
+  assert.match(workflow, /Generate independently verified release manifest/);
+  assert.match(workflow, /--publication-mode/);
+  assert.match(workflow, /steps\.source\.outputs\.publication_mode/);
   assert.doesNotMatch(workflow, /test "\$run_name" = "Build Production APK"/);
   assert.match(workflow, /manifest\.schemaVersion !== 4/);
 });
