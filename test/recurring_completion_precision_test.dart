@@ -278,66 +278,69 @@ void main() {
       DateTime(2026, 8, 17, 14, 30, 15),
     );
   });
-  test('Undo clears the duplicate guard for an immediate legitimate re-completion', () async {
-    var actionElapsed = Duration.zero;
-    final now = DateTime(2026, 8, 16, 14, 30);
-    final guardedMaintenance = DriftMaintenanceRepository(
-      db,
-      now: () => now,
-      actionElapsed: () => actionElapsed,
-    );
-    await assetRepo.saveArea(
-      id: 'area_undo_guard',
-      name: 'Undo guard',
-      kind: AreaKind.indoor,
-      sortOrder: 0,
-    );
-    final roomId = await assetRepo.saveRoom(
-      areaId: 'area_undo_guard',
-      name: 'Undo guard',
-    );
-    final assetId = await assetRepo.saveAsset(
-      name: 'Undo guard asset',
-      categoryId: (await assetRepo.listCategories()).first.id,
-      roomId: roomId,
-    );
-    final due = DateTime(2026, 8, 18, 9);
-    final planId = await guardedMaintenance.savePlan(
-      id: 'plan_undo_guard',
-      assetId: assetId,
-      title: 'Undo guard task',
-      recurrence: const RecurrenceRule(
-        interval: 1,
-        unit: RecurrenceUnit.months,
-      ),
-      priority: PriorityLevel.medium,
-      nextDueDate: due,
-      healthGroup: HealthGroup.other,
-    );
-    final first = await guardedMaintenance.completePlanResult(
-      planId,
-      completedAt: now,
-      expectedNextDueDate: due,
-    );
-    expect(first.isApplied, isTrue);
-    await guardedMaintenance.undoCompletion(
-      planId: planId,
-      completionId: first.operationId!,
-      previousDueDate: first.previousDueDate!,
-      expectedCurrentNextDueDate: first.nextDueDate!,
-    );
+  test(
+    'Undo clears the duplicate guard for an immediate legitimate re-completion',
+    () async {
+      var actionElapsed = Duration.zero;
+      final now = DateTime(2026, 8, 16, 14, 30);
+      final guardedMaintenance = DriftMaintenanceRepository(
+        db,
+        now: () => now,
+        actionElapsed: () => actionElapsed,
+      );
+      await assetRepo.saveArea(
+        id: 'area_undo_guard',
+        name: 'Undo guard',
+        kind: AreaKind.indoor,
+        sortOrder: 0,
+      );
+      final roomId = await assetRepo.saveRoom(
+        areaId: 'area_undo_guard',
+        name: 'Undo guard',
+      );
+      final assetId = await assetRepo.saveAsset(
+        name: 'Undo guard asset',
+        categoryId: (await assetRepo.listCategories()).first.id,
+        roomId: roomId,
+      );
+      final due = DateTime(2026, 8, 18, 9);
+      final planId = await guardedMaintenance.savePlan(
+        id: 'plan_undo_guard',
+        assetId: assetId,
+        title: 'Undo guard task',
+        recurrence: const RecurrenceRule(
+          interval: 1,
+          unit: RecurrenceUnit.months,
+        ),
+        priority: PriorityLevel.medium,
+        nextDueDate: due,
+        healthGroup: HealthGroup.other,
+      );
+      final first = await guardedMaintenance.completePlanResult(
+        planId,
+        completedAt: now,
+        expectedNextDueDate: due,
+      );
+      expect(first.isApplied, isTrue);
+      await guardedMaintenance.undoCompletion(
+        planId: planId,
+        completionId: first.operationId!,
+        previousDueDate: first.previousDueDate!,
+        expectedCurrentNextDueDate: first.nextDueDate!,
+      );
 
-    actionElapsed = const Duration(seconds: 1);
-    final second = await guardedMaintenance.completePlanResult(
-      planId,
-      completedAt: now.add(const Duration(minutes: 1)),
-      expectedNextDueDate: due,
-    );
-    expect(second.isApplied, isTrue);
-    expect(second.duplicateIgnored, isFalse);
-    expect(second.operationId, isNot(first.operationId));
-    expect(await guardedMaintenance.listRecordsForPlan(planId), hasLength(1));
-  });
+      actionElapsed = const Duration(seconds: 1);
+      final second = await guardedMaintenance.completePlanResult(
+        planId,
+        completedAt: now.add(const Duration(minutes: 1)),
+        expectedNextDueDate: due,
+      );
+      expect(second.isApplied, isTrue);
+      expect(second.duplicateIgnored, isFalse);
+      expect(second.operationId, isNot(first.operationId));
+      expect(await guardedMaintenance.listRecordsForPlan(planId), hasLength(1));
+    },
+  );
 
   test(
     'completion recurrence matrix anchors every supported unit to completedAt',

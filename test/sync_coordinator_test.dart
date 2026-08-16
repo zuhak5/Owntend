@@ -300,9 +300,8 @@ class _StatefulGateway implements SupabaseSyncGateway {
     final payload = Map<String, dynamic>.from(jsonDecode(payloadJson) as Map);
     final planId = payload['plan_id']! as String;
     final completionId = payload['completion_id']! as String;
-    final previousDue = DateTime.parse(
-      payload['previous_due_date']! as String,
-    ).toUtc();
+    final previousDue = DateTime.parse(payload['previous_due_date']! as String)
+        .toUtc();
     final expectedCurrent = DateTime.parse(
       payload['expected_current_next_due_date']! as String,
     ).toUtc();
@@ -328,8 +327,13 @@ class _StatefulGateway implements SupabaseSyncGateway {
     if (completionIndex >= 0) {
       _records.removeAt(completionIndex);
     }
-    var plan = _records[planIndex > completionIndex && completionIndex >= 0 ? planIndex - 1 : planIndex].record;
-    final currentDue = DateTime.parse(plan.values['next_due_date']! as String).toUtc();
+    var plan =
+        _records[planIndex > completionIndex && completionIndex >= 0
+                ? planIndex - 1
+                : planIndex]
+            .record;
+    final currentDue = DateTime.parse(plan.values['next_due_date']! as String)
+        .toUtc();
     var rewound = false;
     final newerCompletionExists = _records.any(
       (item) =>
@@ -337,7 +341,8 @@ class _StatefulGateway implements SupabaseSyncGateway {
           item.record.spec.entity == 'maintenance_record' &&
           item.record.values['plan_id'] == planId,
     );
-    if (!newerCompletionExists && currentDue.isAtSameMomentAs(expectedCurrent)) {
+    if (!newerCompletionExists &&
+        currentDue.isAtSameMomentAs(expectedCurrent)) {
       final updated = SyncRecord(
         spec: plan.spec,
         recordKey: plan.recordKey,
