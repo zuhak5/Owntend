@@ -34,11 +34,19 @@ jobs:
           text = text.replace(old_dispatch, new_dispatch, 1)
 
           input_expr = '$' + '{{ inputs.publication_mode }}'
-          old_source = f'''          publication_mode="{input_expr}"\n          test "$publication_mode" = "disabled"\n          echo "- Production build run: public release publication is contained" >> "$GITHUB_STEP_SUMMARY"\n          echo "publication_mode=$publication_mode" >> "$GITHUB_OUTPUT"\n          echo "expected_publication_status=disabled" >> "$GITHUB_OUTPUT"\n          echo "- Publication mode: `'$publication_mode'`" >> "$GITHUB_STEP_SUMMARY"\n'''
-          new_source = f'''          publication_mode="{input_expr}"\n          case "$publication_mode" in\n            disabled)\n              expected_publication_status="disabled"\n              echo "- Production build run: public release publication is contained" >> "$GITHUB_STEP_SUMMARY"\n              ;;\n            verified)\n              expected_publication_status="active"\n              echo "- Production build run: independently verified release publication is enabled" >> "$GITHUB_STEP_SUMMARY"\n              ;;\n            *)\n              echo "Unsupported publication mode: $publication_mode" >&2\n              exit 1\n              ;;\n          esac\n          echo "publication_mode=$publication_mode" >> "$GITHUB_OUTPUT"\n          echo "expected_publication_status=$expected_publication_status" >> "$GITHUB_OUTPUT"\n          echo "- Publication mode: `'$publication_mode'`" >> "$GITHUB_STEP_SUMMARY"\n'''
-          if old_source not in text:
-              raise SystemExit('VersionDeck publication source block did not match expected source')
-          workflow.write_text(text.replace(old_source, new_source, 1))
+          start_needle = f'          publication_mode="{input_expr}"\n'
+          start = text.find(start_needle)
+          if start < 0:
+              raise SystemExit('VersionDeck publication mode assignment was not found')
+          end = text.find('          echo "- Publication mode:', start)
+          if end < 0:
+              raise SystemExit('VersionDeck publication summary line was not found')
+          original = text[start:end]
+          if 'test "$publication_mode" = "disabled"' not in original or 'expected_publication_status=disabled' not in original:
+              raise SystemExit('VersionDeck publication block was not the expected contained implementation')
+          replacement = f'''          publication_mode="{input_expr}"\n          case "$publication_mode" in\n            disabled)\n              expected_publication_status="disabled"\n              echo "- Production build run: public release publication is contained" >> "$GITHUB_STEP_SUMMARY"\n              ;;\n            verified)\n              expected_publication_status="active"\n              echo "- Production build run: independently verified release publication is enabled" >> "$GITHUB_STEP_SUMMARY"\n              ;;\n            *)\n              echo "Unsupported publication mode: $publication_mode" >&2\n              exit 1\n              ;;\n          esac\n          echo "publication_mode=$publication_mode" >> "$GITHUB_OUTPUT"\n          echo "expected_publication_status=$expected_publication_status" >> "$GITHUB_OUTPUT"\n'''
+          text = text[:start] + replacement + text[end:]
+          workflow.write_text(text)
 
           control_path = Path('tool/versiondeck-control.json')
           control = json.loads(control_path.read_text())
@@ -65,7 +73,7 @@ jobs:
           PY
 
           grep -A9 'publication_mode:' .github/workflows/deploy-download-site.yml
-          grep -A18 'publication_mode="' .github/workflows/deploy-download-site.yml
+          grep -A20 'publication_mode="' .github/workflows/deploy-download-site.yml
           cat tool/versiondeck-control.json
 
           git config user.name 'github-actions[bot]'
