@@ -15,18 +15,21 @@ void main() {
 
   tearDown(() => db.close());
 
-  test('Arabic category aliases find canonical categories without leaking aliases', () async {
-    await repository.rebuildIndex();
+  test(
+    'Arabic category aliases find canonical categories without leaking aliases',
+    () async {
+      await repository.rebuildIndex();
 
-    final results = await repository.search('تنظيف');
-    final cleaning = results.singleWhere(
-      (result) => result.entityId == 'category_cleaning',
-    );
+      final results = await repository.search('تنظيف');
+      final cleaning = results.singleWhere(
+        (result) => result.entityId == 'category_cleaning',
+      );
 
-    expect(cleaning.entityType, 'category');
-    expect(cleaning.title, 'Cleaning');
-    expect(cleaning.snippet, isEmpty);
-  });
+      expect(cleaning.entityType, 'category');
+      expect(cleaning.title, 'Cleaning');
+      expect(cleaning.snippet, isEmpty);
+    },
+  );
 
   test('Arabic controlled type aliases find assets while display snippets stay user-authored', () async {
     await db.customStatement(

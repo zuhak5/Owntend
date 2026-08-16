@@ -31,7 +31,8 @@ const _localizedSearchAliases = <String, String>{
   'pets': 'pets pet حيوانات حيوان حيوانات أليفة',
   'plants': 'plants plant نباتات نبات',
   'cleaning': 'cleaning clean تنظيف التنظيف نظافة',
-  'category_appliances': 'appliances appliance أجهزة جهاز كهربائي أجهزة كهربائية',
+  'category_appliances':
+      'appliances appliance أجهزة جهاز كهربائي أجهزة كهربائية',
   'category_safety': 'safety أمان سلامة',
   'category_plants': 'plants plant نباتات نبات',
   'category_pets': 'pets pet حيوانات حيوان حيوانات أليفة',
@@ -149,13 +150,7 @@ class DriftSearchRepository implements SearchRepository {
       for (final plan in await (db.select(
         db.maintenancePlans,
       )..where((plan) => plan.archivedAt.isNull())).get()) {
-        await _insert(
-          'plan',
-          plan.id,
-          plan.title,
-          plan.instructions ?? '',
-          '',
-        );
+        await _insert('plan', plan.id, plan.title, plan.instructions ?? '', '');
       }
     });
   }
@@ -201,8 +196,9 @@ class DriftSearchRepository implements SearchRepository {
     );
   }
 
-  Future<({String displayBody, String searchTerms})>
-  _assetDetailSearchContent(AssetRow asset) async {
+  Future<({String displayBody, String searchTerms})> _assetDetailSearchContent(
+    AssetRow asset,
+  ) async {
     switch (_assetType(asset.assetType)) {
       case domain.AssetType.device:
         final row =
