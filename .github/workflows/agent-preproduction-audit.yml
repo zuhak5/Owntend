@@ -1,0 +1,219 @@
+name: Agent preproduction audit patch
+
+on:
+  push:
+    branches:
+      - fix/preproduction-state-integrity-audit
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          fetch-depth: 0
+      - name: Apply verified phase-one fixes
+        shell: bash
+        run: |
+          cat > /tmp/patch.py <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              if new in text and old not in text:
+                  return False
+              if old not in text:
+                  raise SystemExit(f'expected snippet not found in {path}: {old[:100]!r}')
+              p.write_text(text.replace(old, new, 1))
+              return True
+
+          # Completion result exposes whether an otherwise successful call was a rapid duplicate.
+          replace_once(
+              'lib/src/core/domain/contracts.dart',
+              '''    this.nextDueDate,\n  });\n\n  final LocalMaintenanceCompletionStatus status;\n  final String? operationId;\n  final DateTime? previousDueDate;\n  final DateTime? nextDueDate;\n\n  bool get isApplied => status == LocalMaintenanceCompletionStatus.applied;\n''',
+              '''    this.nextDueDate,\n    this.duplicateIgnored = false,\n  });\n\n  final LocalMaintenanceCompletionStatus status;\n  final String? operationId;\n  final DateTime? previousDueDate;\n  final DateTime? nextDueDate;\n  final bool duplicateIgnored;\n\n  bool get isApplied => status == LocalMaintenanceCompletionStatus.applied;\n''',
+          )
+
+          # Recurrence is anchored to the actual completion instant before UTC storage canonicalization.
+          replace_once(
+              'lib/src/core/data/maintenance_repository.dart',
+              '''  final DateTime Function() _now;\n\n  @override\n''',
+              '''  final DateTime Function() _now;\n  static const _completionDuplicateWindow = Duration(seconds: 4);\n\n  @override\n''',
+          )
+          replace_once(
+              'lib/src/core/data/maintenance_repository.dart',
+              '''      final completed = canonicalSyncSecond(completedAt ?? _now());\n      final previousDueDate = canonicalPlanNextDue;\n      final baseDate = completed.isAfter(previousDueDate)\n          ? completed\n          : previousDueDate;\n      final nextDue = canonicalSyncSecond(\n        _recurrenceEngine.nextDueDate(\n          baseDate,\n          domain.RecurrenceRule(\n            interval: plan.recurrenceInterval,\n            unit: _recurrenceUnit(plan.recurrenceUnit),\n          ),\n        ),\n      );\n''',
+              '''      final completionInstant = completedAt ?? _now();\n      final completed = canonicalSyncSecond(completionInstant);\n      final previousDueDate = canonicalPlanNextDue;\n\n      final latestRecord =\n          await (db.select(db.maintenanceRecords)\n                ..where((record) => record.planId.equals(planId))\n                ..orderBy([\n                  (record) => OrderingTerm.desc(record.completedAt),\n                  (record) => OrderingTerm.desc(record.id),\n                ])\n                ..limit(1))\n              .getSingleOrNull();\n      if (latestRecord != null &&\n          completed\n                  .difference(canonicalSyncSecond(latestRecord.completedAt))\n                  .abs() <\n              _completionDuplicateWindow) {\n        return LocalMaintenanceCompletionResult(\n          status: LocalMaintenanceCompletionStatus.applied,\n          operationId: latestRecord.id,\n          previousDueDate: canonicalSyncSecond(latestRecord.dueDate),\n          nextDueDate: canonicalPlanNextDue,\n          duplicateIgnored: true,\n        );\n      }\n\n      final nextDue = canonicalSyncSecond(\n        _recurrenceEngine.nextDueDate(\n          completionInstant,\n          domain.RecurrenceRule(\n            interval: plan.recurrenceInterval,\n            unit: _recurrenceUnit(plan.recurrenceUnit),\n          ),\n        ),\n      );\n''',
+          )
+
+          # Enabling/disabling is not an implicit skip and must preserve the outstanding occurrence.
+          replace_once(
+              'lib/src/core/data/maintenance_repository.dart',
+              '''      final recurrence = domain.RecurrenceRule(\n        interval: plan.recurrenceInterval,\n        unit: _recurrenceUnit(plan.recurrenceUnit),\n      );\n      final nextDueDate = enabled && !plan.nextDueDate.isAfter(now)\n          ? _recurrenceEngine.nextDueDate(now, recurrence)\n          : plan.nextDueDate;\n      await (db.update(\n        db.maintenancePlans,\n      )..where((row) => row.id.equals(planId))).write(\n        MaintenancePlansCompanion(\n          isEnabled: Value(enabled),\n          nextDueDate: Value(nextDueDate),\n          updatedAt: Value(now),\n        ),\n      );\n''',
+              '''      await (db.update(\n        db.maintenancePlans,\n      )..where((row) => row.id.equals(planId))).write(\n        MaintenancePlansCompanion(\n          isEnabled: Value(enabled),\n          updatedAt: Value(now),\n        ),\n      );\n''',
+          )
+
+          # Suppress duplicate success/Undo UI for the guarded rapid repeat.
+          replace_once(
+              'lib/src/features/backup/presentation/backup_screen.dart',
+              '''  if (!result.isApplied) {\n    hk_ui.showToast(\n''',
+              '''  if (!result.isApplied) {\n    hk_ui.showToast(\n''',
+          )
+          replace_once(
+              'lib/src/features/backup/presentation/backup_screen.dart',
+              '''  if (!context.mounted) {\n    return true;\n  }\n  hk_ui.showUndoToast(\n''',
+              '''  if (result.duplicateIgnored) {\n    return true;\n  }\n  if (!context.mounted) {\n    return true;\n  }\n  hk_ui.showUndoToast(\n''',
+          )
+
+          # A failed secure-storage write must propagate so the UI cannot claim a durable offline save.
+          replace_once(
+              'lib/src/features/monetization/monetization.dart',
+              '''    } on Object catch (error) {\n      AppLogger.warning('offline_creation_draft_save', error: error);\n    }\n''',
+              '''    } on Object catch (error) {\n      AppLogger.warning('offline_creation_draft_save', error: error);\n      rethrow;\n    }\n''',
+          )
+
+          # Recovery is keyed by the authenticated operation and expected entity identity, not incompatible JSON serializations.
+          replace_once(
+              'lib/src/features/monetization/charged_operation_resolver.dart',
+              '''          final status = await monetizationRepo.getChargedOperationStatus(\n            op.operationId,\n            requestHash: op.requestHash,\n          );\n          if (status.status == 'completed') {\n''',
+              '''          final status = await monetizationRepo.getChargedOperationStatus(\n            op.operationId,\n          );\n          if (status.status == 'completed') {\n            final expectsTask = op.requestPayload.containsKey('plan');\n            final expectedType = expectsTask ? 'task' : 'asset';\n            if (status.entityType != expectedType || status.entityId != op.planId) {\n              await operationStore.saveOperation(\n                op.copyWith(\n                  state: TaskCreationOperationState.permanentRejected,\n                  updatedAt: DateTime.now(),\n                  lastErrorCode: 'operation_identity_mismatch',\n                  lastErrorMessage: 'Recovered operation identity did not match the local request.',\n                ),\n              );\n              continue;\n            }\n''',
+          )
+
+          # On a detected clock-skew conflict, do not let a client wall clock select the winner.
+          replace_once(
+              'lib/src/core/sync/sync_coordinator.dart',
+              '''    if (remote != null && _hasClockSkew(local, remote)) {\n      _clockSkewConflicts++;\n    }\n\n    if (remote != null && _sameRecordData(local, remote)) {\n''',
+              '''    final hasClockSkew = remote != null && _hasClockSkew(local, remote);\n    if (hasClockSkew) {\n      _clockSkewConflicts++;\n    }\n\n    if (remote != null && _sameRecordData(local, remote)) {\n''',
+          )
+          replace_once(
+              'lib/src/core/sync/sync_coordinator.dart',
+              '''    } else if (local.clientModifiedAt.isAfter(remote.clientModifiedAt) ||\n''',
+              '''    } else if (hasClockSkew) {\n      await _localStore.applyRemoteRecords([remote]);\n      await _localStore.markMutationSucceeded(mutation, remote);\n      return;\n    } else if (local.clientModifiedAt.isAfter(remote.clientModifiedAt) ||\n''',
+          )
+
+          # Generate a forward migration from the released completion RPC so deployed environments receive the fix.
+          migration_path = Path('supabase/migrations/20260816163000_preproduction_completion_integrity.sql')
+          if not migration_path.exists():
+              source = Path('supabase/migrations/20260815000004_task_completion_and_rpc.sql').read_text()
+              start = source.index('CREATE OR REPLACE FUNCTION public.complete_maintenance_task(')
+              revoke = source.index('REVOKE ALL ON FUNCTION public.complete_maintenance_task', start)
+              function_sql = source[start:revoke].rstrip()
+              clamp = """  IF record_completed_at IS NOT NULL AND record_completed_at > date_trunc('second', clock_timestamp()) THEN\n    record_completed_at := date_trunc('second', clock_timestamp());\n  END IF;\n\n"""
+              if clamp not in function_sql:
+                  raise SystemExit('completion timestamp clamp not found')
+              function_sql = function_sql.replace(clamp, '', 1)
+              old_check = '      OR plan_next_due_date <= record_due_date\n'
+              new_check = '      OR plan_next_due_date <= record_completed_at\n'
+              if old_check not in function_sql:
+                  raise SystemExit('completion next-due validation not found')
+              function_sql = function_sql.replace(old_check, new_check, 1)
+              migration_path.write_text(f'''-- Forward fixes for pre-production maintenance completion integrity.\nBEGIN;\n\nALTER TABLE public.maintenance_plans\n  DROP CONSTRAINT IF EXISTS maintenance_plans_interval_unit_check;\nALTER TABLE public.maintenance_plans\n  ADD CONSTRAINT maintenance_plans_interval_unit_check\n  CHECK (interval_unit IN ('hours', 'days', 'weeks', 'months', 'years'));\n\n{function_sql}\n\nREVOKE ALL ON FUNCTION public.complete_maintenance_task(JSONB, TEXT) FROM PUBLIC, anon, service_role;\nGRANT EXECUTE ON FUNCTION public.complete_maintenance_task(JSONB, TEXT) TO authenticated;\n\nCOMMIT;\n''')
+
+          # Regression coverage: actual completion anchoring and duplicate window.
+          test_path = Path('test/recurring_completion_precision_test.dart')
+          text = test_path.read_text()
+          marker = "\n}\n"
+          addition = r'''
+
+  test('early completion resets recurrence from actual completion time', () async {
+    await assetRepo.saveArea(id: 'area_early', name: 'Early', kind: AreaKind.indoor, sortOrder: 0);
+    final roomId = await assetRepo.saveRoom(areaId: 'area_early', name: 'Early');
+    final categoryId = (await assetRepo.listCategories()).first.id;
+    final assetId = await assetRepo.saveAsset(
+      name: 'Monthly filter',
+      assetType: AssetType.device,
+      categoryId: categoryId,
+      roomId: roomId,
+    );
+    final due = DateTime(2026, 8, 18, 9);
+    final planId = await maintenance.savePlan(
+      assetId: assetId,
+      title: 'Monthly filter',
+      recurrence: const RecurrenceRule(interval: 1, unit: RecurrenceUnit.months),
+      priority: PriorityLevel.medium,
+      nextDueDate: due,
+      healthGroup: HealthGroup.appliances,
+    );
+    final completedAt = DateTime(2026, 8, 13, 14, 30);
+    final result = await maintenance.completePlanResult(
+      planId,
+      completedAt: completedAt,
+      expectedNextDueDate: due,
+    );
+    expect(result.isApplied, isTrue);
+    expect(result.duplicateIgnored, isFalse);
+    expect((await maintenance.getTask(planId))!.plan.nextDueDate.toLocal(), DateTime(2026, 9, 13, 14, 30));
+    final record = (await maintenance.listRecordsForPlan(planId)).single;
+    expect(record.completedAt.toLocal(), DateTime(2026, 8, 13, 14, 30));
+    expect(record.dueDate.toLocal(), due);
+  });
+
+  test('rapid repeated completions are idempotent but a later completion is allowed', () async {
+    await assetRepo.saveArea(id: 'area_repeat', name: 'Repeat', kind: AreaKind.indoor, sortOrder: 0);
+    final roomId = await assetRepo.saveRoom(areaId: 'area_repeat', name: 'Repeat');
+    final categoryId = (await assetRepo.listCategories()).first.id;
+    final assetId = await assetRepo.saveAsset(
+      name: 'Rapid task',
+      categoryId: categoryId,
+      roomId: roomId,
+    );
+    final due = DateTime(2026, 8, 17, 9);
+    final planId = await maintenance.savePlan(
+      assetId: assetId,
+      title: 'Rapid task',
+      recurrence: const RecurrenceRule(interval: 1, unit: RecurrenceUnit.days),
+      priority: PriorityLevel.medium,
+      nextDueDate: due,
+      healthGroup: HealthGroup.other,
+    );
+    final firstAt = DateTime(2026, 8, 16, 14, 30, 10);
+    final first = await maintenance.completePlanResult(planId, completedAt: firstAt, expectedNextDueDate: due);
+    expect(first.isApplied, isTrue);
+    for (var i = 1; i <= 4; i++) {
+      final repeat = await maintenance.completePlanResult(
+        planId,
+        completedAt: firstAt.add(Duration(milliseconds: 500 * i)),
+        expectedNextDueDate: first.nextDueDate,
+      );
+      expect(repeat.isApplied, isTrue);
+      expect(repeat.duplicateIgnored, isTrue);
+      expect(repeat.operationId, first.operationId);
+    }
+    expect(await maintenance.listRecordsForPlan(planId), hasLength(1));
+    expect((await maintenance.getTask(planId))!.plan.nextDueDate.toLocal(), DateTime(2026, 8, 17, 14, 30, 10));
+
+    final afterWindowAt = firstAt.add(const Duration(seconds: 5));
+    final second = await maintenance.completePlanResult(
+      planId,
+      completedAt: afterWindowAt,
+      expectedNextDueDate: first.nextDueDate,
+    );
+    expect(second.isApplied, isTrue);
+    expect(second.duplicateIgnored, isFalse);
+    expect(await maintenance.listRecordsForPlan(planId), hasLength(2));
+    expect((await maintenance.getTask(planId))!.plan.nextDueDate.toLocal(), DateTime(2026, 8, 17, 14, 30, 15));
+  });
+'''
+          if "early completion resets recurrence from actual completion time" not in text:
+              idx = text.rfind(marker)
+              if idx < 0:
+                  raise SystemExit('test file closing brace not found')
+              test_path.write_text(text[:idx] + addition + text[idx:])
+          PY
+          python /tmp/patch.py
+          dart format lib/src/core/domain/contracts.dart lib/src/core/data/maintenance_repository.dart lib/src/features/backup/presentation/backup_screen.dart lib/src/features/monetization/monetization.dart lib/src/features/monetization/charged_operation_resolver.dart lib/src/core/sync/sync_coordinator.dart test/recurring_completion_precision_test.dart
+          if git diff --quiet; then
+            echo "No phase-one changes to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/src/core/domain/contracts.dart lib/src/core/data/maintenance_repository.dart lib/src/features/backup/presentation/backup_screen.dart lib/src/features/monetization/monetization.dart lib/src/features/monetization/charged_operation_resolver.dart lib/src/core/sync/sync_coordinator.dart test/recurring_completion_precision_test.dart supabase/migrations/20260816163000_preproduction_completion_integrity.sql
+          git commit -m "fix: anchor recurring completions to actual time"
+          git push
