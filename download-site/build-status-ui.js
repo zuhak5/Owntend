@@ -24,7 +24,7 @@ const TECHNICAL_PHASES = [
   },
   {
     id: "publish",
-    label: "Publishing release",
+    label: "Packaging verified build evidence",
     match: /publish and verify sentry release|upload production apk|attest production apk provenance|publish (?:github )?release/i,
   },
   {
@@ -231,6 +231,10 @@ function initializeBuildStatusUi() {
 
   function enhance() {
     frame = 0;
+    const success = !section.hidden && section.dataset.state === "success";
+    if (success && phaseName.textContent !== "Verified build evidence ready") {
+      phaseName.textContent = "Verified build evidence ready";
+    }
     const active = !section.hidden && section.dataset.state === "active";
     if (!active) {
       progressTrack.classList.remove("is-indeterminate");
