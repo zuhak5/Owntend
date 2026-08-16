@@ -86,6 +86,26 @@ class MaintenanceUndoResult {
       status == MaintenanceCompletionStatus.alreadyApplied;
 }
 
+class MaintenanceUndoResult {
+  const MaintenanceUndoResult({
+    required this.status,
+    required this.retryable,
+    this.plan,
+    this.rewound = false,
+    this.conflictReason,
+  });
+
+  final MaintenanceCompletionStatus status;
+  final bool retryable;
+  final SyncRecord? plan;
+  final bool rewound;
+  final String? conflictReason;
+
+  bool get acknowledged =>
+      status == MaintenanceCompletionStatus.applied ||
+      status == MaintenanceCompletionStatus.alreadyApplied;
+}
+
 class MaintenanceCompletionResult {
   const MaintenanceCompletionResult({
     required this.status,
@@ -701,6 +721,66 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
         currentPlanRevision: (body['current_plan_revision'] as num?)?.toInt(),
         resultingRecordId: body['resulting_record_id'] as String?,
         resultingNextDueDate: _parseUtc(body['resulting_next_due_date']),
+        conflictReason: body['conflict_reason'] as String?,
+      );
+    } on Object catch (error) {
+      throw SupabaseFailure.from(error);
+    }
+  }
+
+  Future<MaintenanceUndoResult> undoMaintenanceCompletion({
+    required String payloadJson,
+    required String userId,
+    required String deviceId,
+  }) async {
+    try {
+      final decoded = jsonDecode(payloadJson);
+      if (decoded is! Map) {
+        throw const FormatException(
+          'The queued maintenance undo payload is invalid.',
+        );
+      }
+      final operation = Map<String, dynamic>.from(decoded);
+      final Object? response = await _withDataTimeout<Object?>(
+        () async => _client.rpc<Map<String, dynamic>>(
+          'undo_maintenance_completion',
+          params: {'p_operation': operation, 'p_device_id': deviceId},
+        ),
+      );
+      if (response is! Map) {
+        throw const FormatException(
+          'The maintenance undo RPC returned an invalid result.',
+        );
+      }
+      final body = Map<String, dynamic>.from(response);
+      final status = _maintenanceCompletionStatus(body['status']);
+      final rawPlan = body['plan'];
+      final planData = rawPlan is Map
+          ? Map<String, dynamic>.from(rawPlan)
+          : null;
+      if (planData != null && planData['user_id'] != userId) {
+        throw const SupabaseFailure(
+          kind: SupabaseFailureKind.permissionDenied,
+          message: 'The cloud returned maintenance data for another account.',
+        );
+      }
+      if ((status == MaintenanceCompletionStatus.applied ||
+              status == MaintenanceCompletionStatus.alreadyApplied) &&
+          planData == null) {
+        throw const FormatException(
+          'The maintenance undo RPC omitted the canonical plan.',
+        );
+      }
+      return MaintenanceUndoResult(
+        status: status,
+        retryable: body['retryable'] == true,
+        plan: planData == null
+            ? null
+            : SyncRecord.fromRemote(
+                syncSpecByEntity['maintenance_plan']!,
+                planData,
+              ),
+        rewound: body['rewound'] == true,
         conflictReason: body['conflict_reason'] as String?,
       );
     } on Object catch (error) {

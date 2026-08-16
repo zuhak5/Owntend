@@ -918,6 +918,29 @@ class DriftMaintenanceRepository
     );
   }
 
+  Future<void> _reopenPlanInbox(String planId, DateTime now) async {
+    final latest =
+        await (db.select(db.inboxNotifications)
+              ..where(
+                (row) => row.planId.equals(planId) & row.kind.equals('task'),
+              )
+              ..orderBy([
+                (row) => OrderingTerm.desc(row.createdAt),
+                (row) => OrderingTerm.desc(row.id),
+              ])
+              ..limit(1))
+            .getSingleOrNull();
+    if (latest == null) return;
+    await (db.update(
+      db.inboxNotifications,
+    )..where((row) => row.id.equals(latest.id))).write(
+      InboxNotificationsCompanion(
+        readAt: const Value(null),
+        updatedAt: Value(now),
+      ),
+    );
+  }
+
   Future<void> _recordTaskSystemNote({
     required String planId,
     required String title,
