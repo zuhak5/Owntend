@@ -4,7 +4,7 @@ create extension if not exists pgtap with schema extensions;
 set local role postgres;
 set search_path = public, extensions, pg_catalog;
 
-select extensions.plan(13);
+select extensions.plan(14);
 
 -- 1. Table and Function Existence Checks
 select extensions.has_table('public', 'server_change_feed', 'server_change_feed table exists');
@@ -33,6 +33,24 @@ prepare create_user_b as insert into auth.users (id, email) values ('00000000-00
 execute create_user_a;
 execute create_user_b;
 
+-- Auth initialization creates a profile, and profiles participate in the
+-- canonical owner-scoped change feed.
+select extensions.results_eq(
+  $$ select entity_type, record_id, op_type
+     from public.server_change_feed
+     where user_id = '00000000-0000-0000-0000-00000000000a'
+       and entity_type = 'profiles'
+       and record_id = '00000000-0000-0000-0000-00000000000a'
+     order by change_seq asc
+     limit 1 $$,
+  $$ values (
+    'profiles',
+    '00000000-0000-0000-0000-00000000000a',
+    'INSERT'
+  ) $$,
+  'Auth user initialization logs profile INSERT change feed entry'
+);
+
 -- 2. Test Trigger on INSERT / UPDATE / DELETE
 set local role authenticated;
 set local "request.jwt.claims" = '{"sub": "00000000-0000-0000-0000-00000000000a"}';
@@ -50,7 +68,11 @@ values (
 );
 
 select extensions.results_eq(
-  $$ select entity_type, record_id, op_type from public.server_change_feed where user_id = '00000000-0000-0000-0000-00000000000a' $$,
+  $$ select entity_type, record_id, op_type
+     from public.server_change_feed
+     where user_id = '00000000-0000-0000-0000-00000000000a'
+       and entity_type = 'areas'
+       and record_id = 'area-1' $$,
   $$ values ('areas', 'area-1', 'INSERT') $$,
   'INSERT on areas automatically logs INSERT change feed entry'
 );
@@ -78,9 +100,12 @@ select extensions.results_eq(
 
 -- 3. Check Monotonic Sequence Ordering
 select extensions.results_eq(
-  $$ select count(distinct change_seq) from public.server_change_feed where user_id = '00000000-0000-0000-0000-00000000000a' $$,
+  $$ select count(distinct change_seq)
+     from public.server_change_feed
+     where user_id = '00000000-0000-0000-0000-00000000000a'
+       and entity_type = 'areas' $$,
   $$ values (3::bigint) $$,
-  'All 3 operations created unique monotonic change sequences'
+  'All 3 area operations created unique monotonic change sequences'
 );
 
 -- 4. Check RLS Cross-User Isolation
@@ -101,15 +126,15 @@ values (
 
 select extensions.results_eq(
   $$ select count(*) from public.server_change_feed $$,
-  $$ values (1::bigint) $$,
-  'User B RLS policy permits reading only User B records'
+  $$ values (2::bigint) $$,
+  'User B RLS policy permits reading only User B profile and area records'
 );
 
 -- 5. Test Watermark Helper Function
 select extensions.results_eq(
   $$ select total_changes from public.get_user_change_feed_watermark('00000000-0000-0000-0000-00000000000b') $$,
-  $$ values (1::bigint) $$,
-  'Watermark helper returns correct change count for User B'
+  $$ values (2::bigint) $$,
+  'Watermark helper includes User B profile and area changes'
 );
 
 -- 6. The pre-launch baseline has no legacy backfill surface.

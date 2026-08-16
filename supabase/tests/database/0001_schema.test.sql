@@ -4,7 +4,7 @@ create extension if not exists pgtap with schema extensions;
 set local role postgres;
 set search_path = public, extensions, pg_catalog;
 
-select extensions.plan(31);
+select extensions.plan(35);
 
 select extensions.has_table('public', 'profiles', 'profiles table exists');
 select extensions.has_table('public', 'areas', 'areas table exists');
@@ -174,5 +174,47 @@ select extensions.is(
   'Auth registration creates exactly one profile row'
 );
 
+select extensions.has_column(
+  'public',
+  'profiles',
+  'revision',
+  'profiles expose sync revision'
+);
+
+select extensions.ok(
+  exists (
+    select 1
+    from information_schema.triggers
+    where trigger_schema = 'public'
+      and event_object_schema = 'public'
+      and event_object_table = 'profiles'
+      and trigger_name = 'trg_server_change_feed_profiles'
+  ),
+  'profiles publish to the server change feed'
+);
+
+select extensions.is(
+  (
+    select revision
+    from public.profiles
+    where user_id = '11111111-1111-1111-1111-111111111111'
+  ),
+  1::bigint,
+  'new profiles begin at revision 1'
+);
+
+update public.profiles
+set nickname = 'Revision Test'
+where user_id = '11111111-1111-1111-1111-111111111111';
+
+select extensions.is(
+  (
+    select revision
+    from public.profiles
+    where user_id = '11111111-1111-1111-1111-111111111111'
+  ),
+  2::bigint,
+  'profile updates increment revision'
+);
 select * from extensions.finish();
 rollback;
