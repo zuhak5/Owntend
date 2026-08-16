@@ -1746,6 +1746,10 @@ class SyncCoordinator implements CloudSyncRepository {
       await _localStore.applyRemoteRecords([remote]);
       await _localStore.markMutationSucceeded(mutation, remote);
       return;
+    } else if (hasClockSkew) {
+      await _localStore.applyRemoteRecords([remote]);
+      await _localStore.markMutationSucceeded(mutation, remote);
+      return;
     } else if (local.clientModifiedAt.isAfter(remote.clientModifiedAt) ||
         (local.clientModifiedAt.isAtSameMomentAs(remote.clientModifiedAt) &&
             local.originDeviceId.compareTo(remote.originDeviceId) > 0)) {

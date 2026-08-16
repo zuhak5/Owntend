@@ -2020,6 +2020,9 @@ Future<bool> completeTaskWithFeedback(
   if (result.duplicateIgnored) {
     return true;
   }
+  if (result.duplicateIgnored) {
+    return true;
+  }
   if (!context.mounted) {
     return true;
   }
