@@ -1143,6 +1143,13 @@ WHERE next_attempt_at IS NULL OR next_attempt_at <= ?
     }
 
     mutations.sort((a, b) {
+      if (a.entity == 'maintenance_undo' && b.entity != 'maintenance_undo') {
+        return -1;
+      }
+      if (b.entity == 'maintenance_undo' && a.entity != 'maintenance_undo') {
+        return 1;
+      }
+
       final aDelete = a.operation == 'delete';
       final bDelete = b.operation == 'delete';
       if (aDelete != bDelete) {
@@ -1160,8 +1167,6 @@ WHERE next_attempt_at IS NULL OR next_attempt_at <= ?
       if (changedComparison != 0) return changedComparison;
 
       if (a.entity == b.entity) return 0;
-      if (a.entity == 'maintenance_undo') return -1;
-      if (b.entity == 'maintenance_undo') return 1;
       if (a.entity == 'maintenance_completion') return -1;
       if (b.entity == 'maintenance_completion') return 1;
       return a.entity.compareTo(b.entity);

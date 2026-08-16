@@ -2637,6 +2637,16 @@ void main() {
         previousDueDate: completion.previousDueDate!,
         expectedCurrentNextDueDate: completion.nextDueDate!,
       );
+      final queuedAfterUndo = await store.pendingMutations();
+      expect(queuedAfterUndo.first.entity, 'maintenance_undo');
+      expect(
+        queuedAfterUndo.any(
+          (mutation) =>
+              mutation.entity == 'maintenance_record' &&
+              mutation.operation == 'delete',
+        ),
+        isTrue,
+      );
       gateway.maintenanceCompletionGate!.complete();
       await syncFuture;
       await _eventually(() async {
