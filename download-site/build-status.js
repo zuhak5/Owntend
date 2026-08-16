@@ -593,7 +593,7 @@ async function loadHistoricalModel(successfulRuns, options) {
   const jobs = [];
   for (const run of candidates) {
     try {
-      const job = await fetchRunJob(run.id, options);
+      const job = await fetchLiveBuildRunJobs(run.id, options);
       if (job) jobs.push(job);
     } catch {
       // A partial history still produces a conservative estimate.
@@ -876,7 +876,7 @@ function initializeBuildStatus() {
     controller?.abort();
     controller = new AbortController();
     try {
-      const job = await fetchRunJob(currentRun.id, { signal: controller.signal });
+      const job = await fetchLiveBuildRunJobs(currentRun.id, { signal: controller.signal });
       consecutiveFailures = 0;
       if (!job) {
         currentRun = null;
@@ -924,7 +924,7 @@ function initializeBuildStatus() {
       const successfulRuns = runs.filter(
         (run) => run?.status === "completed" && run?.conclusion === "success" && run?.head_branch === "main",
       );
-      const job = await fetchRunJob(activeRun.id, { signal: controller.signal });
+      const job = await fetchLiveBuildRunJobs(activeRun.id, { signal: controller.signal });
       const initialSnapshot = createBuildSnapshot(
         activeRun,
         job || { status: activeRun.status, steps: [] },
