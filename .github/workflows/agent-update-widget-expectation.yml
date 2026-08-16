@@ -1,0 +1,40 @@
+name: Agent task location test expectation
+
+on:
+  push:
+    branches:
+      - agent/fix-data-contract-and-arabic-localization
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out remediation branch
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          fetch-depth: 0
+
+      - name: Update task location expectation
+        run: python tool/agent_update_widget_expectation.py
+
+      - name: Remove temporary automation
+        run: |
+          rm tool/agent_update_widget_expectation.py
+          rm .github/workflows/agent-update-widget-expectation.yml
+
+      - name: Check patch hygiene
+        run: git diff --check
+
+      - name: Commit and push updated expectation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Update task location test expectation"
+          git push origin HEAD:${GITHUB_REF_NAME}
