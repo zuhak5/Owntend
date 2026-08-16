@@ -34,54 +34,30 @@ jobs:
 
       - name: Test home structure repository
         id: test_home_structure
-        continue-on-error: true
         shell: pwsh
         run: flutter test --no-pub --concurrency=1 --timeout 3m --reporter expanded test/home_structure_repository_test.dart
       - name: Test recurring completion precision
         id: test_recurring_completion
-        continue-on-error: true
+        if: always()
         shell: pwsh
         run: flutter test --no-pub --concurrency=1 --timeout 3m --reporter expanded test/recurring_completion_precision_test.dart
       - name: Test sync coordinator
         id: test_sync_coordinator
-        continue-on-error: true
+        if: always()
         shell: pwsh
         run: flutter test --no-pub --concurrency=1 --timeout 3m --reporter expanded test/sync_coordinator_test.dart
       - name: Test trash lifecycle and invariants
         id: test_trash_lifecycle
-        continue-on-error: true
+        if: always()
         shell: pwsh
         run: flutter test --no-pub --concurrency=1 --timeout 3m --reporter expanded test/trash_lifecycle_and_invariants_test.dart
       - name: Test widget regressions
         id: test_widget
-        continue-on-error: true
-        shell: pwsh
-        run: flutter test --no-pub --concurrency=1 --timeout 3m --reporter expanded test/widget_test.dart
-
-      - name: Run complete Flutter suite when changed tests pass
-        id: test_full_suite
-        if: >-
-          steps.test_home_structure.outcome == 'success' &&
-          steps.test_recurring_completion.outcome == 'success' &&
-          steps.test_sync_coordinator.outcome == 'success' &&
-          steps.test_trash_lifecycle.outcome == 'success' &&
-          steps.test_widget.outcome == 'success'
-        continue-on-error: true
-        shell: pwsh
-        run: flutter test --no-pub --concurrency=1 --timeout 3m --reporter expanded --exclude-tags production-config
-
-      - name: Fail when any diagnostic test fails
         if: always()
         shell: pwsh
-        run: |
-          $failed = @()
-          if ('${{ steps.test_home_structure.outcome }}' -eq 'failure') { $failed += 'test/home_structure_repository_test.dart' }
-          if ('${{ steps.test_recurring_completion.outcome }}' -eq 'failure') { $failed += 'test/recurring_completion_precision_test.dart' }
-          if ('${{ steps.test_sync_coordinator.outcome }}' -eq 'failure') { $failed += 'test/sync_coordinator_test.dart' }
-          if ('${{ steps.test_trash_lifecycle.outcome }}' -eq 'failure') { $failed += 'test/trash_lifecycle_and_invariants_test.dart' }
-          if ('${{ steps.test_widget.outcome }}' -eq 'failure') { $failed += 'test/widget_test.dart' }
-          if ('${{ steps.test_full_suite.outcome }}' -eq 'failure') { $failed += 'complete Flutter suite' }
-          if ($failed.Count -gt 0) {
-            Write-Host ('Failing diagnostics: ' + ($failed -join ', '))
-            exit 1
-          }
+        run: flutter test --no-pub --concurrency=1 --timeout 3m --reporter expanded test/widget_test.dart
+      - name: Run complete Flutter suite
+        id: test_full_suite
+        if: always()
+        shell: pwsh
+        run: flutter test --no-pub --concurrency=1 --timeout 3m --reporter expanded --exclude-tags production-config
