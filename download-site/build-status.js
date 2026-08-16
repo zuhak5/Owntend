@@ -1,7 +1,7 @@
 const REPOSITORY = "zuhak5/Owntend";
 const WORKFLOW_FILE = "build-production-android.yml";
 const JOB_NAME = "Build signed production APK";
-const API_BASE = "";
+const API_BASE = `https://api.github.com/repos/${REPOSITORY}`;
 const ACTIVE_POLL_MS = 90_000;
 const ACTIVE_HIDDEN_POLL_MS = 150_000;
 const IDLE_POLL_MS = 300_000;
@@ -789,7 +789,7 @@ function initializeBuildStatus() {
 
     runLink.href = snapshot.runUrl;
     runLink.textContent = snapshot.runNumber ? `Run #${snapshot.runNumber}` : "Workflow run";
-    runMeta.textContent = `${formatElapsedTime(snapshot.elapsedSeconds)} Â· Updated just now`;
+    runMeta.textContent = `${formatElapsedTime(snapshot.elapsedSeconds)} · Updated just now`;
     phaseName.textContent = snapshot.currentPhaseName;
     stepName.textContent = snapshot.currentStepName;
 
@@ -824,10 +824,10 @@ function initializeBuildStatus() {
     const basis = snapshot.historySampleCount
       ? `${snapshot.historySampleCount} recent successful ${
           snapshot.historySampleCount === 1 ? "build" : "builds"
-        } Â· ${snapshot.estimateConfidence} confidence`
+        } · ${snapshot.estimateConfidence} confidence`
       : "Estimate improves after more successful builds";
     etaBasis.textContent = QUEUED_STATUSES.has(snapshot.status)
-      ? `Typical duration after approval and runner start Â· ${basis}`
+      ? `Typical duration after approval and runner start · ${basis}`
       : basis;
     elapsed.textContent = formatElapsedTime(snapshot.elapsedSeconds);
     renderSteps(snapshot);
