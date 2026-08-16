@@ -1,0 +1,41 @@
+name: Update VersionDeck publication contract test
+
+on:
+  push:
+    branches:
+      - release/enable-versiondeck-1.0.0
+    paths:
+      - .github/workflows/agent-update-versiondeck-contract-test.yml
+
+permissions:
+  contents: write
+
+jobs:
+  update-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          fetch-depth: 0
+      - name: Replace obsolete containment-only assertion
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('tool/release-workflows.test.mjs')
+          text = path.read_text()
+          old = '''test('VersionDeck stays disabled while public publication is contained', async () => {\n  const workflow = await read('.github/workflows/deploy-download-site.yml');\n\n  assert.doesNotMatch(workflow, /^  push:/m);\n  assert.doesNotMatch(workflow, /^  release:/m);\n  assert.doesNotMatch(workflow, /^  workflow_run:/m);\n\n  assert.match(workflow, /publication_mode:/);\n  assert.match(workflow, /default: disabled/);\n  assert.doesNotMatch(workflow, /^\\s+- verified$/m);\n  assert.doesNotMatch(workflow, /^\\s+production_run_id:/m);\n\n  assert.match(\n    workflow,\n    /if: github\\.event_name == 'workflow_dispatch' && github\\.ref == 'refs\\/heads\\/main'/,\n  );\n\n  assert.match(workflow, /test "\\$publication_mode" = "disabled"/);\n  assert.match(workflow, /expected_publication_status=disabled/);\n  assert.doesNotMatch(workflow, /test "\\$run_name" = "Build Production APK"/);\n  assert.match(workflow, /manifest\\.schemaVersion !== 4/);\n});\n'''
+          new = '''test('VersionDeck exposes only reviewed disabled and verified publication modes', async () => {\n  const workflow = await read('.github/workflows/deploy-download-site.yml');\n\n  assert.doesNotMatch(workflow, /^  push:/m);\n  assert.doesNotMatch(workflow, /^  release:/m);\n  assert.doesNotMatch(workflow, /^  workflow_run:/m);\n\n  assert.match(workflow, /publication_mode:/);\n  assert.match(workflow, /default: disabled/);\n  assert.match(workflow, /^\\s+- disabled$/m);\n  assert.match(workflow, /^\\s+- verified$/m);\n  assert.doesNotMatch(workflow, /^\\s+production_run_id:/m);\n\n  assert.match(\n    workflow,\n    /if: github\\.event_name == 'workflow_dispatch' && github\\.ref == 'refs\\/heads\\/main'/,\n  );\n\n  assert.match(workflow, /disabled\\)\\s+[\\s\\S]*expected_publication_status="disabled"/);\n  assert.match(workflow, /verified\\)\\s+[\\s\\S]*expected_publication_status="active"/);\n  assert.match(\n    workflow,\n    /if: \\${{ steps\\.source\\.outputs\\.publication_mode == 'verified' }}/,\n  );\n  assert.match(workflow, /--publication-mode \\${{ steps\\.source\\.outputs\\.publication_mode }}/);\n  assert.doesNotMatch(workflow, /test "\\$run_name" = "Build Production APK"/);\n  assert.match(workflow, /manifest\\.schemaVersion !== 4/);\n});\n'''
+          if old not in text:
+              raise SystemExit('obsolete VersionDeck contract test not found exactly')
+          path.write_text(text.replace(old, new, 1))
+          PY
+          node --test tool/release-workflows.test.mjs
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add tool/release-workflows.test.mjs
+          git commit -m 'Update VersionDeck verified publication contract test'
+          git push origin HEAD:release/enable-versiondeck-1.0.0
