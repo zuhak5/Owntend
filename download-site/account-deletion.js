@@ -2,7 +2,10 @@ const PKCE_STORAGE_KEY = "owntend-account-deletion-pkce-verifier";
 const RECOVERY_STORAGE_KEY = "owntend-account-deletion-recovery-v1";
 const REQUIRED_CONFIRMATION = "delete-my-account";
 const EXPECTED_SUPABASE_ORIGIN = "https://qvdccazlbpvsrzkxunxo.supabase.co";
-const EXPECTED_DELETION_PAGE_URL = "https://owntend.app/account-deletion.html";
+const EXPECTED_DELETION_PAGE_URLS = Object.freeze([
+  "https://owntend.app/account-deletion.html",
+  "https://zuhak5.github.io/Owntend/account-deletion.html",
+]);
 
 export function validatePublicConfig(value) {
   if (!value || typeof value !== "object" || value.enabled !== true) {
@@ -12,7 +15,7 @@ export function validatePublicConfig(value) {
   const supabaseUrl = parseExactUrl(value.supabaseUrl, EXPECTED_SUPABASE_ORIGIN);
   const deletionPageUrl = parseExactUrl(
     value.accountDeletionSiteUrl,
-    EXPECTED_DELETION_PAGE_URL,
+    EXPECTED_DELETION_PAGE_URLS,
   );
   const publishableKey = value.supabasePublishableKey;
   if (!isPublicSupabaseKey(publishableKey)) {
@@ -576,7 +579,10 @@ async function readJson(response) {
 }
 
 function parseExactUrl(value, expected) {
-  if (typeof value !== "string" || value !== expected) {
+  const matchesExpected = Array.isArray(expected)
+    ? expected.includes(value)
+    : value === expected;
+  if (typeof value !== "string" || !matchesExpected) {
     throw new Error("unexpected_public_endpoint");
   }
   const parsed = new URL(value);
