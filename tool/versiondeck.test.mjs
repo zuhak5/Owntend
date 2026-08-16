@@ -14,6 +14,7 @@ import {
   selectProductionApk,
   validateVersionDeckControl,
 } from "./generate_versiondeck_manifest.mjs";
+import { buildVersionDeckApkProvenancePolicy } from "./versiondeck_apk_verifier.mjs";
 import { formatRelativeTime } from "../download-site/relative-time.js";
 import {
   VERSIONDECK_PACKAGE_NAME,
@@ -33,6 +34,26 @@ const SHA = "a".repeat(64);
 const COMMIT = "b".repeat(40);
 const NOW = Date.parse("2026-08-04T13:00:00Z");
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+test("VersionDeck provenance policy binds the APK to the canonical production rail", () => {
+  const apkName = "Owntend-1.0.0-build-1.apk";
+  const policy = buildVersionDeckApkProvenancePolicy({
+    commitSha: COMMIT,
+    apkAsset: { name: apkName },
+    sha256: SHA,
+  });
+
+  assert.equal(policy.artifactType, "apk");
+  assert.equal(policy.repository, VERSIONDECK_REPOSITORY);
+  assert.equal(policy.sourceDigest, COMMIT);
+  assert.equal(policy.sourceRef, "refs/heads/main");
+  assert.equal(policy.workflowPath, ".github/workflows/build-production-android.yml");
+  assert.equal(policy.workflowName, "Build Production APK");
+  assert.equal(policy.workflowTrigger, "workflow_dispatch");
+  assert.equal(policy.runnerEnvironment, "github-hosted");
+  assert.equal(policy.artifactName, apkName);
+  assert.equal(policy.artifactSha256, SHA);
+});
 
 function baseControl(overrides = {}) {
   return {
