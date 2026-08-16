@@ -1,0 +1,74 @@
+name: Agent remediation patch
+
+on:
+  push:
+    branches:
+      - agent/fix-data-contract-and-arabic-localization
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out remediation branch
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          fetch-depth: 0
+
+      - name: Tighten one-time patcher guards
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('tool/agent_remediation.py')
+          text = path.read_text(encoding='utf-8')
+
+          # Do not create an unused private formatter while fish breed is not
+          # currently rendered as a controlled detail field.
+          text = text.replace(
+              "String _fishBreedLabel(BuildContext context, String value) =>\n"
+              "    _fishTypeOptions.contains(value) ? _fishTypeLabel(context, value) : value;\n\n",
+              "",
+              1,
+          )
+
+          broad = (
+              '    "select extensions.is(\\n  (\\n'
+              '    public.create_task_with_point_debit(",\n'
+          )
+          unique = (
+              '    "select extensions.is(\\n  (\\n'
+              '    public.create_task_with_point_debit(\\n'
+              '      jsonb_build_object(\\n'
+              "        'operation_id', '44444444-0000-0000-0000-000000000002',",\n'
+          )
+          if text.count(broad) != 1:
+              raise SystemExit(f'expected one SQL anchor declaration, found {text.count(broad)}')
+          text = text.replace(broad, unique, 1)
+          path.write_text(text, encoding='utf-8')
+
+      - name: Apply scoped remediation
+        run: python tool/agent_remediation.py
+
+      - name: Remove temporary automation
+        run: |
+          rm tool/agent_remediation.py
+          rm .github/workflows/agent-remediation.yml
+
+      - name: Check patch hygiene
+        run: |
+          git diff --check
+          git status --short
+
+      - name: Commit and push remediation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Fix data contract and Arabic localization"
+          git push origin HEAD:${GITHUB_REF_NAME}
