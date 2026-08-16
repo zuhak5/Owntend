@@ -1,0 +1,76 @@
+name: Prepare VersionDeck 1.0.0 verified publication
+
+on:
+  push:
+    branches:
+      - release/enable-versiondeck-1.0.0
+    paths:
+      - .github/workflows/agent-enable-versiondeck-release.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          fetch-depth: 0
+      - name: Enable verified VersionDeck publication
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          workflow = Path('.github/workflows/deploy-download-site.yml')
+          text = workflow.read_text()
+          old_dispatch = '''      publication_mode:\n        description: "Publish the explicit disabled manifest while production publication is contained"\n        required: true\n        default: disabled\n        type: choice\n        options:\n          - disabled\n'''
+          new_dispatch = '''      publication_mode:\n        description: "Choose disabled containment or independently verified release publication"\n        required: true\n        default: disabled\n        type: choice\n        options:\n          - disabled\n          - verified\n'''
+          if old_dispatch not in text:
+              raise SystemExit('VersionDeck dispatch block did not match expected source')
+          text = text.replace(old_dispatch, new_dispatch, 1)
+
+          old_source = '''          publication_mode="${{ inputs.publication_mode }}"\n          test "$publication_mode" = "disabled"\n          echo "- Production build run: public release publication is contained" >> "$GITHUB_STEP_SUMMARY"\n          echo "publication_mode=$publication_mode" >> "$GITHUB_OUTPUT"\n          echo "expected_publication_status=disabled" >> "$GITHUB_OUTPUT"\n          echo "- Publication mode: `'$publication_mode'`" >> "$GITHUB_STEP_SUMMARY"\n'''
+          new_source = '''          publication_mode="${{ inputs.publication_mode }}"\n          case "$publication_mode" in\n            disabled)\n              expected_publication_status="disabled"\n              echo "- Production build run: public release publication is contained" >> "$GITHUB_STEP_SUMMARY"\n              ;;\n            verified)\n              expected_publication_status="active"\n              echo "- Production build run: independently verified release publication is enabled" >> "$GITHUB_STEP_SUMMARY"\n              ;;\n            *)\n              echo "Unsupported publication mode: $publication_mode" >&2\n              exit 1\n              ;;\n          esac\n          echo "publication_mode=$publication_mode" >> "$GITHUB_OUTPUT"\n          echo "expected_publication_status=$expected_publication_status" >> "$GITHUB_OUTPUT"\n          echo "- Publication mode: `'$publication_mode'`" >> "$GITHUB_STEP_SUMMARY"\n'''
+          if old_source not in text:
+              raise SystemExit('VersionDeck publication source block did not match expected source')
+          workflow.write_text(text.replace(old_source, new_source, 1))
+
+          control_path = Path('tool/versiondeck-control.json')
+          control = json.loads(control_path.read_text())
+          control['publication'] = {
+              'status': 'active',
+              'reasonCode': None,
+              'message': None,
+              'updatedAt': None,
+          }
+          control_path.write_text(json.dumps(control, indent=2) + '\n')
+
+          runbook = Path('docs/versiondeck-release-runbook.md')
+          docs = runbook.read_text()
+          old_intro = '''> **Scoped containment status:** VersionDeck itself may be deployed with an\n> explicit disabled manifest, but verified APK download publication remains\n> contained. A successful signed APK evidence build does not automatically\n> authorize public downloads. The account-deletion surface is independent of\n> release publication. See the\n> [TASK-001 containment record](operations/production-containment.md).\n'''
+          new_intro = '''> **Release publication status:** VersionDeck supports explicit disabled containment\n> and independently verified publication. A successful signed APK evidence build\n> still does not automatically authorize public downloads: a matching GitHub\n> Release must pass the VersionDeck package, version, checksum, signer, source,\n> ancestry, and provenance checks before a download is exposed. The account-deletion\n> surface remains independent of release publication.\n'''
+          if old_intro not in docs:
+              raise SystemExit('Runbook containment introduction did not match expected source')
+          docs = docs.replace(old_intro, new_intro, 1)
+          old_clean = '''In the clean pre-release state, the checked-in control keeps publication disabled\nuntil the first official `1.0.0 (Build 1)` release is signed, verified, and published.\n'''
+          new_clean = '''For the initial `1.0.0 (Build 1)` publication, the checked-in control is active only\nafter the signed production artifact has been verified and is ready to be published as\na matching GitHub Release. Operators may still select disabled deployment mode to fail\nclosed without weakening release verification.\n'''
+          if old_clean not in docs:
+              raise SystemExit('Runbook pre-release paragraph did not match expected source')
+          runbook.write_text(docs.replace(old_clean, new_clean, 1))
+          PY
+
+          grep -A9 'publication_mode:' .github/workflows/deploy-download-site.yml
+          grep -A18 'publication_mode="' .github/workflows/deploy-download-site.yml
+          cat tool/versiondeck-control.json
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          rm .github/workflows/agent-enable-versiondeck-release.yml
+          git add .github/workflows/deploy-download-site.yml tool/versiondeck-control.json docs/versiondeck-release-runbook.md .github/workflows/agent-enable-versiondeck-release.yml
+          git diff --cached --check
+          git commit -m 'Enable verified VersionDeck publication for 1.0.0'
+          git push origin HEAD:release/enable-versiondeck-1.0.0
