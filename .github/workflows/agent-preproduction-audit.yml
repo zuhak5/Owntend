@@ -35,27 +35,27 @@ jobs:
       - name: Test home structure repository
         id: test_home_structure
         shell: pwsh
-        run: flutter test --no-pub --concurrency=1 --timeout 3m --reporter expanded test/home_structure_repository_test.dart
+        run: flutter test --no-pub --concurrency=1 --timeout 3m --reporter expanded --exclude-tags production-config test/home_structure_repository_test.dart
       - name: Test recurring completion precision
         id: test_recurring_completion
         if: always()
         shell: pwsh
-        run: flutter test --no-pub --concurrency=1 --timeout 3m --reporter expanded test/recurring_completion_precision_test.dart
+        run: flutter test --no-pub --concurrency=1 --timeout 3m --reporter expanded --exclude-tags production-config test/recurring_completion_precision_test.dart
       - name: Test sync coordinator
         id: test_sync_coordinator
         if: always()
         shell: pwsh
-        run: flutter test --no-pub --concurrency=1 --timeout 3m --reporter expanded test/sync_coordinator_test.dart
+        run: flutter test --no-pub --concurrency=1 --timeout 3m --reporter expanded --exclude-tags production-config test/sync_coordinator_test.dart
       - name: Test trash lifecycle and invariants
         id: test_trash_lifecycle
         if: always()
         shell: pwsh
-        run: flutter test --no-pub --concurrency=1 --timeout 3m --reporter expanded test/trash_lifecycle_and_invariants_test.dart
+        run: flutter test --no-pub --concurrency=1 --timeout 3m --reporter expanded --exclude-tags production-config test/trash_lifecycle_and_invariants_test.dart
       - name: Test widget regressions
         id: test_widget
         if: always()
         shell: pwsh
-        run: flutter test --no-pub --concurrency=1 --timeout 3m --reporter expanded test/widget_test.dart
+        run: flutter test --no-pub --concurrency=1 --timeout 3m --reporter expanded --exclude-tags production-config test/widget_test.dart
       - name: Run complete Flutter suite
         id: test_full_suite
         if: always()
