@@ -130,58 +130,55 @@ repo_path.write_text(text)
 
 test_path = Path('test/recurring_completion_precision_test.dart')
 test = test_path.read_text()
-old_test_open = """  test(
-    'rapid repeated completions are idempotent but a later completion is allowed',
-    () async {
+old_test_open = """  test('rapid repeated completions are idempotent but a later completion is allowed', () async {
 """
-new_test_open = """  test(
-    'rapid repeated completions use the action clock while a later action is allowed',
-    () async {
-      var actionNow = DateTime(2026, 8, 16, 14, 30, 10);
-      final guardedMaintenance = DriftMaintenanceRepository(
-        db,
-        now: () => actionNow,
-      );
+new_test_open = """  test('rapid repeated completions use the action clock while a later action is allowed', () async {
+    var actionNow = DateTime(2026, 8, 16, 14, 30, 10);
+    final guardedMaintenance = DriftMaintenanceRepository(
+      db,
+      now: () => actionNow,
+    );
 """
 if old_test_open not in test:
     raise SystemExit('rapid test opening did not match')
 test = test.replace(old_test_open, new_test_open, 1)
-# Limit replacements to the rapid test slice.
 start = test.index(new_test_open)
-end_marker = "\n  test('completion recurrence matrix anchors every supported unit to completedAt'"
+end_marker = """
+  test(
+    'completion recurrence matrix anchors every supported unit to completedAt',
+"""
 end = test.index(end_marker, start)
 slice_text = test[start:end]
 slice_text = slice_text.replace('maintenance.savePlan(', 'guardedMaintenance.savePlan(')
 slice_text = slice_text.replace('maintenance.completePlanResult(', 'guardedMaintenance.completePlanResult(')
 slice_text = slice_text.replace('maintenance.listRecordsForPlan(', 'guardedMaintenance.listRecordsForPlan(')
 slice_text = slice_text.replace('maintenance.getTask(', 'guardedMaintenance.getTask(')
-# Advance action clock independently before each duplicate invocation.
-old_loop = """      for (var i = 1; i <= 4; i++) {
-        final repeat = await guardedMaintenance.completePlanResult(
-          planId,
-          completedAt: firstAt.add(Duration(milliseconds: 500 * i)),
-          expectedNextDueDate: first.nextDueDate,
-        );
+old_loop = """    for (var i = 1; i <= 4; i++) {
+      final repeat = await guardedMaintenance.completePlanResult(
+        planId,
+        completedAt: firstAt.add(Duration(milliseconds: 500 * i)),
+        expectedNextDueDate: first.nextDueDate,
+      );
 """
-new_loop = """      for (var i = 1; i <= 4; i++) {
-        actionNow = firstAt.add(Duration(milliseconds: 500 * i));
-        final repeat = await guardedMaintenance.completePlanResult(
-          planId,
-          completedAt: i == 2
-              ? firstAt.add(const Duration(hours: 1))
-              : firstAt.add(Duration(milliseconds: 500 * i)),
-          expectedNextDueDate: first.nextDueDate,
-        );
+new_loop = """    for (var i = 1; i <= 4; i++) {
+      actionNow = firstAt.add(Duration(milliseconds: 500 * i));
+      final repeat = await guardedMaintenance.completePlanResult(
+        planId,
+        completedAt: i == 2
+            ? firstAt.add(const Duration(hours: 1))
+            : firstAt.add(Duration(milliseconds: 500 * i)),
+        expectedNextDueDate: first.nextDueDate,
+      );
 """
 if old_loop not in slice_text:
     raise SystemExit('rapid test loop did not match')
 slice_text = slice_text.replace(old_loop, new_loop, 1)
-old_after = """      final afterWindowAt = firstAt.add(const Duration(seconds: 5));
-      final second = await guardedMaintenance.completePlanResult(
+old_after = """    final afterWindowAt = firstAt.add(const Duration(seconds: 5));
+    final second = await guardedMaintenance.completePlanResult(
 """
-new_after = """      final afterWindowAt = firstAt.add(const Duration(seconds: 5));
-      actionNow = afterWindowAt;
-      final second = await guardedMaintenance.completePlanResult(
+new_after = """    final afterWindowAt = firstAt.add(const Duration(seconds: 5));
+    actionNow = afterWindowAt;
+    final second = await guardedMaintenance.completePlanResult(
 """
 if old_after not in slice_text:
     raise SystemExit('after-window test block did not match')
