@@ -250,3 +250,15 @@ test("VersionDeck target metadata uses the canonical pubspec version", () => {
     /X\.Y\.Z\+N/,
   );
 });
+
+
+test("live polling calls the exported production-job fetcher", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const source = await readFile(
+    new URL("../download-site/build-status.js", import.meta.url),
+    "utf8",
+  );
+  assert.doesNotMatch(source, /\bfetchRunJob\s*\(/);
+  assert.match(source, /fetchLiveBuildRunJobs\(currentRun\.id/);
+  assert.match(source, /fetchLiveBuildRunJobs\(activeRun\.id/);
+});
