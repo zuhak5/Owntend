@@ -56,6 +56,10 @@ Never disable RLS to resolve an application error.
 
 The pre-launch cloud schema follows the fields emitted by Flutter for device, pet, plant, and safety details plus maintenance-plan metadata. Cloud-only aliases remain intentional for maintenance plans (`description`, `interval_count`, `interval_unit`) and streaks (`longest_streak`, `last_completion_date`); `SyncEntitySpec.remoteRenames` is the executable client mapping. Direct client insertion of a new charged maintenance plan is denied. Authenticated reconciliation can only update a plan that the atomic creation or completion RPC already established.
 
+### Asset detail contract
+
+`device_details.consumable` is optional descriptive text end to end, matching the Flutter domain model and Drift schema. It stores user-entered consumable or replacement-part descriptions such as filters, batteries, and cartridges; it is not a Boolean capability flag. The atomic asset-creation RPC normalizes blank consumable text to `NULL` and persists the optional `assets.placement` field supplied by Flutter. Database regression coverage exercises this contract through `create_asset_with_point_debit`.
+
 ## RPCs
 
 Use RPCs when an operation must be atomic or server-authoritative, including point debit plus entity creation, revision-aware mutation, protected cleanup, or idempotent completion.

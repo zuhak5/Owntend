@@ -127,7 +127,7 @@ class TrashScreen extends ConsumerWidget {
                     _TrashRow(
                       icon: Symbols.task_alt_rounded,
                       title: task.plan.title,
-                      subtitle: '${task.asset.name} - ${task.room.name}',
+                      subtitle: '${task.asset.name} · ${task.room.name}',
                       onRestore: () => _restoreTask(context, ref, task),
                       onDeleteForever: () =>
                           _deleteTaskForever(context, ref, task),

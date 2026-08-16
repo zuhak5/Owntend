@@ -46,6 +46,9 @@ String _fishTypeLabel(BuildContext context, String value) => switch (value) {
   _ => value,
 };
 
+String _petSpeciesLabel(BuildContext context, String value) =>
+    _petTypeOptions.contains(value) ? _petTypeLabel(context, value) : value;
+
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 
 const _themeTransitionDuration = Duration(milliseconds: 620);
@@ -285,6 +288,18 @@ String _healthGroupLabel(BuildContext context, HealthGroup group) {
   };
 }
 
+String _categoryLabel(BuildContext context, Category category) {
+  return switch (category.id) {
+    'category_appliances' => context.l10n.appliances,
+    'category_safety' => context.l10n.safety,
+    'category_plants' => context.l10n.plants,
+    'category_pets' => context.l10n.pets,
+    'category_cleaning' => context.l10n.cleaning,
+    'category_general' => context.l10n.general,
+    _ => category.name,
+  };
+}
+
 String _recurrenceUnitLabel(BuildContext context, RecurrenceUnit unit) {
   return switch (unit) {
     RecurrenceUnit.hours => context.l10n.hours2,
@@ -296,18 +311,13 @@ String _recurrenceUnitLabel(BuildContext context, RecurrenceUnit unit) {
 }
 
 String _recurrenceLabel(BuildContext context, RecurrenceRule rule) {
-  final plural = rule.interval != 1;
-  final unit = switch (rule.unit) {
-    RecurrenceUnit.hours => plural ? context.l10n.hours2 : context.l10n.hour,
-    RecurrenceUnit.days => plural ? context.l10n.days2 : context.l10n.day,
-    RecurrenceUnit.weeks => plural ? context.l10n.weeks2 : context.l10n.week,
-    RecurrenceUnit.months => plural ? context.l10n.months2 : context.l10n.month,
-    RecurrenceUnit.years => plural ? context.l10n.years2 : context.l10n.year,
+  return switch (rule.unit) {
+    RecurrenceUnit.hours => context.l10n.recurrenceHours(rule.interval),
+    RecurrenceUnit.days => context.l10n.recurrenceDays(rule.interval),
+    RecurrenceUnit.weeks => context.l10n.recurrenceWeeks(rule.interval),
+    RecurrenceUnit.months => context.l10n.recurrenceMonths(rule.interval),
+    RecurrenceUnit.years => context.l10n.recurrenceYears(rule.interval),
   };
-  if (rule.interval == 1) {
-    return context.l10n.recurrenceEveryOne(unit);
-  }
-  return context.l10n.recurrenceEveryMany(rule.interval, unit);
 }
 
 Color _taskStatusColor(BuildContext context, TaskStatus status) {

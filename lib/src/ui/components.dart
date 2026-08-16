@@ -2408,7 +2408,7 @@ class _TaskCardState extends State<TaskCard>
     );
     final completed = task.status == TaskStatus.completed;
     final visuallyCompleted = completed || completionProgress > 0.52;
-    final locationText = '${task.asset.name} in ${task.room.name}';
+    final locationText = '${task.asset.name} · ${task.room.name}';
     final primaryMeta =
         '${_localizedCategoryName(context, task.category.name)} · ${_localizedPriorityLabel(context, task.plan.priority)}';
     final statusText = _statusText(context, task);

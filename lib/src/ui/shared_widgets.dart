@@ -103,7 +103,7 @@ class TaskTile extends ConsumerWidget {
           contentType: 'maintenance_plan.title',
         ),
         subtitle: Text(
-          '${task.asset.name} - ${_formatShortDate(context, task.plan.nextDueDate)} - ${_recurrenceLabel(context, task.plan.recurrence)}',
+          '${task.asset.name} · ${_formatShortDate(context, task.plan.nextDueDate)} · ${_recurrenceLabel(context, task.plan.recurrence)}',
         ),
         trailing: IconButton(
           tooltip: context.l10n.completeTask,

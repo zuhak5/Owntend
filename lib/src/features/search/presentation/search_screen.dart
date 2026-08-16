@@ -150,7 +150,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                     child: ListTile(
                       contentPadding: EdgeInsets.zero,
                       leading: Icon(_searchResultIcon(result.entityType)),
-                      title: Text(result.title),
+                      title: Text(_searchResultTitle(context, result)),
                       subtitle: Text(
                         _searchResultSubtitle(context, result),
                         maxLines: 2,
@@ -180,6 +180,16 @@ IconData _searchResultIcon(String type) {
   };
 }
 
+String _searchResultTitle(BuildContext context, SearchResult result) {
+  if (result.entityType == 'category') {
+    final category = appCategoryById[result.entityId];
+    if (category != null) {
+      return _categoryLabel(context, category);
+    }
+  }
+  return result.title;
+}
+
 String _searchResultSubtitle(BuildContext context, SearchResult result) {
   final type = switch (result.entityType) {
     'area' => context.l10n.area,
@@ -190,7 +200,7 @@ String _searchResultSubtitle(BuildContext context, SearchResult result) {
     'category' => context.l10n.category,
     _ => context.l10n.result,
   };
-  final snippet = result.snippet.trim();
+  final snippet = result.entityType == 'category' ? '' : result.snippet.trim();
   return snippet.isEmpty
       ? type
       : context.l10n.searchResultWithSnippet(type, snippet);
