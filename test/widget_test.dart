@@ -7065,10 +7065,15 @@ class FakeMaintenanceRepository implements MaintenanceRepository {
       expectedNextDueDate: expectedNextDueDate,
       notes: notes,
     );
+    final completed = completedAt ?? DateTime.now();
+    final previousDue = expectedNextDueDate ?? completed;
     return LocalMaintenanceCompletionResult(
       status: ok
           ? LocalMaintenanceCompletionStatus.applied
           : LocalMaintenanceCompletionStatus.occurrenceChanged,
+      operationId: ok ? 'fake-completion-$planId' : null,
+      previousDueDate: ok ? previousDue : null,
+      nextDueDate: ok ? previousDue.add(const Duration(days: 1)) : null,
     );
   }
 

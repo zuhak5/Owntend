@@ -218,6 +218,30 @@ class _StatefulGateway implements SupabaseSyncGateway {
     final expectedDue = DateTime.parse(
       payload['expected_next_due_date']! as String,
     ).toUtc();
+    final existingRecord = await fetch(
+      spec: recordSpec,
+      userId: userId,
+      deviceId: deviceId,
+      recordKey: recordKey,
+    );
+    if (existingRecord != null) {
+      final existingPlan = await fetch(
+        spec: planSpec,
+        userId: userId,
+        deviceId: deviceId,
+        recordKey: planValues['id']! as String,
+      );
+      if (existingPlan == null) {
+        throw StateError('The idempotent completion lost its plan.');
+      }
+      return MaintenanceCompletionResult(
+        status: MaintenanceCompletionStatus.alreadyApplied,
+        retryable: false,
+        plan: existingPlan,
+        record: existingRecord,
+      );
+    }
+
     final existingPlan = await fetch(
       spec: planSpec,
       userId: userId,
@@ -254,30 +278,6 @@ class _StatefulGateway implements SupabaseSyncGateway {
           );
         }
       }
-    }
-
-    final existingRecord = await fetch(
-      spec: recordSpec,
-      userId: userId,
-      deviceId: deviceId,
-      recordKey: recordKey,
-    );
-    if (existingRecord != null) {
-      final existingPlan = await fetch(
-        spec: planSpec,
-        userId: userId,
-        deviceId: deviceId,
-        recordKey: planValues['id']! as String,
-      );
-      if (existingPlan == null) {
-        throw StateError('The idempotent completion lost its plan.');
-      }
-      return MaintenanceCompletionResult(
-        status: MaintenanceCompletionStatus.alreadyApplied,
-        retryable: false,
-        plan: existingPlan,
-        record: existingRecord,
-      );
     }
 
     SyncRecord storeCanonical(SyncRecord local) {
@@ -2235,6 +2235,7 @@ void main() {
       await db.delete(db.syncOutbox).go();
 
       var repositoryNow = DateTime.utc(2026, 7, 1, 10);
+      var actionElapsed = Duration.zero;
 
       final maintenance = DriftMaintenanceRepository(
         db,
@@ -2243,6 +2244,7 @@ void main() {
           repositoryNow = repositoryNow.add(const Duration(hours: 1));
           return value;
         },
+        actionElapsed: () => actionElapsed,
       );
 
       final firstApplied = await maintenance.completePlan(
@@ -2252,6 +2254,7 @@ void main() {
       );
 
       expect(firstApplied, isTrue);
+      actionElapsed += const Duration(seconds: 5);
 
       final afterFirst =
           await (db.select(db.maintenancePlans)

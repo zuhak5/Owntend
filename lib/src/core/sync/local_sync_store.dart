@@ -1395,11 +1395,13 @@ WHERE entity = 'profile'
       );
     }
     final values = _toRemoteCompatible(spec, result.data);
+    final semanticModifiedAt =
+        _semanticClientModifiedAt(spec, values) ?? mutation.changedAt.toUtc();
     return SyncRecord(
       spec: spec,
       recordKey: mutation.recordKey,
       values: values,
-      clientModifiedAt: mutation.changedAt.toUtc(),
+      clientModifiedAt: semanticModifiedAt,
       originDeviceId: deviceId,
     );
   }
@@ -1410,7 +1412,7 @@ WHERE entity = 'profile'
   ) async {
     final row = await db
         .customSelect(
-          "SELECT value FROM settings WHERE key = 'profile' LIMIT 1",
+          "SELECT value, updated_at FROM settings WHERE key = 'profile' LIMIT 1",
         )
         .getSingleOrNull();
     if (row == null) {
@@ -1429,7 +1431,9 @@ WHERE entity = 'profile'
       spec: profileSyncSpec,
       recordKey: 'profile',
       values: {'nickname': decoded['nickname'] as String?},
-      clientModifiedAt: mutation.changedAt.toUtc(),
+      clientModifiedAt:
+          _dateTimeFromStorage(row.data['updated_at']) ??
+          mutation.changedAt.toUtc(),
       originDeviceId: deviceId,
     );
   }
@@ -2343,9 +2347,11 @@ ON CONFLICT(key) DO UPDATE SET
     required SyncRecord record,
   }) async {
     await db.transaction(() async {
-      await (db.delete(
-        db.maintenanceRecords,
-      )..where((row) => row.id.equals(mutation.operationId))).go();
+      await withOutboxSuppressed(() async {
+        await (db.delete(
+          db.maintenanceRecords,
+        )..where((row) => row.id.equals(mutation.operationId))).go();
+      });
       await applyRemoteRecords([plan, record]);
 
       await db
@@ -2838,6 +2844,26 @@ DateTime? _nullableDateValue(
   if (value == null) return null;
   if (value is DateTime) return value.toUtc();
   return DateTime.tryParse(value.toString())?.toUtc() ?? fallback;
+}
+
+DateTime? _dateTimeFromStorage(dynamic value) {
+  if (value == null) return null;
+  if (value is DateTime) return value.toUtc();
+  if (value is int) {
+    return DateTime.fromMillisecondsSinceEpoch(value * 1000, isUtc: true);
+  }
+  return DateTime.tryParse(value.toString())?.toUtc();
+}
+
+DateTime? _semanticClientModifiedAt(
+  SyncEntitySpec spec,
+  Map<String, dynamic> values,
+) {
+  final expression = spec.modifiedExpression.trim();
+  if (!RegExp(r'^[A-Za-z_][A-Za-z0-9_]*$').hasMatch(expression)) {
+    return null;
+  }
+  return _dateTimeFromStorage(values[expression]);
 }
 
 Map<String, dynamic> _toRemoteCompatible(

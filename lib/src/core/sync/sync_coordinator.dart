@@ -1373,10 +1373,10 @@ class SyncCoordinator implements CloudSyncRepository {
             if (trackHydration) {
               await _localStore.addHydrationUnits(1);
             }
-            // The undo acknowledgement removes any generic plan/delete guard
-            // rows that were already present in this in-memory batch. Re-read
-            // the outbox on the next sync pass rather than pushing stale rows.
-            return true;
+            // The undo acknowledgement removes generic guard rows that may
+            // already be present in this in-memory batch. Stop using this snapshot
+            // and re-read the outbox immediately.
+            break;
           } on _AccountScopeInactive {
             rethrow;
           } on Object catch (error) {
@@ -1545,7 +1545,10 @@ class SyncCoordinator implements CloudSyncRepository {
         }
         index++;
       }
-      if (mutations.length < 200) return pushedSomething;
+      if (mutations.length < 200) {
+        final remaining = await _localStore.pendingMutations();
+        if (remaining.isEmpty) return pushedSomething;
+      }
     }
   }
 

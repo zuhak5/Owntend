@@ -129,6 +129,42 @@ class DriftAssetRepository implements AssetRepository {
 
   final AppDatabase db;
 
+  Future<DateTime> _nextTrashCascadeTimestamp() async {
+    final usedSeconds = <int>{};
+    void remember(DateTime? value) {
+      if (value != null) {
+        usedSeconds.add(value.millisecondsSinceEpoch ~/ 1000);
+      }
+    }
+
+    for (final row in await (db.select(
+      db.areas,
+    )..where((row) => row.archivedAt.isNotNull())).get()) {
+      remember(row.archivedAt);
+    }
+    for (final row in await (db.select(
+      db.rooms,
+    )..where((row) => row.archivedAt.isNotNull())).get()) {
+      remember(row.archivedAt);
+    }
+    for (final row in await (db.select(
+      db.assets,
+    )..where((row) => row.archivedAt.isNotNull())).get()) {
+      remember(row.archivedAt);
+    }
+    for (final row in await (db.select(
+      db.maintenancePlans,
+    )..where((row) => row.archivedAt.isNotNull())).get()) {
+      remember(row.archivedAt);
+    }
+
+    var candidateSecond = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    while (usedSeconds.contains(candidateSecond)) {
+      candidateSecond += 1;
+    }
+    return DateTime.fromMillisecondsSinceEpoch(candidateSecond * 1000);
+  }
+
   @override
   Stream<List<domain.Area>> watchAreas() {
     final query = db.select(db.areas)
@@ -269,8 +305,8 @@ class DriftAssetRepository implements AssetRepository {
 
   @override
   Future<void> trashArea(String id) async {
-    final now = DateTime.now();
     await db.transaction(() async {
+      final now = await _nextTrashCascadeTimestamp();
       final area = await (db.select(
         db.areas,
       )..where((row) => row.id.equals(id))).getSingleOrNull();
@@ -519,8 +555,8 @@ class DriftAssetRepository implements AssetRepository {
 
   @override
   Future<void> trashRoom(String id) async {
-    final now = DateTime.now();
     await db.transaction(() async {
+      final now = await _nextTrashCascadeTimestamp();
       final room = await (db.select(
         db.rooms,
       )..where((row) => row.id.equals(id))).getSingleOrNull();
@@ -897,8 +933,8 @@ class DriftAssetRepository implements AssetRepository {
 
   @override
   Future<void> trashAsset(String id) async {
-    final now = DateTime.now();
     await db.transaction(() async {
+      final now = await _nextTrashCascadeTimestamp();
       final asset = await (db.select(
         db.assets,
       )..where((row) => row.id.equals(id))).getSingleOrNull();

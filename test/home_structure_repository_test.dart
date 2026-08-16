@@ -706,13 +706,15 @@ void main() {
 
       final active = (await maintenance.listTasks()).single;
       expect(active.plan.isEnabled, isTrue);
-      expect(active.plan.nextDueDate.isAfter(clock), isTrue);
-      expect(active.plan.nextDueDate, DateTime(2026, 6, 19, 12));
+      expect(active.plan.nextDueDate, originalDue);
       expect(await maintenance.listRecordsForPlan(planId), hasLength(1));
     });
 
     test('skips and postpones one task occurrence with reason notes', () async {
-      final maintenance = DriftMaintenanceRepository(db);
+      final maintenance = DriftMaintenanceRepository(
+        db,
+        now: () => DateTime(2026, 1, 1, 8),
+      );
       final categories = await repo.listCategories();
       final roomId = await repo.saveRoom(
         areaId: 'area_first_floor',
@@ -1671,13 +1673,35 @@ void main() {
     test(
       'task dedupe reopens read reminder and digest dedupe updates counts',
       () async {
+        final roomId = await repo.saveRoom(
+          areaId: 'area_first_floor',
+          name: 'Dedupe room',
+        );
+        final categoryId = (await repo.listCategories()).first.id;
+        final assetId = await repo.saveAsset(
+          name: 'Dedupe asset',
+          categoryId: categoryId,
+          roomId: roomId,
+        );
+        final planId = await DriftMaintenanceRepository(db).savePlan(
+          id: 'plan-dedupe',
+          assetId: assetId,
+          title: 'Dedupe task',
+          recurrence: const RecurrenceRule(
+            interval: 1,
+            unit: RecurrenceUnit.days,
+          ),
+          priority: PriorityLevel.medium,
+          nextDueDate: DateTime(2026, 8, 17, 9),
+          healthGroup: HealthGroup.other,
+        );
         final inbox = DriftNotificationInboxRepository(db);
         await inbox.createNotification(
           title: 'Task due',
           body: 'Open Owntend',
           kind: 'task',
-          route: '/maintenance/plan-dedupe',
-          planId: 'plan-dedupe',
+          route: '/maintenance/$planId',
+          planId: planId,
         );
         final first = (await inbox.listNotifications()).single;
         await inbox.markRead(first.id);

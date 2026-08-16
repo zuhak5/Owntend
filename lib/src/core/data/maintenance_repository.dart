@@ -326,7 +326,7 @@ class DriftMaintenanceRepository
       notes: notes,
       expectedNextDueDate: expectedNextDueDate,
     );
-    return result.isApplied;
+    return result.isApplied && !result.duplicateIgnored;
   }
 
   DateTime canonicalSyncSecond(DateTime value) {
