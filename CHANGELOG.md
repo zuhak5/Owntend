@@ -10,7 +10,7 @@ The current application version is defined only in `pubspec.yaml`. Released vers
 
 - Aligned the Supabase device `consumable` field with Flutter's optional descriptive-text contract so normal filter, battery, and cartridge descriptions no longer fail asset creation.
 - Preserved item `placement` during the server-authoritative asset-creation RPC.
-- Localized built-in categories and pet species at presentation boundaries, corrected Arabic recurrence/reminder/duration grammar across detail and task-card surfaces, and removed English-only relationship fragments from Arabic UI surfaces.
+- Centralized built-in category and recurrence presentation, localized built-in pet species, corrected Arabic recurrence/reminder/duration grammar across detail and task-card surfaces, and removed English-only relationship fragments from Arabic UI surfaces.
 - Added Arabic search aliases for controlled categories, room/item types, power sources, sunlight, and built-in pet/fish values while keeping canonical stored values locale-neutral.
 
 ## 1.0.0 (Build 1) — 2026-08-15
