@@ -13,6 +13,7 @@ import {
   phaseForStepName,
   selectActiveRun,
 } from "../download-site/build-status.js";
+import { parseVersionDeckTarget } from "./build_versiondeck_site.mjs";
 
 const START = Date.parse("2026-08-04T12:00:00Z");
 
@@ -38,7 +39,7 @@ function successfulJob(multiplier = 1) {
       step("Check out repository", 1, 10 * multiplier),
       step("Build and test production APK", 11, 300 * multiplier),
       step("Verify package, version, checksum, and signer", 311, 60 * multiplier),
-      step("Publish GitHub Release", 371, 30 * multiplier),
+      step("Upload production APK handoff", 371, 30 * multiplier),
       step("Post Check out repository", 401, 1),
       step("Complete job", 402, 1),
     ],
@@ -83,7 +84,7 @@ test("workflow steps are grouped into readable phases", () => {
   assert.equal(phaseForStepName("Check out repository").label, "Preparing the build");
   assert.equal(phaseForStepName("Build and test production APK").label, "Building and testing the APK");
   assert.equal(phaseForStepName("Verify package, version, checksum, and signer").label, "Verifying the release");
-  assert.equal(phaseForStepName("Publish GitHub Release").label, "Packaging verified build evidence");
+  assert.equal(phaseForStepName("Upload production APK handoff").label, "Packaging verified build evidence");
   assert.equal(phaseForStepName("Remove temporary credentials").label, "Finishing securely");
 });
 
@@ -126,7 +127,7 @@ test("snapshot reports step position, readable phase, context, and a history-bas
       step("Check out repository", 0, 10),
       step("Build and test production APK", 10, 0, "in_progress"),
       { name: "Verify package, version, checksum, and signer", status: "queued", conclusion: null, started_at: null, completed_at: null },
-      { name: "Publish GitHub Release", status: "queued", conclusion: null, started_at: null, completed_at: null },
+      { name: "Upload production APK handoff", status: "queued", conclusion: null, started_at: null, completed_at: null },
     ],
   };
   const snapshot = createBuildSnapshot(run, job, history, { now: START + 70_000 });
@@ -158,7 +159,7 @@ test("failed snapshots retain the failed technical step and phase", () => {
     steps: [
       step("Check out repository", 0, 10),
       step("Verify package, version, checksum, and signer", 10, 20, "completed", "failure"),
-      { name: "Publish GitHub Release", status: "completed", conclusion: "skipped", started_at: null, completed_at: null },
+      { name: "Upload production APK handoff", status: "completed", conclusion: "skipped", started_at: null, completed_at: null },
     ],
   };
   const snapshot = createBuildSnapshot(run, job, null, { now: START + 60_000 });
@@ -209,6 +210,7 @@ test("remaining time formatting remains concise for announcements", () => {
   assert.equal(formatRemainingTime(600), "About 10 minutes");
   assert.equal(formatRemainingTime(5_400), "About 1 hr 30 min");
 });
+
 test("live build status uses the GitHub REST API origin", async () => {
   const { readFile } = await import("node:fs/promises");
   const source = await readFile(
@@ -222,4 +224,29 @@ test("live build status uses the GitHub REST API origin", async () => {
   );
   assert.doesNotMatch(source, /const API_BASE = "";/);
   assert.doesNotMatch(source, /Â·/);
+});
+
+test("VersionDeck page permits and exposes live GitHub build status", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const html = await readFile(
+    new URL("../download-site/index.html", import.meta.url),
+    "utf8",
+  );
+  assert.match(html, /id="build-progress-run-link"/);
+  assert.match(html, /connect-src 'self' https:\/\/api\.github\.com/);
+  assert.match(
+    html,
+    /href="https:\/\/github\.com\/zuhak5\/Owntend\/actions\/workflows\/build-production-android\.yml"/,
+  );
+});
+
+test("VersionDeck target metadata uses the canonical pubspec version", () => {
+  assert.deepEqual(parseVersionDeckTarget("name: owntend\nversion: 1.0.0+1\n"), {
+    version: "1.0.0",
+    build: 1,
+  });
+  assert.throws(
+    () => parseVersionDeckTarget("version: 1.0.0"),
+    /X\.Y\.Z\+N/,
+  );
 });
