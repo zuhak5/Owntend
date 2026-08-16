@@ -288,17 +288,8 @@ String _healthGroupLabel(BuildContext context, HealthGroup group) {
   };
 }
 
-String _categoryLabel(BuildContext context, Category category) {
-  return switch (category.id) {
-    'category_appliances' => context.l10n.appliances,
-    'category_safety' => context.l10n.safety,
-    'category_plants' => context.l10n.plants,
-    'category_pets' => context.l10n.pets,
-    'category_cleaning' => context.l10n.cleaning,
-    'category_general' => context.l10n.general,
-    _ => category.name,
-  };
-}
+String _categoryLabel(BuildContext context, Category category) =>
+    localizedCategoryLabel(context, category);
 
 String _recurrenceUnitLabel(BuildContext context, RecurrenceUnit unit) {
   return switch (unit) {
@@ -310,15 +301,8 @@ String _recurrenceUnitLabel(BuildContext context, RecurrenceUnit unit) {
   };
 }
 
-String _recurrenceLabel(BuildContext context, RecurrenceRule rule) {
-  return switch (rule.unit) {
-    RecurrenceUnit.hours => context.l10n.recurrenceHours(rule.interval),
-    RecurrenceUnit.days => context.l10n.recurrenceDays(rule.interval),
-    RecurrenceUnit.weeks => context.l10n.recurrenceWeeks(rule.interval),
-    RecurrenceUnit.months => context.l10n.recurrenceMonths(rule.interval),
-    RecurrenceUnit.years => context.l10n.recurrenceYears(rule.interval),
-  };
-}
+String _recurrenceLabel(BuildContext context, RecurrenceRule rule) =>
+    localizedRecurrenceLabel(context, rule);
 
 Color _taskStatusColor(BuildContext context, TaskStatus status) {
   return switch (status) {

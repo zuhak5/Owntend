@@ -37,7 +37,7 @@ void main() {
       ),
       category: Category(
         id: 'category_cleaning',
-        name: 'Cleaning',
+        name: 'Legacy category display name',
         healthGroup: HealthGroup.cleaning,
         iconName: 'cleaning_services',
         createdAt: now,
@@ -74,6 +74,7 @@ void main() {
     expect(find.textContaining(arabic.cleaning), findsOneWidget);
     expect(find.text(arabic.recurrenceDays(2)), findsOneWidget);
     expect(find.text('HEPA Purifier · المطبخ'), findsOneWidget);
+    expect(find.textContaining('Legacy category display name'), findsNothing);
     expect(find.textContaining('Cleaning'), findsNothing);
     expect(find.textContaining(' in '), findsNothing);
   });

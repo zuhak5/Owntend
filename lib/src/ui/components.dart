@@ -12,6 +12,7 @@ import '../core/domain/task_selectors.dart';
 import '../i18n/dynamic_text.dart';
 import '../core/utils/date_utils.dart' as hk_dates;
 import 'app_theme.dart';
+import 'domain_localization.dart';
 import 'feedback/feedback_coordinator.dart';
 import 'feedback/feedback_model.dart';
 
@@ -2410,7 +2411,7 @@ class _TaskCardState extends State<TaskCard>
     final visuallyCompleted = completed || completionProgress > 0.52;
     final locationText = '${task.asset.name} · ${task.room.name}';
     final primaryMeta =
-        '${_localizedCategoryName(context, task.category.name)} · ${_localizedPriorityLabel(context, task.plan.priority)}';
+        '${localizedCategoryLabel(context, task.category)} · ${_localizedPriorityLabel(context, task.plan.priority)}';
     final statusText = _statusText(context, task);
     final card = PremiumCard(
       margin:
@@ -3077,15 +3078,8 @@ String _durationText(BuildContext context, Duration duration) {
       : context.l10n.durationDays(days);
 }
 
-String _recurrenceText(BuildContext context, RecurrenceRule rule) {
-  return switch (rule.unit) {
-    RecurrenceUnit.hours => context.l10n.recurrenceHours(rule.interval),
-    RecurrenceUnit.days => context.l10n.recurrenceDays(rule.interval),
-    RecurrenceUnit.weeks => context.l10n.recurrenceWeeks(rule.interval),
-    RecurrenceUnit.months => context.l10n.recurrenceMonths(rule.interval),
-    RecurrenceUnit.years => context.l10n.recurrenceYears(rule.interval),
-  };
-}
+String _recurrenceText(BuildContext context, RecurrenceRule rule) =>
+    localizedRecurrenceLabel(context, rule);
 
 String _localizedPriorityLabel(BuildContext context, PriorityLevel priority) =>
     switch (priority) {
@@ -3093,17 +3087,6 @@ String _localizedPriorityLabel(BuildContext context, PriorityLevel priority) =>
       PriorityLevel.medium => context.l10n.medium,
       PriorityLevel.high => context.l10n.high,
       PriorityLevel.critical => context.l10n.critical,
-    };
-
-String _localizedCategoryName(BuildContext context, String name) =>
-    switch (name) {
-      'Safety' => context.l10n.safety,
-      'Pets' => context.l10n.pets,
-      'Appliances' => context.l10n.appliances,
-      'Plants' => context.l10n.plants,
-      'Cleaning' => context.l10n.cleaning,
-      'General' => context.l10n.general,
-      _ => name,
     };
 
 _TaskColors _taskColors(

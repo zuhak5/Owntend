@@ -119,7 +119,9 @@ void main() {
 
     final components = File('lib/src/ui/components.dart').readAsStringSync();
     expect(components, isNot(contains(" in \${task.room.name}")));
-    expect(components, contains('recurrenceDays(rule.interval)'));
+    expect(components, contains('localizedCategoryLabel(context, task.category)'));
+    expect(components, contains('localizedRecurrenceLabel(context, rule)'));
+    expect(components, isNot(contains('_localizedCategoryName')));
     expect(components, isNot(contains('recurrenceEveryMany(rule.interval')));
 
     final search = File(

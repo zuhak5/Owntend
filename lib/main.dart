@@ -74,6 +74,7 @@ import 'src/features/startup/presentation/startup_route_host.dart';
 import 'src/i18n/dynamic_text.dart';
 import 'src/core/utils/date_utils.dart' as hk_dates;
 import 'src/ui/app_theme.dart';
+import 'src/ui/domain_localization.dart';
 import 'src/ui/components.dart' as hk_ui;
 import 'src/ui/full_bleed_illustration_background.dart';
 import 'src/ui/full_canvas_system_ui.dart';
