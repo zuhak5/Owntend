@@ -1878,14 +1878,12 @@ class SyncCoordinator implements CloudSyncRepository {
     }
     final remote = result.canonical;
     final now = DateTime.now().toUtc();
-    final localFutureClock = remote != null &&
-        _isFutureClockSkew(local.clientModifiedAt, now);
-    final remoteFutureClock = remote != null &&
+    final localFutureClock =
+        remote != null && _isFutureClockSkew(local.clientModifiedAt, now);
+    final remoteFutureClock =
+        remote != null &&
         remote.serverUpdatedAt != null &&
-        _isFutureClockSkew(
-          remote.clientModifiedAt,
-          remote.serverUpdatedAt!,
-        );
+        _isFutureClockSkew(remote.clientModifiedAt, remote.serverUpdatedAt!);
     if (localFutureClock || remoteFutureClock) {
       _clockSkewConflicts++;
     }
