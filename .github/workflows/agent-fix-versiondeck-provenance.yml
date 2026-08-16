@@ -1,0 +1,77 @@
+name: Fix VersionDeck provenance verification
+
+on:
+  push:
+    branches:
+      - fix/versiondeck-provenance-verification
+    paths:
+      - .github/workflows/agent-fix-versiondeck-provenance.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          fetch-depth: 0
+      - name: Wire strict attestation verification into VersionDeck
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          verifier = Path('tool/versiondeck_apk_verifier.mjs')
+          text = verifier.read_text()
+          import_anchor = '''import {\n  VERSIONDECK_PACKAGE_NAME,\n  VERSIONDECK_REPOSITORY,\n} from "../download-site/manifest-schema.js";\n'''
+          import_replacement = import_anchor + '''import {\n  buildAndroidProvenancePolicy,\n  buildGhAttestationVerifyArgs,\n  verifyAttestationVerificationJson,\n} from "./provenance_policy.mjs";\n'''
+          if import_anchor not in text:
+              raise SystemExit('verifier import anchor missing')
+          text = text.replace(import_anchor, import_replacement, 1)
+
+          function_anchor = '''export async function verifyReleaseArtifact({ release, apkAsset, historicalDecision }, token) {\n'''
+          helper = '''export function buildVersionDeckApkProvenancePolicy({ commitSha, apkAsset, sha256 }) {\n  return buildAndroidProvenancePolicy({\n    artifactType: "apk",\n    repository: VERSIONDECK_REPOSITORY,\n    sourceDigest: commitSha,\n    sourceRef: "refs/heads/main",\n    workflowTrigger: "workflow_dispatch",\n    runnerEnvironment: "github-hosted",\n    sourceRepositoryVisibilityAtSigning: "public",\n    artifactName: apkAsset?.name || "",\n    artifactSha256: sha256,\n  });\n}\n\n'''
+          if function_anchor not in text:
+              raise SystemExit('verifyReleaseArtifact anchor missing')
+          text = text.replace(function_anchor, helper + function_anchor, 1)
+
+          commit_anchor = '''    const commitSha = await resolveReleaseCommit(release.tag_name, historicalDecision);\n\n    return {\n'''
+          commit_replacement = '''    const commitSha = await resolveReleaseCommit(release.tag_name, historicalDecision);\n    const provenancePolicy = buildVersionDeckApkProvenancePolicy({\n      commitSha,\n      apkAsset,\n      sha256,\n    });\n    const { stdout: attestationJson } = await runChecked(\n      "gh",\n      buildGhAttestationVerifyArgs(provenancePolicy, apkPath, { formatJson: true }),\n      {\n        env: { ...process.env, GH_TOKEN: token },\n      },\n    );\n    const provenance = verifyAttestationVerificationJson(attestationJson, provenancePolicy);\n\n    return {\n'''
+          if commit_anchor not in text:
+              raise SystemExit('release commit return anchor missing')
+          text = text.replace(commit_anchor, commit_replacement, 1)
+
+          attestation_anchor = '''      commitSha,\n      attestationVerified: true,\n'''
+          attestation_replacement = '''      commitSha,\n      attestationVerified: true,\n      provenance,\n'''
+          if attestation_anchor not in text:
+              raise SystemExit('attestation return anchor missing')
+          verifier.write_text(text.replace(attestation_anchor, attestation_replacement, 1))
+
+          test_path = Path('tool/versiondeck.test.mjs')
+          tests = test_path.read_text()
+          test_import_anchor = '''import { formatRelativeTime } from "../download-site/relative-time.js";\n'''
+          test_import = '''import { buildVersionDeckApkProvenancePolicy } from "./versiondeck_apk_verifier.mjs";\n'''
+          if test_import_anchor not in tests:
+              raise SystemExit('versiondeck test import anchor missing')
+          tests = tests.replace(test_import_anchor, test_import + test_import_anchor, 1)
+
+          constants_anchor = '''const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");\n\n'''
+          policy_test = '''test("VersionDeck provenance policy binds the APK to the canonical production rail", () => {\n  const apkName = "Owntend-1.0.0-build-1.apk";\n  const policy = buildVersionDeckApkProvenancePolicy({\n    commitSha: COMMIT,\n    apkAsset: { name: apkName },\n    sha256: SHA,\n  });\n\n  assert.equal(policy.artifactType, "apk");\n  assert.equal(policy.repository, VERSIONDECK_REPOSITORY);\n  assert.equal(policy.sourceDigest, COMMIT);\n  assert.equal(policy.sourceRef, "refs/heads/main");\n  assert.equal(policy.workflowPath, ".github/workflows/build-production-android.yml");\n  assert.equal(policy.workflowName, "Build Production APK");\n  assert.equal(policy.workflowTrigger, "workflow_dispatch");\n  assert.equal(policy.runnerEnvironment, "github-hosted");\n  assert.equal(policy.artifactName, apkName);\n  assert.equal(policy.artifactSha256, SHA);\n});\n\n'''
+          if constants_anchor not in tests:
+              raise SystemExit('versiondeck test constants anchor missing')
+          test_path.write_text(tests.replace(constants_anchor, constants_anchor + policy_test, 1))
+          PY
+
+          node --check tool/versiondeck_apk_verifier.mjs
+          node --test tool/provenance_policy.test.mjs tool/versiondeck.test.mjs
+          git diff --check
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          rm .github/workflows/agent-fix-versiondeck-provenance.yml
+          git add tool/versiondeck_apk_verifier.mjs tool/versiondeck.test.mjs .github/workflows/agent-fix-versiondeck-provenance.yml
+          git commit -m 'Verify VersionDeck release provenance attestation'
+          git push origin HEAD:fix/versiondeck-provenance-verification
