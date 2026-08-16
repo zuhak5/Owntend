@@ -20,13 +20,11 @@ jobs:
     timeout-minutes: 30
 
     permissions:
-      contents: write
+      contents: read
 
     steps:
       - name: Check out repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Set up Node
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
@@ -121,56 +119,6 @@ jobs:
 
       - name: Analyze
         run: flutter analyze --no-pub
-
-      - name: Regenerate Settings visual baselines
-        if: github.event_name == 'pull_request' && github.head_ref == 'fix/language-selector-routing'
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = "Stop"
-          flutter test `
-            test/widget_test.dart `
-            --no-pub `
-            --concurrency=1 `
-            --update-goldens `
-            --plain-name "production surfaces have stable English and Arabic visual baselines"
-
-          if ($LASTEXITCODE -ne 0) {
-            exit $LASTEXITCODE
-          }
-
-          $Expected = @(
-            "test/goldens/production_settings_en.png",
-            "test/goldens/production_settings_ar.png"
-          )
-          $Changed = @(git diff --name-only -- test/goldens)
-          $Unexpected = @($Changed | Where-Object { $Expected -notcontains $_ })
-          $Missing = @($Expected | Where-Object { $Changed -notcontains $_ })
-
-          if ($Unexpected.Count -gt 0) {
-            Write-Error "Golden regeneration changed unexpected files: $($Unexpected -join ', ')"
-            exit 1
-          }
-          if ($Missing.Count -gt 0) {
-            Write-Error "Expected Settings goldens were not regenerated: $($Missing -join ', ')"
-            exit 1
-          }
-
-          git add -- test/goldens/production_settings_en.png test/goldens/production_settings_ar.png
-          git diff --cached --check
-          if ($LASTEXITCODE -ne 0) {
-            exit $LASTEXITCODE
-          }
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "Regenerate Settings visual baselines"
-          if ($LASTEXITCODE -ne 0) {
-            exit $LASTEXITCODE
-          }
-          git push origin "HEAD:$env:GITHUB_HEAD_REF"
-          if ($LASTEXITCODE -ne 0) {
-            exit $LASTEXITCODE
-          }
 
       - name: Run tests
         shell: pwsh
