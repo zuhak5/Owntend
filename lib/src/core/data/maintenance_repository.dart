@@ -13,7 +13,8 @@ class DriftMaintenanceRepository
   final DateTime Function() _now;
   static const _completionDuplicateWindow = Duration(seconds: 4);
   final Map<String, DateTime> _lastCompletionActionAt = {};
-  final Map<String, LocalMaintenanceCompletionResult> _lastCompletionResult = {};
+  final Map<String, LocalMaintenanceCompletionResult> _lastCompletionResult =
+      {};
 
   @override
   Stream<List<domain.TaskItem>> watchTasks() {
