@@ -1635,6 +1635,85 @@ void main() {
       expect(streak.bestStreak, 0);
     });
 
+
+    test('task dedupe reopens read reminder and digest dedupe updates counts', () async {
+      final inbox = DriftNotificationInboxRepository(db);
+      await inbox.createNotification(
+        title: 'Task due',
+        body: 'Open Owntend',
+        kind: 'task',
+        route: '/maintenance/plan-dedupe',
+        planId: 'plan-dedupe',
+      );
+      final first = (await inbox.listNotifications()).single;
+      await inbox.markRead(first.id);
+      expect(await inbox.unreadCount(), 0);
+      await inbox.createNotification(
+        title: 'Task due',
+        body: 'Open Owntend',
+        kind: 'task',
+        route: '/maintenance/plan-dedupe',
+        planId: 'plan-dedupe',
+      );
+      expect(await inbox.unreadCount(), 1);
+      expect(await inbox.listNotifications(), hasLength(1));
+
+      await inbox.createNotification(
+        title: 'Daily digest',
+        body: '5 due today',
+        kind: 'digest',
+        route: '/maintenance',
+        messageArgs: const {'dueToday': 5},
+      );
+      await inbox.createNotification(
+        title: 'Daily digest',
+        body: '2 due today',
+        kind: 'digest',
+        route: '/maintenance',
+        messageArgs: const {'dueToday': 2},
+      );
+      final digest = (await inbox.listNotifications())
+          .firstWhere((item) => item.kind == 'digest');
+      expect(digest.body, '2 due today');
+      expect(digest.messageArgs['dueToday'], 2);
+    });
+
+    test('reminder lead must fit inside recurrence cadence', () async {
+      final maintenance = DriftMaintenanceRepository(db);
+      final roomId = await repo.saveRoom(
+        areaId: 'area_first_floor',
+        name: 'Reminder cadence room',
+      );
+      final categoryId = (await repo.listCategories()).first.id;
+      final assetId = await repo.saveAsset(
+        name: 'Reminder cadence asset',
+        categoryId: categoryId,
+        roomId: roomId,
+      );
+      await expectLater(
+        maintenance.savePlan(
+          assetId: assetId,
+          title: 'Daily impossible reminder',
+          recurrence: const RecurrenceRule(interval: 1, unit: RecurrenceUnit.days),
+          priority: PriorityLevel.medium,
+          nextDueDate: DateTime(2026, 8, 17, 9),
+          reminderDaysBefore: 2,
+          healthGroup: HealthGroup.other,
+        ),
+        throwsA(isA<MaintenancePlanValidationException>()),
+      );
+      final valid = await maintenance.savePlan(
+        assetId: assetId,
+        title: 'Weekly reminder',
+        recurrence: const RecurrenceRule(interval: 1, unit: RecurrenceUnit.weeks),
+        priority: PriorityLevel.medium,
+        nextDueDate: DateTime(2026, 8, 23, 9),
+        reminderDaysBefore: 2,
+        healthGroup: HealthGroup.other,
+      );
+      expect(valid, isNotEmpty);
+    });
+
   });
 }
 

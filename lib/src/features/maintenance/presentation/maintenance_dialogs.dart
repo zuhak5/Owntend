@@ -289,7 +289,7 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
     _unit = plan?.recurrence.unit ?? RecurrenceUnit.months;
     _priority = plan?.priority ?? PriorityLevel.medium;
     _healthGroup = plan?.healthGroup ?? HealthGroup.appliances;
-    _dueDate = plan?.nextDueDate ?? _defaultPlanDueDate();
+    _dueDate = plan?.nextDueDate ?? _nextDefaultPlanDueDate();
     if (plan == null) scheduleMicrotask(_restoreOfflineDraft);
   }
 
@@ -312,6 +312,13 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
   }
 
   void _onFormChanged() => setState(() {});
+
+  DateTime _nextDefaultPlanDueDate() {
+    final reminderHour =
+        ref.read(notificationPreferencesProvider).value?.reminderHour ??
+        const NotificationPreferences().reminderHour;
+    return _defaultPlanDueDate(reminderHour: reminderHour);
+  }
 
   String get _offlineDraftKey {
     final userId = ref.read(monetizationRepositoryProvider)?.currentUserId;
@@ -379,7 +386,7 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
           HealthGroup.appliances;
       _dueDate =
           DateTime.tryParse(text('due_date'))?.toLocal() ??
-          _defaultPlanDueDate();
+          _nextDefaultPlanDueDate();
     });
   }
 
@@ -825,7 +832,7 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
           _materialsController.clear();
           _reminderRecommendationController.clear();
           setState(() {
-            _dueDate = _defaultPlanDueDate();
+            _dueDate = _nextDefaultPlanDueDate();
           });
           hk_ui.showToast(context, content: Text(context.l10n.taskCreated));
         }
@@ -878,12 +885,12 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
   }
 }
 
-DateTime _defaultPlanDueDate() {
-  final now = DateTime.now();
-  return DateTime(
-    now.year,
-    now.month,
-    now.day,
-    const NotificationPreferences().reminderHour,
-  );
+DateTime _defaultPlanDueDate({
+  required int reminderHour,
+  DateTime? clock,
+}) {
+  final now = clock ?? DateTime.now();
+  final today = DateTime(now.year, now.month, now.day, reminderHour);
+  if (today.isAfter(now)) return today;
+  return DateTime(now.year, now.month, now.day + 1, reminderHour);
 }

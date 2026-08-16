@@ -194,6 +194,12 @@ class DriftMaintenanceRepository
         code: 'invalid_reminder',
       );
     }
+    if (!_reminderLeadFitsRecurrence(recurrence, reminderDaysBefore)) {
+      throw const MaintenancePlanValidationException(
+        'Reminder lead time must be shorter than the recurrence interval.',
+        code: 'invalid_reminder_cadence',
+      );
+    }
     final planId = id ?? _uuid.v7();
     final now = _now();
     await db.transaction(() async {
@@ -1056,4 +1062,21 @@ class DriftMaintenanceRepository
           (value) => taskListFingerprint(value as List<domain.TaskItem>),
     );
   }
+}
+
+
+bool _reminderLeadFitsRecurrence(
+  domain.RecurrenceRule recurrence,
+  int reminderDaysBefore,
+) {
+  if (reminderDaysBefore == 0) return true;
+  final leadHours = reminderDaysBefore * 24;
+  final minimumCycleHours = switch (recurrence.unit) {
+    domain.RecurrenceUnit.hours => recurrence.interval,
+    domain.RecurrenceUnit.days => recurrence.interval * 24,
+    domain.RecurrenceUnit.weeks => recurrence.interval * 7 * 24,
+    domain.RecurrenceUnit.months => recurrence.interval * 28 * 24,
+    domain.RecurrenceUnit.years => recurrence.interval * 365 * 24,
+  };
+  return leadHours < minimumCycleHours;
 }

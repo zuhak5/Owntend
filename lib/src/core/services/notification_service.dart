@@ -218,6 +218,7 @@ class OwntendNotificationScheduler implements NotificationScheduler {
   final void Function(String payload)? _onNotificationPayload;
   bool _initialized = false;
   Future<void>? _refreshInFlight;
+  bool _refreshRequestedWhileInFlight = false;
 
   static const _dueChannelId = 'owntend_due';
   static const _overdueChannelId = 'owntend_overdue';
@@ -320,14 +321,24 @@ class OwntendNotificationScheduler implements NotificationScheduler {
   @override
   Future<void> refreshSchedules() {
     final active = _refreshInFlight;
-    if (active != null) return active;
-    final refresh = _refreshSchedulesNow();
+    if (active != null) {
+      _refreshRequestedWhileInFlight = true;
+      return active;
+    }
+    final refresh = _runRefreshLoop();
     _refreshInFlight = refresh;
     return refresh.whenComplete(() {
       if (identical(_refreshInFlight, refresh)) {
         _refreshInFlight = null;
       }
     });
+  }
+
+  Future<void> _runRefreshLoop() async {
+    do {
+      _refreshRequestedWhileInFlight = false;
+      await _refreshSchedulesNow();
+    } while (_refreshRequestedWhileInFlight);
   }
 
   @override
@@ -356,6 +367,19 @@ class OwntendNotificationScheduler implements NotificationScheduler {
     }
     final tasks = await maintenanceRepository.listTasks();
     final now = DateTime.now();
+    final tasksById = {for (final task in tasks) task.plan.id: task};
+    final activeSnoozes = <String, ReminderScheduleEntry>{};
+    for (final entry in current) {
+      if (!entry.identity.startsWith('snooze:')) continue;
+      final planId = entry.identity.substring('snooze:'.length);
+      final task = tasksById[planId];
+      if (task == null) continue;
+      final currentRevision = task.plan.updatedAt.toUtc().toIso8601String();
+      if (entry.planRevision == currentRevision &&
+          entry.scheduledAt.isAfter(now.toUtc())) {
+        activeSnoozes[planId] = entry;
+      }
+    }
     final buckets = getTaskBuckets(tasks, now);
     if (preferences.allowsInbox) {
       await _refreshDueTaskInbox(buckets, preferences, now);
@@ -374,6 +398,12 @@ class OwntendNotificationScheduler implements NotificationScheduler {
     for (final task in tasks.take(128)) {
       if (scheduledCount >= _maxScheduledReminders) {
         break;
+      }
+      final activeSnooze = activeSnoozes[task.plan.id];
+      if (activeSnooze != null) {
+        desired.add(_DesiredReminder(activeSnooze, () async {}));
+        scheduledCount++;
+        continue;
       }
       final critical = task.plan.priority == PriorityLevel.critical;
       final reminderTime = _adjustForQuietHours(
@@ -435,13 +465,44 @@ class OwntendNotificationScheduler implements NotificationScheduler {
       preferences,
       critical: task.plan.priority == PriorityLevel.critical,
     );
+    final scheduleMode = await _taskScheduleMode(preferences);
+    final snoozeId = _stableNotificationId(
+      'snooze:$planId',
+      _snoozeIdBase,
+    );
     await _scheduleTaskReminder(
       task,
       scheduledFor: scheduledFor,
       preferences: preferences,
-      scheduleMode: await _taskScheduleMode(preferences),
+      scheduleMode: scheduleMode,
       snoozed: true,
     );
+    try {
+      await _plugin.cancel(
+        id: _stableNotificationId('task:$planId', _maintenanceIdBase),
+      );
+    } on Object {
+      await _plugin.cancel(id: snoozeId);
+      rethrow;
+    }
+    final current = await _scheduleStore.readAll();
+    final snapshot = _scheduleSnapshot(
+      identity: 'snooze:$planId',
+      notificationId: snoozeId,
+      planRevision: task.plan.updatedAt.toUtc().toIso8601String(),
+      scheduledFor: scheduledFor,
+      scheduleMode: scheduleMode,
+      contentVersion:
+          '${task.plan.title}|${task.plan.priority.name}|snoozed|'
+          '${preferences.privacyMode}',
+    );
+    await _scheduleStore.replaceAll([
+      for (final entry in current)
+        if (entry.identity != 'task:$planId' &&
+            entry.identity != 'snooze:$planId')
+          entry,
+      snapshot,
+    ]);
   }
 
   @override
