@@ -2031,9 +2031,17 @@ Future<bool> completeTaskWithFeedback(
     content: Text(context.l10n.taskCompleted),
     onUndo: () async {
       try {
-        await ref
-            .read(maintenanceRepositoryProvider)
-            .undoLastCompletion(task.plan.id, previousDueDate);
+        final completionId = result.operationId;
+        final completedNextDue = result.nextDueDate;
+        if (completionId == null || completedNextDue == null) {
+          throw StateError('Completion acknowledgement is missing undo identity.');
+        }
+        await ref.read(maintenanceRepositoryProvider).undoCompletion(
+          planId: task.plan.id,
+          completionId: completionId,
+          previousDueDate: result.previousDueDate ?? previousDueDate,
+          expectedCurrentNextDueDate: completedNextDue,
+        );
         try {
           await ref.read(streakServiceProvider).refresh(DateTime.now());
           await refreshNotificationSchedules(ref);

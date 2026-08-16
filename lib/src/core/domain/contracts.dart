@@ -154,7 +154,12 @@ abstract interface class MaintenanceRepository {
     String? notes,
     DateTime? expectedNextDueDate,
   });
-  Future<void> undoLastCompletion(String planId, DateTime previousDueDate);
+  Future<void> undoCompletion({
+    required String planId,
+    required String completionId,
+    required DateTime previousDueDate,
+    required DateTime expectedCurrentNextDueDate,
+  });
   Future<void> archivePlan(String planId);
   Future<void> restorePlan(String planId);
   Future<void> setTaskEnabled(String planId, bool enabled);

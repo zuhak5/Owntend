@@ -394,4 +394,173 @@ REVOKE ALL ON FUNCTION public.complete_maintenance_task(JSONB, TEXT)
 GRANT EXECUTE ON FUNCTION public.complete_maintenance_task(JSONB, TEXT)
   TO authenticated;
 
+
+CREATE OR REPLACE FUNCTION public.undo_maintenance_completion(
+  p_operation JSONB,
+  p_device_id TEXT
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  request_user UUID := auth.uid();
+  operation_id_value TEXT;
+  plan_id_value TEXT;
+  completion_id_value TEXT;
+  target_completed_at TIMESTAMPTZ;
+  previous_due_date_value TIMESTAMPTZ;
+  expected_current_due TIMESTAMPTZ;
+  current_plan public.maintenance_plans%ROWTYPE;
+  target_record public.maintenance_records%ROWTYPE;
+  latest_record public.maintenance_records%ROWTYPE;
+  has_newer BOOLEAN := false;
+  rewound_value BOOLEAN := false;
+  target_existed BOOLEAN := false;
+BEGIN
+  IF request_user IS NULL THEN
+    RETURN jsonb_build_object(
+      'status', 'unauthorized',
+      'retryable', false,
+      'conflict_reason', 'authentication_required'
+    );
+  END IF;
+  IF p_operation IS NULL
+     OR jsonb_typeof(p_operation) <> 'object'
+     OR COALESCE((p_operation ->> 'version')::integer, 0) <> 1
+     OR NULLIF(TRIM(COALESCE(p_device_id, '')), '') IS NULL THEN
+    RETURN jsonb_build_object(
+      'status', 'invalid',
+      'retryable', false,
+      'conflict_reason', 'invalid_payload'
+    );
+  END IF;
+
+  operation_id_value := NULLIF(TRIM(p_operation ->> 'operation_id'), '');
+  plan_id_value := NULLIF(TRIM(p_operation ->> 'plan_id'), '');
+  completion_id_value := NULLIF(TRIM(p_operation ->> 'completion_id'), '');
+  BEGIN
+    target_completed_at := date_trunc(
+      'second',
+      NULLIF(TRIM(p_operation ->> 'completion_completed_at'), '')::timestamptz
+    );
+    previous_due_date_value := date_trunc(
+      'second',
+      NULLIF(TRIM(p_operation ->> 'previous_due_date'), '')::timestamptz
+    );
+    expected_current_due := date_trunc(
+      'second',
+      NULLIF(TRIM(p_operation ->> 'expected_current_next_due_date'), '')::timestamptz
+    );
+  EXCEPTION WHEN OTHERS THEN
+    RETURN jsonb_build_object(
+      'status', 'invalid',
+      'retryable', false,
+      'conflict_reason', 'invalid_timestamp'
+    );
+  END;
+  IF operation_id_value IS NULL
+     OR plan_id_value IS NULL
+     OR completion_id_value IS NULL
+     OR target_completed_at IS NULL
+     OR previous_due_date_value IS NULL
+     OR expected_current_due IS NULL THEN
+    RETURN jsonb_build_object(
+      'status', 'invalid',
+      'retryable', false,
+      'conflict_reason', 'missing_fields'
+    );
+  END IF;
+
+  PERFORM pg_advisory_xact_lock(
+    hashtextextended(request_user::text || ':maintenance:' || plan_id_value, 0)
+  );
+
+  SELECT * INTO current_plan
+  FROM public.maintenance_plans
+  WHERE user_id = request_user
+    AND id = plan_id_value
+  FOR UPDATE;
+  IF current_plan.id IS NULL THEN
+    RETURN jsonb_build_object(
+      'status', 'invalid',
+      'retryable', false,
+      'conflict_reason', 'plan_missing'
+    );
+  END IF;
+
+  SELECT * INTO target_record
+  FROM public.maintenance_records
+  WHERE user_id = request_user
+    AND id = completion_id_value
+    AND plan_id = plan_id_value
+  FOR UPDATE;
+  target_existed := target_record.id IS NOT NULL;
+  IF target_existed THEN
+    DELETE FROM public.maintenance_records
+    WHERE user_id = request_user
+      AND id = completion_id_value;
+  END IF;
+
+  SELECT * INTO latest_record
+  FROM public.maintenance_records
+  WHERE user_id = request_user
+    AND plan_id = plan_id_value
+  ORDER BY completed_at DESC, id DESC
+  LIMIT 1;
+
+  has_newer := latest_record.id IS NOT NULL AND (
+    latest_record.completed_at > target_completed_at OR
+    (
+      latest_record.completed_at = target_completed_at AND
+      latest_record.id > completion_id_value
+    )
+  );
+
+  IF NOT has_newer
+     AND current_plan.next_due_date IS NOT DISTINCT FROM expected_current_due THEN
+    UPDATE public.maintenance_plans
+    SET next_due_date = previous_due_date_value,
+        updated_at = date_trunc('second', clock_timestamp()),
+        revision = current_plan.revision + 1
+    WHERE user_id = request_user
+      AND id = plan_id_value
+    RETURNING * INTO current_plan;
+    rewound_value := true;
+  END IF;
+
+  UPDATE public.notification_inbox
+  SET read_at = NULL,
+      updated_at = clock_timestamp()
+  WHERE user_id = request_user
+    AND id = (
+      SELECT id
+      FROM public.notification_inbox
+      WHERE user_id = request_user
+        AND plan_id = plan_id_value
+        AND kind = 'task'
+      ORDER BY created_at DESC, id DESC
+      LIMIT 1
+    );
+
+  RETURN jsonb_build_object(
+    'status', CASE
+      WHEN target_existed OR rewound_value THEN 'applied'
+      ELSE 'already_applied'
+    END,
+    'retryable', false,
+    'conflict_reason', null,
+    'rewound', rewound_value,
+    'plan', to_jsonb(current_plan)
+  );
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.undo_maintenance_completion(JSONB, TEXT)
+  FROM PUBLIC, anon, service_role;
+GRANT EXECUTE ON FUNCTION public.undo_maintenance_completion(JSONB, TEXT)
+  TO authenticated;
+
+
 COMMIT;

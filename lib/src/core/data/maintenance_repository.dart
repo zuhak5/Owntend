@@ -544,63 +544,102 @@ class DriftMaintenanceRepository
   }
 
   @override
-  Future<void> undoLastCompletion(
-    String planId,
-    DateTime previousDueDate,
-  ) async {
-    final latestRecord =
-        await (db.select(db.maintenanceRecords)
-              ..where((record) => record.planId.equals(planId))
-              ..orderBy([(record) => OrderingTerm.desc(record.completedAt)])
-              ..limit(1))
-            .getSingleOrNull();
-    if (latestRecord == null) {
-      return;
-    }
+  Future<void> undoCompletion({
+    required String planId,
+    required String completionId,
+    required DateTime previousDueDate,
+    required DateTime expectedCurrentNextDueDate,
+  }) async {
     final canonicalPreviousDue = canonicalSyncSecond(previousDueDate);
+    final canonicalExpectedCurrent = canonicalSyncSecond(
+      expectedCurrentNextDueDate,
+    );
     final now = canonicalSyncSecond(_now());
+
     await db.transaction(() async {
-      final outboxDeleted =
-          await (db.delete(db.syncOutbox)..where(
-                (row) =>
-                    row.entity.equals('maintenance_completion') &
-                    row.recordKey.equals(latestRecord.id),
+      final target =
+          await (db.select(db.maintenanceRecords)..where(
+                (record) =>
+                    record.id.equals(completionId) &
+                    record.planId.equals(planId),
               ))
-              .go();
-      if (outboxDeleted > 0) {
-        await (db.update(db.syncRuntime)..where((row) => row.id.equals(1)))
-            .write(const SyncRuntimeCompanion(suppressOutbox: Value(true)));
-        try {
-          await (db.delete(
-            db.maintenanceRecords,
-          )..where((record) => record.id.equals(latestRecord.id))).go();
-          await (db.update(
-            db.maintenancePlans,
-          )..where((plan) => plan.id.equals(planId))).write(
-            MaintenancePlansCompanion(
-              nextDueDate: Value(canonicalPreviousDue),
-              updatedAt: Value(now),
-            ),
+              .getSingleOrNull();
+      if (target == null) {
+        return;
+      }
+      final plan = await (db.select(
+        db.maintenancePlans,
+      )..where((row) => row.id.equals(planId))).getSingleOrNull();
+      if (plan == null) {
+        return;
+      }
+      final latest =
+          await (db.select(db.maintenanceRecords)
+                ..where((record) => record.planId.equals(planId))
+                ..orderBy([
+                  (record) => OrderingTerm.desc(record.completedAt),
+                  (record) => OrderingTerm.desc(record.id),
+                ])
+                ..limit(1))
+              .getSingleOrNull();
+      final shouldRewind =
+          latest?.id == completionId &&
+          canonicalSyncSecond(plan.nextDueDate).isAtSameMomentAs(
+            canonicalExpectedCurrent,
           );
-        } finally {
-          await (db.update(db.syncRuntime)..where((row) => row.id.equals(1)))
-              .write(const SyncRuntimeCompanion(suppressOutbox: Value(false)));
-        }
-      } else {
-        await (db.delete(
-          db.maintenanceRecords,
-        )..where((record) => record.id.equals(latestRecord.id))).go();
+
+      await (db.delete(db.syncOutbox)..where(
+            (row) =>
+                row.entity.equals('maintenance_completion') &
+                row.recordKey.equals(completionId),
+          ))
+          .go();
+
+      // Keep ordinary outbox triggers enabled here. If the completion RPC is
+      // already in flight, the exact-record delete protects local history and
+      // the plan mutation protects the local rewind until the guarded undo RPC
+      // reaches the server.
+      await (db.delete(
+        db.maintenanceRecords,
+      )..where((record) => record.id.equals(completionId))).go();
+      if (shouldRewind) {
         await (db.update(
           db.maintenancePlans,
-        )..where((plan) => plan.id.equals(planId))).write(
+        )..where((row) => row.id.equals(planId))).write(
           MaintenancePlansCompanion(
             nextDueDate: Value(canonicalPreviousDue),
             updatedAt: Value(now),
           ),
         );
       }
-      await _markPlanInboxRead(planId);
 
+      final syncAccount = await (db.select(
+        db.syncAccount,
+      )..where((row) => row.id.equals(1))).getSingleOrNull();
+      final payload = jsonEncode({
+        'version': 1,
+        'operation_id': 'undo:$completionId',
+        'plan_id': planId,
+        'completion_id': completionId,
+        'completion_completed_at': canonicalSyncSecond(
+          target.completedAt,
+        ).toUtc().toIso8601String(),
+        'previous_due_date': canonicalPreviousDue.toUtc().toIso8601String(),
+        'expected_current_next_due_date': canonicalExpectedCurrent
+            .toUtc()
+            .toIso8601String(),
+      });
+      await db.into(db.syncOutbox).insertOnConflictUpdate(
+        SyncOutboxCompanion.insert(
+          entity: 'maintenance_undo',
+          recordKey: completionId,
+          operation: 'execute',
+          changedAt: Value(now.subtract(const Duration(microseconds: 1))),
+          payloadJson: Value(payload),
+          userId: Value(syncAccount?.boundUserId),
+        ),
+      );
+      await _reopenPlanInbox(planId, now);
       await db
           .into(db.notificationReconciliationRequests)
           .insertOnConflictUpdate(
@@ -854,6 +893,29 @@ class DriftMaintenanceRepository
     await (db.update(db.inboxNotifications)
           ..where((row) => row.planId.equals(planId) & row.readAt.isNull()))
         .write(InboxNotificationsCompanion(readAt: Value(DateTime.now())));
+  }
+
+  Future<void> _reopenPlanInbox(String planId, DateTime now) async {
+    final latest =
+        await (db.select(db.inboxNotifications)
+              ..where(
+                (row) => row.planId.equals(planId) & row.kind.equals('task'),
+              )
+              ..orderBy([
+                (row) => OrderingTerm.desc(row.createdAt),
+                (row) => OrderingTerm.desc(row.id),
+              ])
+              ..limit(1))
+            .getSingleOrNull();
+    if (latest == null) return;
+    await (db.update(
+      db.inboxNotifications,
+    )..where((row) => row.id.equals(latest.id))).write(
+      InboxNotificationsCompanion(
+        readAt: const Value(null),
+        updatedAt: Value(now),
+      ),
+    );
   }
 
   Future<void> _recordTaskSystemNote({

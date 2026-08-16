@@ -1268,6 +1268,44 @@ class SyncCoordinator implements CloudSyncRepository {
           continue;
         }
 
+        if (mutation.entity == 'maintenance_undo') {
+          final payloadJson = mutation.payloadJson;
+          if (mutation.operation != 'execute' ||
+              payloadJson == null ||
+              payloadJson.trim().isEmpty) {
+            const failure = SupabaseFailure(
+              kind: SupabaseFailureKind.incompatibleSchema,
+              message:
+                  'A queued maintenance undo has an invalid payload. '
+                  'Update Owntend before synchronizing again.',
+            );
+            await _recordMutationFailure(mutation, failure);
+            throw failure;
+          }
+          try {
+            await _pushMaintenanceUndo(
+              mutation,
+              payloadJson: payloadJson,
+              userId: userId,
+              deviceId: deviceId,
+              scope: scope,
+            );
+            if (trackHydration) {
+              await _localStore.addHydrationUnits(1);
+            }
+            // The undo acknowledgement removes any generic plan/delete guard
+            // rows that were already present in this in-memory batch. Re-read
+            // the outbox on the next sync pass rather than pushing stale rows.
+            return true;
+          } on _AccountScopeInactive {
+            rethrow;
+          } on Object catch (error) {
+            final failure = SupabaseFailure.from(error);
+            await _recordMutationFailure(mutation, failure);
+            rethrow;
+          }
+        }
+
         if (mutation.operation == 'upsert') {
           final shadow = await _localStore.shadow(
             mutation.entity,
@@ -1429,6 +1467,41 @@ class SyncCoordinator implements CloudSyncRepository {
       }
       if (mutations.length < 200) return pushedSomething;
     }
+  }
+
+  Future<void> _pushMaintenanceUndo(
+    LocalSyncMutation mutation, {
+    required String payloadJson,
+    required String userId,
+    required String deviceId,
+    required _ActiveAccountScope scope,
+  }) async {
+    await _localStore.markMutationInFlight(mutation, userId: userId);
+    final result = await _remoteGateway.undoMaintenanceCompletion(
+      payloadJson: payloadJson,
+      userId: userId,
+      deviceId: deviceId,
+    );
+    await _ensureActiveAccountScope(scope);
+    if (result.acknowledged && result.plan != null) {
+      await _localStore.markMaintenanceUndoSucceeded(
+        mutation,
+        plan: result.plan!,
+        completionId: mutation.recordKey,
+      );
+      await _reconcileMaintenanceCompletionReminders(mutation);
+      return;
+    }
+    throw SupabaseFailure(
+      kind: result.status == MaintenanceCompletionStatus.unauthorized
+          ? SupabaseFailureKind.permissionDenied
+          : result.status == MaintenanceCompletionStatus.invalid
+          ? SupabaseFailureKind.incompatibleSchema
+          : SupabaseFailureKind.conflict,
+      message:
+          result.conflictReason ?? 'The completion undo could not be reconciled.',
+      retryable: result.retryable,
+    );
   }
 
   Future<void> _pushMaintenanceCompletion(

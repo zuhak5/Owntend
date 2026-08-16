@@ -1137,6 +1137,7 @@ WHERE next_attempt_at IS NULL OR next_attempt_at <= ?
     final maintenancePlanOrder = dependencyOrder['maintenance_plan'];
     if (maintenancePlanOrder != null) {
       dependencyOrder['maintenance_completion'] = maintenancePlanOrder;
+      dependencyOrder['maintenance_undo'] = maintenancePlanOrder;
     }
 
     mutations.sort((a, b) {
@@ -1157,6 +1158,8 @@ WHERE next_attempt_at IS NULL OR next_attempt_at <= ?
       if (changedComparison != 0) return changedComparison;
 
       if (a.entity == b.entity) return 0;
+      if (a.entity == 'maintenance_undo') return -1;
+      if (b.entity == 'maintenance_undo') return 1;
       if (a.entity == 'maintenance_completion') return -1;
       if (b.entity == 'maintenance_completion') return 1;
       return a.entity.compareTo(b.entity);
@@ -1876,6 +1879,44 @@ ON CONFLICT(key) DO UPDATE SET
     return db.allTables.firstWhere(
       (table) => table.actualTableName == tableName,
     );
+  }
+
+  Future<void> markMaintenanceUndoSucceeded(
+    LocalSyncMutation mutation, {
+    required SyncRecord plan,
+    required String completionId,
+  }) async {
+    if (mutation.entity != 'maintenance_undo' ||
+        plan.spec.entity != 'maintenance_plan' ||
+        mutation.recordKey != completionId) {
+      throw StateError('Invalid maintenance undo acknowledgement.');
+    }
+    await db.transaction(() async {
+      await (db.delete(db.syncOutbox)..where(
+            (row) =>
+                (row.entity.equals('maintenance_undo') &
+                    row.recordKey.equals(completionId)) |
+                (row.entity.equals('maintenance_plan') &
+                    row.recordKey.equals(plan.recordKey)) |
+                (row.entity.equals('maintenance_record') &
+                    row.recordKey.equals(completionId)),
+          ))
+          .go();
+      await withOutboxSuppressed(() async {
+        await _upsertLocal(plan);
+        await _saveShadow(plan);
+        await (db.delete(db.maintenanceRecords)..where(
+              (row) => row.id.equals(completionId),
+            ))
+            .go();
+        await (db.delete(db.syncShadows)..where(
+              (row) =>
+                  row.entity.equals('maintenance_record') &
+                  row.recordKey.equals(completionId),
+            ))
+            .go();
+      });
+    });
   }
 
   Future<void> markMaintenanceCompletionSucceeded(
