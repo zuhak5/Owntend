@@ -52,6 +52,8 @@ void main() {
       (result) => result.entityId == 'search-device',
     );
     expect(purifier.title, 'Purifier');
+    // A search_terms-only match may still return the row's display_body
+    // snippet; that snippet must contain only user-authored display text.
     expect(purifier.snippet, contains('Quiet'));
     expect(purifier.snippet, isNot(contains('جهاز')));
     expect(purifier.snippet, isNot(contains('device appliance')));
