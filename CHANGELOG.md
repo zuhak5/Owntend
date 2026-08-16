@@ -28,13 +28,7 @@ The current application version is defined only in `pubspec.yaml`. Released vers
   - Local backup and restore subsystem with ZIP archive integrity validation, SHA-256 manifest checks, and rollback safety.
   - Complete dual-language internationalization and RTL layout support for English and Arabic.
   - Privacy-preserving Sentry observability with strict PII scrubbing and symbolicated crash reporting.
-  - Google Play production release tooling, signed APK pipeline, immutable artifact manifests, and browser-hosted VersionDeck update distribution.
-  - Supabase-hosted Edge Functions for account deletion, AdMob SSV callback validation, and secure administrative operations.
-  - CI/CD validation for Flutter formatting, static analysis, unit/widget/integration tests, Supabase schema/database tests, Edge Function Deno tests, Android lint, dependency security, asset provenance, and release workflow contracts.
-
-### Security
-
-- Row Level Security is enabled across user-owned cloud tables with explicit least-privilege policies and service-role isolation for internal monetization and synchronization tables.
-- Public security-definer entry points are minimized in favor of invoker wrappers around private-schema privileged implementations.
-- Production secrets and platform identifiers are validated through explicit build configuration contracts rather than committed runtime credentials.
-- Dependency licensing, SBOM generation, third-party notices, asset provenance, and immutable GitHub Actions are enforced by repository validation tooling.
+  - First-class Empty Trash bulk purge capability with transactional cascading deletion, photo file unlinking, and UI confirmation.
+  - Hardened task recurrence calculation preventing backward next_due_date regression on early completions.
+  - Dual-state completion undo handling for both un-synced outbox mutations and synchronized cloud records.
+  - Enhanced account deletion data cleaner purging all reconciliation requests and FTS virtual tables.
