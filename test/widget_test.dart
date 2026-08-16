@@ -4128,7 +4128,7 @@ void main() {
       lessThan(tester.getTopLeft(find.text('Next 7 days')).dy),
     );
     expect(find.text('1 task'), findsAtLeastNWidgets(3));
-    expect(find.text('Fish in Kitchen'), findsWidgets);
+    expect(find.text('Fish · Kitchen'), findsWidgets);
     expect(find.text('Due now'), findsOneWidget);
     expect(find.text('Overdue by 1 day'), findsOneWidget);
 
