@@ -83,7 +83,7 @@ test("workflow steps are grouped into readable phases", () => {
   assert.equal(phaseForStepName("Check out repository").label, "Preparing the build");
   assert.equal(phaseForStepName("Build and test production APK").label, "Building and testing the APK");
   assert.equal(phaseForStepName("Verify package, version, checksum, and signer").label, "Verifying the release");
-  assert.equal(phaseForStepName("Publish GitHub Release").label, "Publishing the release");
+  assert.equal(phaseForStepName("Publish GitHub Release").label, "Packaging verified build evidence");
   assert.equal(phaseForStepName("Remove temporary credentials").label, "Finishing securely");
 });
 

@@ -415,7 +415,7 @@ function durationParts(seconds) {
 }
 
 export function formatRemainingTime(seconds) {
-  if (!Number.isFinite(seconds)) return "Calculatingâ€¦";
+  if (!Number.isFinite(seconds)) return "Calculating…";
   if (seconds < 60) return "Less than a minute";
   const minutes = Math.max(1, Math.round(seconds / 60));
   if (minutes < 60) return `About ${minutes} ${minutes === 1 ? "minute" : "minutes"}`;
@@ -427,7 +427,7 @@ export function formatRemainingTime(seconds) {
 }
 
 export function formatEtaRange(lowSeconds, highSeconds, fallbackSeconds) {
-  if (!Number.isFinite(fallbackSeconds)) return "Calculatingâ€¦";
+  if (!Number.isFinite(fallbackSeconds)) return "Calculating…";
   const low = durationParts(Number.isFinite(lowSeconds) ? lowSeconds : fallbackSeconds * 0.82);
   const high = durationParts(Number.isFinite(highSeconds) ? highSeconds : fallbackSeconds * 1.22);
   if (!low || !high) return formatRemainingTime(fallbackSeconds);
@@ -435,9 +435,9 @@ export function formatEtaRange(lowSeconds, highSeconds, fallbackSeconds) {
     if (Math.abs(Number(high.value) - Number(low.value)) <= 2) {
       return `About ${Math.max(1, Math.round(fallbackSeconds / 60))} min`;
     }
-    return `${low.value}â€“${high.value} min`;
+    return `${low.value}–${high.value} min`;
   }
-  return `${low.value}${low.unit ? ` ${low.unit}` : ""}â€“${high.value}${high.unit ? ` ${high.unit}` : ""}`;
+  return `${low.value}${low.unit ? ` ${low.unit}` : ""}–${high.value}${high.unit ? ` ${high.unit}` : ""}`;
 }
 
 export function formatElapsedTime(seconds) {
