@@ -64,6 +64,12 @@ const _localizedSearchAliases = <String, String>{
 String _localizedSearchAlias(String? value) =>
     value == null ? '' : (_localizedSearchAliases[value] ?? '');
 
+String _joinSearchParts(Iterable<String?> parts) => parts
+    .whereType<String>()
+    .map((part) => part.trim())
+    .where((part) => part.isNotEmpty)
+    .join(' ');
+
 class DriftSearchRepository implements SearchRepository {
   DriftSearchRepository(this.db);
 
@@ -82,7 +88,8 @@ class DriftSearchRepository implements SearchRepository {
           'area',
           area.id,
           area.name,
-          '${area.kind} ${_localizedSearchAlias(area.kind)}',
+          '',
+          _joinSearchParts([area.kind, _localizedSearchAlias(area.kind)]),
         );
       }
       for (final room in await (db.select(
@@ -93,7 +100,11 @@ class DriftSearchRepository implements SearchRepository {
           'room',
           room.id,
           room.name,
-          '$areaName ${room.roomType} ${_localizedSearchAlias(room.roomType)} ${room.notes ?? ''}',
+          _joinSearchParts([areaName, room.notes]),
+          _joinSearchParts([
+            room.roomType,
+            _localizedSearchAlias(room.roomType),
+          ]),
         );
       }
       for (final category in await db.select(db.categories).get()) {
@@ -101,30 +112,50 @@ class DriftSearchRepository implements SearchRepository {
           'category',
           category.id,
           category.name,
-          '${category.healthGroup} ${_localizedSearchAlias(category.id)} ${_localizedSearchAlias(category.healthGroup)}',
+          '',
+          _joinSearchParts([
+            category.name,
+            category.healthGroup,
+            _localizedSearchAlias(category.id),
+            _localizedSearchAlias(category.healthGroup),
+          ]),
         );
       }
       for (final asset in await (db.select(
         db.assets,
       )..where((asset) => asset.archivedAt.isNull())).get()) {
+        final detail = await _assetDetailSearchContent(asset);
         await _insert(
           'asset',
           asset.id,
           asset.name,
-          '${asset.assetType} ${_localizedSearchAlias(asset.assetType)} '
-              '${asset.placement ?? ''} ${asset.notes ?? ''} '
-              '${await _assetDetailSearchBody(asset)} '
-              '${await _assetTagSearchBody(asset.id)} '
-              '${await _assetPhotoSearchBody(asset.id)}',
+          _joinSearchParts([
+            asset.placement,
+            asset.notes,
+            detail.displayBody,
+            await _assetTagSearchBody(asset.id),
+            await _assetPhotoSearchBody(asset.id),
+          ]),
+          _joinSearchParts([
+            asset.assetType,
+            _localizedSearchAlias(asset.assetType),
+            detail.searchTerms,
+          ]),
         );
       }
       for (final tag in await db.select(db.tags).get()) {
-        await _insert('tag', tag.id, tag.name, '');
+        await _insert('tag', tag.id, tag.name, '', '');
       }
       for (final plan in await (db.select(
         db.maintenancePlans,
       )..where((plan) => plan.archivedAt.isNull())).get()) {
-        await _insert('plan', plan.id, plan.title, plan.instructions ?? '');
+        await _insert(
+          'plan',
+          plan.id,
+          plan.title,
+          plan.instructions ?? '',
+          '',
+        );
       }
     });
   }
@@ -159,15 +190,19 @@ class DriftSearchRepository implements SearchRepository {
     String type,
     String id,
     String title,
-    String body,
+    String displayBody,
+    String searchTerms,
   ) async {
     await db.customStatement(
-      'INSERT INTO search_index(entity_type, entity_id, title, body) VALUES (?, ?, ?, ?)',
-      [type, id, title, body],
+      'INSERT INTO search_index('
+      'entity_type, entity_id, title, display_body, search_terms'
+      ') VALUES (?, ?, ?, ?, ?)',
+      [type, id, title, displayBody, searchTerms],
     );
   }
 
-  Future<String> _assetDetailSearchBody(AssetRow asset) async {
+  Future<({String displayBody, String searchTerms})>
+  _assetDetailSearchContent(AssetRow asset) async {
     switch (_assetType(asset.assetType)) {
       case domain.AssetType.device:
         final row =
@@ -175,62 +210,77 @@ class DriftSearchRepository implements SearchRepository {
                   ..where((detail) => detail.assetId.equals(asset.id)))
                 .getSingleOrNull();
         if (row == null) {
-          return '';
+          return (displayBody: '', searchTerms: '');
         }
-        return [
-          row.brand,
-          row.model,
-          row.serialNumber,
-          row.powerSource,
-          _localizedSearchAlias(row.powerSource),
-          row.manualUrl,
-          row.consumable,
-        ].whereType<String>().join(' ');
+        return (
+          displayBody: _joinSearchParts([
+            row.brand,
+            row.model,
+            row.serialNumber,
+            row.manualUrl,
+            row.consumable,
+          ]),
+          searchTerms: _joinSearchParts([
+            row.powerSource,
+            _localizedSearchAlias(row.powerSource),
+          ]),
+        );
       case domain.AssetType.pet:
         final row =
             await (db.select(db.petDetailsTable)
                   ..where((detail) => detail.assetId.equals(asset.id)))
                 .getSingleOrNull();
         if (row == null) {
-          return '';
+          return (displayBody: '', searchTerms: '');
         }
-        return [
-          row.species,
-          _localizedSearchAlias(row.species),
-          row.breed,
-          _localizedSearchAlias(row.breed),
-          row.microchipId,
-          row.vetName,
-          row.vetPhone,
-          row.feedingNotes,
-          row.medicalNotes,
-        ].whereType<String>().join(' ');
+        return (
+          displayBody: _joinSearchParts([
+            row.microchipId,
+            row.vetName,
+            row.vetPhone,
+            row.feedingNotes,
+            row.medicalNotes,
+          ]),
+          searchTerms: _joinSearchParts([
+            row.species,
+            _localizedSearchAlias(row.species),
+            row.breed,
+            _localizedSearchAlias(row.breed),
+          ]),
+        );
       case domain.AssetType.plant:
         final row =
             await (db.select(db.plantDetailsTable)
                   ..where((detail) => detail.assetId.equals(asset.id)))
                 .getSingleOrNull();
         if (row == null) {
-          return '';
+          return (displayBody: '', searchTerms: '');
         }
-        return [
-          row.species,
-          row.sunlight,
-          _localizedSearchAlias(row.sunlight),
-          row.potSize,
-          row.toxicityNotes,
-        ].whereType<String>().join(' ');
+        return (
+          displayBody: _joinSearchParts([
+            row.species,
+            row.potSize,
+            row.toxicityNotes,
+          ]),
+          searchTerms: _joinSearchParts([
+            row.sunlight,
+            _localizedSearchAlias(row.sunlight),
+          ]),
+        );
       case domain.AssetType.safety:
         final row =
             await (db.select(db.safetyDetailsTable)
                   ..where((detail) => detail.assetId.equals(asset.id)))
                 .getSingleOrNull();
         if (row == null) {
-          return '';
+          return (displayBody: '', searchTerms: '');
         }
-        return [row.safetyType, row.batteryType].whereType<String>().join(' ');
+        return (
+          displayBody: _joinSearchParts([row.safetyType, row.batteryType]),
+          searchTerms: '',
+        );
       case domain.AssetType.general:
-        return '';
+        return (displayBody: '', searchTerms: '');
     }
   }
 
