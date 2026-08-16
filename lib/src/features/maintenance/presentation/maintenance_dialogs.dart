@@ -885,10 +885,7 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
   }
 }
 
-DateTime _defaultPlanDueDate({
-  required int reminderHour,
-  DateTime? clock,
-}) {
+DateTime _defaultPlanDueDate({required int reminderHour, DateTime? clock}) {
   final now = clock ?? DateTime.now();
   final today = DateTime(now.year, now.month, now.day, reminderHour);
   if (today.isAfter(now)) return today;

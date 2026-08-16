@@ -275,15 +275,18 @@ class DriftAssetRepository implements AssetRepository {
         db.areas,
       )..where((row) => row.id.equals(id))).getSingleOrNull();
       if (area == null || area.archivedAt != null) return;
-      final activeRooms = await (db.select(db.rooms)..where(
-            (room) => room.areaId.equals(id) & room.archivedAt.isNull(),
-          )).get();
+      final activeRooms =
+          await (db.select(db.rooms)..where(
+                (room) => room.areaId.equals(id) & room.archivedAt.isNull(),
+              ))
+              .get();
       final roomIds = activeRooms.map((row) => row.id).toList();
       final activeAssets = roomIds.isEmpty
           ? <AssetRow>[]
           : await (db.select(db.assets)..where(
-                (row) => row.roomId.isIn(roomIds) & row.archivedAt.isNull(),
-              )).get();
+                  (row) => row.roomId.isIn(roomIds) & row.archivedAt.isNull(),
+                ))
+                .get();
       final assetIds = activeAssets.map((row) => row.id).toList();
       await (db.update(db.areas)..where((row) => row.id.equals(id))).write(
         AreasCompanion(archivedAt: Value(now), updatedAt: Value(now)),
@@ -294,14 +297,20 @@ class DriftAssetRepository implements AssetRepository {
         );
       }
       if (assetIds.isNotEmpty) {
-        await (db.update(db.assets)..where((row) => row.id.isIn(assetIds))).write(
+        await (db.update(
+          db.assets,
+        )..where((row) => row.id.isIn(assetIds))).write(
           AssetsCompanion(archivedAt: Value(now), updatedAt: Value(now)),
         );
         await (db.update(db.maintenancePlans)..where(
               (plan) => plan.assetId.isIn(assetIds) & plan.archivedAt.isNull(),
-            )).write(
-          MaintenancePlansCompanion(archivedAt: Value(now), updatedAt: Value(now)),
-        );
+            ))
+            .write(
+              MaintenancePlansCompanion(
+                archivedAt: Value(now),
+                updatedAt: Value(now),
+              ),
+            );
       }
     });
   }
@@ -315,15 +324,21 @@ class DriftAssetRepository implements AssetRepository {
       )..where((row) => row.id.equals(id))).getSingleOrNull();
       final cascadeAt = area?.archivedAt;
       if (area == null || cascadeAt == null) return;
-      final cascadeRooms = await (db.select(db.rooms)..where(
-            (room) => room.areaId.equals(id) & room.archivedAt.equals(cascadeAt),
-          )).get();
+      final cascadeRooms =
+          await (db.select(db.rooms)..where(
+                (room) =>
+                    room.areaId.equals(id) & room.archivedAt.equals(cascadeAt),
+              ))
+              .get();
       final roomIds = cascadeRooms.map((row) => row.id).toList();
       final cascadeAssets = roomIds.isEmpty
           ? <AssetRow>[]
           : await (db.select(db.assets)..where(
-                (row) => row.roomId.isIn(roomIds) & row.archivedAt.equals(cascadeAt),
-              )).get();
+                  (row) =>
+                      row.roomId.isIn(roomIds) &
+                      row.archivedAt.equals(cascadeAt),
+                ))
+                .get();
       final assetIds = cascadeAssets.map((row) => row.id).toList();
       await (db.update(db.areas)..where((row) => row.id.equals(id))).write(
         AreasCompanion(archivedAt: const Value(null), updatedAt: Value(now)),
@@ -334,14 +349,22 @@ class DriftAssetRepository implements AssetRepository {
         );
       }
       if (assetIds.isNotEmpty) {
-        await (db.update(db.assets)..where((row) => row.id.isIn(assetIds))).write(
+        await (db.update(
+          db.assets,
+        )..where((row) => row.id.isIn(assetIds))).write(
           AssetsCompanion(archivedAt: const Value(null), updatedAt: Value(now)),
         );
         await (db.update(db.maintenancePlans)..where(
-              (plan) => plan.assetId.isIn(assetIds) & plan.archivedAt.equals(cascadeAt),
-            )).write(
-          MaintenancePlansCompanion(archivedAt: const Value(null), updatedAt: Value(now)),
-        );
+              (plan) =>
+                  plan.assetId.isIn(assetIds) &
+                  plan.archivedAt.equals(cascadeAt),
+            ))
+            .write(
+              MaintenancePlansCompanion(
+                archivedAt: const Value(null),
+                updatedAt: Value(now),
+              ),
+            );
       }
     });
   }
@@ -502,22 +525,28 @@ class DriftAssetRepository implements AssetRepository {
         db.rooms,
       )..where((row) => row.id.equals(id))).getSingleOrNull();
       if (room == null || room.archivedAt != null) return;
-      final activeAssets = await (db.select(db.assets)..where(
-            (row) => row.roomId.equals(id) & row.archivedAt.isNull(),
-          )).get();
+      final activeAssets = await (db.select(
+        db.assets,
+      )..where((row) => row.roomId.equals(id) & row.archivedAt.isNull())).get();
       final assetIds = activeAssets.map((row) => row.id).toList();
       await (db.update(db.rooms)..where((row) => row.id.equals(id))).write(
         RoomsCompanion(archivedAt: Value(now), updatedAt: Value(now)),
       );
       if (assetIds.isNotEmpty) {
-        await (db.update(db.assets)..where((row) => row.id.isIn(assetIds))).write(
+        await (db.update(
+          db.assets,
+        )..where((row) => row.id.isIn(assetIds))).write(
           AssetsCompanion(archivedAt: Value(now), updatedAt: Value(now)),
         );
         await (db.update(db.maintenancePlans)..where(
               (plan) => plan.assetId.isIn(assetIds) & plan.archivedAt.isNull(),
-            )).write(
-          MaintenancePlansCompanion(archivedAt: Value(now), updatedAt: Value(now)),
-        );
+            ))
+            .write(
+              MaintenancePlansCompanion(
+                archivedAt: Value(now),
+                updatedAt: Value(now),
+              ),
+            );
       }
     });
   }
@@ -537,22 +566,33 @@ class DriftAssetRepository implements AssetRepository {
       if (area == null || area.archivedAt != null) {
         throw StateError('Restore the parent area before restoring this room.');
       }
-      final cascadeAssets = await (db.select(db.assets)..where(
-            (row) => row.roomId.equals(id) & row.archivedAt.equals(cascadeAt),
-          )).get();
+      final cascadeAssets =
+          await (db.select(db.assets)..where(
+                (row) =>
+                    row.roomId.equals(id) & row.archivedAt.equals(cascadeAt),
+              ))
+              .get();
       final assetIds = cascadeAssets.map((row) => row.id).toList();
       await (db.update(db.rooms)..where((row) => row.id.equals(id))).write(
         RoomsCompanion(archivedAt: const Value(null), updatedAt: Value(now)),
       );
       if (assetIds.isNotEmpty) {
-        await (db.update(db.assets)..where((row) => row.id.isIn(assetIds))).write(
+        await (db.update(
+          db.assets,
+        )..where((row) => row.id.isIn(assetIds))).write(
           AssetsCompanion(archivedAt: const Value(null), updatedAt: Value(now)),
         );
         await (db.update(db.maintenancePlans)..where(
-              (plan) => plan.assetId.isIn(assetIds) & plan.archivedAt.equals(cascadeAt),
-            )).write(
-          MaintenancePlansCompanion(archivedAt: const Value(null), updatedAt: Value(now)),
-        );
+              (plan) =>
+                  plan.assetId.isIn(assetIds) &
+                  plan.archivedAt.equals(cascadeAt),
+            ))
+            .write(
+              MaintenancePlansCompanion(
+                archivedAt: const Value(null),
+                updatedAt: Value(now),
+              ),
+            );
       }
     });
   }
@@ -868,9 +908,13 @@ class DriftAssetRepository implements AssetRepository {
       );
       await (db.update(db.maintenancePlans)..where(
             (plan) => plan.assetId.equals(id) & plan.archivedAt.isNull(),
-          )).write(
-        MaintenancePlansCompanion(archivedAt: Value(now), updatedAt: Value(now)),
-      );
+          ))
+          .write(
+            MaintenancePlansCompanion(
+              archivedAt: Value(now),
+              updatedAt: Value(now),
+            ),
+          );
     });
   }
 
@@ -891,17 +935,27 @@ class DriftAssetRepository implements AssetRepository {
           : await (db.select(
               db.areas,
             )..where((row) => row.id.equals(room.areaId))).getSingleOrNull();
-      if (room == null || room.archivedAt != null || area == null || area.archivedAt != null) {
-        throw StateError('Restore the parent room and area before restoring this item.');
+      if (room == null ||
+          room.archivedAt != null ||
+          area == null ||
+          area.archivedAt != null) {
+        throw StateError(
+          'Restore the parent room and area before restoring this item.',
+        );
       }
       await (db.update(db.assets)..where((row) => row.id.equals(id))).write(
         AssetsCompanion(archivedAt: const Value(null), updatedAt: Value(now)),
       );
       await (db.update(db.maintenancePlans)..where(
-            (plan) => plan.assetId.equals(id) & plan.archivedAt.equals(cascadeAt),
-          )).write(
-        MaintenancePlansCompanion(archivedAt: const Value(null), updatedAt: Value(now)),
-      );
+            (plan) =>
+                plan.assetId.equals(id) & plan.archivedAt.equals(cascadeAt),
+          ))
+          .write(
+            MaintenancePlansCompanion(
+              archivedAt: const Value(null),
+              updatedAt: Value(now),
+            ),
+          );
     });
   }
 
@@ -929,7 +983,8 @@ class DriftAssetRepository implements AssetRepository {
       final planIds = trashedPlans.map((row) => row.id).toList();
       final photos = await _photoRowsForAssets(assetIds);
       if (planIds.isNotEmpty) await _deletePlansCascade(db, planIds);
-      if (assetIds.isNotEmpty) await _deleteAssetsCascadeInTransaction(assetIds);
+      if (assetIds.isNotEmpty)
+        await _deleteAssetsCascadeInTransaction(assetIds);
       if (roomIds.isNotEmpty) {
         await (db.delete(db.rooms)..where((row) => row.id.isIn(roomIds))).go();
       }
@@ -1022,14 +1077,16 @@ class DriftAssetRepository implements AssetRepository {
               .getSingleOrNull();
       if (target == null) return;
 
-      await (db.update(db.syncRuntime)..where((row) => row.id.equals(1)))
-          .write(const SyncRuntimeCompanion(suppressOutbox: Value(true)));
+      await (db.update(db.syncRuntime)..where((row) => row.id.equals(1))).write(
+        const SyncRuntimeCompanion(suppressOutbox: Value(true)),
+      );
       try {
         await (db.update(db.assetPhotos)
               ..where((photo) => photo.assetId.equals(assetId)))
             .write(const AssetPhotosCompanion(isPrimary: Value(false)));
         await (db.update(db.assetPhotos)..where(
-              (photo) => photo.id.equals(photoId) & photo.assetId.equals(assetId),
+              (photo) =>
+                  photo.id.equals(photoId) & photo.assetId.equals(assetId),
             ))
             .write(const AssetPhotosCompanion(isPrimary: Value(true)));
       } finally {
@@ -1040,20 +1097,24 @@ class DriftAssetRepository implements AssetRepository {
       final account = await (db.select(
         db.syncAccount,
       )..where((row) => row.id.equals(1))).getSingleOrNull();
-      await db.into(db.syncOutbox).insertOnConflictUpdate(
-        SyncOutboxCompanion.insert(
-          entity: 'asset_photo_primary',
-          recordKey: assetId,
-          operation: 'execute',
-          changedAt: Value(now),
-          payloadJson: Value(jsonEncode({
-            'version': 1,
-            'asset_id': assetId,
-            'photo_id': photoId,
-          })),
-          userId: Value(account?.boundUserId),
-        ),
-      );
+      await db
+          .into(db.syncOutbox)
+          .insertOnConflictUpdate(
+            SyncOutboxCompanion.insert(
+              entity: 'asset_photo_primary',
+              recordKey: assetId,
+              operation: 'execute',
+              changedAt: Value(now),
+              payloadJson: Value(
+                jsonEncode({
+                  'version': 1,
+                  'asset_id': assetId,
+                  'photo_id': photoId,
+                }),
+              ),
+              userId: Value(account?.boundUserId),
+            ),
+          );
     });
   }
 

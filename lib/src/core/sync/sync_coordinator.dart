@@ -1275,7 +1275,8 @@ class SyncCoordinator implements CloudSyncRepository {
               payloadJson.trim().isEmpty) {
             const failure = SupabaseFailure(
               kind: SupabaseFailureKind.incompatibleSchema,
-              message: 'A queued primary-photo operation has an invalid payload.',
+              message:
+                  'A queued primary-photo operation has an invalid payload.',
             );
             await _recordMutationFailure(mutation, failure);
             throw failure;
@@ -1286,7 +1287,9 @@ class SyncCoordinator implements CloudSyncRepository {
             );
             final assetId = payload['asset_id'] as String?;
             final photoId = payload['photo_id'] as String?;
-            if (assetId == null || photoId == null || assetId != mutation.recordKey) {
+            if (assetId == null ||
+                photoId == null ||
+                assetId != mutation.recordKey) {
               throw const SupabaseFailure(
                 kind: SupabaseFailureKind.incompatibleSchema,
                 message: 'A queued primary-photo operation is malformed.',
@@ -1576,7 +1579,8 @@ class SyncCoordinator implements CloudSyncRepository {
           ? SupabaseFailureKind.incompatibleSchema
           : SupabaseFailureKind.conflict,
       message:
-          result.conflictReason ?? 'The completion undo could not be reconciled.',
+          result.conflictReason ??
+          'The completion undo could not be reconciled.',
       retryable: result.retryable,
     );
   }
@@ -1611,7 +1615,8 @@ class SyncCoordinator implements CloudSyncRepository {
           ? SupabaseFailureKind.incompatibleSchema
           : SupabaseFailureKind.conflict,
       message:
-          result.conflictReason ?? 'The completion undo could not be reconciled.',
+          result.conflictReason ??
+          'The completion undo could not be reconciled.',
       retryable: result.retryable,
     );
   }

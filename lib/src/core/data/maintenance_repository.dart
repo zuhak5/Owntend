@@ -248,10 +248,9 @@ class DriftMaintenanceRepository
         if (metadata != null) {
           await _savePlanMetadata(planId, metadata, now);
         } else {
-          await (db.delete(db.maintenancePlanMetadata)..where(
-                (row) => row.planId.equals(planId),
-              ))
-              .go();
+          await (db.delete(
+            db.maintenancePlanMetadata,
+          )..where((row) => row.planId.equals(planId))).go();
         }
       }
     });
@@ -594,9 +593,8 @@ class DriftMaintenanceRepository
               .getSingleOrNull();
       final shouldRewind =
           latest?.id == completionId &&
-          canonicalSyncSecond(plan.nextDueDate).isAtSameMomentAs(
-            canonicalExpectedCurrent,
-          );
+          canonicalSyncSecond(plan.nextDueDate)
+              .isAtSameMomentAs(canonicalExpectedCurrent);
 
       await (db.delete(db.syncOutbox)..where(
             (row) =>
@@ -631,24 +629,26 @@ class DriftMaintenanceRepository
         'operation_id': 'undo:$completionId',
         'plan_id': planId,
         'completion_id': completionId,
-        'completion_completed_at': canonicalSyncSecond(
-          target.completedAt,
-        ).toUtc().toIso8601String(),
+        'completion_completed_at': canonicalSyncSecond(target.completedAt)
+            .toUtc()
+            .toIso8601String(),
         'previous_due_date': canonicalPreviousDue.toUtc().toIso8601String(),
         'expected_current_next_due_date': canonicalExpectedCurrent
             .toUtc()
             .toIso8601String(),
       });
-      await db.into(db.syncOutbox).insertOnConflictUpdate(
-        SyncOutboxCompanion.insert(
-          entity: 'maintenance_undo',
-          recordKey: completionId,
-          operation: 'execute',
-          changedAt: Value(now.subtract(const Duration(microseconds: 1))),
-          payloadJson: Value(payload),
-          userId: Value(syncAccount?.boundUserId),
-        ),
-      );
+      await db
+          .into(db.syncOutbox)
+          .insertOnConflictUpdate(
+            SyncOutboxCompanion.insert(
+              entity: 'maintenance_undo',
+              recordKey: completionId,
+              operation: 'execute',
+              changedAt: Value(now.subtract(const Duration(microseconds: 1))),
+              payloadJson: Value(payload),
+              userId: Value(syncAccount?.boundUserId),
+            ),
+          );
       await _reopenPlanInbox(planId, now);
       await db
           .into(db.notificationReconciliationRequests)
@@ -1063,7 +1063,6 @@ class DriftMaintenanceRepository
     );
   }
 }
-
 
 bool _reminderLeadFitsRecurrence(
   domain.RecurrenceRule recurrence,

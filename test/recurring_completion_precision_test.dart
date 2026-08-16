@@ -154,121 +154,117 @@ void main() {
     },
   );
 
-  test('early completion resets recurrence from actual completion time', () async {
-    await assetRepo.saveArea(
-      id: 'area_early',
-      name: 'Early',
-      kind: AreaKind.indoor,
-      sortOrder: 0,
-    );
-    final roomId = await assetRepo.saveRoom(
-      areaId: 'area_early',
-      name: 'Early',
-    );
-    final categoryId = (await assetRepo.listCategories()).first.id;
-    final assetId = await assetRepo.saveAsset(
-      name: 'Monthly filter',
-      assetType: AssetType.device,
-      categoryId: categoryId,
-      roomId: roomId,
-    );
-    final due = DateTime(2026, 8, 18, 9);
-    final planId = await maintenance.savePlan(
-      assetId: assetId,
-      title: 'Monthly filter',
-      recurrence: const RecurrenceRule(
-        interval: 1,
-        unit: RecurrenceUnit.months,
-      ),
-      priority: PriorityLevel.medium,
-      nextDueDate: due,
-      healthGroup: HealthGroup.appliances,
-    );
-    final completedAt = DateTime(2026, 8, 13, 14, 30);
-    final result = await maintenance.completePlanResult(
-      planId,
-      completedAt: completedAt,
-      expectedNextDueDate: due,
-    );
-    expect(result.isApplied, isTrue);
-    expect(result.duplicateIgnored, isFalse);
-    expect(
-      (await maintenance.getTask(planId))!.plan.nextDueDate.toLocal(),
-      DateTime(2026, 9, 13, 14, 30),
-    );
-    final record = (await maintenance.listRecordsForPlan(planId)).single;
-    expect(record.completedAt.toLocal(), DateTime(2026, 8, 13, 14, 30));
-    expect(record.dueDate.toLocal(), due);
-  });
-
   test(
-    'rapid repeated completions are idempotent but a later completion is allowed',
+    'early completion resets recurrence from actual completion time',
     () async {
       await assetRepo.saveArea(
-        id: 'area_repeat',
-        name: 'Repeat',
+        id: 'area_early',
+        name: 'Early',
         kind: AreaKind.indoor,
         sortOrder: 0,
       );
       final roomId = await assetRepo.saveRoom(
-        areaId: 'area_repeat',
-        name: 'Repeat',
+        areaId: 'area_early',
+        name: 'Early',
       );
       final categoryId = (await assetRepo.listCategories()).first.id;
       final assetId = await assetRepo.saveAsset(
-        name: 'Rapid task',
+        name: 'Monthly filter',
+        assetType: AssetType.device,
         categoryId: categoryId,
         roomId: roomId,
       );
-      final due = DateTime(2026, 8, 17, 9);
+      final due = DateTime(2026, 8, 18, 9);
       final planId = await maintenance.savePlan(
         assetId: assetId,
-        title: 'Rapid task',
+        title: 'Monthly filter',
         recurrence: const RecurrenceRule(
           interval: 1,
-          unit: RecurrenceUnit.days,
+          unit: RecurrenceUnit.months,
         ),
         priority: PriorityLevel.medium,
         nextDueDate: due,
-        healthGroup: HealthGroup.other,
+        healthGroup: HealthGroup.appliances,
       );
-      final firstAt = DateTime(2026, 8, 16, 14, 30, 10);
-      final first = await maintenance.completePlanResult(
+      final completedAt = DateTime(2026, 8, 13, 14, 30);
+      final result = await maintenance.completePlanResult(
         planId,
-        completedAt: firstAt,
+        completedAt: completedAt,
         expectedNextDueDate: due,
       );
-      expect(first.isApplied, isTrue);
-      for (var i = 1; i <= 4; i++) {
-        final repeat = await maintenance.completePlanResult(
-          planId,
-          completedAt: firstAt.add(Duration(milliseconds: 500 * i)),
-          expectedNextDueDate: first.nextDueDate,
-        );
-        expect(repeat.isApplied, isTrue);
-        expect(repeat.duplicateIgnored, isTrue);
-        expect(repeat.operationId, first.operationId);
-      }
-      expect(await maintenance.listRecordsForPlan(planId), hasLength(1));
+      expect(result.isApplied, isTrue);
+      expect(result.duplicateIgnored, isFalse);
       expect(
         (await maintenance.getTask(planId))!.plan.nextDueDate.toLocal(),
-        DateTime(2026, 8, 17, 14, 30, 10),
+        DateTime(2026, 9, 13, 14, 30),
       );
-
-      final afterWindowAt = firstAt.add(const Duration(seconds: 5));
-      final second = await maintenance.completePlanResult(
-        planId,
-        completedAt: afterWindowAt,
-        expectedNextDueDate: first.nextDueDate,
-      );
-      expect(second.isApplied, isTrue);
-      expect(second.duplicateIgnored, isFalse);
-      expect(await maintenance.listRecordsForPlan(planId), hasLength(2));
-      expect(
-        (await maintenance.getTask(planId))!.plan.nextDueDate.toLocal(),
-        DateTime(2026, 8, 17, 14, 30, 15),
-      );
+      final record = (await maintenance.listRecordsForPlan(planId)).single;
+      expect(record.completedAt.toLocal(), DateTime(2026, 8, 13, 14, 30));
+      expect(record.dueDate.toLocal(), due);
     },
   );
 
+  test('rapid repeated completions are idempotent but a later completion is allowed', () async {
+    await assetRepo.saveArea(
+      id: 'area_repeat',
+      name: 'Repeat',
+      kind: AreaKind.indoor,
+      sortOrder: 0,
+    );
+    final roomId = await assetRepo.saveRoom(
+      areaId: 'area_repeat',
+      name: 'Repeat',
+    );
+    final categoryId = (await assetRepo.listCategories()).first.id;
+    final assetId = await assetRepo.saveAsset(
+      name: 'Rapid task',
+      categoryId: categoryId,
+      roomId: roomId,
+    );
+    final due = DateTime(2026, 8, 17, 9);
+    final planId = await maintenance.savePlan(
+      assetId: assetId,
+      title: 'Rapid task',
+      recurrence: const RecurrenceRule(interval: 1, unit: RecurrenceUnit.days),
+      priority: PriorityLevel.medium,
+      nextDueDate: due,
+      healthGroup: HealthGroup.other,
+    );
+    final firstAt = DateTime(2026, 8, 16, 14, 30, 10);
+    final first = await maintenance.completePlanResult(
+      planId,
+      completedAt: firstAt,
+      expectedNextDueDate: due,
+    );
+    expect(first.isApplied, isTrue);
+    for (var i = 1; i <= 4; i++) {
+      final repeat = await maintenance.completePlanResult(
+        planId,
+        completedAt: firstAt.add(Duration(milliseconds: 500 * i)),
+        expectedNextDueDate: first.nextDueDate,
+      );
+      expect(repeat.isApplied, isTrue);
+      expect(repeat.duplicateIgnored, isTrue);
+      expect(repeat.operationId, first.operationId);
+    }
+    expect(await maintenance.listRecordsForPlan(planId), hasLength(1));
+    expect(
+      (await maintenance.getTask(planId))!.plan.nextDueDate.toLocal(),
+      DateTime(2026, 8, 17, 14, 30, 10),
+    );
+
+    final afterWindowAt = firstAt.add(const Duration(seconds: 5));
+    final second = await maintenance.completePlanResult(
+      planId,
+      completedAt: afterWindowAt,
+      expectedNextDueDate: first.nextDueDate,
+    );
+    expect(second.isApplied, isTrue);
+    expect(second.duplicateIgnored, isFalse);
+    expect(await maintenance.listRecordsForPlan(planId), hasLength(2));
+    expect(
+      (await maintenance.getTask(planId))!.plan.nextDueDate.toLocal(),
+      DateTime(2026, 8, 17, 14, 30, 15),
+    );
+  });
 }

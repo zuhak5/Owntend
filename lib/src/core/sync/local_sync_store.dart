@@ -1894,9 +1894,10 @@ ON CONFLICT(key) DO UPDATE SET
     await db.transaction(() async {
       await withOutboxSuppressed(() async {
         for (final canonical in photos) {
-          final local = await (db.select(db.assetPhotos)..where(
-                (row) => row.id.equals(canonical.recordKey),
-              )).getSingleOrNull();
+          final local =
+              await (db.select(db.assetPhotos)
+                    ..where((row) => row.id.equals(canonical.recordKey)))
+                  .getSingleOrNull();
           if (local == null) {
             // A photo created by another device will be materialized by the
             // normal pull path. Remembering its remote row here is unnecessary.
@@ -1905,10 +1906,7 @@ ON CONFLICT(key) DO UPDATE SET
           final localized = SyncRecord(
             spec: canonical.spec,
             recordKey: canonical.recordKey,
-            values: {
-              ...canonical.values,
-              'relative_path': local.relativePath,
-            },
+            values: {...canonical.values, 'relative_path': local.relativePath},
             clientModifiedAt: canonical.clientModifiedAt,
             originDeviceId: canonical.originDeviceId,
             revision: canonical.revision,
@@ -1924,7 +1922,8 @@ ON CONFLICT(key) DO UPDATE SET
             (row) =>
                 row.entity.equals('asset_photo_primary') &
                 row.recordKey.equals(mutation.recordKey),
-          )).go();
+          ))
+          .go();
     });
   }
 
@@ -1952,10 +1951,9 @@ ON CONFLICT(key) DO UPDATE SET
       await withOutboxSuppressed(() async {
         await _upsertLocal(plan);
         await _saveShadow(plan);
-        await (db.delete(db.maintenanceRecords)..where(
-              (row) => row.id.equals(completionId),
-            ))
-            .go();
+        await (db.delete(
+          db.maintenanceRecords,
+        )..where((row) => row.id.equals(completionId))).go();
         await (db.delete(db.syncShadows)..where(
               (row) =>
                   row.entity.equals('maintenance_record') &
@@ -1990,10 +1988,9 @@ ON CONFLICT(key) DO UPDATE SET
       await withOutboxSuppressed(() async {
         await _upsertLocal(plan);
         await _saveShadow(plan);
-        await (db.delete(db.maintenanceRecords)..where(
-              (row) => row.id.equals(completionId),
-            ))
-            .go();
+        await (db.delete(
+          db.maintenanceRecords,
+        )..where((row) => row.id.equals(completionId))).go();
         await (db.delete(db.syncShadows)..where(
               (row) =>
                   row.entity.equals('maintenance_record') &

@@ -455,7 +455,8 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
         record,
         userId,
         deviceId,
-        uploadMedia: !(record.spec.entity == 'asset_photo' && expectedRevision != null),
+        uploadMedia:
+            !(record.spec.entity == 'asset_photo' && expectedRevision != null),
       );
       if (record.isDeleted) {
         if (expectedRevision == null) {

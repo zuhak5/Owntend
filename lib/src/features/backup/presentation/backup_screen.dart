@@ -2042,14 +2042,18 @@ Future<bool> completeTaskWithFeedback(
         final completionId = result.operationId;
         final completedNextDue = result.nextDueDate;
         if (completionId == null || completedNextDue == null) {
-          throw StateError('Completion acknowledgement is missing undo identity.');
+          throw StateError(
+            'Completion acknowledgement is missing undo identity.',
+          );
         }
-        await ref.read(maintenanceRepositoryProvider).undoCompletion(
-          planId: task.plan.id,
-          completionId: completionId,
-          previousDueDate: result.previousDueDate ?? previousDueDate,
-          expectedCurrentNextDueDate: completedNextDue,
-        );
+        await ref
+            .read(maintenanceRepositoryProvider)
+            .undoCompletion(
+              planId: task.plan.id,
+              completionId: completionId,
+              previousDueDate: result.previousDueDate ?? previousDueDate,
+              expectedCurrentNextDueDate: completedNextDue,
+            );
         try {
           await ref.read(streakServiceProvider).refresh(DateTime.now());
           await refreshNotificationSchedules(ref);

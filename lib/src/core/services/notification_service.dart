@@ -466,10 +466,7 @@ class OwntendNotificationScheduler implements NotificationScheduler {
       critical: task.plan.priority == PriorityLevel.critical,
     );
     final scheduleMode = await _taskScheduleMode(preferences);
-    final snoozeId = _stableNotificationId(
-      'snooze:$planId',
-      _snoozeIdBase,
-    );
+    final snoozeId = _stableNotificationId('snooze:$planId', _snoozeIdBase);
     await _scheduleTaskReminder(
       task,
       scheduledFor: scheduledFor,

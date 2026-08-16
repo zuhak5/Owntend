@@ -79,9 +79,7 @@ class DatabaseStreakService implements StreakService {
       );
     }
 
-    if (recordsCompletedToday.isEmpty ||
-        hasOpenDueToday ||
-        wasAwardedToday) {
+    if (recordsCompletedToday.isEmpty || hasOpenDueToday || wasAwardedToday) {
       return existing;
     }
 
@@ -103,7 +101,10 @@ class DatabaseStreakService implements StreakService {
   Future<int> _longestCompletionRun({required DateTime beforeExclusive}) async {
     final rows =
         await (db.select(db.maintenanceRecords)
-              ..where((record) => record.completedAt.isSmallerThanValue(beforeExclusive))
+              ..where(
+                (record) =>
+                    record.completedAt.isSmallerThanValue(beforeExclusive),
+              )
               ..orderBy([(record) => OrderingTerm.asc(record.completedAt)]))
             .get();
     final days = <DateTime>[];

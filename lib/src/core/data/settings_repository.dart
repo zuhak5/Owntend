@@ -284,7 +284,8 @@ class DriftSettingsRepository implements SettingsRepository {
             ? desired.quietHoursEndMinutes
             : null,
         criticalBypassQuietHours:
-            desired.criticalBypassQuietHours != baseline.criticalBypassQuietHours
+            desired.criticalBypassQuietHours !=
+                baseline.criticalBypassQuietHours
             ? desired.criticalBypassQuietHours
             : null,
         privacyMode: desired.privacyMode != baseline.privacyMode

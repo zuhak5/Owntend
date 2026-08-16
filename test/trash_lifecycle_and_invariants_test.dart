@@ -166,53 +166,56 @@ void main() {
   });
 
   group('Recurrence Invariants & Early Completion', () {
-    test('Early completion resets nextDueDate from actual completion time', () async {
-      final areaId = await assetRepo.saveArea(
-        name: 'Garage',
-        kind: AreaKind.indoor,
-      );
-      final roomId = await assetRepo.saveRoom(
-        areaId: areaId,
-        name: 'Main Garage',
-      );
-      final categories = await assetRepo.listCategories();
-      final assetId = await assetRepo.saveAsset(
-        name: 'Lawn Mower',
-        categoryId: categories.first.id,
-        roomId: roomId,
-      );
+    test(
+      'Early completion resets nextDueDate from actual completion time',
+      () async {
+        final areaId = await assetRepo.saveArea(
+          name: 'Garage',
+          kind: AreaKind.indoor,
+        );
+        final roomId = await assetRepo.saveRoom(
+          areaId: areaId,
+          name: 'Main Garage',
+        );
+        final categories = await assetRepo.listCategories();
+        final assetId = await assetRepo.saveAsset(
+          name: 'Lawn Mower',
+          categoryId: categories.first.id,
+          roomId: roomId,
+        );
 
-      final scheduledDueDate = DateTime.utc(2026, 8, 30, 12, 0, 0);
-      final planId = await maintenanceRepo.savePlan(
-        assetId: assetId,
-        title: 'Oil Check',
-        recurrence: const RecurrenceRule(
-          interval: 7,
-          unit: RecurrenceUnit.days,
-        ),
-        priority: PriorityLevel.medium,
-        nextDueDate: scheduledDueDate,
-        healthGroup: HealthGroup.appliances,
-      );
+        final scheduledDueDate = DateTime.utc(2026, 8, 30, 12, 0, 0);
+        final planId = await maintenanceRepo.savePlan(
+          assetId: assetId,
+          title: 'Oil Check',
+          recurrence: const RecurrenceRule(
+            interval: 7,
+            unit: RecurrenceUnit.days,
+          ),
+          priority: PriorityLevel.medium,
+          nextDueDate: scheduledDueDate,
+          healthGroup: HealthGroup.appliances,
+        );
 
-      // Complete 10 days early on Aug 20
-      final earlyCompletedAt = DateTime.utc(2026, 8, 20, 10, 0, 0);
-      final result = await maintenanceRepo.completePlanResult(
-        planId,
-        completedAt: earlyCompletedAt,
-        expectedNextDueDate: scheduledDueDate,
-      );
+        // Complete 10 days early on Aug 20
+        final earlyCompletedAt = DateTime.utc(2026, 8, 20, 10, 0, 0);
+        final result = await maintenanceRepo.completePlanResult(
+          planId,
+          completedAt: earlyCompletedAt,
+          expectedNextDueDate: scheduledDueDate,
+        );
 
-      expect(result.isApplied, isTrue);
+        expect(result.isApplied, isTrue);
 
-      final updatedTask = await maintenanceRepo.getTask(planId);
-      expect(updatedTask, isNotNull);
+        final updatedTask = await maintenanceRepo.getTask(planId);
+        expect(updatedTask, isNotNull);
 
-      expect(
-        updatedTask!.plan.nextDueDate.toUtc(),
-        equals(DateTime.utc(2026, 8, 27, 10, 0, 0)),
-      );
-    });
+        expect(
+          updatedTask!.plan.nextDueDate.toUtc(),
+          equals(DateTime.utc(2026, 8, 27, 10, 0, 0)),
+        );
+      },
+    );
   });
 
   group('Undo Completion Pre-Sync and Post-Sync', () {
@@ -407,76 +410,110 @@ void main() {
   });
 
   group('Trash provenance', () {
-    test('restoring parent preserves independently trashed descendants', () async {
-      final areaId = await assetRepo.saveArea(name: 'Provenance', kind: AreaKind.indoor);
-      final roomId = await assetRepo.saveRoom(areaId: areaId, name: 'Room');
-      final categoryId = (await assetRepo.listCategories()).first.id;
-      final assetId = await assetRepo.saveAsset(
-        name: 'Independent asset',
-        categoryId: categoryId,
-        roomId: roomId,
-      );
-      final planId = await maintenanceRepo.savePlan(
-        assetId: assetId,
-        title: 'Independent task',
-        recurrence: const RecurrenceRule(interval: 1, unit: RecurrenceUnit.days),
-        priority: PriorityLevel.medium,
-        nextDueDate: DateTime(2026, 8, 20, 9),
-        healthGroup: HealthGroup.other,
-      );
-      await maintenanceRepo.archivePlan(planId);
-      await Future<void>.delayed(const Duration(milliseconds: 2));
-      await assetRepo.trashAsset(assetId);
-      await Future<void>.delayed(const Duration(milliseconds: 2));
-      await assetRepo.trashRoom(roomId);
-      await assetRepo.restoreRoom(roomId);
+    test(
+      'restoring parent preserves independently trashed descendants',
+      () async {
+        final areaId = await assetRepo.saveArea(
+          name: 'Provenance',
+          kind: AreaKind.indoor,
+        );
+        final roomId = await assetRepo.saveRoom(areaId: areaId, name: 'Room');
+        final categoryId = (await assetRepo.listCategories()).first.id;
+        final assetId = await assetRepo.saveAsset(
+          name: 'Independent asset',
+          categoryId: categoryId,
+          roomId: roomId,
+        );
+        final planId = await maintenanceRepo.savePlan(
+          assetId: assetId,
+          title: 'Independent task',
+          recurrence: const RecurrenceRule(
+            interval: 1,
+            unit: RecurrenceUnit.days,
+          ),
+          priority: PriorityLevel.medium,
+          nextDueDate: DateTime(2026, 8, 20, 9),
+          healthGroup: HealthGroup.other,
+        );
+        await maintenanceRepo.archivePlan(planId);
+        await Future<void>.delayed(const Duration(milliseconds: 2));
+        await assetRepo.trashAsset(assetId);
+        await Future<void>.delayed(const Duration(milliseconds: 2));
+        await assetRepo.trashRoom(roomId);
+        await assetRepo.restoreRoom(roomId);
 
-      final restoredAsset = await assetRepo.getAsset(assetId);
-      expect(restoredAsset!.archivedAt, isNotNull);
-      expect((await maintenanceRepo.listArchivedTasks()).map((t) => t.plan.id), contains(planId));
-    });
+        final restoredAsset = await assetRepo.getAsset(assetId);
+        expect(restoredAsset!.archivedAt, isNotNull);
+        expect(
+          (await maintenanceRepo.listArchivedTasks()).map((t) => t.plan.id),
+          contains(planId),
+        );
+      },
+    );
 
     test('restoring a child never resurrects its trashed ancestor', () async {
-      final areaId = await assetRepo.saveArea(name: 'Ancestor', kind: AreaKind.indoor);
+      final areaId = await assetRepo.saveArea(
+        name: 'Ancestor',
+        kind: AreaKind.indoor,
+      );
       final roomId = await assetRepo.saveRoom(areaId: areaId, name: 'Child');
       await assetRepo.trashArea(areaId);
       await expectLater(assetRepo.restoreRoom(roomId), throwsStateError);
-      expect((await assetRepo.listArchivedAreas()).map((a) => a.id), contains(areaId));
-      expect((await assetRepo.listArchivedRooms()).map((r) => r.id), contains(roomId));
+      expect(
+        (await assetRepo.listArchivedAreas()).map((a) => a.id),
+        contains(areaId),
+      );
+      expect(
+        (await assetRepo.listArchivedRooms()).map((r) => r.id),
+        contains(roomId),
+      );
     });
   });
-
 
   group('Primary photo mutation routing', () {
-    test('make primary queues one atomic operation instead of photo upserts', () async {
-      final areaId = await assetRepo.saveArea(name: 'Photos', kind: AreaKind.indoor);
-      final roomId = await assetRepo.saveRoom(areaId: areaId, name: 'Photos');
-      final categoryId = (await assetRepo.listCategories()).first.id;
-      final assetId = await assetRepo.saveAsset(
-        name: 'Photo asset',
-        categoryId: categoryId,
-        roomId: roomId,
-      );
-      final sourceA = File(p.join(tempDir.path, 'a.jpg'))..writeAsBytesSync([1, 2, 3]);
-      final sourceB = File(p.join(tempDir.path, 'b.jpg'))..writeAsBytesSync([4, 5, 6]);
-      final first = await assetRepo.addPhoto(assetId, sourceA.path);
-      final second = await assetRepo.addPhoto(assetId, sourceB.path);
-      await db.delete(db.syncOutbox).go();
+    test(
+      'make primary queues one atomic operation instead of photo upserts',
+      () async {
+        final areaId = await assetRepo.saveArea(
+          name: 'Photos',
+          kind: AreaKind.indoor,
+        );
+        final roomId = await assetRepo.saveRoom(areaId: areaId, name: 'Photos');
+        final categoryId = (await assetRepo.listCategories()).first.id;
+        final assetId = await assetRepo.saveAsset(
+          name: 'Photo asset',
+          categoryId: categoryId,
+          roomId: roomId,
+        );
+        final sourceA = File(p.join(tempDir.path, 'a.jpg'))
+          ..writeAsBytesSync([1, 2, 3]);
+        final sourceB = File(p.join(tempDir.path, 'b.jpg'))
+          ..writeAsBytesSync([4, 5, 6]);
+        final first = await assetRepo.addPhoto(assetId, sourceA.path);
+        final second = await assetRepo.addPhoto(assetId, sourceB.path);
+        await db.delete(db.syncOutbox).go();
 
-      await assetRepo.setPrimaryPhoto(assetId, second.id);
+        await assetRepo.setPrimaryPhoto(assetId, second.id);
 
-      final outbox = await db.select(db.syncOutbox).get();
-      expect(outbox.where((row) => row.entity == 'asset_photo'), isEmpty);
-      final operation = outbox.singleWhere(
-        (row) => row.entity == 'asset_photo_primary',
-      );
-      final payload = jsonDecode(operation.payloadJson!) as Map<String, dynamic>;
-      expect(payload['asset_id'], assetId);
-      expect(payload['photo_id'], second.id);
-      final photos = await assetRepo.listPhotosForAsset(assetId);
-      expect(photos.singleWhere((photo) => photo.id == first.id).isPrimary, isFalse);
-      expect(photos.singleWhere((photo) => photo.id == second.id).isPrimary, isTrue);
-    });
+        final outbox = await db.select(db.syncOutbox).get();
+        expect(outbox.where((row) => row.entity == 'asset_photo'), isEmpty);
+        final operation = outbox.singleWhere(
+          (row) => row.entity == 'asset_photo_primary',
+        );
+        final payload =
+            jsonDecode(operation.payloadJson!) as Map<String, dynamic>;
+        expect(payload['asset_id'], assetId);
+        expect(payload['photo_id'], second.id);
+        final photos = await assetRepo.listPhotosForAsset(assetId);
+        expect(
+          photos.singleWhere((photo) => photo.id == first.id).isPrimary,
+          isFalse,
+        );
+        expect(
+          photos.singleWhere((photo) => photo.id == second.id).isPrimary,
+          isTrue,
+        );
+      },
+    );
   });
-
 }
