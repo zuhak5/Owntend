@@ -2,11 +2,6 @@ name: Build Production APK
 
 on:
   workflow_dispatch:
-    inputs:
-      changelog:
-        description: "Release changelog in Markdown"
-        required: true
-        type: string
 
 concurrency:
   group: owntend-production-release
@@ -200,7 +195,7 @@ jobs:
           "sentry_dist=$BuildNumber" >> $env:GITHUB_OUTPUT
 
           Write-Host "Prepared Owntend $VersionName ($BuildNumber)."
-          Write-Host "Prepared Sentry release $SentryRelease."
+          Write-Host "Prepared Sentry release identity $SentryRelease (publication contained)."
 
       - name: Initialize APK diagnostics
         shell: pwsh
@@ -235,7 +230,7 @@ jobs:
             (New-Object System.Text.UTF8Encoding($false))
           )
 
-      - name: Reject an existing release tag before mutation
+      - name: Reject an existing release tag before artifact build
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -579,129 +574,14 @@ jobs:
           Remove-Item -LiteralPath "android\key.properties" -Force -ErrorAction SilentlyContinue
           Remove-Item -LiteralPath "config\prod.json" -Force -ErrorAction SilentlyContinue
 
-  publish-sentry-release:
-    name: Publish Sentry release
+  attest-production-apk:
+    name: Attest production APK evidence
     needs: build-production-apk
     runs-on: windows-latest
-    timeout-minutes: 20
-    environment: production-sentry
+    timeout-minutes: 15
 
     permissions:
       contents: read
-      actions: read
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
-        with:
-          ref: ${{ github.sha }}
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Revalidate exact release source
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = "Stop"
-          git fetch origin main --no-tags
-          if ($LASTEXITCODE -ne 0) { throw "Could not refresh origin/main." }
-          $SourceSha = (git rev-parse HEAD).Trim()
-          $MainSha = (git rev-parse origin/main).Trim()
-          if ($SourceSha -ne $env:GITHUB_SHA) {
-            throw "Checked-out source $SourceSha differs from GITHUB_SHA $env:GITHUB_SHA."
-          }
-          if ($SourceSha -ne $MainSha) {
-            throw "Sentry publication requires exact current origin/main $MainSha, got $SourceSha."
-          }
-
-      - name: Set up Flutter
-        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
-        with:
-          flutter-version: "3.47.0"
-          channel: stable
-          cache: true
-
-      - name: Set up Node
-        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
-        with:
-          node-version: "24"
-          cache: npm
-
-      - name: Restore release handoff
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-          HANDOFF_NAME: Owntend-production-apk-handoff-${{ github.run_id }}
-          EXPECTED_APK_NAME: ${{ needs.build-production-apk.outputs.apk_name }}
-          EXPECTED_APK_SHA256: ${{ needs.build-production-apk.outputs.apk_sha256 }}
-        run: |
-          $ErrorActionPreference = "Stop"
-          gh run download $env:GITHUB_RUN_ID --name $env:HANDOFF_NAME --dir .
-          $ApkPath = Join-Path $PWD "release\$env:EXPECTED_APK_NAME"
-          if (-not (Test-Path -LiteralPath $ApkPath -PathType Leaf)) {
-            throw "Expected APK handoff file was not restored: $ApkPath"
-          }
-          $ActualHash = (Get-FileHash -LiteralPath $ApkPath -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($ActualHash -ne $env:EXPECTED_APK_SHA256) {
-            throw "APK handoff hash mismatch before Sentry publication."
-          }
-          $DartSymbolMapPath = Join-Path $PWD "build\sentry-debug\dart\mapping.json"
-          if (-not (Test-Path -LiteralPath $DartSymbolMapPath -PathType Leaf)) {
-            throw "Expected Flutter obfuscation map was not restored: $DartSymbolMapPath"
-          }
-          $DartSymbolFiles = @(Get-ChildItem -LiteralPath (Join-Path $PWD "build\sentry-debug\dart") -Filter "*.symbols" -File)
-          if ($DartSymbolFiles.Count -eq 0) {
-            throw "Expected Flutter debug symbol files were not restored."
-          }
-          $ProguardMappingPath = Join-Path $PWD "build\app\outputs\mapping\prodRelease\mapping.txt"
-          if (-not (Test-Path -LiteralPath $ProguardMappingPath -PathType Leaf)) {
-            throw "Expected Android R8 mapping file was not restored: $ProguardMappingPath"
-          }
-
-      - name: Recheck release tag before Sentry mutation
-        shell: pwsh
-        env:
-          RELEASE_TAG: ${{ needs.build-production-apk.outputs.release_tag }}
-        run: |
-          $ErrorActionPreference = "Continue"
-          & git ls-remote --exit-code --refs origin "refs/tags/$env:RELEASE_TAG" *> $null
-          $TagExitCode = $LASTEXITCODE
-          if ($TagExitCode -eq 0) {
-            throw "Git tag appeared before Sentry publication: $env:RELEASE_TAG"
-          }
-          if ($TagExitCode -ne 2) {
-            throw "Could not recheck Git tag $env:RELEASE_TAG before Sentry publication."
-          }
-
-          exit 0
-
-      - name: Publish and verify Sentry release
-        shell: pwsh
-        env:
-          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
-          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
-          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-          SENTRY_RELEASE: ${{ needs.build-production-apk.outputs.sentry_release }}
-          SENTRY_DIST: ${{ needs.build-production-apk.outputs.sentry_dist }}
-        run: |
-          $ErrorActionPreference = "Stop"
-          npm ci
-          flutter pub get --enforce-lockfile
-          & ".\tool\publish_sentry_release.ps1" `
-            -Release $env:SENTRY_RELEASE `
-            -Dist $env:SENTRY_DIST `
-            -Environment "prod"
-
-  publish-github-release:
-    name: Publish GitHub Release
-    needs:
-      - build-production-apk
-      - publish-sentry-release
-    runs-on: windows-latest
-    timeout-minutes: 15
-    environment: production-github-release
-
-    permissions:
-      contents: write
       actions: read
       id-token: write
       attestations: write
@@ -720,13 +600,16 @@ jobs:
           $ErrorActionPreference = "Stop"
           git fetch origin main --no-tags
           if ($LASTEXITCODE -ne 0) { throw "Could not refresh origin/main." }
+
           $SourceSha = (git rev-parse HEAD).Trim()
           $MainSha = (git rev-parse origin/main).Trim()
+
           if ($SourceSha -ne $env:GITHUB_SHA) {
             throw "Checked-out source $SourceSha differs from GITHUB_SHA $env:GITHUB_SHA."
           }
+
           if ($SourceSha -ne $MainSha) {
-            throw "GitHub Release publication requires exact current origin/main $MainSha, got $SourceSha."
+            throw "APK attestation requires exact current origin/main $MainSha, got $SourceSha."
           }
 
       - name: Restore and verify release handoff
@@ -738,41 +621,42 @@ jobs:
           APK_SHA256: ${{ needs.build-production-apk.outputs.apk_sha256 }}
         run: |
           $ErrorActionPreference = "Stop"
-          gh run download $env:GITHUB_RUN_ID --name $env:HANDOFF_NAME --dir .
+
+          gh run download $env:GITHUB_RUN_ID `
+            --name $env:HANDOFF_NAME `
+            --dir .
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not restore production APK handoff."
+          }
+
           $ApkPath = Join-Path $PWD "release\$env:APK_NAME"
           $ChecksumPath = "$ApkPath.sha256"
+
           if (-not (Test-Path -LiteralPath $ApkPath -PathType Leaf)) {
             throw "Expected APK handoff file was not restored: $ApkPath"
           }
+
           if (-not (Test-Path -LiteralPath $ChecksumPath -PathType Leaf)) {
             throw "Expected checksum handoff file was not restored: $ChecksumPath"
           }
-          $ActualHash = (Get-FileHash -LiteralPath $ApkPath -Algorithm SHA256).Hash.ToLowerInvariant()
+
+          $ActualHash = (
+            Get-FileHash -LiteralPath $ApkPath -Algorithm SHA256
+          ).Hash.ToLowerInvariant()
+
           if ($ActualHash -ne $env:APK_SHA256) {
-            throw "APK handoff hash mismatch before GitHub Release publication."
+            throw "APK handoff hash mismatch before provenance attestation."
           }
+
           $ExpectedLine = "$($env:APK_SHA256)  $($env:APK_NAME)"
-          $ChecksumLine = (Get-Content -LiteralPath $ChecksumPath -Raw).Trim()
+          $ChecksumLine = (
+            Get-Content -LiteralPath $ChecksumPath -Raw
+          ).Trim()
+
           if ($ChecksumLine -ne $ExpectedLine) {
-            throw "Checksum handoff contents do not match the release APK."
+            throw "Checksum handoff contents do not match the APK."
           }
-
-      - name: Recheck release tag before GitHub mutation
-        shell: pwsh
-        env:
-          RELEASE_TAG: ${{ needs.build-production-apk.outputs.release_tag }}
-        run: |
-          $ErrorActionPreference = "Continue"
-          & git ls-remote --exit-code --refs origin "refs/tags/$env:RELEASE_TAG" *> $null
-          $TagExitCode = $LASTEXITCODE
-          if ($TagExitCode -eq 0) {
-            throw "Git tag appeared before GitHub Release publication: $env:RELEASE_TAG"
-          }
-          if ($TagExitCode -ne 2) {
-            throw "Could not recheck Git tag $env:RELEASE_TAG before GitHub Release publication."
-          }
-
-          exit 0
 
       - name: Attest production APK provenance
         uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
@@ -786,7 +670,9 @@ jobs:
           APK_PATH: release\${{ needs.build-production-apk.outputs.apk_name }}
         run: |
           $ErrorActionPreference = "Stop"
+
           $CertIdentity = "https://github.com/$env:GITHUB_REPOSITORY/.github/workflows/build-production-android.yml@refs/heads/main"
+
           $VerificationOutput = (& gh attestation verify $env:APK_PATH `
             --repo $env:GITHUB_REPOSITORY `
             --predicate-type https://slsa.dev/provenance/v1 `
@@ -796,11 +682,17 @@ jobs:
             --signer-digest $env:GITHUB_SHA `
             --deny-self-hosted-runners `
             --format json 2>&1 | Out-String)
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "APK provenance verification failed.`n$VerificationOutput"
+          }
+
           [System.IO.File]::WriteAllText(
             (Join-Path $PWD "release\apk-evidence\provenance-verification.json"),
             $VerificationOutput,
             (New-Object System.Text.UTF8Encoding($false))
           )
+
           & node .\tool\provenance_policy.mjs `
             --artifact-path $env:APK_PATH `
             --workflow-context (Join-Path $PWD "release\apk-evidence\workflow-context.json") `
@@ -808,92 +700,8 @@ jobs:
             --attestation-output (Join-Path $PWD "release\apk-evidence\provenance-attestation.json") `
             --verification-output (Join-Path $PWD "release\apk-evidence\provenance-verification.json")
 
-      - name: Publish GitHub Release
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-          CHANGELOG: ${{ inputs.changelog }}
-          RELEASE_TAG: ${{ needs.build-production-apk.outputs.release_tag }}
-          RELEASE_NAME: ${{ needs.build-production-apk.outputs.release_name }}
-          VERSION_NAME: ${{ needs.build-production-apk.outputs.version_name }}
-          BUILD_NUMBER: ${{ needs.build-production-apk.outputs.build_number }}
-          APK_NAME: ${{ needs.build-production-apk.outputs.apk_name }}
-          APK_PATH: release\${{ needs.build-production-apk.outputs.apk_name }}
-          CHECKSUM_PATH: release\${{ needs.build-production-apk.outputs.apk_name }}.sha256
-          APK_SHA256: ${{ needs.build-production-apk.outputs.apk_sha256 }}
-          SENTRY_RELEASE: ${{ needs.build-production-apk.outputs.sentry_release }}
-        run: |
-          $ErrorActionPreference = "Stop"
-          if ([string]::IsNullOrWhiteSpace($env:CHANGELOG)) {
-            throw "The release changelog cannot be empty."
-          }
-
-          & gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY *> $null
-          if ($LASTEXITCODE -eq 0) {
-            throw "Release already exists: $env:RELEASE_TAG"
-          }
-
-          $NotesPath = Join-Path $PWD "release\release-notes.md"
-          $Notes = @"
-          ## What's changed
-
-          $env:CHANGELOG
-
-          ## Build details
-
-          - Version: $env:VERSION_NAME
-          - Build: $env:BUILD_NUMBER
-          - Package: app.owntend.mobile
-          - File: $env:APK_NAME
-          - SHA-256: ``$env:APK_SHA256``
-          - Signer certificate SHA-256: ``3E:98:0E:B5:BB:68:A5:19:90:E7:70:56:D4:E1:09:95:B2:E0:4F:B3:88:A7:34:42:B7:9A:46:C8:53:36:1E:51``
-          - Sentry release: ``$env:SENTRY_RELEASE``
-
-          Verify build provenance with:
-
-          ``````bash
-          gh attestation verify $env:APK_NAME --repo $env:GITHUB_REPOSITORY
-          ``````
-          "@
-
-          $Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
-          [System.IO.File]::WriteAllText($NotesPath, $Notes, $Utf8NoBom)
-
-          # 1. Create draft release
-          & gh release create `
-            $env:RELEASE_TAG `
-            --draft `
-            --repo $env:GITHUB_REPOSITORY `
-            --target $env:GITHUB_SHA `
-            --title $env:RELEASE_NAME `
-            --notes-file $NotesPath
-
           if ($LASTEXITCODE -ne 0) {
-            throw "Failed to create draft GitHub Release."
-          }
-
-          # 2. Upload all assets to the draft release
-          & gh release upload `
-            $env:RELEASE_TAG `
-            $env:APK_PATH `
-            $env:CHECKSUM_PATH `
-            (Join-Path $PWD "release\apk-evidence\release-evidence-summary.json") `
-            (Join-Path $PWD "release\apk-evidence\provenance-verification.json") `
-            --repo $env:GITHUB_REPOSITORY
-
-          if ($LASTEXITCODE -ne 0) {
-            throw "Failed to upload release assets to draft GitHub Release."
-          }
-
-          # 3. Publish draft release (remove draft status and mark latest)
-          & gh release edit `
-            $env:RELEASE_TAG `
-            --draft=false `
-            --latest `
-            --repo $env:GITHUB_REPOSITORY
-
-          if ($LASTEXITCODE -ne 0) {
-            throw "Failed to publish GitHub Release."
+            throw "APK provenance policy validation failed."
           }
 
       - name: Upload APK provenance evidence

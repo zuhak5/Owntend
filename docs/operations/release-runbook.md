@@ -1,9 +1,10 @@
 # Android Production Release Rails
 
-> **Production containment is active.** Since 2026-08-11, production release
-> rails are paused.
-> Do not dispatch or re-enable a rail from this runbook. Follow the evidence and
-> rail-specific prerequisites in the
+> **Scoped production containment is active.** Exact-main signed APK and AAB
+> evidence rails may run. Public or hosted-service mutation remains contained:
+> no Sentry release mutation, GitHub Release/tag publication, verified
+> VersionDeck download publication, Google Play upload/rollout, or hosted
+> backend mutation is authorized by an evidence build. See the
 > [TASK-001 containment record](production-containment.md).
 
 ## Scope
@@ -37,13 +38,12 @@ If source changes after any final-SHA evidence is collected, choose a new final 
 
 ## Strict final-SHA sequence
 
-The sequence below describes the intended protected release contract after
-containment is lifted. It is not currently executable authorization.
+During scoped containment, the backend validation plus signed APK and AAB evidence steps below are executable. Sentry, GitHub Release, VersionDeck verified publication, Play upload/rollout, and hosted backend mutation remain separate blocked publication steps.
 
 1. **Backend database gate.** If the release contains pending database migrations, review and apply pending migrations to the exact project ref; inspect remote list and dry-run evidence and require verification to succeed. Then run `Validate Google Backend and Release Contracts` on the same `main` SHA. Its checks cover locked Deno formatting/type/tests for AdMob SSV, account deletion, and deletion-status recovery; deletion-site static tests; Google/Android static contracts; a local Supabase database start, lint, and test cycle; and the read-only Supabase Advisors audit. The required backend workflow jobs are `Deno SSV tests`, `Google contract/static checks`, and `Supabase database tests`.
-2. **APK and Sentry.** Run `tool/build_prod.ps1` at the same SHA. The APK evidence collector must pass before Sentry mutation. Then require successful Sentry publication and artifact validation.
-3. **VersionDeck.** Build and validate VersionDeck static distribution. VersionDeck independently verifies the candidate APK before deployment.
-4. **Separate AAB evidence.** Run `tool/build_play_prod.ps1` at the same frozen SHA as an independent rail. Review the AAB checksum, upload-key signature evidence, merged manifest, output metadata when present, dependency report, and evidence summary. This workflow does not upload to Google Play.
+2. **APK evidence.** Run `tool/build_prod.ps1` at the same SHA through the protected Build Production APK workflow. Require signer, checksum, manifest/dependency evidence, symbol/mapping handoff, and provenance attestation. Do not perform Sentry or GitHub Release mutation during scoped containment.
+3. **VersionDeck containment.** The static site may be deployed only with an explicit disabled manifest during scoped containment. A successful APK evidence build is not public download authorization.
+4. **Separate AAB evidence.** Run `tool/build_play_prod.ps1` at the same frozen SHA as an independent rail. Review the AAB checksum, upload-key signature evidence, merged manifest, output metadata when present, dependency report, evidence summary, and provenance. This workflow does not upload to Google Play.
 
 ## Immutable-asset withdrawal, supersession, and incident procedure
 
@@ -152,7 +152,7 @@ Record at minimum:
 - Final source SHA and `pubspec.yaml` version/build.
 - Backend verification output and separate hosted-backend deployment evidence.
 - AAB artifact name, artifact/checksum equality, upload-certificate fingerprint, evidence-summary fields, and manifest/dependency review.
-- APK artifact/evidence names, checksum, standalone signer, Sentry release/deploy, and partial-state notes if any.
+- APK artifact/evidence names, checksum, standalone signer, provenance, and Sentry publication status (contained/not run unless separately authorized).
 - VersionDeck source SHA, independent verification result, and public manifest result.
 - Google Play Console upload, Play App Signing, track/rollout, app-content, and device evidence from the dedicated runbook.
 - Operator, reviewer/approval evidence, timestamps, exceptions, rollback decisions, and all checks deferred to hosted services or devices.

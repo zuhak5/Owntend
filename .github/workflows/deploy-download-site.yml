@@ -20,27 +20,17 @@ on:
       - "docs/versiondeck-release-runbook.md"
       - "docs/versiondeck-live-build-status.md"
       - ".github/workflows/deploy-download-site.yml"
-  workflow_run:
-    workflows:
-      - Build Production APK
-    types:
-      - completed
-    branches:
-      - main
+
   workflow_dispatch:
     inputs:
       publication_mode:
-        description: "Publish verified releases or an explicit disabled manifest"
+        description: "Publish the explicit disabled manifest while production publication is contained"
         required: true
         default: disabled
         type: choice
         options:
           - disabled
-          - verified
-      production_run_id:
-        description: "Successful Build Production APK run ID for the current main SHA"
-        required: false
-        type: string
+
 
 concurrency:
   group: versiondeck-${{ github.event_name == 'pull_request' && github.event.pull_request.number || 'pages' }}
@@ -116,12 +106,7 @@ jobs:
 
   build:
     name: Verify and build VersionDeck
-    if: >-
-      (github.event_name == 'workflow_run' &&
-       github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.event == 'workflow_dispatch' &&
-       github.event.workflow_run.head_branch == 'main') ||
-      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -137,7 +122,7 @@ jobs:
       - name: Check out current VersionDeck source
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
 
       - name: Verify deployment source
@@ -157,46 +142,11 @@ jobs:
           echo "- Commit: \`$source_sha\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Trigger: \`${{ github.event_name }}\`" >> "$GITHUB_STEP_SUMMARY"
 
-          if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
-            publication_mode="verified"
-            upstream_sha="${{ github.event.workflow_run.head_sha }}"
-            upstream_url="${{ github.event.workflow_run.html_url }}"
-            test -n "$upstream_sha"
-            test "$upstream_sha" = "$source_sha"
-            echo "- Production build commit: \`$upstream_sha\`" >> "$GITHUB_STEP_SUMMARY"
-            echo "- Production build run: $upstream_url" >> "$GITHUB_STEP_SUMMARY"
-          else
-            publication_mode="${{ inputs.publication_mode }}"
-            test "$publication_mode" = "verified" || test "$publication_mode" = "disabled"
-            production_run_id="${{ inputs.production_run_id }}"
-            if [[ "$publication_mode" == "verified" ]]; then
-              test -n "$production_run_id"
-              run_api="repos/${GITHUB_REPOSITORY}/actions/runs/${production_run_id}"
-              run_name="$(gh api "$run_api" --jq '.name')"
-              run_conclusion="$(gh api "$run_api" --jq '.conclusion')"
-              run_event="$(gh api "$run_api" --jq '.event')"
-              run_branch="$(gh api "$run_api" --jq '.head_branch')"
-              run_sha="$(gh api "$run_api" --jq '.head_sha')"
-              run_url="$(gh api "$run_api" --jq '.html_url')"
-              test "$run_name" = "Build Production APK"
-              test "$run_conclusion" = "success"
-              test "$run_event" = "workflow_dispatch"
-              test "$run_branch" = "main"
-              test "$run_sha" = "$source_sha"
-              echo "- Production build commit: \`$run_sha\`" >> "$GITHUB_STEP_SUMMARY"
-              echo "- Production build run: $run_url" >> "$GITHUB_STEP_SUMMARY"
-            else
-              test -z "$production_run_id"
-              echo "- Production build run: not required for disabled publication" >> "$GITHUB_STEP_SUMMARY"
-            fi
-          fi
-
+          publication_mode="${{ inputs.publication_mode }}"
+          test "$publication_mode" = "disabled"
+          echo "- Production build run: public release publication is contained" >> "$GITHUB_STEP_SUMMARY"
           echo "publication_mode=$publication_mode" >> "$GITHUB_OUTPUT"
-          if [[ "$publication_mode" == "disabled" ]]; then
-            echo "expected_publication_status=disabled" >> "$GITHUB_OUTPUT"
-          else
-            echo "expected_publication_status=active" >> "$GITHUB_OUTPUT"
-          fi
+          echo "expected_publication_status=disabled" >> "$GITHUB_OUTPUT"
           echo "- Publication mode: \`$publication_mode\`" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Set up Node.js

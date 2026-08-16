@@ -16,7 +16,7 @@ const read = async (path) =>
 test('GitHub Actions use only reviewed immutable references', async () => {
   const result = await validateRepositoryActionReferences();
   assert.deepEqual(result.errors, []);
-  assert.equal(result.externalReferences, 52);
+  assert.equal(result.externalReferences, 49);
   assert.equal(result.localReferences, 0);
   assert.equal(result.files.length, 7);
 });
@@ -173,103 +173,93 @@ test('Play AAB rail uses protected production names and verifiable evidence', as
   );
 });
 
-test('APK rail archives merged manifest and dependency evidence', async () => {
+test('APK rail builds, verifies, and attests without public release mutation', async () => {
   const workflow = await read('.github/workflows/build-production-android.yml');
+
   assert.match(workflow, /name: Require current main release source/);
   assert.match(workflow, /Reject a non-main dispatch/);
-  assert.match(workflow, /source_sha" != "\$remote_sha/);
   assert.match(workflow, /needs: validate-release-source/);
   assert.match(workflow, /environment: production-android-signing/);
-  assert.match(workflow, /environment: production-sentry/);
-  assert.match(workflow, /environment: production-github-release/);
-  assert.doesNotMatch(workflow, /if: github\.ref == 'refs\/heads\/main'/);
+
+  assert.doesNotMatch(
+    workflow,
+    /environment: production-sentry|environment: production-github-release|SENTRY_AUTH_TOKEN/,
+  );
+
+  assert.doesNotMatch(
+    workflow,
+    /gh release (?:create|upload|edit)/,
+  );
+
   assert.match(
     workflow,
     /ANDROID_KEYSTORE_BASE64: \$\{\{ secrets\.ANDROID_APK_KEYSTORE_BASE64 \}\}/,
   );
-  assert.match(workflow, /collect_android_release_evidence\.ps1/);
-  assert.match(workflow, /node \.\\tool\\provenance_policy\.mjs/);
-  assert.match(workflow, /production-apk-evidence/);
-  assert.match(workflow, /name: Upload APK diagnostics\n\s+if: always\(\)/);
-  assert.match(workflow, /name: Upload production APK handoff/);
-  assert.match(workflow, /Owntend-production-apk-handoff-\$\{\{ github\.run_id \}\}/);
-  assert.match(workflow, /Owntend-production-apk-provenance-\$\{\{ github\.run_number \}\}/);
-  assert.match(workflow, /apk-signature-verification\.txt/);
-  assert.match(workflow, /apk-badging\.txt/);
-  assert.ok(
-    workflow.indexOf('Initialize APK diagnostics') <
-      workflow.indexOf('Reject an existing release tag before mutation'),
-    'APK diagnostics must exist before the first release-identity failure',
-  );
+
   assert.match(workflow, /validate_google_release_contracts\.mjs/);
   assert.match(workflow, /validate-google-backend\.yml\/runs\?head_sha=/);
-  assert.match(workflow, /\.path -eq "\.github\/workflows\/validate-google-backend\.yml"/);
-  assert.match(workflow, /\.head_branch -eq "main"/);
-  assert.match(workflow, /backend_gate_run_url = "\$\{\{ steps\.backend_gate\.outputs\.run_url \}\}"/);
-  assert.match(workflow, /repository_id = \$env:GITHUB_REPOSITORY_ID/);
-  assert.match(workflow, /source_ref = \$env:GITHUB_REF/);
-  assert.match(workflow, /source_repository_visibility = "public"/);
-  assert.match(workflow, /git ls-remote --exit-code --refs origin "refs\/tags\/\$env:RELEASE_TAG"/);
-  assert.match(workflow, /name: Recheck release tag before Sentry mutation/);
-  assert.match(workflow, /name: Recheck release tag before GitHub mutation/);
+  assert.match(workflow, /collect_android_release_evidence\.ps1/);
+  assert.match(workflow, /name: Upload APK diagnostics\n\s+if: always\(\)/);
+  assert.match(workflow, /name: Upload production APK handoff/);
+  assert.match(workflow, /apk-signature-verification\.txt/);
+  assert.match(workflow, /apk-badging\.txt/);
+
+  assert.match(workflow, /attest-production-apk:/);
+  assert.match(workflow, /name: Attest production APK evidence/);
+  assert.match(workflow, /needs: build-production-apk/);
+  assert.match(workflow, /id-token: write/);
+  assert.match(workflow, /attestations: write/);
+  assert.match(workflow, /name: Attest production APK provenance/);
   assert.match(workflow, /name: Verify and record APK provenance tuple/);
-  assert.match(workflow, /--attestation-output \(Join-Path \$PWD "release\\apk-evidence\\provenance-attestation\.json"\)/);
-  assert.match(workflow, /--verification-output \(Join-Path \$PWD "release\\apk-evidence\\provenance-verification\.json"\)/);
-  assert.match(workflow, /--predicate-type https:\/\/slsa\.dev\/provenance\/v1/);
+
+  assert.match(
+    workflow,
+    /attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3\.0\.0/,
+  );
+
+  assert.match(
+    workflow,
+    /--attestation-output \(Join-Path \$PWD "release\\apk-evidence\\provenance-attestation\.json"\)/,
+  );
+
+  assert.match(
+    workflow,
+    /--verification-output \(Join-Path \$PWD "release\\apk-evidence\\provenance-verification\.json"\)/,
+  );
+
   assert.match(workflow, /--source-digest \$env:GITHUB_SHA/);
   assert.match(workflow, /--source-ref refs\/heads\/main/);
-  assert.match(workflow, /--cert-identity \$CertIdentity/);
-  assert.match(workflow, /--signer-digest \$env:GITHUB_SHA/);
   assert.match(workflow, /--deny-self-hosted-runners/);
-  assert.match(workflow, /--format json/);
-  assert.match(workflow, /needs:\n\s+- build-production-apk\n\s+- publish-sentry-release/);
+
   assert.ok(
     workflow.indexOf('Collect APK manifest and dependency evidence') <
       workflow.indexOf('Upload production APK handoff'),
-    'artifact evidence must fail before Sentry release mutation',
+    'artifact evidence must pass before handoff',
   );
-  assert.ok(
-    workflow.indexOf('Reject an existing release tag before mutation') <
-      workflow.indexOf('Publish and verify Sentry release'),
-    'existing tags must fail before Sentry release mutation',
-  );
-  assert.ok(
-    workflow.indexOf('Recheck release tag before Sentry mutation') <
-      workflow.indexOf('Publish and verify Sentry release'),
-    'the remote tag must be rechecked immediately before Sentry mutation',
-  );
-  assert.ok(
-    workflow.indexOf('Recheck release tag before GitHub mutation') <
-      workflow.indexOf('Publish GitHub Release', workflow.indexOf('Recheck release tag before GitHub mutation')),
-    'the remote tag must be rechecked before GitHub Release publication',
-  );
-  const tagRecheck = workflow.slice(
-    workflow.indexOf('Recheck release tag before Sentry mutation'),
-    workflow.indexOf('Publish and verify Sentry release'),
-  );
-  assert.match(tagRecheck, /if \(\$TagExitCode -ne 2\)/);
-  assert.match(
-    tagRecheck,
-    /\n\s+exit 0\n/,
-    'an accepted no-tag result must not leak git exit code 2 to the step',
-  );
+
   const signingJob = workflow.slice(
     workflow.indexOf('build-production-apk:'),
-    workflow.indexOf('publish-sentry-release:'),
+    workflow.indexOf('attest-production-apk:'),
   );
-  assert.doesNotMatch(signingJob, /SENTRY_AUTH_TOKEN|contents: write|attestations: write/);
-  const sentryJob = workflow.slice(
-    workflow.indexOf('publish-sentry-release:'),
-    workflow.indexOf('publish-github-release:'),
-  );
-  assert.match(sentryJob, /SENTRY_AUTH_TOKEN: \$\{\{ secrets\.SENTRY_AUTH_TOKEN \}\}/);
-  assert.doesNotMatch(sentryJob, /ANDROID_APK_|PLAY_UPLOAD_|contents: write|attestations: write/);
-  const githubReleaseJob = workflow.slice(workflow.indexOf('publish-github-release:'));
-  assert.match(githubReleaseJob, /contents: write/);
-  assert.match(githubReleaseJob, /attestations: write/);
-  assert.doesNotMatch(githubReleaseJob, /ANDROID_APK_|PLAY_UPLOAD_|SENTRY_AUTH_TOKEN/);
-});
 
+  assert.doesNotMatch(
+    signingJob,
+    /SENTRY_AUTH_TOKEN|contents: write|attestations: write/,
+  );
+
+  const attestationJob = workflow.slice(
+    workflow.indexOf('attest-production-apk:'),
+  );
+
+  assert.match(attestationJob, /contents: read/);
+  assert.match(attestationJob, /actions: read/);
+  assert.match(attestationJob, /attestations: write/);
+
+  assert.doesNotMatch(
+    attestationJob,
+    /ANDROID_APK_|PLAY_UPLOAD_|SENTRY_AUTH_TOKEN|contents: write|gh release (?:create|upload|edit)/,
+  );
+});
 test('backend gate covers formatting, type safety, functions, and database', async () => {
   const workflow = await read('.github/workflows/validate-google-backend.yml');
   const triggers = workflow.slice(
@@ -391,26 +381,28 @@ test('release runbook names every required backend check exactly', async () => {
   assert.match(runbook, /`Supabase database tests`/);
 });
 
-test('VersionDeck production deployment is gated by a successful exact-SHA APK run', async () => {
+test('VersionDeck stays disabled while public publication is contained', async () => {
   const workflow = await read('.github/workflows/deploy-download-site.yml');
+
   assert.doesNotMatch(workflow, /^  push:/m);
   assert.doesNotMatch(workflow, /^  release:/m);
+  assert.doesNotMatch(workflow, /^  workflow_run:/m);
+
   assert.match(workflow, /publication_mode:/);
   assert.match(workflow, /default: disabled/);
-  assert.match(workflow, /production_run_id:/);
-  assert.match(workflow, /required: false/);
-  assert.match(workflow, /tool\/versiondeck-control\.json/);
-  assert.match(workflow, /github\.event\.workflow_run\.conclusion == 'success'/);
-  assert.match(workflow, /test "\$upstream_sha" = "\$source_sha"/);
-  assert.match(workflow, /test "\$run_name" = "Build Production APK"/);
-  assert.match(workflow, /test "\$run_conclusion" = "success"/);
-  assert.match(workflow, /test "\$run_sha" = "\$source_sha"/);
-  assert.match(workflow, /publication_mode="\$\{\{ inputs\.publication_mode \}\}"/);
-  assert.match(workflow, /if \[\[ "\$publication_mode" == "verified" \]\]; then/);
-  assert.match(workflow, /test -z "\$production_run_id"/);
+  assert.doesNotMatch(workflow, /^\s+- verified$/m);
+  assert.doesNotMatch(workflow, /^\s+production_run_id:/m);
+
+  assert.match(
+    workflow,
+    /if: github\.event_name == 'workflow_dispatch' && github\.ref == 'refs\/heads\/main'/,
+  );
+
+  assert.match(workflow, /test "\$publication_mode" = "disabled"/);
+  assert.match(workflow, /expected_publication_status=disabled/);
+  assert.doesNotMatch(workflow, /test "\$run_name" = "Build Production APK"/);
   assert.match(workflow, /manifest\.schemaVersion !== 4/);
 });
-
 test('Gradle distribution checksum is present and correctly formatted', async () => {
   const props = await read(
     'android/gradle/wrapper/gradle-wrapper.properties',
@@ -495,83 +487,5 @@ test('flutter pub get uses --enforce-lockfile in CI and production scripts', asy
     buildPlayProd,
     /git status --porcelain pubspec\.lock/,
     'build_play_prod.ps1 must verify pubspec.lock is unchanged',
-  );
-});
-
-test('APK workflow creates a draft release, uploads all assets, then publishes exactly once', async () => {
-  const workflow = await read('.github/workflows/build-production-android.yml');
-
-  // 1. Verify the three-step immutable pattern comments are present and in order.
-  const draftComment = '# 1. Create draft release';
-  const uploadComment = '# 2. Upload all assets to the draft release';
-  const publishComment = '# 3. Publish draft release (remove draft status and mark latest)';
-  assert.ok(workflow.includes(draftComment), 'workflow must label the draft creation step');
-  assert.ok(workflow.includes(uploadComment), 'workflow must label the asset upload step');
-  assert.ok(workflow.includes(publishComment), 'workflow must label the single publish step');
-  assert.ok(
-    workflow.indexOf(draftComment) < workflow.indexOf(uploadComment),
-    'draft creation must precede asset upload',
-  );
-  assert.ok(
-    workflow.indexOf(uploadComment) < workflow.indexOf(publishComment),
-    'asset upload must precede publication',
-  );
-
-  // 2. Verify the draft creation uses --draft flag.
-  const draftSection = workflow.slice(
-    workflow.indexOf(draftComment),
-    workflow.indexOf(uploadComment),
-  );
-  assert.match(draftSection, /gh release create/, 'draft step must use gh release create');
-  assert.match(draftSection, /--draft/, 'draft creation must use --draft flag');
-  assert.doesNotMatch(draftSection, /--draft=false/, 'draft creation must not immediately publish');
-
-  // 3. Verify the upload step uses gh release upload (not create).
-  const uploadSection = workflow.slice(
-    workflow.indexOf(uploadComment),
-    workflow.indexOf(publishComment),
-  );
-  assert.match(uploadSection, /gh release upload/, 'upload step must use gh release upload');
-  assert.doesNotMatch(uploadSection, /gh release create/, 'upload step must not re-create the release');
-
-  // 4. Verify the publish step removes draft status and does not re-upload.
-  const publishSection = workflow.slice(
-    workflow.indexOf(publishComment),
-    workflow.indexOf('Upload APK provenance evidence'),
-  );
-  assert.match(publishSection, /gh release edit/, 'publish step must use gh release edit');
-  assert.match(publishSection, /--draft=false/, 'publish step must set --draft=false');
-  assert.match(publishSection, /--latest/, 'publish step must mark the release as latest');
-  assert.doesNotMatch(publishSection, /gh release create/, 'publish step must not create another release');
-  assert.doesNotMatch(publishSection, /gh release upload/, 'publish step must not upload after publishing');
-
-  // 5. Verify the existing-release guard runs before any GitHub Release mutation.
-  assert.ok(
-    workflow.indexOf('Release already exists') <
-      workflow.indexOf(draftComment),
-    'existing-release guard must run before the draft creation step',
-  );
-
-  // 6. Verify there is exactly one gh release create in the GitHub Release job.
-  const githubReleaseJob = workflow.slice(workflow.indexOf('publish-github-release:'));
-  const createCount = (githubReleaseJob.match(/gh release create/g) || []).length;
-  assert.equal(createCount, 1, 'exactly one gh release create must appear in the GitHub Release job');
-});
-
-test('Sentry publication job enforces pub lockfile', async () => {
-  const workflow = await read('.github/workflows/build-production-android.yml');
-  const sentryJob = workflow.slice(
-    workflow.indexOf('publish-sentry-release:'),
-    workflow.indexOf('publish-github-release:'),
-  );
-  assert.match(
-    sentryJob,
-    /flutter pub get --enforce-lockfile/,
-    'publish-sentry-release job must use --enforce-lockfile',
-  );
-  assert.doesNotMatch(
-    sentryJob,
-    /flutter pub get(?! --enforce-lockfile)/,
-    'publish-sentry-release job must not use plain flutter pub get',
   );
 });

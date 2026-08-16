@@ -1,11 +1,10 @@
 # VersionDeck Release Runbook
 
-> **Containment status:** Public VersionDeck paths were paused on 2026-08-11.
-> The root, release manifest, and public browser
-> account-deletion page are intentionally unavailable.
-> Cached release records containing the last live
-> manifest are beyond the executable 24-hour cache limit and disable downloads.
-> Do not republish without authorization; see the
+> **Scoped containment status:** VersionDeck itself may be deployed with an
+> explicit disabled manifest, but verified APK download publication remains
+> contained. A successful signed APK evidence build does not automatically
+> authorize public downloads. The account-deletion surface is independent of
+> release publication. See the
 > [TASK-001 containment record](operations/production-containment.md).
 
 ## Purpose
@@ -41,7 +40,7 @@ Live build status is informational. It must not grant download trust to an in-pr
 
 ## Account-deletion surface
 
-The canonical page is `https://owntend.app/account-deletion.html`. Its browser flow uses Google OAuth with PKCE, consumes the callback verifier from `sessionStorage`, and keeps the resulting access token only in the current page's JavaScript memory. A page reload requires a new sign-in, but an unresolved deletion can resume status recovery from the 32-byte recovery key and expected user ID stored for that operation in `sessionStorage`. Destructive controls remain hidden until identity lookup; the page then shows a masked account identity and keeps the delete button disabled until the user selects an explicit permanent-deletion confirmation.
+The account-deletion page uses an explicitly allowlisted configured deployment URL. The current temporary public URL is `https://zuhak5.github.io/Owntend/account-deletion.html`; `https://owntend.app/account-deletion.html` remains an allowlisted future custom-domain URL. Its browser flow uses Google OAuth with PKCE, consumes the callback verifier from `sessionStorage`, and keeps the resulting access token only in the current page's JavaScript memory. A page reload requires a new sign-in, but an unresolved deletion can resume status recovery from the 32-byte recovery key and expected user ID stored for that operation in `sessionStorage`. Destructive controls remain hidden until identity lookup; the page then shows a masked account identity and keeps the delete button disabled until the user selects an explicit permanent-deletion confirmation.
 
 The page creates one 43-character unpadded base64url recovery key with Web Crypto and sends it with the confirmation to `POST /functions/v1/delete-account`. It reports success only after that response or `POST /functions/v1/account-deletion-status` returns `deleted: true`, `status: "deleted"`, and the authenticated/expected user's exact `user_id`. Ambiguous, pending, temporary, malformed, or mismatched results do not become success, and recovery reuses the same key. Redirect completion, Google sign-in, or a generic successful HTTP status is not deletion evidence. The browser page performs remote deletion only; it cannot erase installed-device databases, media, notifications, caches, secure storage, or user-exported backups.
 

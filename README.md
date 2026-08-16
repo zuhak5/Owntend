@@ -67,12 +67,17 @@ Documentation is part of the implementation contract. Humans, AI agents, bots, a
 
 ## Production releases
 
-Production publication is currently contained. The signing, backend mutation,
-Sentry, release, Play AAB, and VersionDeck automation objects are disabled. Historical releases
-remain preserved. See the
+Production publication remains under scoped containment. Exact-main signed APK
+and AAB evidence builds may run, but they do not authorize Sentry release
+mutation, GitHub Release/tag publication, Google Play upload or rollout, hosted
+backend mutation, or verified VersionDeck downloads. Historical releases remain
+preserved. See the
 [`TASK-001 containment record`](docs/operations/production-containment.md).
 
-Production Android builds validate production configuration, signing identity, package metadata, APK debuggability, checksum, tests, and Sentry release publication. Do not use the production build or release commands as ordinary local development commands.
+Production Android evidence builds validate production configuration, signing
+identity, package metadata, APK debuggability, checksums, tests, and provenance.
+Sentry runtime ingestion may use the public DSN, but Sentry release mutation
+remains a separate contained operation.
 
 See [`docs/operations/release-runbook.md`](docs/operations/release-runbook.md).
 

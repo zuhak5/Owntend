@@ -1,9 +1,10 @@
 # Sentry Operations
 
-> **Production release publication is contained.** The Sentry-bearing Android
-> release process has been disabled since 2026-08-11. Historical Build 44
-> evidence is retained, but no new Sentry release mutation is
-> authorized. Re-enable only under the owner and prerequisite matrix in the
+> **Sentry release mutation remains contained.** Since 2026-08-11, no new
+> production Sentry release mutation is authorized. Exact-main signed APK and
+> AAB evidence builds may run without a Sentry auth token; their symbol and
+> mapping artifacts are retained so a later separately authorized Sentry
+> publication can use the same verified build identity. See the
 > [TASK-001 containment record](operations/production-containment.md).
 
 ## Purpose
@@ -77,7 +78,7 @@ Scrubber tests must include nested maps/lists and representative authentication,
 
 ## Releases
 
-Production release publication is handled through `tool/publish_sentry_release.ps1`.
+When separately authorized, Sentry release publication is handled through `tool/publish_sentry_release.ps1`. The signed APK/AAB evidence workflows do not invoke it during containment.
 The Sentry token must not be available to signing, Supabase, or public client jobs.
 
 The release identifier must correspond to the built application release and source commit. The current protected release format is `app.owntend.mobile@x.y.z+N`, where `N` is also the Sentry `dist`. Release publication should associate commits and upload only the symbol artifacts needed for symbolication without uploading user data or repository secrets.

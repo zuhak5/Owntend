@@ -43,7 +43,7 @@ const BUILD_PHASES = [
   },
   {
     id: "publish",
-    label: "Publishing the release",
+    label: "Packaging verified build evidence",
     match: /upload production apk|attest production apk provenance|publish (?:github )?release/i,
   },
   {
@@ -415,7 +415,7 @@ function durationParts(seconds) {
 }
 
 export function formatRemainingTime(seconds) {
-  if (!Number.isFinite(seconds)) return "Calculating…";
+  if (!Number.isFinite(seconds)) return "Calculatingâ€¦";
   if (seconds < 60) return "Less than a minute";
   const minutes = Math.max(1, Math.round(seconds / 60));
   if (minutes < 60) return `About ${minutes} ${minutes === 1 ? "minute" : "minutes"}`;
@@ -427,7 +427,7 @@ export function formatRemainingTime(seconds) {
 }
 
 export function formatEtaRange(lowSeconds, highSeconds, fallbackSeconds) {
-  if (!Number.isFinite(fallbackSeconds)) return "Calculating…";
+  if (!Number.isFinite(fallbackSeconds)) return "Calculatingâ€¦";
   const low = durationParts(Number.isFinite(lowSeconds) ? lowSeconds : fallbackSeconds * 0.82);
   const high = durationParts(Number.isFinite(highSeconds) ? highSeconds : fallbackSeconds * 1.22);
   if (!low || !high) return formatRemainingTime(fallbackSeconds);
@@ -435,9 +435,9 @@ export function formatEtaRange(lowSeconds, highSeconds, fallbackSeconds) {
     if (Math.abs(Number(high.value) - Number(low.value)) <= 2) {
       return `About ${Math.max(1, Math.round(fallbackSeconds / 60))} min`;
     }
-    return `${low.value}–${high.value} min`;
+    return `${low.value}â€“${high.value} min`;
   }
-  return `${low.value}${low.unit ? ` ${low.unit}` : ""}–${high.value}${high.unit ? ` ${high.unit}` : ""}`;
+  return `${low.value}${low.unit ? ` ${low.unit}` : ""}â€“${high.value}${high.unit ? ` ${high.unit}` : ""}`;
 }
 
 export function formatElapsedTime(seconds) {
@@ -789,7 +789,7 @@ function initializeBuildStatus() {
 
     runLink.href = snapshot.runUrl;
     runLink.textContent = snapshot.runNumber ? `Run #${snapshot.runNumber}` : "Workflow run";
-    runMeta.textContent = `${formatElapsedTime(snapshot.elapsedSeconds)} · Updated just now`;
+    runMeta.textContent = `${formatElapsedTime(snapshot.elapsedSeconds)} Â· Updated just now`;
     phaseName.textContent = snapshot.currentPhaseName;
     stepName.textContent = snapshot.currentStepName;
 
@@ -824,10 +824,10 @@ function initializeBuildStatus() {
     const basis = snapshot.historySampleCount
       ? `${snapshot.historySampleCount} recent successful ${
           snapshot.historySampleCount === 1 ? "build" : "builds"
-        } · ${snapshot.estimateConfidence} confidence`
+        } Â· ${snapshot.estimateConfidence} confidence`
       : "Estimate improves after more successful builds";
     etaBasis.textContent = QUEUED_STATUSES.has(snapshot.status)
-      ? `Typical duration after approval and runner start · ${basis}`
+      ? `Typical duration after approval and runner start Â· ${basis}`
       : basis;
     elapsed.textContent = formatElapsedTime(snapshot.elapsedSeconds);
     renderSteps(snapshot);
