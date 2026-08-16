@@ -1,4 +1,4 @@
-name: Agent preproduction audit formatting
+name: Agent preproduction audit validation
 
 on:
   push:
@@ -6,11 +6,10 @@ on:
       - fix/preproduction-state-integrity-audit
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  format:
-    if: ${{ github.actor != 'github-actions[bot]' }}
+  validate:
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
@@ -22,17 +21,19 @@ jobs:
           flutter-version: "3.47.0"
           channel: stable
           cache: true
-      - name: Format source and tests
+      - name: Resolve dependencies
+        run: flutter pub get --enforce-lockfile
+      - name: Generate localization files
+        run: flutter gen-l10n
+      - name: Generate source files
+        run: dart run build_runner build
+      - name: Verify formatting
+        run: dart format --output=none --set-exit-if-changed lib test
+      - name: Analyze
+        run: flutter analyze --no-pub
+      - name: Run tests
         shell: pwsh
         run: |
-          dart format lib test
-          $changes = git status --porcelain -- lib test
-          if ([string]::IsNullOrWhiteSpace(($changes | Out-String))) {
-            Write-Host "No formatting changes needed."
-            exit 0
-          }
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add lib test
-          git commit -m "style: format sync race regressions"
-          git push
+          $ErrorActionPreference = "Stop"
+          flutter test --no-pub --concurrency=1 --timeout 3m --reporter expanded --exclude-tags production-config
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
