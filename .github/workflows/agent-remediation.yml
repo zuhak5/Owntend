@@ -19,34 +19,7 @@ jobs:
           fetch-depth: 0
 
       - name: Tighten one-time patcher guards
-        shell: python
-        run: |
-          from pathlib import Path
-
-          path = Path('tool/agent_remediation.py')
-          text = path.read_text(encoding='utf-8')
-
-          fish_helper = (
-              "String _fishBreedLabel(BuildContext context, String value) =>\n"
-              "    _fishTypeOptions.contains(value) ? _fishTypeLabel(context, value) : value;\n\n"
-          )
-          if text.count(fish_helper) != 1:
-              raise SystemExit('fish helper guard changed unexpectedly')
-          text = text.replace(fish_helper, '', 1)
-
-          target = '    "select extensions.is(\\n  (\\n    public.create_task_with_point_debit(",'
-          replacement = (
-              '    "select extensions.is(\\n  (\\n'
-              '    public.create_task_with_point_debit(\\n'
-              '      jsonb_build_object(\\n'
-              "        'operation_id', '44444444-0000-0000-0000-000000000002',",'
-          )
-          if text.count(target) != 1:
-              raise SystemExit(
-                  f'expected one SQL anchor declaration, found {text.count(target)}'
-              )
-          text = text.replace(target, replacement, 1)
-          path.write_text(text, encoding='utf-8')
+        run: python tool/fix_agent_patcher.py
 
       - name: Apply scoped remediation
         run: python tool/agent_remediation.py
@@ -54,6 +27,7 @@ jobs:
       - name: Remove temporary automation
         run: |
           rm tool/agent_remediation.py
+          rm tool/fix_agent_patcher.py
           rm .github/workflows/agent-remediation.yml
 
       - name: Check patch hygiene
