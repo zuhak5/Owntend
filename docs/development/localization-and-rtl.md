@@ -37,7 +37,7 @@ flutter gen-l10n
 
 Stable stored identifiers and wire values remain locale-neutral. Built-in category IDs, enum names, pet/fish tokens, and similar controlled values must be converted to localized display labels at the presentation boundary; user-entered names, notes, species, breeds, placement, and other free text remain exactly as entered.
 
-Category presentation is keyed by stable category ID rather than English category spelling. Quantity and recurrence text must use the existing ICU messages rather than manually composing English singular/plural fragments. Search indexes include English and Arabic aliases for controlled values so either language can discover the same canonical record without translating persisted data. Controlled search results must render through the same localized presenters used by the rest of the UI.
+Category presentation is keyed by stable category ID rather than English category spelling. Quantity and recurrence text must use the existing ICU messages rather than manually composing English singular/plural fragments. Search indexes include English and Arabic aliases for controlled values so either language can discover the same canonical record without translating persisted data. User-authored display text and machine search aliases live in separate FTS columns, so snippets never expose canonical aliases merely because an Arabic synonym matched. Controlled search results must render through the same localized presenters used by the rest of the UI.
 
 For relationship metadata that is not a sentence, use a direction-neutral separator such as `·` instead of embedding English grammar such as `in` or manually concatenating translated sentence fragments.
 

@@ -832,9 +832,23 @@ END
   }
 
   Future<void> _createSearchIndex() async {
+    final existing = await customSelect(
+      "SELECT sql FROM sqlite_master "
+      "WHERE type = 'table' AND name = 'search_index'",
+    ).getSingleOrNull();
+    if (existing != null) {
+      final definition = existing.read<String>('sql');
+      if (!definition.contains('display_body') ||
+          !definition.contains('search_terms')) {
+        // The FTS table is a derived cache. Recreate legacy layouts instead of
+        // carrying machine aliases in the user-visible snippet column.
+        await customStatement('DROP TABLE search_index');
+      }
+    }
     await customStatement(
       'CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5('
-      'entity_type UNINDEXED, entity_id UNINDEXED, title, body)',
+      'entity_type UNINDEXED, entity_id UNINDEXED, title, '
+      'display_body, search_terms)',
     );
   }
 
