@@ -511,39 +511,42 @@ void main() {
     expect(await db.select(db.assetTags).get(), hasLength(2));
   });
 
-  test('remote application suppresses outbox feedback', () async {
-    await store.discardMutation('area', 'area_first_floor');
-    final before = await store.pendingCount();
-    final spec = syncSpecByEntity['area']!;
+  test(
+    'remote application suppresses outbox feedback without owning pull cursor',
+    () async {
+      await store.discardMutation('area', 'area_first_floor');
+      final before = await store.pendingCount();
+      final spec = syncSpecByEntity['area']!;
 
-    await store.applyRemoteRecords([
-      SyncRecord(
-        spec: spec,
-        recordKey: 'area_first_floor',
-        values: {
-          'id': 'area_first_floor',
-          'name': 'Remote floor',
-          'kind': 'indoor',
-          'sort_order': 0,
-          'created_at': '2026-06-01T00:00:00.000Z',
-          'updated_at': '2026-06-28T00:00:00.000Z',
-          'archived_at': null,
-        },
-        clientModifiedAt: DateTime.utc(2026, 6, 28),
-        originDeviceId: 'remote-device',
-        revision: 2,
-        syncSeq: 20,
-        serverUpdatedAt: DateTime.utc(2026, 6, 28),
-      ),
-    ]);
+      await store.applyRemoteRecords([
+        SyncRecord(
+          spec: spec,
+          recordKey: 'area_first_floor',
+          values: {
+            'id': 'area_first_floor',
+            'name': 'Remote floor',
+            'kind': 'indoor',
+            'sort_order': 0,
+            'created_at': '2026-06-01T00:00:00.000Z',
+            'updated_at': '2026-06-28T00:00:00.000Z',
+            'archived_at': null,
+          },
+          clientModifiedAt: DateTime.utc(2026, 6, 28),
+          originDeviceId: 'remote-device',
+          revision: 2,
+          syncSeq: 20,
+          serverUpdatedAt: DateTime.utc(2026, 6, 28),
+        ),
+      ]);
 
-    final area = await (db.select(
-      db.areas,
-    )..where((row) => row.id.equals('area_first_floor'))).getSingle();
-    expect(area.name, 'Remote floor');
-    expect(await store.pendingCount(), before);
-    expect(await store.cursor('area'), 20);
-  });
+      final area = await (db.select(
+        db.areas,
+      )..where((row) => row.id.equals('area_first_floor'))).getSingle();
+      expect(area.name, 'Remote floor');
+      expect(await store.pendingCount(), before);
+      expect(await store.cursor('area'), 0);
+    },
+  );
 
   test(
     'remote application immediately refreshes Drift query streams',

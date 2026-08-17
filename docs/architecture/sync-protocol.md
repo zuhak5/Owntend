@@ -82,12 +82,14 @@ The pull worker:
 6. Records shadows and advances the cursor only after successful application.
 7. Continues until the current window is drained.
 
-Cursor advancement must not precede durable local application.
+The local mutations, shadows, and matching checkpoint for a completed pull page
+must commit in the same Drift transaction. Any failure rolls back both data
+application and checkpoint advancement so retry replays the page safely.
 
 ## Client Pull-Only Cursors and Healing Scan
 
 - **Change Feed Checkpoint Namespace**: The Change Feed cursor (`server_change_feed` in local SQLite `sync_cursors`) advances strictly during completed, ordered pull scans (`fetch_user_change_feed`).
-- **Push & Point-Fetch Isolation**: Push acknowledgements (`markMutationSucceeded`), maintenance RPC completions, conflict point-fetches, and Realtime hints update canonical entity shadows but **never** advance the change feed cursor.
+- **Push & Point-Fetch Isolation**: Push acknowledgements (`markMutationSucceeded`), maintenance RPC completions, conflict point-fetches, and Realtime hints may update canonical entity shadows but **never** advance either the change-feed cursor or legacy per-entity pull cursors. Only completed pull transactions own inbound checkpoints.
 - **Retention Gap Resnapshot**: When `fetch_user_change_feed` returns `resnapshot_required == true` (e.g. server retention window elapsed), the client resets the feed cursor to 0 and initiates an explicit account-bound initial hydration / resnapshot.
 - **Healing Scan Path**: The `runHealingScan` worker calls `validate_change_feed_parity()` RPC to discover remote rows absent locally or omitted by legacy cursors, pulling missing records without overwriting newer local outbox intent.
 

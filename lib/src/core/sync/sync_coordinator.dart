@@ -766,12 +766,16 @@ class SyncCoordinator implements CloudSyncRepository {
       }
 
       if (page.changes.isEmpty) {
-        await _localStore.setFeedCursor(page.nextSeq);
+        await _localStore.applyRemoteFeedPageAndCheckpoint(
+          records: const [],
+          lastSyncSeq: page.nextSeq,
+        );
         break;
       }
 
       remoteRecordCount += page.changes.length;
       final allSpecs = [...syncEntitySpecs, profileSyncSpec];
+      final pageRecords = <SyncRecord>[];
 
       for (final change in page.changes) {
         final entity = change['entity_type'] as String?;
@@ -794,7 +798,7 @@ class SyncCoordinator implements CloudSyncRepository {
             deletedAt: now,
             values: {'id': recordKey},
           );
-          await _localStore.applyRemoteFeedDelete(dummyRecord);
+          pageRecords.add(dummyRecord);
           meaningfulRemoteRecordCount++;
         } else {
           final canonical = await _remoteGateway.fetchRecordByKey(
@@ -803,7 +807,7 @@ class SyncCoordinator implements CloudSyncRepository {
             userId: userId,
           );
           if (canonical != null) {
-            await _localStore.applyRemoteFeedRecord(canonical);
+            pageRecords.add(canonical);
             meaningfulRemoteRecordCount++;
             if (spec.entity == 'maintenance_plan' ||
                 spec.entity == 'maintenance_record') {
@@ -813,7 +817,10 @@ class SyncCoordinator implements CloudSyncRepository {
         }
       }
 
-      await _localStore.setFeedCursor(page.nextSeq);
+      await _localStore.applyRemoteFeedPageAndCheckpoint(
+        records: pageRecords,
+        lastSyncSeq: page.nextSeq,
+      );
       currentSeq = page.nextSeq;
 
       if (!page.hasMore) break;
@@ -1055,29 +1062,12 @@ class SyncCoordinator implements CloudSyncRepository {
       }
     }
 
-    final deletions = remoteWinners
-        .where((record) => record.isDeleted)
-        .toList(growable: false);
     await _ensureActiveAccountScope(scope);
-    await _localStore.applyRemoteRecords(deletions);
-    if (firstSync) await _localStore.addHydrationUnits(deletions.length);
-    for (final seed in seeds) {
-      final checkpoint = cursorUpdates[seed.spec.entity]!;
-      final upserts = remoteWinners
-          .where(
-            (record) =>
-                record.spec.entity == seed.spec.entity && !record.isDeleted,
-          )
-          .toList(growable: false);
-      await _ensureActiveAccountScope(scope);
-      await _localStore.applyRemoteRecordsAndCheckpoint(
-        records: upserts,
-        entity: seed.spec.entity,
-        lastSyncSeq: checkpoint.$1,
-        lastRecordKey: checkpoint.$2,
-      );
-      if (firstSync) await _localStore.addHydrationUnits(upserts.length);
-    }
+    await _localStore.applyRemoteRecordsAndCheckpoints(
+      records: remoteWinners,
+      checkpoints: cursorUpdates,
+    );
+    if (firstSync) await _localStore.addHydrationUnits(remoteWinners.length);
     return _PullOutcome(
       maintenanceChanged: maintenanceChanged,
       remoteRecordCount: seeds.fold<int>(

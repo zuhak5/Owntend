@@ -1592,15 +1592,32 @@ WHERE entity = 'profile'
     });
   }
 
-  Future<void> applyRemoteRecordsAndCheckpoint({
+  Future<void> applyRemoteFeedPageAndCheckpoint({
     required List<SyncRecord> records,
-    required String entity,
     required int lastSyncSeq,
-    required String? lastRecordKey,
+  }) async {
+    await db.transaction(() async {
+      for (final record in records) {
+        if (record.isDeleted) {
+          await applyRemoteFeedDelete(record);
+        } else {
+          await applyRemoteFeedRecord(record);
+        }
+      }
+      await setFeedCursor(lastSyncSeq);
+    });
+  }
+
+  Future<void> applyRemoteRecordsAndCheckpoints({
+    required List<SyncRecord> records,
+    required Map<String, (int, String?)> checkpoints,
   }) async {
     await db.transaction(() async {
       await applyRemoteRecords(records);
-      await setCursor(entity, lastSyncSeq, lastRecordKey: lastRecordKey);
+      for (final entry in checkpoints.entries) {
+        final checkpoint = entry.value;
+        await setCursor(entry.key, checkpoint.$1, lastRecordKey: checkpoint.$2);
+      }
     });
   }
 
@@ -1641,19 +1658,6 @@ WHERE entity = 'profile'
         for (final record in upserts) {
           await _upsertLocal(record);
           await _saveShadow(record);
-        }
-        for (final record in records) {
-          final syncSeq = record.syncSeq;
-          if (syncSeq != null) {
-            await db
-                .into(db.syncCursors)
-                .insertOnConflictUpdate(
-                  SyncCursorsCompanion.insert(
-                    entity: record.spec.entity,
-                    lastSyncSeq: Value(syncSeq),
-                  ),
-                );
-          }
         }
       });
     });
@@ -1986,16 +1990,8 @@ ON CONFLICT(key) DO UPDATE SET
     }
 
     await db.transaction(() async {
-      Future<void> checkpointWithoutApplying(SyncRecord canonical) async {
+      Future<void> recordCanonicalWithoutApplying(SyncRecord canonical) async {
         await _saveShadow(canonical);
-        final syncSeq = canonical.syncSeq;
-        if (syncSeq != null) {
-          await setCursor(
-            canonical.spec.entity,
-            syncSeq,
-            lastRecordKey: canonical.recordKey,
-          );
-        }
       }
 
       final pendingOperation =
@@ -2010,8 +2006,8 @@ ON CONFLICT(key) DO UPDATE SET
         // Undo can remove the composite mutation while its RPC is in flight.
         // Retain the locally undone state and only record what reached cloud;
         // the compensating generic mutations remain queued.
-        await checkpointWithoutApplying(plan);
-        await checkpointWithoutApplying(record);
+        await recordCanonicalWithoutApplying(plan);
+        await recordCanonicalWithoutApplying(record);
         return;
       }
 
@@ -2058,9 +2054,9 @@ ON CONFLICT(key) DO UPDATE SET
 
       if (preserveNewerLocalPlan) {
         // A later offline completion or edit already changed this plan.
-        // Keep that local value while remembering the canonical cloud row
-        // for conflict detection and incremental-pull checkpointing.
-        await checkpointWithoutApplying(plan);
+        // Keep that local value while remembering the canonical cloud row for
+        // conflict detection. Inbound pull processing exclusively owns cursors.
+        await recordCanonicalWithoutApplying(plan);
       }
 
       await (db.delete(db.syncOutbox)..where(
@@ -2528,14 +2524,6 @@ ON CONFLICT(key) DO UPDATE SET
     return await db.transaction(() async {
       if (canonical != null) {
         await _saveShadow(canonical);
-        final syncSeq = canonical.syncSeq;
-        if (syncSeq != null) {
-          await setCursor(
-            canonical.spec.entity,
-            syncSeq,
-            lastRecordKey: canonical.recordKey,
-          );
-        }
       }
       if (mutation.operation == 'delete') {
         await (db.delete(db.syncShadows)..where(
