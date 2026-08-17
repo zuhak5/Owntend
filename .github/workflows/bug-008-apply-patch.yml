@@ -1,0 +1,336 @@
+name: BUG-008 apply patch
+
+on:
+  push:
+    branches:
+      - fix/bug-008-hydration-lease-readiness
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply exact BUG-008 coordinator patch
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('lib/src/core/sync/sync_coordinator.dart')
+          text = path.read_text()
+
+          def replace_once(old: str, new: str) -> None:
+              global text
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'expected exactly one match, found {count}: {old[:120]!r}')
+              text = text.replace(old, new, 1)
+
+          replace_once(
+          """    this.autoEnableOnAuthChange = true,
+              this.localFinalizationTimeout = const Duration(seconds: 8),
+            }) : _connectivity = connectivity ?? const AlwaysOnlineSyncConnectivity(),""",
+          """    this.autoEnableOnAuthChange = true,
+              this.localFinalizationTimeout = const Duration(seconds: 8),
+              this.initialHydrationLeaseRetryDelay = const Duration(seconds: 2),
+              this.initialHydrationLeaseWaitTimeout = const Duration(seconds: 30),
+              this.leaseDuration = const Duration(minutes: 5),
+            }) : _connectivity = connectivity ?? const AlwaysOnlineSyncConnectivity(),""",
+          )
+
+          replace_once(
+          """  final bool autoEnableOnAuthChange;
+            final Duration localFinalizationTimeout;
+            final StreamController<SyncStatus> _statusController =""",
+          """  final bool autoEnableOnAuthChange;
+            final Duration localFinalizationTimeout;
+            final Duration initialHydrationLeaseRetryDelay;
+            final Duration initialHydrationLeaseWaitTimeout;
+            final Duration leaseDuration;
+            final StreamController<SyncStatus> _statusController =""",
+          )
+
+          replace_once(
+          """  Future<void>? _activeSync;
+            SyncWork? _activeWork;""",
+          """  Future<SyncRunOutcome>? _activeSync;
+            SyncWork? _activeWork;""",
+          )
+
+          old_enable = """  @override
+            Future<void> enable() => _serializeAccountTransition(() async {
+              final session = _authRepository.currentSession;
+              if (session == null) {
+                throw const SupabaseFailure(
+                  kind: SupabaseFailureKind.authentication,
+                  message: 'Sign in before enabling cloud sync.',
+                );
+              }
+              final account = await _localStore.account();
+              if (account.boundUserId != null && account.boundUserId != session.userId) {
+                throw const SupabaseFailure(
+                  kind: SupabaseFailureKind.permissionDenied,
+                  message:
+                      'This device data is linked to a different cloud account. '
+                      'Sign back into that account or explicitly reset local data.',
+                );
+              }
+              _accountDeletionInProgress = false;
+              _deletingUserId = null;
+              _mergeConfirmationRequired = false;
+              final pristineCloudBootstrap = await _localStore
+                  .isPristineForCloudBootstrap();
+              await _localStore.bindIdentity(session.userId);
+              if (!pristineCloudBootstrap) {
+                await _localStore.enqueueInitialSnapshot();
+              }
+              await _startSync(mode: SyncMode.initialHydration);
+            });
+          """
+          new_enable = """  @override
+            Future<void> enable() => _serializeAccountTransition(() async {
+              final session = _authRepository.currentSession;
+              if (session == null) {
+                throw const SupabaseFailure(
+                  kind: SupabaseFailureKind.authentication,
+                  message: 'Sign in before enabling cloud sync.',
+                );
+              }
+              final account = await _localStore.account();
+              if (account.boundUserId != null && account.boundUserId != session.userId) {
+                throw const SupabaseFailure(
+                  kind: SupabaseFailureKind.permissionDenied,
+                  message:
+                      'This device data is linked to a different cloud account. '
+                      'Sign back into that account or explicitly reset local data.',
+                );
+              }
+              _accountDeletionInProgress = false;
+              _deletingUserId = null;
+              _mergeConfirmationRequired = false;
+              final pristineCloudBootstrap = await _localStore
+                  .isPristineForCloudBootstrap();
+              await _localStore.bindIdentity(session.userId);
+              if (!pristineCloudBootstrap) {
+                await _localStore.enqueueInitialSnapshot();
+              }
+              await _awaitInitialHydrationReadiness(session.userId);
+            });
+
+            Future<void> _awaitInitialHydrationReadiness(String expectedUserId) async {
+              final deadline = DateTime.now().add(initialHydrationLeaseWaitTimeout);
+              while (true) {
+                if (_accountDeletionInProgress ||
+                    _authRepository.currentSession?.userId != expectedUserId) {
+                  throw const SupabaseFailure(
+                    kind: SupabaseFailureKind.authentication,
+                    message: 'The cloud account changed before initial hydration completed.',
+                  );
+                }
+
+                final outcome = await _startSyncWithOutcome(
+                  mode: SyncMode.initialHydration,
+                );
+
+                if (_accountDeletionInProgress ||
+                    _authRepository.currentSession?.userId != expectedUserId) {
+                  throw const SupabaseFailure(
+                    kind: SupabaseFailureKind.authentication,
+                    message: 'The cloud account changed before initial hydration completed.',
+                  );
+                }
+                if (await _localStore.hasCompleteSnapshotForUser(expectedUserId)) {
+                  return;
+                }
+
+                switch (outcome) {
+                  case SyncRunOutcome.completed:
+                    throw const SupabaseFailure(
+                      kind: SupabaseFailureKind.unknown,
+                      message:
+                          'Initial cloud hydration completed without a durable Home snapshot. '
+                          'Retry to finish startup safely.',
+                      retryable: true,
+                    );
+                  case SyncRunOutcome.notEligible:
+                    throw const SupabaseFailure(
+                      kind: SupabaseFailureKind.unknown,
+                      message:
+                          'Initial cloud hydration is no longer eligible to continue. '
+                          'Retry after cloud sync becomes available.',
+                      retryable: true,
+                    );
+                  case SyncRunOutcome.waitingForSyncLease:
+                    final now = DateTime.now();
+                    if (!now.isBefore(deadline)) {
+                      throw const SupabaseFailure(
+                        kind: SupabaseFailureKind.unknown,
+                        message:
+                            'Another sync operation is still running. '
+                            'Retry initial cloud hydration shortly.',
+                        retryable: true,
+                      );
+                    }
+                    final remaining = deadline.difference(now);
+                    final delay =
+                        initialHydrationLeaseRetryDelay.compareTo(remaining) <= 0
+                        ? initialHydrationLeaseRetryDelay
+                        : remaining;
+                    if (delay > Duration.zero) {
+                      await Future<void>.delayed(delay);
+                    }
+                }
+              }
+            }
+          """
+          replace_once(old_enable, new_enable)
+
+          replace_once(
+          """  Future<void> _startSync({required SyncMode mode}) {
+              if (_accountDeletionInProgress) {
+                AppLogger.info('sync_skipped_account_deletion_in_progress');
+                return Future<void>.value();
+              }""",
+          """  Future<void> _startSync({required SyncMode mode}) async {
+              await _startSyncWithOutcome(mode: mode);
+            }
+
+            Future<SyncRunOutcome> _startSyncWithOutcome({required SyncMode mode}) {
+              if (_accountDeletionInProgress) {
+                AppLogger.info('sync_skipped_account_deletion_in_progress');
+                return Future<SyncRunOutcome>.value(SyncRunOutcome.notEligible);
+              }""",
+          )
+
+          replace_once(
+          """  Future<void> _runSync(SyncWork requestedWork, {required int attempt}) async {
+              _ActiveAccountScope? activeScope;
+              if (_accountDeletionInProgress) return;
+              final session = _authRepository.currentSession;
+              final account = await _localStore.existingAccount();
+              if (account == null) return;
+              if (!account.enabled) return;""",
+          """  Future<SyncRunOutcome> _runSync(
+              SyncWork requestedWork, {
+              required int attempt,
+            }) async {
+              _ActiveAccountScope? activeScope;
+              if (_accountDeletionInProgress) return SyncRunOutcome.notEligible;
+              final session = _authRepository.currentSession;
+              final account = await _localStore.existingAccount();
+              if (account == null) return SyncRunOutcome.notEligible;
+              if (!account.enabled) return SyncRunOutcome.notEligible;""",
+          )
+
+          replace_once(
+          """      await _emit();
+                  return;
+                }
+                activeScope = _ActiveAccountScope(""",
+          """      await _emit();
+                  return SyncRunOutcome.notEligible;
+                }
+                activeScope = _ActiveAccountScope(""",
+          )
+
+          replace_once(
+          """      await _localStore.recordSyncBlocked(_messageOverride!);
+                  await _emit();
+                  return;
+                }
+                await _ensureActiveAccountScope(activeScope);""",
+          """      await _localStore.recordSyncBlocked(_messageOverride!);
+                  await _emit();
+                  return SyncRunOutcome.notEligible;
+                }
+                await _ensureActiveAccountScope(activeScope);""",
+          )
+
+          replace_once(
+          """    if (!await _localStore.acquireLease(leaseOwner)) {
+                  _phaseOverride = SyncPhase.syncing;
+                  _messageOverride =
+                      'Another sync operation is already running. '
+                      'Owntend will retry shortly.';
+                  await _emit();
+                  _scheduleAutomaticSync(delay: const Duration(seconds: 2));
+                  return;
+                }""",
+          """    if (!await _localStore.acquireLease(
+                  leaseOwner,
+                  duration: leaseDuration,
+                )) {
+                  _phaseOverride = SyncPhase.waitingForSyncLease;
+                  _messageOverride =
+                      'Another sync operation is already running. '
+                      'Owntend is waiting for hydration readiness.';
+                  await _emit();
+                  _scheduleAutomaticSync(delay: initialHydrationLeaseRetryDelay);
+                  return SyncRunOutcome.waitingForSyncLease;
+                }""",
+          )
+
+          replace_once(
+          """      if (attempt != _syncAttemptSerial) return;
+                  await _ensureActiveAccountScope(activeScope);
+                  _phaseOverride = SyncPhase.ready;
+                  _messageOverride = null;
+                } on _AccountScopeInactive {""",
+          """      if (attempt != _syncAttemptSerial) return SyncRunOutcome.notEligible;
+                  await _ensureActiveAccountScope(activeScope);
+                  _phaseOverride = SyncPhase.ready;
+                  _messageOverride = null;
+                  return SyncRunOutcome.completed;
+                } on _AccountScopeInactive {""",
+          )
+
+          replace_once(
+          """      AppLogger.info(
+                    'sync_account_scope_discarded',
+                    fields: {'attempt': attempt},
+                  );
+                  return;
+                } on Object catch (error) {""",
+          """      AppLogger.info(
+                    'sync_account_scope_discarded',
+                    fields: {'attempt': attempt},
+                  );
+                  return SyncRunOutcome.notEligible;
+                } on Object catch (error) {""",
+          )
+
+          replace_once(
+          """        AppLogger.info(
+                      'sync_account_scope_failure_discarded',
+                      fields: {'attempt': attempt},
+                    );
+                    return;
+                  }
+                  final failure = SupabaseFailure.from(error);""",
+          """        AppLogger.info(
+                      'sync_account_scope_failure_discarded',
+                      fields: {'attempt': attempt},
+                    );
+                    return SyncRunOutcome.notEligible;
+                  }
+                  final failure = SupabaseFailure.from(error);""",
+          )
+
+          path.write_text(text)
+          PY
+          rm .github/workflows/bug-008-apply-patch.yml
+          git diff --check
+      - name: Commit final source-only patch
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add lib/src/core/sync/sync_coordinator.dart .github/workflows/bug-008-apply-patch.yml
+          git commit -m 'Fix BUG-008 hydration lease readiness'
+          git push
