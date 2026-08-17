@@ -63,64 +63,70 @@ void main() {
     );
   });
 
-  test('successful barrier runs before delegate sign-out and forwards scope', () async {
-    final events = <String>[];
-    final delegate = _RecordingAuthRepository(events);
-    final repository = AccountSafetyAuthRepository(
-      delegate,
-      barrier: AccountSafetyBarrier(
-        prepareAccountScope: (userId) async {
-          events.add('prepare:$userId');
-        },
-        cancelBackgroundWork: () async {
-          events.add('cancel-background');
-        },
-        releaseAccountScope: (userId) async {
-          events.add('release:$userId');
-        },
-      ),
-    );
+  test(
+    'successful barrier runs before delegate sign-out and forwards scope',
+    () async {
+      final events = <String>[];
+      final delegate = _RecordingAuthRepository(events);
+      final repository = AccountSafetyAuthRepository(
+        delegate,
+        barrier: AccountSafetyBarrier(
+          prepareAccountScope: (userId) async {
+            events.add('prepare:$userId');
+          },
+          cancelBackgroundWork: () async {
+            events.add('cancel-background');
+          },
+          releaseAccountScope: (userId) async {
+            events.add('release:$userId');
+          },
+        ),
+      );
 
-    await repository.signOut(allDevices: true);
+      await repository.signOut(allDevices: true);
 
-    expect(delegate.signOutCalls, 1);
-    expect(delegate.lastAllDevices, isTrue);
-    expect(delegate.currentSession, isNull);
-    expect(
-      events,
-      <String>[
-        'prepare:user-1',
-        'cancel-background',
-        'delegate-sign-out',
-        'release:user-1',
-      ],
-    );
-  });
+      expect(delegate.signOutCalls, 1);
+      expect(delegate.lastAllDevices, isTrue);
+      expect(delegate.currentSession, isNull);
+      expect(
+        events,
+        <String>[
+          'prepare:user-1',
+          'cancel-background',
+          'delegate-sign-out',
+          'release:user-1',
+        ],
+      );
+    },
+  );
 
-  test('barrier release failure does not turn a completed sign-out into failure', () async {
-    final events = <String>[];
-    final delegate = _RecordingAuthRepository(events);
-    final repository = AccountSafetyAuthRepository(
-      delegate,
-      barrier: AccountSafetyBarrier(
-        prepareAccountScope: (userId) async {
-          events.add('prepare:$userId');
-        },
-        cancelBackgroundWork: () async {
-          events.add('cancel-background');
-        },
-        releaseAccountScope: (userId) async {
-          events.add('release:$userId');
-          throw StateError('resume failed');
-        },
-      ),
-    );
+  test(
+    'barrier release failure does not turn a completed sign-out into failure',
+    () async {
+      final events = <String>[];
+      final delegate = _RecordingAuthRepository(events);
+      final repository = AccountSafetyAuthRepository(
+        delegate,
+        barrier: AccountSafetyBarrier(
+          prepareAccountScope: (userId) async {
+            events.add('prepare:$userId');
+          },
+          cancelBackgroundWork: () async {
+            events.add('cancel-background');
+          },
+          releaseAccountScope: (userId) async {
+            events.add('release:$userId');
+            throw StateError('resume failed');
+          },
+        ),
+      );
 
-    await repository.signOut();
+      await repository.signOut();
 
-    expect(delegate.signOutCalls, 1);
-    expect(delegate.currentSession, isNull);
-  });
+      expect(delegate.signOutCalls, 1);
+      expect(delegate.currentSession, isNull);
+    },
+  );
 }
 
 class _RecordingAuthRepository implements AuthRepository {
