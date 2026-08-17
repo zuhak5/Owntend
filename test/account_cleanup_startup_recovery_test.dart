@@ -25,7 +25,7 @@ void main() {
   test('successful sign-out completion cannot resume account-scoped work', () {
     final startup = File(
       'lib/src/features/startup/presentation/startup_bootstrap.dart',
-    ).readAsStringSync();
+    ).readAsStringSync().replaceAll('\r\n', '\n');
     final sync = File('lib/src/core/sync/sync_coordinator.dart')
         .readAsStringSync();
 
