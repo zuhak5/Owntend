@@ -189,35 +189,32 @@ void main() {
       expect(stagedMedia, isEmpty);
     });
 
-    test(
-      'captures account scope before the restore barrier and persists cloud intent',
-      () async {
-        final db = await _openDatabase(docs, databases);
-        await _seedRealisticData(db, root);
-        final syncStore = LocalSyncStore(db);
-        await syncStore.bindIdentity('user-a');
-        await syncStore.recordSyncSuccess(DateTime.now());
+    test('captures account scope before the restore barrier and persists cloud intent', () async {
+      final db = await _openDatabase(docs, databases);
+      await _seedRealisticData(db, root);
+      final syncStore = LocalSyncStore(db);
+      await syncStore.bindIdentity('user-a');
+      await syncStore.recordSyncSuccess(DateTime.now());
 
-        final journalStore = InMemoryRestoreJournalStore();
-        RestoreJournalEntry? entryAtBarrier;
-        final service = ZipBackupService(
-          db,
-          journalStore: journalStore,
-          onBeforeRestoreBarrier: () async {
-            entryAtBarrier = await journalStore.getActiveEntry();
-          },
-        );
-        final backupPath = await service.exportBackup();
-        await db.delete(db.syncOutbox).go();
+      final journalStore = InMemoryRestoreJournalStore();
+      RestoreJournalEntry? entryAtBarrier;
+      final service = ZipBackupService(
+        db,
+        journalStore: journalStore,
+        onBeforeRestoreBarrier: () async {
+          entryAtBarrier = await journalStore.getActiveEntry();
+        },
+      );
+      final backupPath = await service.exportBackup();
+      await db.delete(db.syncOutbox).go();
 
-        await service.restoreBackup(backupPath);
+      await service.restoreBackup(backupPath);
 
-        expect(entryAtBarrier?.accountScope, 'user-a');
-        expect(entryAtBarrier?.updateCloudIntent, isTrue);
-        expect(await journalStore.getActiveEntry(), isNull);
-        expect(await syncStore.pendingCount(), greaterThan(0));
-      },
-    );
+      expect(entryAtBarrier?.accountScope, 'user-a');
+      expect(entryAtBarrier?.updateCloudIntent, isTrue);
+      expect(await journalStore.getActiveEntry(), isNull);
+      expect(await syncStore.pendingCount(), greaterThan(0));
+    });
 
     test('local-only restore durably pauses cloud synchronization', () async {
       final db = await _openDatabase(docs, databases);

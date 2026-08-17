@@ -267,34 +267,37 @@ void main() {
       expect(fakeSync.calls, ['pauseAfterLocalRestore']);
     });
 
-    test('fails closed when recovery account differs from local binding', () async {
-      final store = InMemoryRestoreJournalStore();
-      final fakeSync = _FakeLocalSyncStore(boundUserId: 'user-b');
-      final now = DateTime.now();
-      final entry = RestoreJournalEntry(
-        version: 1,
-        journalId: 'j-mismatch',
-        accountScope: 'user-a',
-        archivePath: '/tmp/mismatch.zip',
-        archiveHash: 'hash-mismatch',
-        phase: RestorePhase.dbCommitComplete,
-        updateCloudIntent: true,
-        createdAt: now,
-        updatedAt: now,
-      );
-      await store.saveEntry(entry);
+    test(
+      'fails closed when recovery account differs from local binding',
+      () async {
+        final store = InMemoryRestoreJournalStore();
+        final fakeSync = _FakeLocalSyncStore(boundUserId: 'user-b');
+        final now = DateTime.now();
+        final entry = RestoreJournalEntry(
+          version: 1,
+          journalId: 'j-mismatch',
+          accountScope: 'user-a',
+          archivePath: '/tmp/mismatch.zip',
+          archiveHash: 'hash-mismatch',
+          phase: RestorePhase.dbCommitComplete,
+          updateCloudIntent: true,
+          createdAt: now,
+          updatedAt: now,
+        );
+        await store.saveEntry(entry);
 
-      await expectLater(
-        RestoreJournalResolver(
-          journalStore: store,
-          localSyncStore: fakeSync,
-        ).resolveActiveJournal(),
-        throwsA(isA<StateError>()),
-      );
+        await expectLater(
+          RestoreJournalResolver(
+            journalStore: store,
+            localSyncStore: fakeSync,
+          ).resolveActiveJournal(),
+          throwsA(isA<StateError>()),
+        );
 
-      expect((await store.getActiveEntry())?.journalId, 'j-mismatch');
-      expect(fakeSync.calls, isEmpty);
-    });
+        expect((await store.getActiveEntry())?.journalId, 'j-mismatch');
+        expect(fakeSync.calls, isEmpty);
+      },
+    );
 
     test('blocks startup on unsupported future journal version', () async {
       final store = InMemoryRestoreJournalStore();
