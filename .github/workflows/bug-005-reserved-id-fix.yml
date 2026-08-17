@@ -29,73 +29,79 @@ jobs:
           from pathlib import Path
           import re
 
-          path = Path('lib/src/features/maintenance/application/task_creation_controller.dart')
-          text = path.read_text(encoding='utf-8')
-          gate_pattern = re.compile(
-              r"      if \(existingOperation == null && monetizationRepo != null\) \{.*?"
-              r"      final operationId = existingOperation\?\.operationId \?\? _uuid\.v7\(\);",
-              re.S,
-          )
+          controller_path = Path('lib/src/features/maintenance/application/task_creation_controller.dart')
+          text = controller_path.read_text(encoding='utf-8')
+
+          gate_start_marker = "      if (existingOperation == null && monetizationRepo != null) {"
+          gate_end_marker = "      final operationId = existingOperation?.operationId ?? _uuid.v7();"
+          gate_start = text.index(gate_start_marker)
+          gate_end = text.index(gate_end_marker, gate_start) + len(gate_end_marker)
           gate_replacement = """      final hasRetainedPayload =
-                  existingOperation?.requestPayload.isNotEmpty ?? false;
-              final hasRetainedHash =
-                  existingOperation?.requestHash.trim().isNotEmpty ?? false;
-              if (existingOperation != null &&
-                  (existingOperation.accountScope != accountScope ||
-                      hasRetainedPayload != hasRetainedHash)) {
-                throw const TaskCreationFailure(
-                  'The retained charged operation cannot be replayed safely.',
-                  code: TaskCreationFailureCode.operationIdReused,
-                );
-              }
-              final isRetainedReplay = hasRetainedPayload && hasRetainedHash;
+              existingOperation?.requestPayload.isNotEmpty ?? false;
+          final hasRetainedHash =
+              existingOperation?.requestHash.trim().isNotEmpty ?? false;
+          if (existingOperation != null &&
+              (existingOperation.accountScope != accountScope ||
+                  hasRetainedPayload != hasRetainedHash)) {
+            throw const TaskCreationFailure(
+              'The retained charged operation cannot be replayed safely.',
+              code: TaskCreationFailureCode.operationIdReused,
+            );
+          }
+          final isRetainedReplay = hasRetainedPayload && hasRetainedHash;
 
-              if (!isRetainedReplay && monetizationRepo != null) {
-                await _recoverBeforeNewChargedOperation(
-                  operationStore: operationStore,
-                  accountScope: accountScope,
-                );
-              }
+          if (!isRetainedReplay && monetizationRepo != null) {
+            await _recoverBeforeNewChargedOperation(
+              operationStore: operationStore,
+              accountScope: accountScope,
+            );
+          }
 
-              final operationId = existingOperation?.operationId ?? _uuid.v7();"""
-          text, count = gate_pattern.subn(gate_replacement, text, count=1)
-          if count != 1:
-              raise SystemExit(f'recovery gate: expected 1 match, found {count}')
+          final operationId = existingOperation?.operationId ?? _uuid.v7();"""
+          text = text[:gate_start] + gate_replacement + text[gate_end:]
 
-          replay_pattern = re.compile(
-              r"      if \(existingOperation != null\) \{.*?"
-              r"      \} else \{\n        requestHash = computedRequestHash;",
-              re.S,
-          )
-          replay_replacement = """      if (isRetainedReplay) {
-                if (existingOperation!.requestPayload['request_hash'] !=
-                    existingOperation.requestHash) {
-                  throw const TaskCreationFailure(
-                    'The retained charged operation cannot be replayed safely.',
-                    code: TaskCreationFailureCode.operationIdReused,
-                  );
-                }
-                requestHash = existingOperation.requestHash;
-                requestPayload = Map<String, dynamic>.from(
-                  existingOperation.requestPayload,
-                );
-              } else {
-                requestHash = computedRequestHash;"""
-          text, count = replay_pattern.subn(replay_replacement, text, count=1)
-          if count != 1:
-              raise SystemExit(f'replay selection: expected 1 match, found {count}')
-          path.write_text(text, encoding='utf-8')
+          request_start_marker = "      final Map<String, dynamic> requestPayload;"
+          operation_marker = "      final operation = TaskCreationOperation("
+          request_start = text.index(request_start_marker)
+          request_end = text.index(operation_marker, request_start)
+          request_replacement = """      final Map<String, dynamic> requestPayload;
+          final String requestHash;
+          if (isRetainedReplay) {
+            if (existingOperation!.requestPayload['request_hash'] !=
+                existingOperation.requestHash) {
+              throw const TaskCreationFailure(
+                'The retained charged operation cannot be replayed safely.',
+                code: TaskCreationFailureCode.operationIdReused,
+              );
+            }
+            requestHash = existingOperation.requestHash;
+            requestPayload = Map<String, dynamic>.from(
+              existingOperation.requestPayload,
+            );
+          } else {
+            requestHash = computedRequestHash;
+            requestPayload = {
+              ...unsignedRequestPayload,
+              'request_hash': requestHash,
+            };
+          }
+
+"""
+          text = text[:request_start] + request_replacement + text[request_end:]
+          controller_path.write_text(text, encoding='utf-8')
 
           test_path = Path('test/bug_005_charged_operation_recovery_test.dart')
           test = test_path.read_text(encoding='utf-8')
-          marker = """    healthGroup: HealthGroup.other,
-              accountScope: 'account-1',
-            );
+          call_pattern = re.compile(
+              r"(final created = await controller\.createNewTask\(.*?accountScope: 'account-1',\n)(\s*\);)",
+              re.S,
+          )
+          matches = list(call_pattern.finditer(test))
+          if len(matches) != 2:
+              raise SystemExit(f'expected 2 createNewTask calls, found {len(matches)}')
 
-            expect(created, isFalse);"""
-          replacement = """    healthGroup: HealthGroup.other,
-              accountScope: 'account-1',
-              existingOperation: TaskCreationOperation(
+          placeholders = [
+              """      existingOperation: TaskCreationOperation(
                 operationId: 'op-reserved-next',
                 planId: 'plan-reserved-next',
                 accountScope: 'account-1',
@@ -105,42 +111,23 @@ jobs:
                 createdAt: now,
                 updatedAt: now,
               ),
-            );
-
-            expect(created, isFalse);"""
-          if marker not in test:
-              marker = marker.replace('            ', '    ')
-              replacement = replacement.replace('            ', '    ')
-          if marker not in test:
-              raise SystemExit('pending recovery test anchor missing')
-          test = test.replace(marker, replacement, 1)
-
-          marker = """      healthGroup: HealthGroup.other,
-                accountScope: 'account-1',
-              );
-
-              expect(created, isTrue);"""
-          replacement = """      healthGroup: HealthGroup.other,
-                accountScope: 'account-1',
-                existingOperation: TaskCreationOperation(
-                  operationId: 'op-reserved-new',
-                  planId: 'plan-reserved-new',
-                  accountScope: 'account-1',
-                  requestPayload: const {},
-                  requestHash: '',
-                  state: TaskCreationOperationState.submitting,
-                  createdAt: DateTime.utc(2026, 8, 17),
-                  updatedAt: DateTime.utc(2026, 8, 17),
-                ),
-              );
-
-              expect(created, isTrue);"""
-          if marker not in test:
-              marker = marker.replace('              ', '      ')
-              replacement = replacement.replace('              ', '      ')
-          if marker not in test:
-              raise SystemExit('new operation test anchor missing')
-          test = test.replace(marker, replacement, 1)
+""",
+              """        existingOperation: TaskCreationOperation(
+          operationId: 'op-reserved-new',
+          planId: 'plan-reserved-new',
+          accountScope: 'account-1',
+          requestPayload: const {},
+          requestHash: '',
+          state: TaskCreationOperationState.submitting,
+          createdAt: DateTime.utc(2026, 8, 17),
+          updatedAt: DateTime.utc(2026, 8, 17),
+        ),
+""",
+          ]
+          for index in (1, 0):
+              match = matches[index]
+              replacement = match.group(1) + placeholders[index] + match.group(2)
+              test = test[:match.start()] + replacement + test[match.end():]
           test_path.write_text(test, encoding='utf-8')
           '@ | python -
       - name: Format
