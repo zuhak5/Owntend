@@ -17,8 +17,7 @@ replace_once(
 
 path = Path("lib/src/core/services/reminder_schedule_reconciler.dart")
 text = path.read_text()
-text = text.replace(
-    """  NotificationReconciliationConsumer({
+old_constructor = """  NotificationReconciliationConsumer({
     required AppDatabase database,
     required NotificationScheduler scheduler,
     required NotificationReconciliationAccountGuard accountGuard,
@@ -33,8 +32,8 @@ text = text.replace(
   final AppDatabase _database;
   final NotificationScheduler _scheduler;
   final NotificationReconciliationAccountGuard _accountGuard;
-""",
-    """  NotificationReconciliationConsumer({
+"""
+new_constructor = """  NotificationReconciliationConsumer({
     required this.database,
     required this.scheduler,
     required this.accountGuard,
@@ -46,12 +45,13 @@ text = text.replace(
   final AppDatabase database;
   final NotificationScheduler scheduler;
   final NotificationReconciliationAccountGuard accountGuard;
-""",
-    1,
-)
-text = text.replace("_accountGuard", "accountGuard")
-text = text.replace("_scheduler", "scheduler")
-text = text.replace("_database", "database")
+"""
+if old_constructor not in text:
+    raise SystemExit("missing consumer constructor block")
+text = text.replace(old_constructor, new_constructor, 1)
+text = text.replace("_database.", "database.")
+text = text.replace("_scheduler.", "scheduler.")
+text = text.replace("_accountGuard(", "accountGuard(")
 path.write_text(text)
 
 replace_once(
