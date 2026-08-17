@@ -37,6 +37,8 @@ class _StatefulGateway implements SupabaseSyncGateway {
   Completer<void>? materializeMediaGate;
   Completer<void>? pullGate;
   Completer<void>? startRealtimeGate;
+  Completer<void>? fetchRecordByKeyGate;
+  var fetchRecordByKeyCalls = 0;
 
   @override
   Future<Set<String>> fetchAuthoritativeRecordKeys({
@@ -95,6 +97,8 @@ class _StatefulGateway implements SupabaseSyncGateway {
     required String recordKey,
     required String userId,
   }) async {
+    fetchRecordByKeyCalls++;
+    await fetchRecordByKeyGate?.future;
     for (final item in _records) {
       if (item.userId == userId &&
           item.record.spec.entity == spec.entity &&
@@ -2941,6 +2945,173 @@ void main() {
       });
     },
   );
+
+  test(
+    'realtime delete preserves and replays newer pending local intent',
+    () async {
+      final db = AppDatabase(executor: NativeDatabase.memory());
+      addTearDown(db.close);
+      final store = LocalSyncStore(db);
+      final account = await store.account();
+      await store.setEnabled(enabled: true, boundUserId: 'user-1');
+      await db.delete(db.syncOutbox).go();
+      final auth = _FakeAuthRepository(const AuthSession(userId: 'user-1'));
+      addTearDown(auth.controller.close);
+      final gateway = _StatefulGateway();
+      final coordinator = SyncCoordinator(
+        auth,
+        store,
+        gateway,
+        realtime: gateway,
+      );
+      addTearDown(coordinator.dispose);
+      await _eventually(() async => gateway.onRealtimeDelete != null);
+
+      final spec = syncSpecByEntity['user_setting']!;
+      final seeded = await gateway.write(
+        record: SyncRecord(
+          spec: spec,
+          recordKey: 'theme',
+          values: {
+            'key': 'theme',
+            'value': 'light',
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          },
+          clientModifiedAt: DateTime.now().toUtc(),
+          originDeviceId: 'peer-device',
+        ),
+        userId: 'user-1',
+        deviceId: 'peer-device',
+        expectedRevision: null,
+      );
+      await store.applyRemoteFeedRecord(seeded.canonical!);
+      await db.delete(db.syncOutbox).go();
+      await db.customStatement(
+        "UPDATE settings SET value = 'dark' WHERE key = 'theme'",
+      );
+      expect(await store.pendingChangedAt('user_setting', 'theme'), isNotNull);
+
+      gateway.hardDelete(userId: 'user-1', spec: spec, recordKey: 'theme');
+
+      await _eventually(() async {
+        final local = await db
+            .customSelect("SELECT value FROM settings WHERE key = 'theme'")
+            .getSingleOrNull();
+        final remote = await gateway.fetch(
+          spec: spec,
+          userId: 'user-1',
+          deviceId: account.deviceId,
+          recordKey: 'theme',
+        );
+        return local?.read<String>('value') == 'dark' &&
+            remote?.values['value'] == 'dark';
+      });
+    },
+  );
+
+  test('stale realtime delete cannot apply after the authenticated account changes', () async {
+    final db = AppDatabase(executor: NativeDatabase.memory());
+    addTearDown(db.close);
+    final store = LocalSyncStore(db);
+    await store.account();
+    await store.setEnabled(enabled: true, boundUserId: 'user-1');
+    await db.delete(db.syncOutbox).go();
+    final auth = _FakeAuthRepository(const AuthSession(userId: 'user-1'));
+    addTearDown(auth.controller.close);
+    final gateway = _StatefulGateway();
+    final coordinator = SyncCoordinator(
+      auth,
+      store,
+      gateway,
+      realtime: gateway,
+    );
+    addTearDown(coordinator.dispose);
+    await _eventually(() async => gateway.onRealtimeDelete != null);
+
+    final spec = syncSpecByEntity['user_setting']!;
+    final seeded = await gateway.write(
+      record: SyncRecord(
+        spec: spec,
+        recordKey: 'theme',
+        values: {
+          'key': 'theme',
+          'value': 'dark',
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        },
+        clientModifiedAt: DateTime.now().toUtc(),
+        originDeviceId: 'peer-device',
+      ),
+      userId: 'user-1',
+      deviceId: 'peer-device',
+      expectedRevision: null,
+    );
+    await store.applyRemoteFeedRecord(seeded.canonical!);
+    await db.delete(db.syncOutbox).go();
+
+    gateway.fetchRecordByKeyGate = Completer<void>();
+    gateway.hardDelete(userId: 'user-1', spec: spec, recordKey: 'theme');
+    await _eventually(() async => gateway.fetchRecordByKeyCalls > 0);
+
+    auth.emit(AuthEventType.signedIn, const AuthSession(userId: 'user-2'));
+    gateway.fetchRecordByKeyGate!.complete();
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+
+    final local = await db
+        .customSelect("SELECT value FROM settings WHERE key = 'theme'")
+        .getSingleOrNull();
+    expect(local?.read<String>('value'), 'dark');
+  });
+
+  test('duplicate realtime deletes reconcile idempotently', () async {
+    final db = AppDatabase(executor: NativeDatabase.memory());
+    addTearDown(db.close);
+    final store = LocalSyncStore(db);
+    await store.account();
+    await store.setEnabled(enabled: true, boundUserId: 'user-1');
+    await db.delete(db.syncOutbox).go();
+    final auth = _FakeAuthRepository(const AuthSession(userId: 'user-1'));
+    addTearDown(auth.controller.close);
+    final gateway = _StatefulGateway();
+    final coordinator = SyncCoordinator(
+      auth,
+      store,
+      gateway,
+      realtime: gateway,
+    );
+    addTearDown(coordinator.dispose);
+    await _eventually(() async => gateway.onRealtimeDelete != null);
+
+    final spec = syncSpecByEntity['user_setting']!;
+    final seeded = await gateway.write(
+      record: SyncRecord(
+        spec: spec,
+        recordKey: 'theme',
+        values: {
+          'key': 'theme',
+          'value': 'dark',
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        },
+        clientModifiedAt: DateTime.now().toUtc(),
+        originDeviceId: 'peer-device',
+      ),
+      userId: 'user-1',
+      deviceId: 'peer-device',
+      expectedRevision: null,
+    );
+    await store.applyRemoteFeedRecord(seeded.canonical!);
+    await db.delete(db.syncOutbox).go();
+
+    gateway.hardDelete(userId: 'user-1', spec: spec, recordKey: 'theme');
+    gateway.hardDelete(userId: 'user-1', spec: spec, recordKey: 'theme');
+
+    await _eventually(() async {
+      return await db
+              .customSelect("SELECT 1 FROM settings WHERE key = 'theme'")
+              .getSingleOrNull() ==
+          null;
+    });
+    expect(gateway.fetchRecordByKeyCalls, greaterThanOrEqualTo(2));
+  });
 }
 
 Future<void> _seedMaintenancePlanForSync(
