@@ -1673,65 +1673,6 @@ WHERE entity = 'profile'
     }
   }
 
-  Future<bool> applyRemoteHardDelete({
-    required SyncEntitySpec spec,
-    required Map<String, dynamic> oldRecord,
-    required String userId,
-    required String deviceId,
-  }) async {
-    if (spec.scope != SyncScope.catalog && oldRecord['user_id'] != userId) {
-      return false;
-    }
-    if (spec.scope == SyncScope.deviceScoped &&
-        oldRecord['device_id'] != deviceId) {
-      return false;
-    }
-    final values = <String, dynamic>{
-      for (final column in spec.keyColumns)
-        column: oldRecord[spec.remoteColumnFor(column)],
-    };
-    if (values.values.any((value) => value == null)) return false;
-    final recordKey = spec.keyColumns.isEmpty
-        ? spec.entity
-        : spec.keyColumns.map((column) => values[column]).join('|');
-    final record = SyncRecord(
-      spec: spec,
-      recordKey: recordKey,
-      values: values,
-      clientModifiedAt: DateTime.now().toUtc(),
-      originDeviceId: 'supabase-hard-delete',
-      deletedAt: DateTime.now().toUtc(),
-    );
-    await db.transaction(() async {
-      await _setOutboxSuppressed(true);
-      try {
-        await _deleteLocal(record);
-        await (db.delete(db.syncOutbox)..where(
-              (row) =>
-                  row.entity.equals(spec.entity) &
-                  row.recordKey.equals(recordKey),
-            ))
-            .go();
-        await (db.delete(db.syncShadows)..where(
-              (row) =>
-                  row.entity.equals(spec.entity) &
-                  row.recordKey.equals(recordKey),
-            ))
-            .go();
-      } finally {
-        await _setOutboxSuppressed(false);
-      }
-    });
-    if (spec.entity == 'user_setting' && recordKey == 'home_location') {
-      await db.customUpdate(
-        "DELETE FROM settings WHERE key = 'weather_cache'",
-        updates: {db.settings},
-        updateKind: UpdateKind.delete,
-      );
-    }
-    return true;
-  }
-
   Future<void> enforceInboxRetention() {
     return db
         .customUpdate(

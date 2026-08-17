@@ -2557,12 +2557,11 @@ class SyncCoordinator implements CloudSyncRepository {
           unawaited(_handleRealtimeChange(event, scope: scope));
         },
         onDelete: (spec, oldRecord) {
-          unawaited(
-            _handleRealtimeDelete(
+          _runListener(
+            'sync_realtime_delete_reconcile_failed',
+            () => _handleRealtimeDelete(
               spec: spec,
               oldRecord: oldRecord,
-              userId: session.userId,
-              deviceId: account.deviceId,
               scope: scope,
             ),
           );
@@ -2637,24 +2636,63 @@ class SyncCoordinator implements CloudSyncRepository {
   Future<void> _handleRealtimeDelete({
     required SyncEntitySpec spec,
     required Map<String, dynamic> oldRecord,
-    required String userId,
-    required String deviceId,
     required _ActiveAccountScope scope,
   }) async {
     if (!_isActiveAccountScope(scope)) return;
+    if (spec.scope != SyncScope.catalog &&
+        oldRecord['user_id'] != scope.userId) {
+      return;
+    }
+    if (spec.scope == SyncScope.deviceScoped &&
+        oldRecord['device_id'] != scope.deviceId) {
+      return;
+    }
+
+    final keyValues = <String, dynamic>{};
+    for (final column in spec.keyColumns) {
+      final value = oldRecord[spec.remoteColumnFor(column)];
+      if (value == null) return;
+      keyValues[column] = value;
+    }
+    final recordKey = spec.keyColumns.isEmpty
+        ? spec.entity
+        : spec.keyColumns.map((column) => keyValues[column]).join('|');
+
     AppLogger.info(
       'sync_realtime_delete_hint',
       fields: {'entity': spec.entity},
     );
-    await _localStore.applyRemoteHardDelete(
-      spec: spec,
-      oldRecord: oldRecord,
-      userId: userId,
-      deviceId: deviceId,
-    );
     _scheduleAutomaticSync(
       delay: Duration.zero,
       targetTables: {spec.remoteTable},
+    );
+
+    final canonical = await _remoteGateway.fetchRecordByKey(
+      spec: spec,
+      recordKey: recordKey,
+      userId: scope.userId,
+    );
+    await _ensureActiveAccountScope(scope);
+
+    if (canonical != null) {
+      if (canonical.isDeleted) {
+        await _localStore.applyRemoteFeedDelete(canonical);
+      } else {
+        await _localStore.applyRemoteFeedRecord(canonical);
+      }
+      return;
+    }
+
+    final now = DateTime.now().toUtc();
+    await _localStore.applyRemoteFeedDelete(
+      SyncRecord(
+        spec: spec,
+        recordKey: recordKey,
+        values: keyValues,
+        clientModifiedAt: now,
+        originDeviceId: 'realtime-reconcile',
+        deletedAt: now,
+      ),
     );
   }
 
