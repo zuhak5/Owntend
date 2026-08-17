@@ -6,18 +6,21 @@ import 'package:owntend/src/core/domain/contracts.dart';
 import 'package:owntend/src/core/services/automatic_backup_coordinator.dart';
 
 void main() {
-  test('post-ready triggers a due check while pre-ready resume does not', () async {
-    final repository = _FakeBackupRepository();
-    final coordinator = AutomaticBackupCoordinator(
-      backupRepository: repository,
-    );
+  test(
+    'post-ready triggers a due check while pre-ready resume does not',
+    () async {
+      final repository = _FakeBackupRepository();
+      final coordinator = AutomaticBackupCoordinator(
+        backupRepository: repository,
+      );
 
-    await coordinator.onAppResumed();
-    expect(repository.automaticChecks, 0);
+      await coordinator.onAppResumed();
+      expect(repository.automaticChecks, 0);
 
-    await coordinator.onPostReady();
-    expect(repository.automaticChecks, 1);
-  });
+      await coordinator.onPostReady();
+      expect(repository.automaticChecks, 1);
+    },
+  );
 
   test('successful due checks throttle repeated foreground resumes', () async {
     final repository = _FakeBackupRepository();
@@ -71,27 +74,30 @@ void main() {
     await Future.wait([postReady, resumed]);
   });
 
-  test('app wiring defers startup backup until after ready frame and resumes', () {
-    final source = File('lib/main.dart').readAsStringSync().replaceAll(
-      '\r\n',
-      '\n',
-    );
+  test(
+    'app wiring defers startup backup until after ready frame and resumes',
+    () {
+      final source = File('lib/main.dart').readAsStringSync().replaceAll(
+        '\r\n',
+        '\n',
+      );
 
-    expect(
-      source,
-      contains(
-        'startup.stateListenable.addListener('
-        '_handleAutomaticBackupStartupState);',
-      ),
-    );
-    expect(
-      source,
-      contains('WidgetsBinding.instance.addPostFrameCallback((_) {'),
-    );
-    expect(source, contains('_automaticBackupCoordinator.onPostReady()'));
-    expect(source, contains('state == AppLifecycleState.resumed'));
-    expect(source, contains('_automaticBackupCoordinator.onAppResumed()'));
-  });
+      expect(
+        source,
+        contains(
+          'startup.stateListenable.addListener('
+          '_handleAutomaticBackupStartupState);',
+        ),
+      );
+      expect(
+        source,
+        contains('WidgetsBinding.instance.addPostFrameCallback((_) {'),
+      );
+      expect(source, contains('_automaticBackupCoordinator.onPostReady()'));
+      expect(source, contains('state == AppLifecycleState.resumed'));
+      expect(source, contains('_automaticBackupCoordinator.onAppResumed()'));
+    },
+  );
 }
 
 class _FakeBackupRepository implements BackupRepository {
