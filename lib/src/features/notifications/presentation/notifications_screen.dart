@@ -182,7 +182,15 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       );
       return;
     }
-    await completeTaskWithFeedback(context, ref, task, collectNotes: true);
+    final completed = await completeTaskWithFeedback(
+      context,
+      ref,
+      task,
+      collectNotes: true,
+    );
+    if (!completed) {
+      return;
+    }
     await ref.read(notificationInboxRepositoryProvider).markRead(item.id);
   }
 
