@@ -1,0 +1,31 @@
+name: Apply BUG-003 branch patch
+
+on:
+  push:
+    branches:
+      - fix/bug-003-durable-restore-recovery
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.event.head_commit.message == 'Apply BUG-003 implementation patch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: fix/bug-003-durable-restore-recovery
+      - name: Apply scoped remediation patch
+        run: git apply --check tool/bug003_apply.patch && git apply tool/bug003_apply.patch
+      - name: Remove temporary branch-only patch harness
+        run: git rm .github/workflows/bug003-apply.yml tool/bug003_apply.patch
+      - name: Commit remediation implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib test docs
+          git commit -m "Fix BUG-003 durable restore recovery"
+          git push origin HEAD:fix/bug-003-durable-restore-recovery
