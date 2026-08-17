@@ -84,41 +84,11 @@ jobs:
           --dart-define-from-file=config/prod.example.json
           --dart-define=VERIFY_PRODUCTION_CONFIG=true
 
-      - name: Verify final diff scope
+      - name: Verify remediation worktree scope
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          $allowed = @(
-            "lib/src/core/sync/local_sync_store.dart",
-            "lib/src/core/sync/sync_coordinator.dart",
-            "test/sync_store_test.dart",
-            "test/client_pull_cursors_and_healing_test.dart",
-            "docs/architecture/sync-protocol.md",
-            "CHANGELOG.md",
-            "tool/apply_bug_001_006_remediation.py",
-            ".github/workflows/remediation-bug-001-006.yml"
-          )
-          $changed = @(git status --porcelain | ForEach-Object { $_.Substring(3) })
-          foreach ($path in $changed) {
-            if ($allowed -notcontains $path) {
-              throw "Unexpected generated or unrelated change: $path"
-            }
-          }
-          if ($changed.Count -lt 6) {
-            throw "Expected remediation files were not all changed."
-          }
-          git diff --check
-
-      - name: Commit validated remediation and remove temporary runner
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = "Stop"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git rm tool/apply_bug_001_006_remediation.py
-          git rm .github/workflows/remediation-bug-001-006.yml
-          $final = @(git status --porcelain | ForEach-Object { $_.Substring(3) })
-          $allowedFinal = @(
+          $expected = @(
             "lib/src/core/sync/local_sync_store.dart",
             "lib/src/core/sync/sync_coordinator.dart",
             "test/sync_store_test.dart",
@@ -126,15 +96,54 @@ jobs:
             "docs/architecture/sync-protocol.md",
             "CHANGELOG.md"
           )
+          $changed = @(git diff --name-only HEAD)
+          if ($changed.Count -ne $expected.Count) {
+            throw "Expected exactly $($expected.Count) remediation paths; found $($changed.Count): $($changed -join ', ')"
+          }
+          foreach ($path in $changed) {
+            if ($expected -notcontains $path) {
+              throw "Unexpected generated or unrelated change: $path"
+            }
+          }
+          foreach ($path in $expected) {
+            if ($changed -notcontains $path) {
+              throw "Expected remediation path is unchanged: $path"
+            }
+          }
+          git diff --check
+
+      - name: Commit validated remediation and remove temporary runner
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $base = "f3ceb2358e2812d806deb6215b31560136f5f711"
+          $expected = @(
+            "lib/src/core/sync/local_sync_store.dart",
+            "lib/src/core/sync/sync_coordinator.dart",
+            "test/sync_store_test.dart",
+            "test/client_pull_cursors_and_healing_test.dart",
+            "docs/architecture/sync-protocol.md",
+            "CHANGELOG.md"
+          )
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm tool/apply_bug_001_006_remediation.py
+          git rm .github/workflows/remediation-bug-001-006.yml
+          git add -- $expected
+          $final = @(git diff --cached --name-only $base)
+          if ($final.Count -ne $expected.Count) {
+            throw "Prospective PR must contain exactly $($expected.Count) paths; found $($final.Count): $($final -join ', ')"
+          }
           foreach ($path in $final) {
-            if ($allowedFinal -notcontains $path) {
+            if ($expected -notcontains $path) {
               throw "Unexpected final PR path: $path"
             }
           }
-          if ($final.Count -ne 6) {
-            throw "Final remediation must contain exactly six scoped paths; found $($final.Count)."
+          foreach ($path in $expected) {
+            if ($final -notcontains $path) {
+              throw "Expected final PR path is missing: $path"
+            }
           }
-          git add -- $allowedFinal
-          git diff --cached --check
+          git diff --cached --check $base
           git commit -m "fix BUG-001 BUG-006 sync checkpoint atomicity"
           git push origin HEAD:fix/bug-001-bug-006-sync-atomicity
