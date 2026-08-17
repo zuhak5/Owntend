@@ -1,0 +1,51 @@
+name: BUG-008 focused validation
+
+on:
+  push:
+    branches:
+      - fix/bug-008-hydration-lease-readiness
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: "3.47.0"
+          channel: stable
+          cache: true
+
+      - name: Resolve dependencies
+        run: flutter pub get --enforce-lockfile
+
+      - name: Generate localization files
+        run: flutter gen-l10n
+
+      - name: Generate source files
+        run: dart run build_runner build
+
+      - name: Verify BUG-008 formatting
+        run: >-
+          dart format --output=none --set-exit-if-changed
+          lib/src/core/sync/sync_contracts.dart
+          lib/src/core/sync/sync_coordinator.dart
+          test/bug_008_hydration_lease_readiness_test.dart
+
+      - name: Analyze
+        run: flutter analyze --no-pub
+
+      - name: Run BUG-008 regression tests
+        run: >-
+          flutter test --no-pub
+          test/bug_008_hydration_lease_readiness_test.dart
+          --concurrency=1
+          --timeout 3m
+          --reporter expanded
