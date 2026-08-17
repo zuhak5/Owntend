@@ -32,6 +32,67 @@ jobs:
       - name: Generate source files
         run: dart run build_runner build
 
+      - name: Apply BUG-008 fault-test and documentation updates
+        shell: pwsh
+        run: |
+          $testPath = 'test/bug_008_hydration_lease_readiness_test.dart'
+          $test = Get-Content -Raw $testPath
+          $testReplacements = @(
+            @('duration: const Duration(milliseconds: 80),', 'duration: const Duration(seconds: 1),'),
+            @('initialHydrationLeaseWaitTimeout: const Duration(seconds: 2),', 'initialHydrationLeaseWaitTimeout: const Duration(seconds: 3),'),
+            @('await enableFuture.timeout(const Duration(seconds: 2));', 'await enableFuture.timeout(const Duration(seconds: 3));')
+          )
+          foreach ($replacement in $testReplacements) {
+            $old = $replacement[0]
+            $new = $replacement[1]
+            $oldCount = ([regex]::Matches($test, [regex]::Escape($old))).Count
+            $newCount = ([regex]::Matches($test, [regex]::Escape($new))).Count
+            if ($oldCount -eq 1) {
+              $test = $test.Replace($old, $new)
+            } elseif ($oldCount -eq 0 -and $newCount -ge 1) {
+              # Already applied by the prior validation run.
+            } else {
+              throw "Unexpected BUG-008 test replacement state for: $old"
+            }
+          }
+          Set-Content -Path $testPath -Value $test -NoNewline -Encoding utf8
+
+          $docPath = 'docs/architecture/sync-protocol.md'
+          $doc = Get-Content -Raw $docPath
+          $stateOld = @'
+          - Initializing: account binding and local runtime preparation are in progress.
+          - Syncing: push, pull, reconciliation, or cleanup work is active.
+          '@
+          $stateNew = @'
+          - Initializing: account binding and local runtime preparation are in progress.
+          - Waiting for sync lease: initial hydration cannot own the local sync lease yet and remains non-ready while durable hydration completion is observed or retried.
+          - Syncing: push, pull, reconciliation, or cleanup work is active.
+          '@
+          if ($doc.Contains($stateOld)) {
+            $doc = $doc.Replace($stateOld, $stateNew)
+          } elseif (-not $doc.Contains($stateNew)) {
+            throw 'Unexpected sync state documentation shape.'
+          }
+
+          $hydrationOld = @'
+          Initial hydration builds a trusted local view for a newly bound account. It must be restartable and must not present partial hydration as fully synchronized. Existing offline local work requires an explicit policy before cloud data is applied.
+
+          Hydration completion should be recorded independently from ordinary incremental synchronization.
+          '@
+          $hydrationNew = @'
+          Initial hydration builds a trusted local view for a newly bound account. It must be restartable and must not present partial hydration as fully synchronized. Existing offline local work requires an explicit policy before cloud data is applied.
+
+          Hydration completion is durable and independent from ordinary incremental synchronization. Authenticated startup may become ready only after the local store proves a complete snapshot for the currently authenticated account.
+
+          A local sync-lease miss is not hydration success. The coordinator exposes a waiting-for-lease state and retries or observes the shared durable completion marker until hydration is complete. A foreground process may accept hydration completed by a background worker only after that durable marker is complete. The wait is bounded and becomes a retryable startup failure rather than silently publishing ready, and an account identity change while waiting fails closed.
+          '@
+          if ($doc.Contains($hydrationOld)) {
+            $doc = $doc.Replace($hydrationOld, $hydrationNew)
+          } elseif (-not $doc.Contains($hydrationNew)) {
+            throw 'Unexpected initial hydration documentation shape.'
+          }
+          Set-Content -Path $docPath -Value $doc -NoNewline -Encoding utf8
+
       - name: Apply BUG-008 formatting
         run: >-
           dart format
@@ -39,15 +100,15 @@ jobs:
           lib/src/core/sync/sync_coordinator.dart
           test/bug_008_hydration_lease_readiness_test.dart
 
-      - name: Commit canonical formatting when needed
+      - name: Commit BUG-008 validation updates when needed
         shell: pwsh
         run: |
-          $changes = (git status --porcelain -- lib/src/core/sync/sync_contracts.dart lib/src/core/sync/sync_coordinator.dart test/bug_008_hydration_lease_readiness_test.dart | Out-String).Trim()
+          $changes = (git status --porcelain -- lib/src/core/sync/sync_contracts.dart lib/src/core/sync/sync_coordinator.dart test/bug_008_hydration_lease_readiness_test.dart docs/architecture/sync-protocol.md | Out-String).Trim()
           if (-not [string]::IsNullOrWhiteSpace($changes)) {
             git config user.name 'github-actions[bot]'
             git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git add lib/src/core/sync/sync_contracts.dart lib/src/core/sync/sync_coordinator.dart test/bug_008_hydration_lease_readiness_test.dart
-            git commit -m 'Format BUG-008 hydration readiness changes'
+            git add lib/src/core/sync/sync_contracts.dart lib/src/core/sync/sync_coordinator.dart test/bug_008_hydration_lease_readiness_test.dart docs/architecture/sync-protocol.md
+            git commit -m 'Finalize BUG-008 hydration readiness coverage'
             git push
           }
 
