@@ -145,6 +145,13 @@ void main() {
       source,
       contains('_runOwntendProcess(const OwntendStartupFailure())'),
     );
+    expect(source, contains('_RestoreRecoveryGate('));
+    expect(source, contains('RestoreRecoveryCoordinator('));
+    expect(
+      source.indexOf('_RestoreRecoveryGate('),
+      lessThan(source.indexOf('_DeferredOwntendBootstrap(')),
+    );
+    expect(source, contains("'startup_restore_recovery_blocked'"));
     expect(source, contains('_DeferredOwntendBootstrap('));
     expect(source, isNot(contains('startup-theme-placeholder')));
     expect(source, isNot(contains('return OwntendSplashOverlay(')));

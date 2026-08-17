@@ -1,6 +1,8 @@
 import 'dart:io';
 
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:owntend/src/core/database/app_database.dart';
 import 'package:owntend/src/core/services/restore_journal.dart';
 import 'package:owntend/src/core/sync/local_sync_store.dart';
 import 'package:path/path.dart' as p;
@@ -29,7 +31,29 @@ class _FakePathProviderPlatform extends PathProviderPlatform {
 }
 
 class _FakeLocalSyncStore implements LocalSyncStore {
+  _FakeLocalSyncStore({this.boundUserId});
+
+  final String? boundUserId;
   final List<String> calls = [];
+
+  @override
+  Future<SyncAccountData?> existingAccount() async {
+    final userId = boundUserId;
+    if (userId == null) return null;
+    final now = DateTime.now();
+    return SyncAccountData(
+      id: 1,
+      deviceId: 'device-test',
+      enabled: true,
+      boundUserId: userId,
+      uploadProhibited: false,
+      migrationState: 'active',
+      restorePending: false,
+      hydrationCompletedUnits: 0,
+      hydrationTotalUnits: 0,
+      updatedAt: now,
+    );
+  }
 
   @override
   Future<void> enqueueRestoreSnapshot(DateTime timestamp) async {
@@ -53,6 +77,7 @@ void main() {
   late Directory temp;
 
   setUp(() async {
+    FlutterSecureStorage.setMockInitialValues(<String, String>{});
     root = await Directory.systemTemp.createTemp('owntend_restore_test_');
     docs = Directory(p.join(root.path, 'docs'))..createSync(recursive: true);
     temp = Directory(p.join(root.path, 'temp'))..createSync(recursive: true);
@@ -97,8 +122,31 @@ void main() {
       expect(restored.mediaToken, equals('token-xyz'));
     });
 
-    test('RestoreJournalStore saves and clears active entry', () async {
-      final store = RestoreJournalStore();
+    test('durable store survives a new store instance', () async {
+      final now = DateTime.now();
+      final entry = RestoreJournalEntry(
+        version: 1,
+        journalId: 'j-durable',
+        accountScope: 'user-a',
+        archivePath: '/tmp/durable.zip',
+        archiveHash: 'hash-durable',
+        phase: RestorePhase.servicesSuspended,
+        updateCloudIntent: true,
+        createdAt: now,
+        updatedAt: now,
+      );
+
+      await RestoreJournalStore().saveEntry(entry);
+      final afterRestart = await RestoreJournalStore().getActiveEntry();
+
+      expect(afterRestart?.journalId, 'j-durable');
+      expect(afterRestart?.phase, RestorePhase.servicesSuspended);
+      expect(afterRestart?.accountScope, 'user-a');
+      expect(afterRestart?.updateCloudIntent, isTrue);
+    });
+
+    test('in-memory test store saves and clears active entry', () async {
+      final store = InMemoryRestoreJournalStore();
       final now = DateTime.now();
       final entry = RestoreJournalEntry(
         version: 1,
@@ -124,8 +172,8 @@ void main() {
   });
 
   group('RestoreJournalResolver Tests', () {
-    test('rolls back pre-DB-commit state (phase < dbCommitStarted)', () async {
-      final store = RestoreJournalStore();
+    test('rolls back pre-DB-commit state after restart', () async {
+      final store = InMemoryRestoreJournalStore();
       final fakeSync = _FakeLocalSyncStore();
       final now = DateTime.now();
 
@@ -161,20 +209,76 @@ void main() {
       expect(fakeSync.calls, isEmpty);
     });
 
-    test(
-      'rolls forward post-commit state (phase >= dbCommitStarted)',
-      () async {
-        final store = RestoreJournalStore();
-        final fakeSync = _FakeLocalSyncStore();
-        final now = DateTime.now();
+    test('rolls forward post-commit cloud intent after restart', () async {
+      final store = InMemoryRestoreJournalStore();
+      final fakeSync = _FakeLocalSyncStore(boundUserId: 'user-a');
+      final now = DateTime.now();
 
+      final entry = RestoreJournalEntry(
+        version: 1,
+        journalId: 'j-post',
+        accountScope: 'user-a',
+        archivePath: '/tmp/post.zip',
+        archiveHash: 'hash-post',
+        mediaToken: 'token-post',
+        phase: RestorePhase.dbCommitComplete,
+        updateCloudIntent: true,
+        createdAt: now,
+        updatedAt: now,
+      );
+      await store.saveEntry(entry);
+
+      final resolver = RestoreJournalResolver(
+        journalStore: store,
+        localSyncStore: fakeSync,
+      );
+
+      await resolver.resolveActiveJournal();
+
+      expect(await store.getActiveEntry(), isNull);
+      expect(fakeSync.calls, ['enqueueRestoreSnapshot']);
+    });
+
+    test('rolls forward post-commit local-only pause after restart', () async {
+      final store = InMemoryRestoreJournalStore();
+      final fakeSync = _FakeLocalSyncStore();
+      final now = DateTime.now();
+
+      await store.saveEntry(
+        RestoreJournalEntry(
+          version: 1,
+          journalId: 'j-local-post',
+          accountScope: 'localOnly',
+          archivePath: '/tmp/local-post.zip',
+          archiveHash: 'hash-local-post',
+          phase: RestorePhase.mediaSwapped,
+          updateCloudIntent: false,
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+
+      await RestoreJournalResolver(
+        journalStore: store,
+        localSyncStore: fakeSync,
+      ).resolveActiveJournal();
+
+      expect(await store.getActiveEntry(), isNull);
+      expect(fakeSync.calls, ['pauseAfterLocalRestore']);
+    });
+
+    test(
+      'fails closed when recovery account differs from local binding',
+      () async {
+        final store = InMemoryRestoreJournalStore();
+        final fakeSync = _FakeLocalSyncStore(boundUserId: 'user-b');
+        final now = DateTime.now();
         final entry = RestoreJournalEntry(
           version: 1,
-          journalId: 'j-post',
+          journalId: 'j-mismatch',
           accountScope: 'user-a',
-          archivePath: '/tmp/post.zip',
-          archiveHash: 'hash-post',
-          mediaToken: 'token-post',
+          archivePath: '/tmp/mismatch.zip',
+          archiveHash: 'hash-mismatch',
           phase: RestorePhase.dbCommitComplete,
           updateCloudIntent: true,
           createdAt: now,
@@ -182,20 +286,21 @@ void main() {
         );
         await store.saveEntry(entry);
 
-        final resolver = RestoreJournalResolver(
-          journalStore: store,
-          localSyncStore: fakeSync,
+        await expectLater(
+          RestoreJournalResolver(
+            journalStore: store,
+            localSyncStore: fakeSync,
+          ).resolveActiveJournal(),
+          throwsA(isA<StateError>()),
         );
 
-        await resolver.resolveActiveJournal();
-
-        expect(await store.getActiveEntry(), isNull);
-        expect(fakeSync.calls, contains('enqueueRestoreSnapshot'));
+        expect((await store.getActiveEntry())?.journalId, 'j-mismatch');
+        expect(fakeSync.calls, isEmpty);
       },
     );
 
     test('blocks startup on unsupported future journal version', () async {
-      final store = RestoreJournalStore();
+      final store = InMemoryRestoreJournalStore();
       final now = DateTime.now();
 
       final entry = RestoreJournalEntry(
@@ -216,16 +321,17 @@ void main() {
         localSyncStore: null,
       );
 
-      expect(
-        () async => resolver.resolveActiveJournal(),
+      await expectLater(
+        resolver.resolveActiveJournal(),
         throwsA(
-          isA<Exception>().having(
+          isA<StateError>().having(
             (e) => e.toString(),
             'message',
             contains('newer than supported'),
           ),
         ),
       );
+      expect((await store.getActiveEntry())?.journalId, 'j-future');
     });
   });
 }
