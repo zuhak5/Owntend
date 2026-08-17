@@ -40,6 +40,9 @@ class _RecoveryMonetizationRepository implements MonetizationRepository {
       plan: operation['plan'] as Map<String, dynamic>?,
     );
   }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 class _RecoveryLocalSyncStore implements LocalSyncStore {
