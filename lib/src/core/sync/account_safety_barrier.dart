@@ -2,13 +2,21 @@ typedef AccountSafetyBackgroundCancellation = Future<void> Function();
 typedef AccountSafetyScopeHook = Future<void> Function(String userId);
 
 class AccountSafetyBarrier {
-  AccountSafetyBarrier({
+  factory AccountSafetyBarrier({
     required AccountSafetyScopeHook prepareAccountScope,
     required AccountSafetyBackgroundCancellation cancelBackgroundWork,
     required AccountSafetyScopeHook releaseAccountScope,
-  }) : _prepareAccountScope = prepareAccountScope,
-       _cancelBackgroundWork = cancelBackgroundWork,
-       _releaseAccountScope = releaseAccountScope;
+  }) => AccountSafetyBarrier._(
+    prepareAccountScope,
+    cancelBackgroundWork,
+    releaseAccountScope,
+  );
+
+  AccountSafetyBarrier._(
+    this._prepareAccountScope,
+    this._cancelBackgroundWork,
+    this._releaseAccountScope,
+  );
 
   final AccountSafetyScopeHook _prepareAccountScope;
   final AccountSafetyBackgroundCancellation _cancelBackgroundWork;
