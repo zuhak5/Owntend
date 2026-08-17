@@ -18,6 +18,10 @@ jobs:
           ref: fix/bug-002-bug-007-account-safety
           fetch-depth: 0
 
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: 3.13.0
+
       - name: Apply scoped startup recovery edit
         shell: bash
         run: |
@@ -41,33 +45,13 @@ jobs:
             raise SystemExit('startup state fields anchor not found')
           source = source.replace(old_fields, new_fields, 1)
 
-          old_initialize = """  Future<void> _initializeAfterFirstFrame() async {
-            final deviceLanguage = _supportedDeviceLanguage(
-              WidgetsBinding.instance.platformDispatcher.locale,
-            );
-            initializeRestoreForegroundService(localeCode: deviceLanguage.name);
-            try {
-              final resumed =
-                  await LocalAccountDataCleaner(LocalSyncStore(widget.database))
-                      .resumePendingCleanup(
-                        additionalCleanup: (accountId) async {
-                          await const OfflineCreationDraftStore().clearForAccount(
-                            accountId,
-                          );
-                          await TaskCreationOperationStore(
-                            storage: const FlutterSecureStorage(),
-                          ).clearOperationsForAccount(accountId);
-                        },
-                      );
-              if (resumed) AppLogger.info('account_deletion_local_cleanup_resumed');
-            } on Object catch (error) {
-              AppLogger.warning(
-                'account_deletion_local_cleanup_resume_failed',
-                error: error,
-              );
-            }
-            try {
-          """
+          initialize_start = source.index(
+              '  Future<void> _initializeAfterFirstFrame() async {'
+          )
+          diagnostics_start = source.index(
+              '    try {\n      final support = await getApplicationSupportDirectory();',
+              initialize_start,
+          )
           new_initialize = """  Future<bool> _resumePendingAccountCleanup() async {
             try {
               final resumed =
@@ -117,46 +101,28 @@ jobs:
             );
             initializeRestoreForegroundService(localeCode: deviceLanguage.name);
             if (!await _resumePendingAccountCleanup()) return;
-            try {
           """
-          if old_initialize not in source:
-            raise SystemExit('startup cleanup anchor not found')
-          source = source.replace(old_initialize, new_initialize, 1)
+          source = source[:initialize_start] + new_initialize + source[diagnostics_start:]
 
-          old_build = """  @override
-            Widget build(BuildContext context) {
-              if (!_ready) {
-                return const OwntendStartupSurface(
-                  key: ValueKey('deferred-startup-loading'),
-                );
-              }
+          build_start = source.index(
+              '  @override\n  Widget build(BuildContext context) {',
+              source.index('class _DeferredOwntendBootstrapState'),
+          )
+          ready_if = source.index('    if (!_ready) {', build_start)
+          recovery_branch = """    if (_accountCleanupRecoveryFailure != null) {
+              return OwntendStartupFailure(
+                accountCleanupBlocked: true,
+                onRetry: _accountCleanupRetrying
+                    ? null
+                    : _retryPendingAccountCleanup,
+              );
+            }
           """
-          new_build = """  @override
-            Widget build(BuildContext context) {
-              if (_accountCleanupRecoveryFailure != null) {
-                return OwntendStartupFailure(
-                  accountCleanupBlocked: true,
-                  onRetry: _accountCleanupRetrying
-                      ? null
-                      : _retryPendingAccountCleanup,
-                );
-              }
-              if (!_ready) {
-                return const OwntendStartupSurface(
-                  key: ValueKey('deferred-startup-loading'),
-                );
-              }
-          """
-          if old_build not in source:
-            raise SystemExit('startup build anchor not found')
-          source = source.replace(old_build, new_build, 1)
+          source = source[:ready_if] + recovery_branch + source[ready_if:]
 
-          old_failure = """class OwntendStartupFailure extends StatelessWidget {
-            const OwntendStartupFailure({this.cloudUnavailable = false, super.key});
-
-            final bool cloudUnavailable;
-          """
-          new_failure = """class OwntendStartupFailure extends StatelessWidget {
+          failure_start = source.index('class OwntendStartupFailure extends StatelessWidget {')
+          override_start = source.index('\n\n  @override', failure_start)
+          new_failure_header = """class OwntendStartupFailure extends StatelessWidget {
             const OwntendStartupFailure({
               this.cloudUnavailable = false,
               this.accountCleanupBlocked = false,
@@ -168,19 +134,16 @@ jobs:
             final bool accountCleanupBlocked;
             final Future<void> Function()? onRetry;
           """
-          if old_failure not in source:
-            raise SystemExit('startup failure constructor anchor not found')
-          source = source.replace(old_failure, new_failure, 1)
+          source = source[:failure_start] + new_failure_header + source[override_start:]
 
-          old_message = """                      Text(
-                        cloudUnavailable
-                            ? context
-                                  .l10n
-                                  .cloudServicesAreUnavailablePleaseTryAgainLater
-                            : context.l10n.thisBuildIsNotConfiguredCorrectly,
-                        textAlign: TextAlign.center,
-                      ),
-          """
+          message_start = source.index(
+              '                      Text(\n                        cloudUnavailable',
+              failure_start,
+          )
+          message_end = source.index(
+              '                      ),',
+              message_start,
+          ) + len('                      ),')
           new_message = """                      Text(
                         accountCleanupBlocked
                             ? context.l10n.accountDeletionFailed
@@ -199,16 +162,13 @@ jobs:
                               : () => unawaited(onRetry!()),
                           child: Text(context.l10n.retry),
                         ),
-                      ],
-          """
-          if old_message not in source:
-            raise SystemExit('startup failure message anchor not found')
-          source = source.replace(old_message, new_message, 1)
+                      ]"""
+          source = source[:message_start] + new_message + source[message_end:]
 
           path.write_text(source)
           PY
 
-          dart format lib/src/features/startup/presentation/startup_bootstrap.dart || true
+          dart format lib/src/features/startup/presentation/startup_bootstrap.dart
           rm .github/workflows/temp-bug-002-startup-recovery-patch.yml
 
       - name: Commit scoped edit and remove temporary workflow
