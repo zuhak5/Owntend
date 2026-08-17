@@ -1,0 +1,60 @@
+name: Temporary BUG-009 patch validation
+
+on:
+  push:
+    branches:
+      - fix/bug-009-response-loss-safe-photo-cleanup
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-validate:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: fix/bug-009-response-loss-safe-photo-cleanup
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: "3.47.0"
+          channel: stable
+          cache: true
+      - run: flutter pub get --enforce-lockfile
+      - name: Apply BUG-009 patch
+        run: python tool/bug009_apply.py
+      - name: Format
+        run: >-
+          dart format
+          lib/src/core/database/app_database.dart
+          lib/src/core/sync/local_sync_store.dart
+          lib/src/core/sync/supabase_sync_gateway.dart
+          lib/src/core/sync/sync_coordinator.dart
+          test/bug_009_photo_cleanup_response_loss_test.dart
+      - name: Analyze
+        run: flutter analyze --no-pub
+      - name: Focused BUG-009 regressions
+        run: >-
+          flutter test --no-pub --concurrency=1
+          test/bug_009_photo_cleanup_response_loss_test.dart
+          test/sync_store_test.dart
+          test/supabase_sync_gateway_contract_test.dart
+          test/media_client_cutover_test.dart
+      - name: Diff check
+        shell: pwsh
+        run: git diff --check
+      - name: Remove harness and commit validated patch
+        shell: pwsh
+        run: |
+          git rm .github/workflows/bug-009-patch.yml tool/bug009_patch.py tool/bug009_apply.py
+          git add lib/src/core/database/app_database.dart
+          git add lib/src/core/sync/local_sync_store.dart
+          git add lib/src/core/sync/supabase_sync_gateway.dart
+          git add lib/src/core/sync/sync_coordinator.dart
+          git add docs/architecture/sync-protocol.md
+          git add test/bug_009_photo_cleanup_response_loss_test.dart
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Fix BUG-009 response-loss-safe photo cleanup"
+          git push origin HEAD:fix/bug-009-response-loss-safe-photo-cleanup
