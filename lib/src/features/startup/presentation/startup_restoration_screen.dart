@@ -390,6 +390,20 @@ class _NotificationBootstrapState extends ConsumerState<NotificationBootstrap>
     try {
       final scheduler = ref.read(notificationSchedulerProvider);
       await scheduler.initialize();
+      if (scheduler is NotificationBackgroundRegistration) {
+        final backgroundRegistration =
+            scheduler as NotificationBackgroundRegistration;
+        await backgroundRegistration.registerBackgroundRefresh();
+      }
+      final session = ref.read(authRepositoryProvider)?.currentSession;
+      final consumer = ref.read(notificationReconciliationConsumerProvider);
+      if (session != null && consumer != null) {
+        final result = await consumer.drainForAccount(session.userId);
+        if (result == NotificationReconciliationDrainResult.refreshed ||
+            result == NotificationReconciliationDrainResult.accountMismatch) {
+          return;
+        }
+      }
       await scheduler.refreshSchedules();
     } on Object catch (error) {
       AppLogger.warning('notification_refresh', error: error);

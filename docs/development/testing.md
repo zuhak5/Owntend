@@ -230,7 +230,7 @@ Test valid current/historical backups, unsupported versions, path traversal, dup
 
 ### Notifications
 
-Test the separation of user preference, OS/service/special-access state, scheduler truth, and effective capability. Include manual weather with denied location, service-disabled location, notification denial and disabled channel, exact preference off, exact denial with inexact fallback, settings-return refresh, time-zone change, reboot, application update, stale snapshots, completion rescheduling, and duplicate prevention.
+Test the separation of user preference, OS/service/special-access state, scheduler truth, and effective capability. Include manual weather with denied location, service-disabled location, notification denial and disabled channel, exact preference off, exact denial with inexact fallback, settings-return refresh, time-zone change, reboot, application update, stale snapshots, completion rescheduling, and duplicate prevention. For background notification work, cover matching versus mismatched account identity, idempotent unique periodic registration across restart, cancellation/rejection on sign-out or account switch, durable reconciliation surviving process restart, coalescing duplicate requests, ACK only after successful refresh, retry state after failure, and replay when a worker/foreground consumer restarts mid-reconciliation.
 
 ### Startup and transient feedback
 
