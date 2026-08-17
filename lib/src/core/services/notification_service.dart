@@ -34,6 +34,27 @@ import '../../features/auth/data/supabase_auth_repository.dart';
 import 'weather_service.dart';
 import 'reminder_schedule_reconciler.dart';
 
+abstract interface class NotificationBackgroundRegistration {
+  Future<void> registerBackgroundRefresh();
+}
+
+bool notificationBackgroundAccountMatches({
+  required String? sessionUserId,
+  required String? boundUserId,
+  required bool accountEnabled,
+  required bool uploadProhibited,
+  required String? migrationState,
+}) {
+  final sessionId = sessionUserId?.trim();
+  final localId = boundUserId?.trim();
+  return sessionId != null &&
+      sessionId.isNotEmpty &&
+      localId == sessionId &&
+      accountEnabled &&
+      !uploadProhibited &&
+      migrationState != 'quarantined';
+}
+
 @pragma('vm:entry-point')
 void owntendWorkManagerCallback() {
   wm.Workmanager().executeTask((taskName, inputData) async {
@@ -60,12 +81,13 @@ void owntendWorkManagerCallback() {
           final store = LocalSyncStore(db);
           final account = await store.existingAccount();
 
-          if (session == null ||
-              account == null ||
-              !account.enabled ||
-              account.boundUserId != session.user.id ||
-              account.uploadProhibited ||
-              account.migrationState == 'quarantined') {
+          if (!notificationBackgroundAccountMatches(
+            sessionUserId: session?.user.id,
+            boundUserId: account?.boundUserId,
+            accountEnabled: account?.enabled ?? false,
+            uploadProhibited: account?.uploadProhibited ?? false,
+            migrationState: account?.migrationState,
+          )) {
             AppLogger.info(
               'background_worker_rejected_unauthenticated_or_mismatched',
             );
@@ -92,7 +114,33 @@ void owntendWorkManagerCallback() {
             localSyncStore: store,
           );
           await scheduler.initialize();
-          await scheduler.refreshSchedules();
+          final consumer = NotificationReconciliationConsumer(
+            database: db,
+            scheduler: scheduler,
+            accountGuard: (expectedUserId) async {
+              final currentSession = client?.auth.currentSession;
+              final currentAccount = await store.existingAccount();
+              return expectedUserId == currentSession?.user.id &&
+                  notificationBackgroundAccountMatches(
+                    sessionUserId: currentSession?.user.id,
+                    boundUserId: currentAccount?.boundUserId,
+                    accountEnabled: currentAccount?.enabled ?? false,
+                    uploadProhibited: currentAccount?.uploadProhibited ?? false,
+                    migrationState: currentAccount?.migrationState,
+                  );
+            },
+          );
+          final reconciliation = await consumer.drainForAccount(
+            session!.user.id,
+          );
+          if (reconciliation ==
+              NotificationReconciliationDrainResult.accountMismatch) {
+            await cancelAccountScopedBackgroundWork();
+            return true;
+          }
+          if (reconciliation == NotificationReconciliationDrainResult.noWork) {
+            await scheduler.refreshSchedules();
+          }
           return true;
         },
         attributes: const {'execution': 'work_manager'},
@@ -183,7 +231,8 @@ Future<bool> runCloudSyncInBackground({
   }
 }
 
-class OwntendNotificationScheduler implements NotificationScheduler {
+class OwntendNotificationScheduler
+    implements NotificationScheduler, NotificationBackgroundRegistration {
   // Public parameter names are clearer for callers while the stored fields stay private.
   OwntendNotificationScheduler(
     this.maintenanceRepository, {
@@ -269,22 +318,52 @@ class OwntendNotificationScheduler implements NotificationScheduler {
     await android?.createNotificationChannel(overdueChannel);
     await android?.createNotificationChannel(criticalChannel);
     await android?.createNotificationChannel(digestChannel);
-    if (Platform.isAndroid) {
-      await wm.Workmanager().initialize(owntendWorkManagerCallback);
-      final session = _supabaseClient?.auth.currentSession;
-      final boundUserId =
-          (await _localSyncStore?.existingAccount())?.boundUserId;
-      if (session != null && boundUserId == session.user.id) {
-        await wm.Workmanager().registerPeriodicTask(
-          dailyRefreshTask,
-          dailyRefreshTask,
-          frequency: const Duration(hours: 24),
-          initialDelay: const Duration(hours: 1),
-          existingWorkPolicy: wm.ExistingPeriodicWorkPolicy.update,
-        );
-      }
-    }
     _initialized = true;
+  }
+
+  @override
+  Future<void> registerBackgroundRefresh() async {
+    if (!Platform.isAndroid) {
+      return;
+    }
+    final session = _supabaseClient?.auth.currentSession;
+    final account = await _localSyncStore?.existingAccount();
+    if (!notificationBackgroundAccountMatches(
+      sessionUserId: session?.user.id,
+      boundUserId: account?.boundUserId,
+      accountEnabled: account?.enabled ?? false,
+      uploadProhibited: account?.uploadProhibited ?? false,
+      migrationState: account?.migrationState,
+    )) {
+      await wm.Workmanager().cancelByUniqueName(dailyRefreshTask);
+      return;
+    }
+
+    final expectedUserId = session!.user.id;
+    final workManager = wm.Workmanager();
+    await workManager.initialize(owntendWorkManagerCallback);
+
+    final currentSession = _supabaseClient?.auth.currentSession;
+    final currentAccount = await _localSyncStore?.existingAccount();
+    if (currentSession?.user.id != expectedUserId ||
+        !notificationBackgroundAccountMatches(
+          sessionUserId: currentSession?.user.id,
+          boundUserId: currentAccount?.boundUserId,
+          accountEnabled: currentAccount?.enabled ?? false,
+          uploadProhibited: currentAccount?.uploadProhibited ?? false,
+          migrationState: currentAccount?.migrationState,
+        )) {
+      await workManager.cancelByUniqueName(dailyRefreshTask);
+      return;
+    }
+
+    await workManager.registerPeriodicTask(
+      dailyRefreshTask,
+      dailyRefreshTask,
+      frequency: const Duration(hours: 24),
+      initialDelay: const Duration(hours: 1),
+      existingWorkPolicy: wm.ExistingPeriodicWorkPolicy.update,
+    );
   }
 
   @override

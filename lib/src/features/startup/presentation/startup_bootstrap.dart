@@ -22,9 +22,23 @@ class _OwntendBootstrapState extends State<OwntendBootstrap> {
               ),
               maintenanceCompletionReminderReconcilerProvider.overrideWith(
                 (ref) => () async {
-                  await ref
-                      .read(notificationSchedulerProvider)
-                      .refreshSchedules();
+                  final scheduler = ref.read(notificationSchedulerProvider);
+                  final session = ref
+                      .read(authRepositoryProvider)
+                      ?.currentSession;
+                  final consumer = ref.read(
+                    notificationReconciliationConsumerProvider,
+                  );
+                  if (session != null && consumer != null) {
+                    final result = await consumer.drainForAccount(
+                      session.userId,
+                    );
+                    if (result !=
+                        NotificationReconciliationDrainResult.noWork) {
+                      return;
+                    }
+                  }
+                  await scheduler.refreshSchedules();
                 },
               ),
               accountDeletionPrepareProvider.overrideWith(

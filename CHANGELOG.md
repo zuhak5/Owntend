@@ -8,6 +8,7 @@ The current application version is defined only in `pubspec.yaml`. Released vers
 
 ### Fixed
 
+- Wired authenticated notification startup to idempotent daily background refresh registration and added a crash-safe consumer for durable notification reconciliation requests.
 - Routed Realtime delete notifications through account-scoped authoritative reconciliation so peer delete hints cannot directly erase local rows, shadows, or pending outbox intent.
 - Made inbound sync checkpoints pull-owned and transactionally atomic with the rows and shadows they acknowledge, preventing push acknowledgements or interrupted pull pages from skipping remote changes.
 - Aligned the Supabase device `consumable` field with Flutter's optional descriptive-text contract so normal filter, battery, and cartridge descriptions no longer fail asset creation.

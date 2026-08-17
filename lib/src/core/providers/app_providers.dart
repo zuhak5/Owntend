@@ -76,9 +76,36 @@ final notificationSchedulerProvider = Provider<NotificationScheduler>(
     settingsRepository: ref.watch(settingsRepositoryProvider),
     weatherRepository: ref.watch(weatherRepositoryProvider),
     permissionGateway: ref.watch(permissionCoordinatorProvider),
+    supabaseClient: ref.watch(supabaseClientProvider),
+    localSyncStore: ref.watch(localSyncStoreProvider),
     onNotificationPayload: _openNotificationPayload,
   ),
 );
+
+final notificationReconciliationConsumerProvider =
+    Provider<NotificationReconciliationConsumer?>((ref) {
+      final client = ref.watch(supabaseClientProvider);
+      final store = ref.watch(localSyncStoreProvider);
+      if (client == null || store == null) {
+        return null;
+      }
+      return NotificationReconciliationConsumer(
+        database: ref.watch(databaseProvider),
+        scheduler: ref.watch(notificationSchedulerProvider),
+        accountGuard: (expectedUserId) async {
+          final session = client.auth.currentSession;
+          final account = await store.existingAccount();
+          return expectedUserId == session?.user.id &&
+              notificationBackgroundAccountMatches(
+                sessionUserId: session?.user.id,
+                boundUserId: account?.boundUserId,
+                accountEnabled: account?.enabled ?? false,
+                uploadProhibited: account?.uploadProhibited ?? false,
+                migrationState: account?.migrationState,
+              );
+        },
+      );
+    });
 
 final notificationAutoStartProvider = Provider<bool>((ref) => true);
 

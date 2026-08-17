@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 
 import '../database/app_database.dart';
+import '../domain/contracts.dart';
 
 class ReminderScheduleEntry {
   const ReminderScheduleEntry({
@@ -147,5 +148,112 @@ class MemoryReminderScheduleStore implements ReminderScheduleStore {
   @override
   Future<void> replaceAll(Iterable<ReminderScheduleEntry> entries) async {
     _entries = List.unmodifiable(entries);
+  }
+}
+
+enum NotificationReconciliationDrainResult {
+  noWork,
+  refreshed,
+  accountMismatch,
+}
+
+typedef NotificationReconciliationAccountGuard = Future<bool> Function(
+  String expectedUserId,
+);
+
+class NotificationReconciliationConsumer {
+  NotificationReconciliationConsumer({
+    required this.database,
+    required this.scheduler,
+    required this.accountGuard,
+    DateTime Function()? now,
+  }) : _now = now ?? DateTime.now;
+
+  static const _maxRetryDelay = Duration(hours: 1);
+
+  final AppDatabase database;
+  final NotificationScheduler scheduler;
+  final NotificationReconciliationAccountGuard accountGuard;
+  final DateTime Function() _now;
+
+  Future<NotificationReconciliationDrainResult> drainForAccount(
+    String expectedUserId,
+  ) async {
+    final userId = expectedUserId.trim();
+    if (userId.isEmpty || !await accountGuard(userId)) {
+      return NotificationReconciliationDrainResult.accountMismatch;
+    }
+
+    final now = _now();
+    final requests =
+        await (database.select(database.notificationReconciliationRequests)
+              ..where(
+                (row) =>
+                    row.nextAttemptAt.isNull() |
+                    row.nextAttemptAt.isSmallerOrEqualValue(now),
+              )
+              ..orderBy([(row) => OrderingTerm.asc(row.updatedAt)]))
+            .get();
+    if (requests.isEmpty) {
+      return NotificationReconciliationDrainResult.noWork;
+    }
+
+    try {
+      await scheduler.refreshSchedules();
+    } on Object catch (error) {
+      await _recordFailure(requests, error, now);
+      rethrow;
+    }
+
+    if (!await accountGuard(userId)) {
+      return NotificationReconciliationDrainResult.accountMismatch;
+    }
+
+    await database.transaction(() async {
+      for (final request in requests) {
+        await (database.delete(database.notificationReconciliationRequests)
+              ..where(
+                (row) =>
+                    row.scopeKey.equals(request.scopeKey) &
+                    row.updatedAt.equals(request.updatedAt),
+              ))
+            .go();
+      }
+    });
+    return NotificationReconciliationDrainResult.refreshed;
+  }
+
+  Future<void> _recordFailure(
+    List<NotificationReconciliationRequestRow> requests,
+    Object error,
+    DateTime now,
+  ) {
+    final errorCode = error.runtimeType.toString();
+    return database.transaction(() async {
+      for (final request in requests) {
+        final attempts = request.attempts + 1;
+        await (database.update(database.notificationReconciliationRequests)
+              ..where(
+                (row) =>
+                    row.scopeKey.equals(request.scopeKey) &
+                    row.updatedAt.equals(request.updatedAt),
+              ))
+            .write(
+              NotificationReconciliationRequestsCompanion(
+                attempts: Value(attempts),
+                updatedAt: Value(now),
+                nextAttemptAt: Value(now.add(_retryDelay(attempts))),
+                lastErrorCode: Value(errorCode),
+                lastErrorMessage: const Value('schedule_refresh_failed'),
+              ),
+            );
+      }
+    });
+  }
+
+  Duration _retryDelay(int attempts) {
+    final exponent = attempts.clamp(1, 7).toInt() - 1;
+    final delay = Duration(minutes: 1 << exponent);
+    return delay > _maxRetryDelay ? _maxRetryDelay : delay;
   }
 }
