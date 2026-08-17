@@ -60,5 +60,22 @@ source = source.replace(
     1,
 )
 
+old_assertion = '''      expect(
+        (await store.pendingMutations()).where(
+          (mutation) =>
+              mutation.entity == 'asset_photo' && mutation.recordKey == _photoId,
+        ),
+        isNotEmpty,
+        reason: 'remote commit without local ACK must retain the tombstone',
+      );'''
+new_assertion = '''      expect(
+        await store.pendingCount(),
+        1,
+        reason: 'remote commit without local ACK must retain the tombstone',
+      );'''
+if source.count(old_assertion) != 1:
+    raise SystemExit('response-loss retention assertion anchor missing or ambiguous')
+source = source.replace(old_assertion, new_assertion, 1)
+
 compiled = compile(source, str(source_path), 'exec')
 exec(compiled, {'__name__': '__main__'})
