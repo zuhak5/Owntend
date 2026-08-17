@@ -54,5 +54,11 @@ new = """      if (spec.entity != 'profile') {
 text = replace_once(text, old, new, 'delete tombstone hydration')'''
 source = source[:patch_start] + replacement + source[patch_end:]
 
+source = source.replace(
+    "import 'package:drift/drift.dart' show Value;",
+    "import 'package:drift/drift.dart';",
+    1,
+)
+
 compiled = compile(source, str(source_path), 'exec')
 exec(compiled, {'__name__': '__main__'})
