@@ -29,7 +29,7 @@ For an authenticated account, the sign-out sequence is:
 6. Resolve the account-transition barrier according to the resulting auth state. If sign-out failed and the authenticated session remains, `cancelAccountDeletion()` is the rollback path and may resume background sync, realtime, and normal scheduling. If sign-out succeeded and the session is gone, `completeAccountSignOut()` is terminal: it clears the transition state while keeping scheduled sync work cancelled and realtime stopped, and account-scoped WorkManager tasks are cancelled again. The local account binding remains intact in both cases.
 7. Reset Sentry telemetry account scope after successful delegated sign-out.
 
-A barrier preparation failure is fail-closed: the authenticated session remains in place and the caller can retry. A partially prepared barrier may be rolled back only while the authenticated session still identifies the original account. Successful sign-out never uses the rollback path and never re-enables account-scoped work as part of barrier release.
+A barrier preparation failure is fail-closed: the authenticated session remains in place and the caller can retry. A partially prepared barrier may be rolled back only while the authenticated session still identifies the original account. Successful sign-out never uses the rollback path and never re-enables account-scoped work as part of barrier release. This rollback-versus-terminal split is part of the sign-out safety invariant, not a best-effort cleanup detail.
 
 Worker callbacks (`homeKeeperWorkManagerCallback`, `runCloudSyncInBackground`) independently fail closed behind their own account guard before performing account-scoped work.
 
