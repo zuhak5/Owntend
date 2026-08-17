@@ -8,6 +8,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: bug-010-014-branch-helper
+  cancel-in-progress: true
+
 jobs:
   apply-and-validate:
     runs-on: ubuntu-latest
@@ -17,7 +21,9 @@ jobs:
         with:
           fetch-depth: 0
       - name: Apply remediation
-        run: python3 tool/bug_010_014_branch_helper.py
+        run: |
+          python3 tool/bug_010_014_branch_helper.py
+          python3 tool/bug_010_014_branch_fixups.py
       - name: Set up Flutter
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
         with:
