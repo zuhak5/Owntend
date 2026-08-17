@@ -6,7 +6,7 @@ on:
       - fix/bug-008-hydration-lease-readiness
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   validate:
@@ -31,6 +31,25 @@ jobs:
 
       - name: Generate source files
         run: dart run build_runner build
+
+      - name: Apply BUG-008 formatting
+        run: >-
+          dart format
+          lib/src/core/sync/sync_contracts.dart
+          lib/src/core/sync/sync_coordinator.dart
+          test/bug_008_hydration_lease_readiness_test.dart
+
+      - name: Commit canonical formatting when needed
+        shell: pwsh
+        run: |
+          $changes = (git status --porcelain -- lib/src/core/sync/sync_contracts.dart lib/src/core/sync/sync_coordinator.dart test/bug_008_hydration_lease_readiness_test.dart | Out-String).Trim()
+          if (-not [string]::IsNullOrWhiteSpace($changes)) {
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add lib/src/core/sync/sync_contracts.dart lib/src/core/sync/sync_coordinator.dart test/bug_008_hydration_lease_readiness_test.dart
+            git commit -m 'Format BUG-008 hydration readiness changes'
+            git push
+          }
 
       - name: Verify BUG-008 formatting
         run: >-
