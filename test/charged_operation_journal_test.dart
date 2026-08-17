@@ -223,33 +223,30 @@ void main() {
       },
     );
 
-    test(
-      'purgeTerminalPayloads removes user requestPayload from reconciled operations',
-      () async {
-        final store = TaskCreationOperationStore();
-        final now = DateTime.now();
+    test('purgeTerminalPayloads removes user requestPayload from reconciled operations', () async {
+      final store = TaskCreationOperationStore();
+      final now = DateTime.now();
 
-        await store.saveOperation(
-          TaskCreationOperation(
-            operationId: 'op-reconciled',
-            planId: 'plan-rec',
-            accountScope: 'user-a',
-            requestPayload: const {'secret_title': 'Change HVAC Filter'},
-            requestHash: 'hash-rec',
-            state: TaskCreationOperationState.reconciled,
-            createdAt: now,
-            updatedAt: now,
-          ),
-        );
+      await store.saveOperation(
+        TaskCreationOperation(
+          operationId: 'op-reconciled',
+          planId: 'plan-rec',
+          accountScope: 'user-a',
+          requestPayload: const {'secret_title': 'Change HVAC Filter'},
+          requestHash: 'hash-rec',
+          state: TaskCreationOperationState.reconciled,
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
 
-        await store.purgeTerminalPayloads('user-a');
+      await store.purgeTerminalPayloads('user-a');
 
-        final purged = await store.getOperation('op-reconciled');
-        expect(purged, isNotNull);
-        expect(purged!.state, equals(TaskCreationOperationState.reconciled));
-        expect(purged.requestPayload, isEmpty);
-      },
-    );
+      final purged = await store.getOperation('op-reconciled');
+      expect(purged, isNotNull);
+      expect(purged!.state, equals(TaskCreationOperationState.reconciled));
+      expect(purged.requestPayload, isEmpty);
+    });
   });
 
   group('ChargedOperationResolver Tests', () {
@@ -320,10 +317,7 @@ void main() {
         final payload = {
           'operation_id': 'op-unsubmitted',
           'request_hash': 'hash-unsubmitted',
-          'plan': {
-            'id': 'plan-unsubmitted',
-            'title': 'Unsubmitted Task',
-          },
+          'plan': {'id': 'plan-unsubmitted', 'title': 'Unsubmitted Task'},
         };
         final now = DateTime.now();
         await store.saveOperation(
@@ -358,38 +352,44 @@ void main() {
 
         final resolvedOp = await store.getOperation('op-unsubmitted');
         expect(resolvedOp, isNotNull);
-        expect(resolvedOp!.state, equals(TaskCreationOperationState.reconciled));
+        expect(
+          resolvedOp!.state,
+          equals(TaskCreationOperationState.reconciled),
+        );
         expect(resolvedOp.requestPayload, isEmpty);
       },
     );
 
-    test('network failure preserves the original pending operation for restart', () async {
-      final store = TaskCreationOperationStore();
-      final fakeSyncStore = _FakeLocalSyncStore();
-      final fakeMonetization = _FakeMonetizationRepository()
-        ..shouldThrowOnStatus = true;
-      final pending = _pendingTaskOperation(
-        operationId: 'op-retry-later',
-        planId: 'plan-retry-later',
-        requestHash: 'hash-retry-later',
-      );
-      await store.saveOperation(pending);
+    test(
+      'network failure preserves the original pending operation for restart',
+      () async {
+        final store = TaskCreationOperationStore();
+        final fakeSyncStore = _FakeLocalSyncStore();
+        final fakeMonetization = _FakeMonetizationRepository()
+          ..shouldThrowOnStatus = true;
+        final pending = _pendingTaskOperation(
+          operationId: 'op-retry-later',
+          planId: 'plan-retry-later',
+          requestHash: 'hash-retry-later',
+        );
+        await store.saveOperation(pending);
 
-      final resolver = ChargedOperationResolver(
-        monetizationRepo: fakeMonetization,
-        localSyncStore: fakeSyncStore,
-        operationStore: store,
-      );
-      await resolver.resolvePendingOperations('user-a');
+        final resolver = ChargedOperationResolver(
+          monetizationRepo: fakeMonetization,
+          localSyncStore: fakeSyncStore,
+          operationStore: store,
+        );
+        await resolver.resolvePendingOperations('user-a');
 
-      final retained = await store.getOperation('op-retry-later');
-      expect(retained, isNotNull);
-      expect(retained!.state, TaskCreationOperationState.outcomeUnknown);
-      expect(retained.requestPayload, pending.requestPayload);
-      expect(retained.requestHash, 'hash-retry-later');
-      expect(fakeMonetization.createTaskCalls, isEmpty);
-      expect(fakeSyncStore.reconciledTaskPlanIds, isEmpty);
-    });
+        final retained = await store.getOperation('op-retry-later');
+        expect(retained, isNotNull);
+        expect(retained!.state, TaskCreationOperationState.outcomeUnknown);
+        expect(retained.requestPayload, pending.requestPayload);
+        expect(retained.requestHash, 'hash-retry-later');
+        expect(fakeMonetization.createTaskCalls, isEmpty);
+        expect(fakeSyncStore.reconciledTaskPlanIds, isEmpty);
+      },
+    );
 
     test('operation id and request hash conflict is terminal and never resubmitted', () async {
       final store = TaskCreationOperationStore();
@@ -413,76 +413,79 @@ void main() {
 
       final rejected = await store.getOperation('op-conflict');
       expect(rejected, isNotNull);
-      expect(
-        rejected!.state,
-        TaskCreationOperationState.permanentRejected,
-      );
+      expect(rejected!.state, TaskCreationOperationState.permanentRejected);
       expect(rejected.lastErrorCode, 'operation_id_reused');
       expect(rejected.requestPayload, isEmpty);
       expect(fakeMonetization.createTaskCalls, isEmpty);
       expect(fakeSyncStore.reconciledTaskPlanIds, isEmpty);
     });
 
-    test('stale account scope cannot inspect or apply pending charged work', () async {
-      final store = TaskCreationOperationStore();
-      final fakeSyncStore = _FakeLocalSyncStore();
-      final fakeMonetization = _FakeMonetizationRepository(
-        currentUserIdOverride: 'user-b',
-      );
-      await store.saveOperation(
-        _pendingTaskOperation(
-          operationId: 'op-stale-account',
-          planId: 'plan-stale-account',
-          requestHash: 'hash-stale-account',
-        ),
-      );
+    test(
+      'stale account scope cannot inspect or apply pending charged work',
+      () async {
+        final store = TaskCreationOperationStore();
+        final fakeSyncStore = _FakeLocalSyncStore();
+        final fakeMonetization = _FakeMonetizationRepository(
+          currentUserIdOverride: 'user-b',
+        );
+        await store.saveOperation(
+          _pendingTaskOperation(
+            operationId: 'op-stale-account',
+            planId: 'plan-stale-account',
+            requestHash: 'hash-stale-account',
+          ),
+        );
 
-      final resolver = ChargedOperationResolver(
-        monetizationRepo: fakeMonetization,
-        localSyncStore: fakeSyncStore,
-        operationStore: store,
-      );
-      await resolver.resolvePendingOperations('user-a');
+        final resolver = ChargedOperationResolver(
+          monetizationRepo: fakeMonetization,
+          localSyncStore: fakeSyncStore,
+          operationStore: store,
+        );
+        await resolver.resolvePendingOperations('user-a');
 
-      expect(fakeMonetization.statusCalls, isEmpty);
-      expect(fakeSyncStore.reconciledTaskPlanIds, isEmpty);
-      final retained = await store.getOperation('op-stale-account');
-      expect(retained!.state, TaskCreationOperationState.outcomeUnknown);
-    });
+        expect(fakeMonetization.statusCalls, isEmpty);
+        expect(fakeSyncStore.reconciledTaskPlanIds, isEmpty);
+        final retained = await store.getOperation('op-stale-account');
+        expect(retained!.state, TaskCreationOperationState.outcomeUnknown);
+      },
+    );
 
-    test('unqualified legacy journal entry fails closed without network work', () async {
-      final store = TaskCreationOperationStore();
-      final fakeSyncStore = _FakeLocalSyncStore();
-      final fakeMonetization = _FakeMonetizationRepository();
-      final now = DateTime.now();
-      await store.saveOperation(
-        TaskCreationOperation(
-          operationId: 'op-unqualified',
-          planId: 'plan-unqualified',
-          accountScope: 'user-a',
-          requestPayload: const {
-            'operation_id': 'op-unqualified',
-            'plan': {'id': 'plan-unqualified'},
-          },
-          requestHash: 'hash-unqualified',
-          state: TaskCreationOperationState.outcomeUnknown,
-          createdAt: now,
-          updatedAt: now,
-        ),
-      );
+    test(
+      'unqualified legacy journal entry fails closed without network work',
+      () async {
+        final store = TaskCreationOperationStore();
+        final fakeSyncStore = _FakeLocalSyncStore();
+        final fakeMonetization = _FakeMonetizationRepository();
+        final now = DateTime.now();
+        await store.saveOperation(
+          TaskCreationOperation(
+            operationId: 'op-unqualified',
+            planId: 'plan-unqualified',
+            accountScope: 'user-a',
+            requestPayload: const {
+              'operation_id': 'op-unqualified',
+              'plan': {'id': 'plan-unqualified'},
+            },
+            requestHash: 'hash-unqualified',
+            state: TaskCreationOperationState.outcomeUnknown,
+            createdAt: now,
+            updatedAt: now,
+          ),
+        );
 
-      final resolver = ChargedOperationResolver(
-        monetizationRepo: fakeMonetization,
-        localSyncStore: fakeSyncStore,
-        operationStore: store,
-      );
-      await resolver.resolvePendingOperations('user-a');
+        final resolver = ChargedOperationResolver(
+          monetizationRepo: fakeMonetization,
+          localSyncStore: fakeSyncStore,
+          operationStore: store,
+        );
+        await resolver.resolvePendingOperations('user-a');
 
-      expect(fakeMonetization.statusCalls, isEmpty);
-      final rejected = await store.getOperation('op-unqualified');
-      expect(rejected!.state, TaskCreationOperationState.permanentRejected);
-      expect(rejected.lastErrorCode, 'unqualified_request_hash');
-      expect(rejected.requestPayload, isEmpty);
-    });
+        expect(fakeMonetization.statusCalls, isEmpty);
+        final rejected = await store.getOperation('op-unqualified');
+        expect(rejected!.state, TaskCreationOperationState.permanentRejected);
+        expect(rejected.lastErrorCode, 'unqualified_request_hash');
+        expect(rejected.requestPayload, isEmpty);
+      },
+    );
   });
 }

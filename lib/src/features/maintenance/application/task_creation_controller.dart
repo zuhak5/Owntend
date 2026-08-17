@@ -47,18 +47,18 @@ final taskCreationOperationStoreProvider = Provider<TaskCreationOperationStore>(
   },
 );
 
-final chargedOperationResolverProvider = Provider<ChargedOperationResolver?>(
-  (ref) {
-    final monetizationRepo = ref.watch(monetizationRepositoryProvider);
-    final localSyncStore = ref.watch(localSyncStoreProvider);
-    if (monetizationRepo == null || localSyncStore == null) return null;
-    return ChargedOperationResolver(
-      monetizationRepo: monetizationRepo,
-      localSyncStore: localSyncStore,
-      operationStore: ref.watch(taskCreationOperationStoreProvider),
-    );
-  },
-);
+final chargedOperationResolverProvider = Provider<ChargedOperationResolver?>((
+  ref,
+) {
+  final monetizationRepo = ref.watch(monetizationRepositoryProvider);
+  final localSyncStore = ref.watch(localSyncStoreProvider);
+  if (monetizationRepo == null || localSyncStore == null) return null;
+  return ChargedOperationResolver(
+    monetizationRepo: monetizationRepo,
+    localSyncStore: localSyncStore,
+    operationStore: ref.watch(taskCreationOperationStoreProvider),
+  );
+});
 
 final taskCreationControllerProvider = Provider<TaskCreationController>((ref) {
   return TaskCreationController(ref: ref);

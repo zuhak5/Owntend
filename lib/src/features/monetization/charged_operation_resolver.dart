@@ -58,8 +58,7 @@ class ChargedOperationResolver {
                 state: TaskCreationOperationState.permanentRejected,
                 updatedAt: DateTime.now(),
                 lastErrorCode: 'operation_identity_mismatch',
-                lastErrorMessage:
-                    'Recovered operation identity did not match the local request.',
+                lastErrorMessage: 'Recovered operation identity did not match the local request.',
               ),
             );
             continue;
@@ -157,10 +156,7 @@ class ChargedOperationResolver {
     );
   }
 
-  Future<void> _markOutcomeUnknown(
-    TaskCreationOperation op,
-    Object error,
-  ) {
+  Future<void> _markOutcomeUnknown(TaskCreationOperation op, Object error) {
     return operationStore.saveOperation(
       op.copyWith(
         state: TaskCreationOperationState.outcomeUnknown,
