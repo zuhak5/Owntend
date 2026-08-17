@@ -450,6 +450,13 @@ class InsufficientPointsException implements Exception {
   String toString() => 'INSUFFICIENT_POINTS';
 }
 
+class OperationIdReusedException implements Exception {
+  const OperationIdReusedException();
+
+  @override
+  String toString() => 'OPERATION_ID_REUSED';
+}
+
 abstract class MonetizationRepository {
   const MonetizationRepository();
 
@@ -471,7 +478,7 @@ abstract class MonetizationRepository {
 
   Future<ChargedOperationStatusResult> getChargedOperationStatus(
     String operationId, {
-    String? requestHash,
+    required String requestHash,
   }) =>
       Future.error(UnsupportedError('Operation status lookup is unavailable.'));
 
@@ -552,13 +559,20 @@ class SupabaseMonetizationRepository extends MonetizationRepository {
   @override
   Future<ChargedOperationStatusResult> getChargedOperationStatus(
     String operationId, {
-    String? requestHash,
+    required String requestHash,
   }) async {
-    final data = await client.rpc<Map<String, dynamic>>(
-      'get_charged_operation_status',
-      params: {'p_operation_id': operationId, 'p_request_hash': ?requestHash},
-    );
-    return ChargedOperationStatusResult.fromJson(data);
+    try {
+      final data = await client.rpc<Map<String, dynamic>>(
+        'get_charged_operation_status',
+        params: {'p_operation_id': operationId, 'p_request_hash': requestHash},
+      );
+      return ChargedOperationStatusResult.fromJson(data);
+    } on PostgrestException catch (error) {
+      if (error.message == 'OPERATION_ID_REUSED') {
+        throw const OperationIdReusedException();
+      }
+      rethrow;
+    }
   }
 
   Future<PointDebitResult> _createWithPointDebit(
@@ -574,6 +588,9 @@ class SupabaseMonetizationRepository extends MonetizationRepository {
     } on PostgrestException catch (error) {
       // Compatibility with the immediately previous backend. Build 44 returns
       // this expected business state as HTTP 200 to avoid warning/error noise.
+      if (error.message == 'OPERATION_ID_REUSED') {
+        throw const OperationIdReusedException();
+      }
       if (error.message == 'INSUFFICIENT_POINTS') {
         throw const InsufficientPointsException(balance: 0);
       }

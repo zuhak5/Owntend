@@ -6,18 +6,24 @@ import 'package:owntend/src/features/monetization/charged_operation_resolver.dar
 import 'package:owntend/src/features/monetization/monetization.dart';
 
 class _FakeMonetizationRepository implements MonetizationRepository {
-  _FakeMonetizationRepository({this.statusToReturn});
+  _FakeMonetizationRepository({
+    this.statusToReturn,
+    this.currentUserIdOverride = 'user-a',
+  });
 
   final ChargedOperationStatusResult? statusToReturn;
+  final String? currentUserIdOverride;
   PointDebitResult? createTaskResult;
   PointDebitResult? createAssetResult;
   bool shouldThrowOnCreateTask = false;
+  bool shouldThrowOnStatus = false;
+  bool shouldThrowOperationIdReusedOnStatus = false;
   final List<Map<String, dynamic>> createTaskCalls = [];
   final List<Map<String, dynamic>> createAssetCalls = [];
   final List<Map<String, dynamic>> statusCalls = [];
 
   @override
-  String? get currentUserId => 'user-a';
+  String? get currentUserId => currentUserIdOverride;
 
   @override
   Stream<PointWallet?> watchWallet(String userId) => Stream.value(null);
@@ -62,13 +68,19 @@ class _FakeMonetizationRepository implements MonetizationRepository {
   @override
   Future<ChargedOperationStatusResult> getChargedOperationStatus(
     String operationId, {
-    String? requestHash,
+    required String requestHash,
   }) async {
     statusCalls.add({'operation_id': operationId, 'request_hash': requestHash});
+    if (shouldThrowOperationIdReusedOnStatus) {
+      throw const OperationIdReusedException();
+    }
+    if (shouldThrowOnStatus) {
+      throw Exception('Network unavailable during operation recovery');
+    }
     if (statusToReturn != null) return statusToReturn!;
     return const ChargedOperationStatusResult(
       status: 'not_found',
-      capabilityVersion: '1.1.0',
+      capabilityVersion: '1.2.0',
     );
   }
 
@@ -111,6 +123,29 @@ class _FakeLocalSyncStore implements LocalSyncStore {
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+TaskCreationOperation _pendingTaskOperation({
+  required String operationId,
+  required String planId,
+  required String requestHash,
+  TaskCreationOperationState state = TaskCreationOperationState.outcomeUnknown,
+}) {
+  final now = DateTime.now();
+  return TaskCreationOperation(
+    operationId: operationId,
+    planId: planId,
+    accountScope: 'user-a',
+    requestPayload: {
+      'operation_id': operationId,
+      'request_hash': requestHash,
+      'plan': {'id': planId, 'title': 'Reconciled Task'},
+    },
+    requestHash: requestHash,
+    state: state,
+    createdAt: now,
+    updatedAt: now,
+  );
 }
 
 void main() {
@@ -216,30 +251,82 @@ void main() {
 
   group('ChargedOperationResolver Tests', () {
     test(
-      'resolves outcomeUnknown operation when server completed RPC',
+      'response-loss recovery is hash-qualified, terminal, and idempotent',
       () async {
         final store = TaskCreationOperationStore();
         final fakeSyncStore = _FakeLocalSyncStore();
         final fakeMonetization = _FakeMonetizationRepository(
-          statusToReturn: ChargedOperationStatusResult(
+          statusToReturn: const ChargedOperationStatusResult(
             status: 'completed',
-            capabilityVersion: '1.1.0',
+            capabilityVersion: '1.2.0',
             entityType: 'task',
             entityId: 'plan-lost',
-            plan: const {'id': 'plan-lost', 'title': 'Reconciled Task'},
+            plan: {'id': 'plan-lost', 'title': 'Reconciled Task'},
           ),
         );
 
+        await store.saveOperation(
+          _pendingTaskOperation(
+            operationId: 'op-lost-response',
+            planId: 'plan-lost',
+            requestHash: 'hash-lost',
+          ),
+        );
+
+        final resolver = ChargedOperationResolver(
+          monetizationRepo: fakeMonetization,
+          localSyncStore: fakeSyncStore,
+          operationStore: store,
+        );
+
+        await resolver.resolvePendingOperations('user-a');
+        await resolver.resolvePendingOperations('user-a');
+
+        expect(fakeMonetization.statusCalls, hasLength(1));
+        expect(
+          fakeMonetization.statusCalls.single,
+          equals({
+            'operation_id': 'op-lost-response',
+            'request_hash': 'hash-lost',
+          }),
+        );
+        expect(fakeSyncStore.reconciledTaskPlanIds, ['plan-lost']);
+
+        final resolvedOp = await store.getOperation('op-lost-response');
+        expect(resolvedOp, isNotNull);
+        expect(
+          resolvedOp!.state,
+          equals(TaskCreationOperationState.reconciled),
+        );
+        expect(resolvedOp.requestPayload, isEmpty);
+      },
+    );
+
+    test(
+      'not_found replay uses exact retained operation id, hash, and payload',
+      () async {
+        final store = TaskCreationOperationStore();
+        final fakeSyncStore = _FakeLocalSyncStore();
+        final fakeMonetization = _FakeMonetizationRepository(
+          statusToReturn: const ChargedOperationStatusResult(
+            status: 'not_found',
+            capabilityVersion: '1.2.0',
+          ),
+        );
+
+        final payload = {
+          'operation_id': 'op-unsubmitted',
+          'request_hash': 'hash-unsubmitted',
+          'plan': {'id': 'plan-unsubmitted', 'title': 'Unsubmitted Task'},
+        };
         final now = DateTime.now();
         await store.saveOperation(
           TaskCreationOperation(
-            operationId: 'op-lost-response',
-            planId: 'plan-lost',
+            operationId: 'op-unsubmitted',
+            planId: 'plan-unsubmitted',
             accountScope: 'user-a',
-            requestPayload: const {
-              'plan': {'id': 'plan-lost', 'title': 'Reconciled Task'},
-            },
-            requestHash: 'hash-lost',
+            requestPayload: payload,
+            requestHash: 'hash-unsubmitted',
             state: TaskCreationOperationState.outcomeUnknown,
             createdAt: now,
             updatedAt: now,
@@ -254,14 +341,16 @@ void main() {
 
         await resolver.resolvePendingOperations('user-a');
 
-        expect(fakeMonetization.statusCalls.length, equals(1));
-        expect(
-          fakeMonetization.statusCalls.first['operation_id'],
-          equals('op-lost-response'),
-        );
-        expect(fakeSyncStore.reconciledTaskPlanIds, contains('plan-lost'));
+        expect(fakeMonetization.statusCalls, [
+          {
+            'operation_id': 'op-unsubmitted',
+            'request_hash': 'hash-unsubmitted',
+          },
+        ]);
+        expect(fakeMonetization.createTaskCalls, [payload]);
+        expect(fakeSyncStore.reconciledTaskPlanIds, ['plan-unsubmitted']);
 
-        final resolvedOp = await store.getOperation('op-lost-response');
+        final resolvedOp = await store.getOperation('op-unsubmitted');
         expect(resolvedOp, isNotNull);
         expect(
           resolvedOp!.state,
@@ -271,32 +360,47 @@ void main() {
       },
     );
 
-    test('resubmits with exact same operationId when status is not_found with capability 1.1.0', () async {
+    test(
+      'network failure preserves the original pending operation for restart',
+      () async {
+        final store = TaskCreationOperationStore();
+        final fakeSyncStore = _FakeLocalSyncStore();
+        final fakeMonetization = _FakeMonetizationRepository()
+          ..shouldThrowOnStatus = true;
+        final pending = _pendingTaskOperation(
+          operationId: 'op-retry-later',
+          planId: 'plan-retry-later',
+          requestHash: 'hash-retry-later',
+        );
+        await store.saveOperation(pending);
+
+        final resolver = ChargedOperationResolver(
+          monetizationRepo: fakeMonetization,
+          localSyncStore: fakeSyncStore,
+          operationStore: store,
+        );
+        await resolver.resolvePendingOperations('user-a');
+
+        final retained = await store.getOperation('op-retry-later');
+        expect(retained, isNotNull);
+        expect(retained!.state, TaskCreationOperationState.outcomeUnknown);
+        expect(retained.requestPayload, pending.requestPayload);
+        expect(retained.requestHash, 'hash-retry-later');
+        expect(fakeMonetization.createTaskCalls, isEmpty);
+        expect(fakeSyncStore.reconciledTaskPlanIds, isEmpty);
+      },
+    );
+
+    test('operation id and request hash conflict is terminal and never resubmitted', () async {
       final store = TaskCreationOperationStore();
       final fakeSyncStore = _FakeLocalSyncStore();
-      final fakeMonetization = _FakeMonetizationRepository(
-        statusToReturn: const ChargedOperationStatusResult(
-          status: 'not_found',
-          capabilityVersion: '1.1.0',
-        ),
-      );
-
-      final now = DateTime.now();
-      final payload = {
-        'operation_id': 'op-unsubmitted',
-        'plan': {'id': 'plan-unsubmitted', 'title': 'Unsubmitted Task'},
-      };
-
+      final fakeMonetization = _FakeMonetizationRepository()
+        ..shouldThrowOperationIdReusedOnStatus = true;
       await store.saveOperation(
-        TaskCreationOperation(
-          operationId: 'op-unsubmitted',
-          planId: 'plan-unsubmitted',
-          accountScope: 'user-a',
-          requestPayload: payload,
-          requestHash: 'hash-unsubmitted',
-          state: TaskCreationOperationState.outcomeUnknown,
-          createdAt: now,
-          updatedAt: now,
+        _pendingTaskOperation(
+          operationId: 'op-conflict',
+          planId: 'plan-conflict',
+          requestHash: 'hash-conflict',
         ),
       );
 
@@ -305,21 +409,83 @@ void main() {
         localSyncStore: fakeSyncStore,
         operationStore: store,
       );
-
       await resolver.resolvePendingOperations('user-a');
 
-      expect(fakeMonetization.statusCalls.length, equals(1));
-      expect(fakeMonetization.createTaskCalls.length, equals(1));
-      expect(
-        fakeMonetization.createTaskCalls.first['operation_id'],
-        equals('op-unsubmitted'),
-      );
-      expect(fakeSyncStore.reconciledTaskPlanIds, contains('plan-unsubmitted'));
-
-      final resolvedOp = await store.getOperation('op-unsubmitted');
-      expect(resolvedOp, isNotNull);
-      expect(resolvedOp!.state, equals(TaskCreationOperationState.reconciled));
-      expect(resolvedOp.requestPayload, isEmpty);
+      final rejected = await store.getOperation('op-conflict');
+      expect(rejected, isNotNull);
+      expect(rejected!.state, TaskCreationOperationState.permanentRejected);
+      expect(rejected.lastErrorCode, 'operation_id_reused');
+      expect(rejected.requestPayload, isEmpty);
+      expect(fakeMonetization.createTaskCalls, isEmpty);
+      expect(fakeSyncStore.reconciledTaskPlanIds, isEmpty);
     });
+
+    test(
+      'stale account scope cannot inspect or apply pending charged work',
+      () async {
+        final store = TaskCreationOperationStore();
+        final fakeSyncStore = _FakeLocalSyncStore();
+        final fakeMonetization = _FakeMonetizationRepository(
+          currentUserIdOverride: 'user-b',
+        );
+        await store.saveOperation(
+          _pendingTaskOperation(
+            operationId: 'op-stale-account',
+            planId: 'plan-stale-account',
+            requestHash: 'hash-stale-account',
+          ),
+        );
+
+        final resolver = ChargedOperationResolver(
+          monetizationRepo: fakeMonetization,
+          localSyncStore: fakeSyncStore,
+          operationStore: store,
+        );
+        await resolver.resolvePendingOperations('user-a');
+
+        expect(fakeMonetization.statusCalls, isEmpty);
+        expect(fakeSyncStore.reconciledTaskPlanIds, isEmpty);
+        final retained = await store.getOperation('op-stale-account');
+        expect(retained!.state, TaskCreationOperationState.outcomeUnknown);
+      },
+    );
+
+    test(
+      'unqualified legacy journal entry fails closed without network work',
+      () async {
+        final store = TaskCreationOperationStore();
+        final fakeSyncStore = _FakeLocalSyncStore();
+        final fakeMonetization = _FakeMonetizationRepository();
+        final now = DateTime.now();
+        await store.saveOperation(
+          TaskCreationOperation(
+            operationId: 'op-unqualified',
+            planId: 'plan-unqualified',
+            accountScope: 'user-a',
+            requestPayload: const {
+              'operation_id': 'op-unqualified',
+              'plan': {'id': 'plan-unqualified'},
+            },
+            requestHash: 'hash-unqualified',
+            state: TaskCreationOperationState.outcomeUnknown,
+            createdAt: now,
+            updatedAt: now,
+          ),
+        );
+
+        final resolver = ChargedOperationResolver(
+          monetizationRepo: fakeMonetization,
+          localSyncStore: fakeSyncStore,
+          operationStore: store,
+        );
+        await resolver.resolvePendingOperations('user-a');
+
+        expect(fakeMonetization.statusCalls, isEmpty);
+        final rejected = await store.getOperation('op-unqualified');
+        expect(rejected!.state, TaskCreationOperationState.permanentRejected);
+        expect(rejected.lastErrorCode, 'unqualified_request_hash');
+        expect(rejected.requestPayload, isEmpty);
+      },
+    );
   });
 }

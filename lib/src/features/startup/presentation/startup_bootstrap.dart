@@ -884,6 +884,9 @@ class StartupBootstrapController {
     );
     if (!_isCurrentStartup(generation, session)) return;
 
+    await _recoverPendingChargedOperations(session, generation);
+    if (!_isCurrentStartup(generation, session)) return;
+
     final offlineSnapshot = _offlineSnapshotCandidate;
     final resumeValidatedFinalization =
         forceRestore &&
@@ -971,6 +974,16 @@ class StartupBootstrapController {
       );
       AppLogger.warning('startup_restore_failed', error: error);
     }
+  }
+
+  Future<void> _recoverPendingChargedOperations(
+    AuthSession session,
+    int generation,
+  ) async {
+    if (!_isCurrentStartup(generation, session)) return;
+    final resolver = _ref.read(chargedOperationResolverProvider);
+    if (resolver == null) return;
+    await resolver.resolvePendingOperations(session.userId);
   }
 
   Future<InitialHomeSnapshot?> _verifiedOfflineSnapshot(
