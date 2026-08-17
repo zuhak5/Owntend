@@ -171,6 +171,50 @@ void main() {
     },
   );
 
+  test(
+    'refuses marker cleanup for unbound non-pristine local data',
+    () async {
+      await database
+          .into(database.areas)
+          .insert(
+            AreasCompanion.insert(
+              id: 'private-area',
+              name: 'Private area',
+              kind: 'indoor',
+            ),
+          );
+      final marker = File(
+        p.join(documents.path, '.owntend-account-deletion-cleanup-pending'),
+      );
+      await marker.writeAsString('user-1');
+      final privateFile = await _writePrivateFile(
+        documents,
+        'photos/private/photo.jpg',
+      );
+      var additionalCleanupCalled = false;
+
+      await expectLater(
+        cleaner.resumePendingCleanup(
+          additionalCleanup: (_) async {
+            additionalCleanupCalled = true;
+          },
+        ),
+        throwsStateError,
+      );
+
+      expect(await store.existingAccount(), isNull);
+      expect(
+        await (database.select(
+          database.areas,
+        )..where((area) => area.id.equals('private-area'))).get(),
+        hasLength(1),
+      );
+      expect(await privateFile.exists(), isTrue);
+      expect(await marker.exists(), isTrue);
+      expect(additionalCleanupCalled, isFalse);
+    },
+  );
+
   for (final invalidMarker in ['', 'pending']) {
     test(
       'refuses cleanup when durable marker identity is invalid: "$invalidMarker"',
