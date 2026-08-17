@@ -26,10 +26,10 @@ For an authenticated account, the sign-out sequence is:
 3. Cancel all account-scoped WorkManager tasks with `cancelAccountScopedBackgroundWork()`, including daily refresh, restore recovery, and legacy cloud-sync work. This cancellation is not best-effort for sign-out: failure propagates and cloud/provider sign-out does not run.
 4. Re-check that the authenticated identity is still the captured user ID.
 5. Only after the barrier succeeds, delegate to Supabase Auth (`SignOutScope.local` or `SignOutScope.global`) and Google Sign-In.
-6. Release the coordinator barrier after the attempt. If sign-out itself failed, the still-authenticated session can resume normal account-scoped work; if sign-out succeeded, the coordinator observes the signed-out auth state while the local account binding remains intact.
+6. Resolve the account-transition barrier according to the resulting auth state. If sign-out failed and the authenticated session remains, `cancelAccountDeletion()` is the rollback path and may resume background sync, realtime, and normal scheduling. If sign-out succeeded and the session is gone, `completeAccountSignOut()` is terminal: it clears the transition state while keeping scheduled sync work cancelled and realtime stopped, and account-scoped WorkManager tasks are cancelled again. The local account binding remains intact in both cases.
 7. Reset Sentry telemetry account scope after successful delegated sign-out.
 
-A barrier preparation failure is fail-closed: the authenticated session remains in place and the caller can retry. Releasing the in-memory barrier after an attempted sign-out is recovery cleanup and never authorizes destructive local data deletion.
+A barrier preparation failure is fail-closed: the authenticated session remains in place and the caller can retry. A partially prepared barrier may be rolled back only while the authenticated session still identifies the original account. Successful sign-out never uses the rollback path and never re-enables account-scoped work as part of barrier release.
 
 Worker callbacks (`homeKeeperWorkManagerCallback`, `runCloudSyncInBackground`) independently fail closed behind their own account guard before performing account-scoped work.
 
