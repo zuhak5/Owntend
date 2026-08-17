@@ -36,9 +36,16 @@ class _OwntendBootstrapState extends State<OwntendBootstrap> {
               ),
               accountDeletionCancelProvider.overrideWith(
                 (ref) => (userId) async {
-                  await ref
-                      .read(syncCoordinatorProvider)
-                      ?.cancelAccountDeletion(userId);
+                  final coordinator = ref.read(syncCoordinatorProvider);
+                  final session = ref
+                      .read(authRepositoryProvider)
+                      ?.currentSession;
+                  if (session == null) {
+                    await coordinator?.completeAccountSignOut(userId);
+                    await cancelAccountScopedBackgroundWork();
+                    return;
+                  }
+                  await coordinator?.cancelAccountDeletion(userId);
                   await ref
                       .read(notificationSchedulerProvider)
                       .refreshSchedules();
