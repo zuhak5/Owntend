@@ -2054,15 +2054,16 @@ class SyncCoordinator implements CloudSyncRepository {
     LocalSyncMutation mutation,
     RemoteWriteResult result,
   ) async {
-    await _localStore.markMutationSucceeded(mutation, result.canonical);
-    for (final objectPath in result.cleanupObjectPaths) {
-      await _localStore.enqueueMediaCleanup(
-        objectPath: objectPath,
-        userId: userId,
-        entity: mutation.entity,
-        recordKey: mutation.recordKey,
-      );
+    if (result.cleanupObjectPaths.isEmpty) {
+      await _localStore.markMutationSucceeded(mutation, result.canonical);
+      return;
     }
+    await _localStore.markMutationSucceededAndEnqueueMediaCleanup(
+      mutation,
+      result.canonical,
+      userId: userId,
+      objectPaths: result.cleanupObjectPaths,
+    );
   }
 
   Future<void> _processMediaCleanup(

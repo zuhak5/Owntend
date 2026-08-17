@@ -1359,6 +1359,12 @@ WHERE entity = 'profile'
           values[spec.keyColumns[index]] = keyParts[index];
         }
       }
+      if (spec.entity == 'asset_photo') {
+        final cleanupObjectPath = _photoDeleteCleanupObjectPath(mutation);
+        if (cleanupObjectPath != null) {
+          values['cleanup_object_path'] = cleanupObjectPath;
+        }
+      }
       return SyncRecord(
         spec: spec,
         recordKey: mutation.recordKey,
@@ -1409,6 +1415,19 @@ WHERE entity = 'profile'
       clientModifiedAt: semanticModifiedAt,
       originDeviceId: deviceId,
     );
+  }
+
+  String? _photoDeleteCleanupObjectPath(LocalSyncMutation mutation) {
+    final payloadJson = mutation.payloadJson;
+    if (payloadJson == null || payloadJson.trim().isEmpty) return null;
+    try {
+      final decoded = jsonDecode(payloadJson);
+      if (decoded is! Map) return null;
+      final path = decoded['cleanup_object_path'];
+      return path is String && path.trim().isNotEmpty ? path : null;
+    } on Object {
+      return null;
+    }
   }
 
   Future<SyncRecord?> _readProfile(
@@ -2474,6 +2493,72 @@ ON CONFLICT(key) DO UPDATE SET
             ))
             .go();
       }
+      final deletedCount =
+          await (db.delete(db.syncOutbox)..where(
+                (row) =>
+                    row.entity.equals(mutation.entity) &
+                    row.recordKey.equals(mutation.recordKey) &
+                    row.generation.equals(mutation.generation),
+              ))
+              .go();
+      return deletedCount > 0;
+    });
+  }
+
+  Future<bool> markMutationSucceededAndEnqueueMediaCleanup(
+    LocalSyncMutation mutation,
+    SyncRecord? canonical, {
+    required String userId,
+    required List<String> objectPaths,
+  }) async {
+    final cleanupPaths = objectPaths.where((path) => path.isNotEmpty).toSet();
+    for (final objectPath in cleanupPaths) {
+      if (!objectPath.startsWith('$userId/')) {
+        throw StateError(
+          'Media cleanup path belongs to another cloud account.',
+        );
+      }
+    }
+
+    return db.transaction(() async {
+      final pending =
+          await (db.select(db.syncOutbox)..where(
+                (row) =>
+                    row.entity.equals(mutation.entity) &
+                    row.recordKey.equals(mutation.recordKey) &
+                    row.generation.equals(mutation.generation),
+              ))
+              .getSingleOrNull();
+      if (pending == null) return false;
+      if (pending.userId != null && pending.userId != userId) {
+        throw StateError('Queued mutation belongs to another cloud account.');
+      }
+
+      if (canonical != null) {
+        await _saveShadow(canonical);
+      }
+      if (mutation.operation == 'delete') {
+        await (db.delete(db.syncShadows)..where(
+              (row) =>
+                  row.entity.equals(mutation.entity) &
+                  row.recordKey.equals(mutation.recordKey),
+            ))
+            .go();
+      }
+
+      for (final objectPath in cleanupPaths) {
+        await db
+            .into(db.syncMediaCleanup)
+            .insertOnConflictUpdate(
+              SyncMediaCleanupCompanion.insert(
+                objectPath: objectPath,
+                userId: userId,
+                entity: mutation.entity,
+                recordKey: mutation.recordKey,
+              ),
+            );
+      }
+
       final deletedCount =
           await (db.delete(db.syncOutbox)..where(
                 (row) =>
