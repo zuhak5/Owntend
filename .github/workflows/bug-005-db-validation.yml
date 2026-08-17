@@ -1,0 +1,98 @@
+name: Temporary BUG-005 database validation
+
+on:
+  push:
+    branches:
+      - fix/bug-005-hash-qualified-charged-recovery
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bug-005-db-validation
+  cancel-in-progress: true
+
+jobs:
+  patch-test-and-clean:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out remediation branch
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: fix/bug-005-hash-qualified-charged-recovery
+
+      - name: Set up Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.0.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Update monetization fixtures for mandatory request hashes
+        shell: bash
+        run: |
+          python - <<'PY'
+          from hashlib import sha256
+          from pathlib import Path
+          import re
+
+          path = Path('supabase/tests/database/0012_points_monetization.test.sql')
+          lines = path.read_text(encoding='utf-8').splitlines()
+          pattern = re.compile(r"^(\s*)'operation_id',\s*'([^']+)',\s*$")
+          out = []
+          inserted = 0
+          for index, line in enumerate(lines):
+              out.append(line)
+              match = pattern.match(line)
+              if not match:
+                  continue
+              next_line = lines[index + 1] if index + 1 < len(lines) else ''
+              if "'request_hash'" in next_line:
+                  continue
+              indent, operation_id = match.groups()
+              request_hash = sha256(operation_id.encode('utf-8')).hexdigest()
+              out.append(f"{indent}'request_hash', '{request_hash}',")
+              inserted += 1
+          if inserted < 10:
+              raise SystemExit(f'expected at least 10 charged-operation fixtures, inserted {inserted}')
+          path.write_text('\n'.join(out) + '\n', encoding='utf-8')
+
+          status_test = Path('supabase/tests/database/0017_charged_operation_status.test.sql')
+          text = status_test.read_text(encoding='utf-8')
+          old = '    select pronargdefaults\n'
+          if text.count(old) != 1:
+              raise SystemExit(f'expected one pronargdefaults assertion, found {text.count(old)}')
+          status_test.write_text(
+              text.replace(old, '    select pronargdefaults::integer\n', 1),
+              encoding='utf-8',
+          )
+          PY
+
+      - name: Start local Supabase stack
+        run: npx supabase start
+
+      - name: Lint database schema
+        run: npm run supabase:lint
+
+      - name: Run database authorization and monetization tests
+        run: npm run supabase:test
+
+      - name: Stop local Supabase stack
+        if: always()
+        run: npx supabase stop --no-backup
+
+      - name: Remove temporary harness and commit validated test contract
+        if: success()
+        shell: bash
+        run: |
+          git rm .github/workflows/bug-005-db-validation.yml
+          git add supabase/tests/database/0012_points_monetization.test.sql
+          git add supabase/tests/database/0017_charged_operation_status.test.sql
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Align monetization tests with BUG-005 recovery contract"
+          git push origin HEAD:fix/bug-005-hash-qualified-charged-recovery
