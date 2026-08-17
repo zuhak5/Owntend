@@ -229,16 +229,15 @@ class SyncCoordinator implements CloudSyncRepository {
     await _awaitInitialHydrationReadiness(session.userId);
   });
 
-  Future<void> _awaitInitialHydrationReadiness(
-    String expectedUserId,
-  ) async {
+  Future<void> _awaitInitialHydrationReadiness(String expectedUserId) async {
     final deadline = DateTime.now().add(initialHydrationLeaseWaitTimeout);
     while (true) {
       if (_accountDeletionInProgress ||
           _authRepository.currentSession?.userId != expectedUserId) {
         throw const SupabaseFailure(
           kind: SupabaseFailureKind.authentication,
-          message: 'The cloud account changed before initial hydration completed.',
+          message:
+              'The cloud account changed before initial hydration completed.',
         );
       }
 
@@ -250,7 +249,8 @@ class SyncCoordinator implements CloudSyncRepository {
           _authRepository.currentSession?.userId != expectedUserId) {
         throw const SupabaseFailure(
           kind: SupabaseFailureKind.authentication,
-          message: 'The cloud account changed before initial hydration completed.',
+          message:
+              'The cloud account changed before initial hydration completed.',
         );
       }
       if (await _localStore.hasCompleteSnapshotForUser(expectedUserId)) {

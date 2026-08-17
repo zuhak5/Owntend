@@ -57,150 +57,7 @@ void main() {
     registerFallbackValue(<SyncRecord>[]);
   });
 
-  test(
-    'lease miss keeps enable pending until durable hydration completes elsewhere',
-    () async {
-      final db = AppDatabase(executor: NativeDatabase.memory());
-      addTearDown(db.close);
-      final store = LocalSyncStore(db);
-      await store.bindIdentity('user-a');
-      expect(
-        await store.acquireLease(
-          'background-worker',
-          duration: const Duration(seconds: 2),
-        ),
-        isTrue,
-      );
-
-      final auth = _MutableAuthRepository(
-        const AuthSession(userId: 'user-a'),
-      );
-      addTearDown(auth.dispose);
-      final gateway = _MockGateway();
-      final coordinator = SyncCoordinator(
-        auth,
-        store,
-        gateway,
-        listenToAuthChanges: false,
-        autoEnableOnAuthChange: false,
-        initialHydrationLeaseRetryDelay: const Duration(milliseconds: 10),
-        initialHydrationLeaseWaitTimeout: const Duration(seconds: 1),
-      );
-      addTearDown(coordinator.dispose);
-
-      var completed = false;
-      final enableFuture = coordinator.enable().then((_) {
-        completed = true;
-      });
-      await _waitForPhase(coordinator, SyncPhase.waitingForSyncLease);
-
-      expect(completed, isFalse);
-      expect(await store.hasCompleteSnapshotForUser('user-a'), isFalse);
-
-      final hydration = await store.beginOrResumeHydration();
-      await store.completeInitialHydration(
-        DateTime.now().toUtc(),
-        expectedRunId: hydration.runId,
-      );
-
-      await enableFuture.timeout(const Duration(seconds: 1));
-      expect(completed, isTrue);
-      expect(await store.hasCompleteSnapshotForUser('user-a'), isTrue);
-      expect((await coordinator.status()).phase, SyncPhase.ready);
-    },
-  );
-
-  test('expired competing lease is retried and foreground hydration completes', () async {
-    final db = AppDatabase(executor: NativeDatabase.memory());
-    addTearDown(db.close);
-    final store = LocalSyncStore(db);
-    await store.bindIdentity('user-a');
-    expect(
-      await store.acquireLease(
-        'crashed-background-worker',
-        duration: const Duration(milliseconds: 80),
-      ),
-      isTrue,
-    );
-
-    final auth = _MutableAuthRepository(const AuthSession(userId: 'user-a'));
-    addTearDown(auth.dispose);
-    final gateway = _MockGateway();
-    _stubEmptyCloud(gateway);
-    final coordinator = SyncCoordinator(
-      auth,
-      store,
-      gateway,
-      listenToAuthChanges: false,
-      autoEnableOnAuthChange: false,
-      initialHydrationLeaseRetryDelay: const Duration(milliseconds: 10),
-      initialHydrationLeaseWaitTimeout: const Duration(seconds: 2),
-    );
-    addTearDown(coordinator.dispose);
-
-    var completed = false;
-    final enableFuture = coordinator.enable().then((_) {
-      completed = true;
-    });
-    await _waitForPhase(coordinator, SyncPhase.waitingForSyncLease);
-    expect(completed, isFalse);
-    expect(await store.hasCompleteSnapshotForUser('user-a'), isFalse);
-
-    await enableFuture.timeout(const Duration(seconds: 2));
-
-    expect(completed, isTrue);
-    expect(await store.hasCompleteSnapshotForUser('user-a'), isTrue);
-    expect((await coordinator.status()).phase, SyncPhase.ready);
-  });
-
-  test('bounded lease wait fails without publishing durable readiness', () async {
-    final db = AppDatabase(executor: NativeDatabase.memory());
-    addTearDown(db.close);
-    final store = LocalSyncStore(db);
-    await store.bindIdentity('user-a');
-    expect(
-      await store.acquireLease(
-        'stuck-background-worker',
-        duration: const Duration(seconds: 2),
-      ),
-      isTrue,
-    );
-
-    final auth = _MutableAuthRepository(const AuthSession(userId: 'user-a'));
-    addTearDown(auth.dispose);
-    final gateway = _MockGateway();
-    final coordinator = SyncCoordinator(
-      auth,
-      store,
-      gateway,
-      listenToAuthChanges: false,
-      autoEnableOnAuthChange: false,
-      initialHydrationLeaseRetryDelay: const Duration(milliseconds: 10),
-      initialHydrationLeaseWaitTimeout: const Duration(milliseconds: 80),
-    );
-    addTearDown(coordinator.dispose);
-
-    await expectLater(
-      coordinator.enable(),
-      throwsA(
-        isA<SupabaseFailure>()
-            .having((failure) => failure.retryable, 'retryable', isTrue)
-            .having(
-              (failure) => failure.message,
-              'message',
-              contains('Another sync operation is still running'),
-            ),
-      ),
-    );
-
-    expect(await store.hasCompleteSnapshotForUser('user-a'), isFalse);
-    expect(
-      (await coordinator.status()).phase,
-      SyncPhase.waitingForSyncLease,
-    );
-  });
-
-  test('account switch while waiting for hydration lease fails closed', () async {
+  test('lease miss keeps enable pending until durable hydration completes elsewhere', () async {
     final db = AppDatabase(executor: NativeDatabase.memory());
     addTearDown(db.close);
     final store = LocalSyncStore(db);
@@ -227,25 +84,169 @@ void main() {
     );
     addTearDown(coordinator.dispose);
 
-    final expectation = expectLater(
-      coordinator.enable(),
-      throwsA(
-        isA<SupabaseFailure>().having(
-          (failure) => failure.kind,
-          'kind',
-          SupabaseFailureKind.authentication,
-        ),
-      ),
-    );
+    var completed = false;
+    final enableFuture = coordinator.enable().then((_) {
+      completed = true;
+    });
     await _waitForPhase(coordinator, SyncPhase.waitingForSyncLease);
 
-    auth.session = const AuthSession(userId: 'user-b');
-    await expectation;
-
+    expect(completed, isFalse);
     expect(await store.hasCompleteSnapshotForUser('user-a'), isFalse);
-    expect(await store.hasCompleteSnapshotForUser('user-b'), isFalse);
-    expect((await store.existingAccount())?.boundUserId, 'user-a');
+
+    final hydration = await store.beginOrResumeHydration();
+    await store.completeInitialHydration(
+      DateTime.now().toUtc(),
+      expectedRunId: hydration.runId,
+    );
+
+    await enableFuture.timeout(const Duration(seconds: 1));
+    expect(completed, isTrue);
+    expect(await store.hasCompleteSnapshotForUser('user-a'), isTrue);
+    expect((await coordinator.status()).phase, SyncPhase.ready);
   });
+
+  test(
+    'expired competing lease is retried and foreground hydration completes',
+    () async {
+      final db = AppDatabase(executor: NativeDatabase.memory());
+      addTearDown(db.close);
+      final store = LocalSyncStore(db);
+      await store.bindIdentity('user-a');
+      expect(
+        await store.acquireLease(
+          'crashed-background-worker',
+          duration: const Duration(milliseconds: 80),
+        ),
+        isTrue,
+      );
+
+      final auth = _MutableAuthRepository(const AuthSession(userId: 'user-a'));
+      addTearDown(auth.dispose);
+      final gateway = _MockGateway();
+      _stubEmptyCloud(gateway);
+      final coordinator = SyncCoordinator(
+        auth,
+        store,
+        gateway,
+        listenToAuthChanges: false,
+        autoEnableOnAuthChange: false,
+        initialHydrationLeaseRetryDelay: const Duration(milliseconds: 10),
+        initialHydrationLeaseWaitTimeout: const Duration(seconds: 2),
+      );
+      addTearDown(coordinator.dispose);
+
+      var completed = false;
+      final enableFuture = coordinator.enable().then((_) {
+        completed = true;
+      });
+      await _waitForPhase(coordinator, SyncPhase.waitingForSyncLease);
+      expect(completed, isFalse);
+      expect(await store.hasCompleteSnapshotForUser('user-a'), isFalse);
+
+      await enableFuture.timeout(const Duration(seconds: 2));
+
+      expect(completed, isTrue);
+      expect(await store.hasCompleteSnapshotForUser('user-a'), isTrue);
+      expect((await coordinator.status()).phase, SyncPhase.ready);
+    },
+  );
+
+  test(
+    'bounded lease wait fails without publishing durable readiness',
+    () async {
+      final db = AppDatabase(executor: NativeDatabase.memory());
+      addTearDown(db.close);
+      final store = LocalSyncStore(db);
+      await store.bindIdentity('user-a');
+      expect(
+        await store.acquireLease(
+          'stuck-background-worker',
+          duration: const Duration(seconds: 2),
+        ),
+        isTrue,
+      );
+
+      final auth = _MutableAuthRepository(const AuthSession(userId: 'user-a'));
+      addTearDown(auth.dispose);
+      final gateway = _MockGateway();
+      final coordinator = SyncCoordinator(
+        auth,
+        store,
+        gateway,
+        listenToAuthChanges: false,
+        autoEnableOnAuthChange: false,
+        initialHydrationLeaseRetryDelay: const Duration(milliseconds: 10),
+        initialHydrationLeaseWaitTimeout: const Duration(milliseconds: 80),
+      );
+      addTearDown(coordinator.dispose);
+
+      await expectLater(
+        coordinator.enable(),
+        throwsA(
+          isA<SupabaseFailure>()
+              .having((failure) => failure.retryable, 'retryable', isTrue)
+              .having(
+                (failure) => failure.message,
+                'message',
+                contains('Another sync operation is still running'),
+              ),
+        ),
+      );
+
+      expect(await store.hasCompleteSnapshotForUser('user-a'), isFalse);
+      expect((await coordinator.status()).phase, SyncPhase.waitingForSyncLease);
+    },
+  );
+
+  test(
+    'account switch while waiting for hydration lease fails closed',
+    () async {
+      final db = AppDatabase(executor: NativeDatabase.memory());
+      addTearDown(db.close);
+      final store = LocalSyncStore(db);
+      await store.bindIdentity('user-a');
+      expect(
+        await store.acquireLease(
+          'background-worker',
+          duration: const Duration(seconds: 2),
+        ),
+        isTrue,
+      );
+
+      final auth = _MutableAuthRepository(const AuthSession(userId: 'user-a'));
+      addTearDown(auth.dispose);
+      final gateway = _MockGateway();
+      final coordinator = SyncCoordinator(
+        auth,
+        store,
+        gateway,
+        listenToAuthChanges: false,
+        autoEnableOnAuthChange: false,
+        initialHydrationLeaseRetryDelay: const Duration(milliseconds: 10),
+        initialHydrationLeaseWaitTimeout: const Duration(seconds: 1),
+      );
+      addTearDown(coordinator.dispose);
+
+      final expectation = expectLater(
+        coordinator.enable(),
+        throwsA(
+          isA<SupabaseFailure>().having(
+            (failure) => failure.kind,
+            'kind',
+            SupabaseFailureKind.authentication,
+          ),
+        ),
+      );
+      await _waitForPhase(coordinator, SyncPhase.waitingForSyncLease);
+
+      auth.session = const AuthSession(userId: 'user-b');
+      await expectation;
+
+      expect(await store.hasCompleteSnapshotForUser('user-a'), isFalse);
+      expect(await store.hasCompleteSnapshotForUser('user-b'), isFalse);
+      expect((await store.existingAccount())?.boundUserId, 'user-a');
+    },
+  );
 }
 
 void _stubEmptyCloud(_MockGateway gateway) {
@@ -260,7 +261,8 @@ void _stubEmptyCloud(_MockGateway gateway) {
       materializeMedia: any(named: 'materializeMedia'),
     ),
   ).thenAnswer((invocation) async {
-    final callback = invocation.namedArguments[#onExactCount] as void Function(int)?;
+    final callback =
+        invocation.namedArguments[#onExactCount] as void Function(int)?;
     callback?.call(0);
     return <SyncRecord>[];
   });
