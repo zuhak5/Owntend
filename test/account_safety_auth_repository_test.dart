@@ -53,14 +53,11 @@ void main() {
 
     expect(delegate.signOutCalls, 0);
     expect(delegate.currentSession?.userId, 'user-2');
-    expect(
-      events,
-      <String>[
-        'prepare:user-1',
-        'cancel-background',
-        'release:user-1',
-      ],
-    );
+    expect(events, <String>[
+      'prepare:user-1',
+      'cancel-background',
+      'release:user-1',
+    ]);
   });
 
   test(
@@ -88,15 +85,12 @@ void main() {
       expect(delegate.signOutCalls, 1);
       expect(delegate.lastAllDevices, isTrue);
       expect(delegate.currentSession, isNull);
-      expect(
-        events,
-        <String>[
-          'prepare:user-1',
-          'cancel-background',
-          'delegate-sign-out',
-          'release:user-1',
-        ],
-      );
+      expect(events, <String>[
+        'prepare:user-1',
+        'cancel-background',
+        'delegate-sign-out',
+        'release:user-1',
+      ]);
     },
   );
 

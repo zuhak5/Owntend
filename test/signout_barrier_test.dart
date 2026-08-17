@@ -48,19 +48,19 @@ void main() {
           events.add('release:$userId');
         },
       );
-      final repository = AccountSafetyAuthRepository(delegate, barrier: barrier);
+      final repository = AccountSafetyAuthRepository(
+        delegate,
+        barrier: barrier,
+      );
 
       await repository.signOut();
 
-      expect(
-        events,
-        <String>[
-          'prepare:user-1',
-          'cancel-background',
-          'delegate-sign-out',
-          'release:user-1',
-        ],
-      );
+      expect(events, <String>[
+        'prepare:user-1',
+        'cancel-background',
+        'delegate-sign-out',
+        'release:user-1',
+      ]);
       expect(delegate.currentSession, isNull);
       final account = await store.account();
       expect(account.boundUserId, 'user-1');
@@ -94,14 +94,11 @@ void main() {
 
     await expectLater(repository.signOut(), throwsStateError);
 
-    expect(
-      events,
-      <String>[
-        'prepare:user-1',
-        'cancel-background',
-        'release:user-1',
-      ],
-    );
+    expect(events, <String>[
+      'prepare:user-1',
+      'cancel-background',
+      'release:user-1',
+    ]);
     expect(delegate.signOutCalls, 0);
     expect(delegate.currentSession?.userId, 'user-1');
     expect((await store.account()).boundUserId, 'user-1');

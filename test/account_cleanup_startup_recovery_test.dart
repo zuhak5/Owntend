@@ -5,27 +5,29 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:owntend/main.dart';
 
 void main() {
-  test('unsafe pending cleanup blocks deferred startup before cloud bootstrap', () {
-    final source = File(
-      'lib/src/features/startup/presentation/startup_bootstrap.dart',
-    ).readAsStringSync();
+  test(
+    'unsafe pending cleanup blocks deferred startup before cloud bootstrap',
+    () {
+      final source = File(
+        'lib/src/features/startup/presentation/startup_bootstrap.dart',
+      ).readAsStringSync();
 
-    expect(
-      source,
-      contains('if (!await _resumePendingAccountCleanup()) return;'),
-    );
-    expect(source, contains('account_deletion_local_cleanup_resume_blocked'));
-    expect(source, contains('accountCleanupBlocked: true'));
-    expect(source, contains('_retryPendingAccountCleanup'));
-  });
+      expect(
+        source,
+        contains('if (!await _resumePendingAccountCleanup()) return;'),
+      );
+      expect(source, contains('account_deletion_local_cleanup_resume_blocked'));
+      expect(source, contains('accountCleanupBlocked: true'));
+      expect(source, contains('_retryPendingAccountCleanup'));
+    },
+  );
 
   test('successful sign-out completion cannot resume account-scoped work', () {
     final startup = File(
       'lib/src/features/startup/presentation/startup_bootstrap.dart',
     ).readAsStringSync();
-    final sync = File(
-      'lib/src/core/sync/sync_coordinator.dart',
-    ).readAsStringSync();
+    final sync = File('lib/src/core/sync/sync_coordinator.dart')
+        .readAsStringSync();
 
     expect(
       startup,
