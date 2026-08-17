@@ -115,7 +115,7 @@ void main() {
       expect(
         await store.acquireLease(
           'crashed-background-worker',
-          duration: const Duration(milliseconds: 80),
+          duration: const Duration(seconds: 1),
         ),
         isTrue,
       );
@@ -131,7 +131,7 @@ void main() {
         listenToAuthChanges: false,
         autoEnableOnAuthChange: false,
         initialHydrationLeaseRetryDelay: const Duration(milliseconds: 10),
-        initialHydrationLeaseWaitTimeout: const Duration(seconds: 2),
+        initialHydrationLeaseWaitTimeout: const Duration(seconds: 3),
       );
       addTearDown(coordinator.dispose);
 
@@ -143,7 +143,7 @@ void main() {
       expect(completed, isFalse);
       expect(await store.hasCompleteSnapshotForUser('user-a'), isFalse);
 
-      await enableFuture.timeout(const Duration(seconds: 2));
+      await enableFuture.timeout(const Duration(seconds: 3));
 
       expect(completed, isTrue);
       expect(await store.hasCompleteSnapshotForUser('user-a'), isTrue);
