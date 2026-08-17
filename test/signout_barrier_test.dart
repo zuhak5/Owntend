@@ -1,102 +1,139 @@
-import 'dart:io';
-
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:owntend/src/core/database/app_database.dart';
-import 'package:owntend/src/core/services/notification_service.dart';
-import 'package:owntend/src/core/services/reminder_schedule_reconciler.dart';
-import 'package:owntend/src/core/sync/background_sync_scheduler.dart';
+import 'package:owntend/src/core/sync/account_safety_barrier.dart';
 import 'package:owntend/src/core/sync/local_sync_store.dart';
-import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
-
-class _FakePathProviderPlatform extends PathProviderPlatform {
-  _FakePathProviderPlatform({
-    required this.documentsPath,
-    required this.temporaryPath,
-  });
-
-  final String documentsPath;
-  final String temporaryPath;
-
-  @override
-  Future<String?> getApplicationDocumentsPath() async => documentsPath;
-
-  @override
-  Future<String?> getTemporaryPath() async => temporaryPath;
-
-  @override
-  Future<String?> getApplicationSupportPath() async => documentsPath;
-
-  @override
-  Future<String?> getApplicationCachePath() async => temporaryPath;
-}
+import 'package:owntend/src/features/auth/data/account_safety_auth_repository.dart';
+import 'package:owntend/src/features/auth/domain/auth_repository.dart';
 
 void main() {
-  TestWidgetsFlutterBinding.ensureInitialized();
-
-  late AppDatabase db;
-  late File tempFile;
+  late AppDatabase database;
   late LocalSyncStore store;
-  late Directory tempDir;
 
   setUp(() async {
-    tempDir = await Directory.systemTemp.createTemp('signout_barrier_test_');
-    PathProviderPlatform.instance = _FakePathProviderPlatform(
-      documentsPath: tempDir.path,
-      temporaryPath: tempDir.path,
+    database = AppDatabase(executor: NativeDatabase.memory());
+    store = LocalSyncStore(database);
+    await database
+        .into(database.areas)
+        .insert(
+          AreasCompanion.insert(
+            id: 'private-area',
+            name: 'Private area',
+            kind: 'indoor',
+          ),
+        );
+    await store.setEnabled(
+      enabled: true,
+      boundUserId: 'user-1',
+      migrationState: 'active',
     );
-    tempFile = File('${tempDir.path}/test.sqlite');
-    db = AppDatabase(executor: NativeDatabase(tempFile));
-    store = LocalSyncStore(db);
-    await store.account();
   });
 
-  tearDown(() async {
-    await db.close();
-    if (await tempDir.exists()) {
-      await tempDir.delete(recursive: true);
-    }
+  tearDown(() => database.close());
+
+  test('ordinary sign-out keeps local account data and binding intact', () async {
+    final events = <String>[];
+    final delegate = _FakeAuthRepository(events: events);
+    final barrier = AccountSafetyBarrier(
+      prepareAccountScope: (userId) async {
+        events.add('prepare:$userId');
+        expect((await store.account()).boundUserId, userId);
+      },
+      cancelBackgroundWork: () async {
+        events.add('cancel-background');
+      },
+      releaseAccountScope: (userId) async {
+        events.add('release:$userId');
+      },
+    );
+    final repository = AccountSafetyAuthRepository(delegate, barrier: barrier);
+
+    await repository.signOut();
+
+    expect(
+      events,
+      <String>[
+        'prepare:user-1',
+        'cancel-background',
+        'delegate-sign-out',
+        'release:user-1',
+      ],
+    );
+    expect(delegate.currentSession, isNull);
+    final account = await store.account();
+    expect(account.boundUserId, 'user-1');
+    expect(account.enabled, isTrue);
+    expect(account.migrationState, 'active');
+    expect(
+      await (database.select(
+        database.areas,
+      )..where((area) => area.id.equals('private-area'))).get(),
+      hasLength(1),
+    );
   });
 
-  test('signOutOrchestrator clears binding and scheduled reminders', () async {
-    final scheduleStore = MemoryReminderScheduleStore();
-    await scheduleStore.replaceAll([
-      ReminderScheduleEntry(
-        identity: 't1',
-        notificationId: 100,
-        planRevision: 'r1',
-        scheduledAt: DateTime.now(),
-        timezone: 'UTC',
-        localComponents: '12:00',
-        scheduleMode: 'exact',
-        contentVersion: 'v1',
-      ),
-    ]);
+  test('background cancellation failure prevents auth sign-out', () async {
+    final events = <String>[];
+    final delegate = _FakeAuthRepository(events: events);
+    final barrier = AccountSafetyBarrier(
+      prepareAccountScope: (userId) async {
+        events.add('prepare:$userId');
+      },
+      cancelBackgroundWork: () async {
+        events.add('cancel-background');
+        throw StateError('scheduler unavailable');
+      },
+      releaseAccountScope: (userId) async {
+        events.add('release:$userId');
+      },
+    );
+    final repository = AccountSafetyAuthRepository(delegate, barrier: barrier);
 
-    // Bind identity first
-    await store.bindIdentity('user-1');
-    final bound = await store.account();
-    expect(bound.boundUserId, 'user-1');
+    await expectLater(repository.signOut(), throwsStateError);
 
-    Future<void> executeSignOut() async {
-      await cancelAccountScopedBackgroundWork();
-      await scheduleStore.replaceAll(const []);
-      await store.clearBinding();
-    }
-
-    await executeSignOut();
-
-    final unbound = await store.account();
-    expect(unbound.boundUserId, isNull);
-    expect(unbound.migrationState, 'localOnly');
-    expect((await scheduleStore.readAll()).isEmpty, true);
+    expect(
+      events,
+      <String>[
+        'prepare:user-1',
+        'cancel-background',
+        'release:user-1',
+      ],
+    );
+    expect(delegate.signOutCalls, 0);
+    expect(delegate.currentSession?.userId, 'user-1');
+    expect((await store.account()).boundUserId, 'user-1');
+    expect(
+      await (database.select(
+        database.areas,
+      )..where((area) => area.id.equals('private-area'))).get(),
+      hasLength(1),
+    );
   });
+}
 
-  test(
-    'runCloudSyncInBackground cancels background work when unauthenticated',
-    () async {
-      final result = await runCloudSyncInBackground(leaseScope: 'test');
-      expect(result, true);
-    },
-  );
+class _FakeAuthRepository implements AuthRepository {
+  _FakeAuthRepository({required this.events});
+
+  final List<String> events;
+  AuthSession? _session = const AuthSession(userId: 'user-1');
+  int signOutCalls = 0;
+
+  @override
+  AuthSession? get currentSession => _session;
+
+  @override
+  Future<void> deleteAccount() async {}
+
+  @override
+  Future<void> signInWithGoogle() async {}
+
+  @override
+  Future<void> signOut({bool allDevices = false}) async {
+    signOutCalls++;
+    events.add('delegate-sign-out');
+    _session = null;
+  }
+
+  @override
+  Stream<AuthStateChange> watchAuthState() => const Stream.empty();
 }
