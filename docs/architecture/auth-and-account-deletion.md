@@ -60,9 +60,12 @@ Sign-out is not account deletion. Local data and cloud data remain unless the se
 
 - Blank markers and the historical `pending` placeholder are invalid and are never rebound to whichever account happens to be active later.
 - If the marker identifies Account A while the local database is bound to Account B, recovery deletes nothing, preserves the marker, and reports an identity-mismatch failure for retry/recovery handling.
-- If the database was already cleared before a crash, a valid Account A marker can replay the remaining cleanup with no current binding; this keeps the operation idempotent without borrowing another account's identity.
+- If no account is bound but authoritative domain data is still present, recovery also deletes nothing because that data cannot be safely attributed to the marker account.
+- If the database was already cleared before a crash, a valid Account A marker can replay the remaining cleanup with no current binding because the authoritative domain data is pristine; this keeps the operation idempotent without borrowing another account's identity.
 - Additional account-scoped cleanup receives the marker's recorded user ID only after the database and canonical file cleanup have passed the identity guard.
 - The marker is removed only after the complete local cleanup succeeds.
+
+Deferred startup resolves this marker before diagnostics, cloud initialization, authentication restoration, realtime, or normal account-scoped background work. An invalid marker, account mismatch, or unbound non-pristine database transitions startup to an explicit blocked-recovery surface and stops bootstrap at that boundary. The marker remains intact and the surface exposes a retry action; normal startup resumes only after the same account-scoped recovery succeeds safely.
 
 These rules ensure that work authorized for one account cannot be reinterpreted as destructive work for another account after restart or account switching.
 
