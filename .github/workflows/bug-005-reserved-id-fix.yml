@@ -1,0 +1,175 @@
+name: Temporary BUG-005 reserved-ID fix
+
+on:
+  push:
+    branches:
+      - fix/bug-005-hash-qualified-charged-recovery
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-validate:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: fix/bug-005-hash-qualified-charged-recovery
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: "3.47.0"
+          channel: stable
+          cache: true
+      - run: flutter pub get --enforce-lockfile
+      - name: Patch reserved-ID semantics and regression coverage
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+
+          def replace_once(text, old, new, label):
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{label}: expected 1 match, found {count}")
+              return text.replace(old, new, 1)
+
+          path = Path('lib/src/features/maintenance/application/task_creation_controller.dart')
+          text = path.read_text(encoding='utf-8')
+          old = """      if (existingOperation == null && monetizationRepo != null) {
+                await _recoverBeforeNewChargedOperation(
+                  operationStore: operationStore,
+                  accountScope: accountScope,
+                );
+              }
+
+              final operationId = existingOperation?.operationId ?? _uuid.v7();
+          """
+          new = """      final hasRetainedPayload =
+                  existingOperation?.requestPayload.isNotEmpty ?? false;
+              final hasRetainedHash =
+                  existingOperation?.requestHash.trim().isNotEmpty ?? false;
+              if (existingOperation != null &&
+                  (existingOperation.accountScope != accountScope ||
+                      hasRetainedPayload != hasRetainedHash)) {
+                throw const TaskCreationFailure(
+                  'The retained charged operation cannot be replayed safely.',
+                  code: TaskCreationFailureCode.operationIdReused,
+                );
+              }
+              final isRetainedReplay = hasRetainedPayload && hasRetainedHash;
+
+              if (!isRetainedReplay && monetizationRepo != null) {
+                await _recoverBeforeNewChargedOperation(
+                  operationStore: operationStore,
+                  accountScope: accountScope,
+                );
+              }
+
+              final operationId = existingOperation?.operationId ?? _uuid.v7();
+          """
+          text = replace_once(text, old, new, 'recovery gate')
+
+          old = """      if (existingOperation != null) {
+                if (existingOperation.accountScope != accountScope ||
+                    existingOperation.requestPayload.isEmpty ||
+                    existingOperation.requestPayload['request_hash'] !=
+                        existingOperation.requestHash) {
+                  throw const TaskCreationFailure(
+                    'The retained charged operation cannot be replayed safely.',
+                    code: TaskCreationFailureCode.operationIdReused,
+                  );
+                }
+                requestHash = existingOperation.requestHash;
+                requestPayload = Map<String, dynamic>.from(
+                  existingOperation.requestPayload,
+                );
+              } else {
+          """
+          new = """      if (isRetainedReplay) {
+                if (existingOperation!.requestPayload['request_hash'] !=
+                    existingOperation.requestHash) {
+                  throw const TaskCreationFailure(
+                    'The retained charged operation cannot be replayed safely.',
+                    code: TaskCreationFailureCode.operationIdReused,
+                  );
+                }
+                requestHash = existingOperation.requestHash;
+                requestPayload = Map<String, dynamic>.from(
+                  existingOperation.requestPayload,
+                );
+              } else {
+          """
+          text = replace_once(text, old, new, 'replay selection')
+          path.write_text(text, encoding='utf-8')
+
+          test_path = Path('test/bug_005_charged_operation_recovery_test.dart')
+          test = test_path.read_text(encoding='utf-8')
+          first = """      healthGroup: HealthGroup.other,
+              accountScope: 'account-1',
+            );
+
+            expect(created, isFalse);
+          """
+          first_new = """      healthGroup: HealthGroup.other,
+              accountScope: 'account-1',
+              existingOperation: TaskCreationOperation(
+                operationId: 'op-reserved-next',
+                planId: 'plan-reserved-next',
+                accountScope: 'account-1',
+                requestPayload: const {},
+                requestHash: '',
+                state: TaskCreationOperationState.submitting,
+                createdAt: now,
+                updatedAt: now,
+              ),
+            );
+
+            expect(created, isFalse);
+          """
+          test = replace_once(test, first, first_new, 'pending recovery with reserved IDs')
+
+          second = """        healthGroup: HealthGroup.other,
+                accountScope: 'account-1',
+              );
+
+              expect(created, isTrue);
+          """
+          second_new = """        healthGroup: HealthGroup.other,
+                accountScope: 'account-1',
+                existingOperation: TaskCreationOperation(
+                  operationId: 'op-reserved-new',
+                  planId: 'plan-reserved-new',
+                  accountScope: 'account-1',
+                  requestPayload: const {},
+                  requestHash: '',
+                  state: TaskCreationOperationState.submitting,
+                  createdAt: DateTime.utc(2026, 8, 17),
+                  updatedAt: DateTime.utc(2026, 8, 17),
+                ),
+              );
+
+              expect(created, isTrue);
+          """
+          test = replace_once(test, second, second_new, 'new task with reserved IDs')
+          test_path.write_text(test, encoding='utf-8')
+          '@ | python -
+      - name: Format
+        run: dart format lib/src/features/maintenance/application/task_creation_controller.dart test/bug_005_charged_operation_recovery_test.dart
+      - name: Analyze
+        run: flutter analyze --no-pub
+      - name: Focused regression tests
+        run: >-
+          flutter test --no-pub --concurrency=1
+          test/bug_005_charged_operation_recovery_test.dart
+          test/widget_test.dart --plain-name "task editor can create and add another task"
+      - name: Remove harness and commit
+        shell: pwsh
+        run: |
+          git rm .github/workflows/bug-005-reserved-id-fix.yml
+          git add lib/src/features/maintenance/application/task_creation_controller.dart
+          git add test/bug_005_charged_operation_recovery_test.dart
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Fix BUG-005 reserved operation ID semantics"
+          git push origin HEAD:fix/bug-005-hash-qualified-charged-recovery
