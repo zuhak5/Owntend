@@ -1,0 +1,21 @@
+name: BUG-010-014 Branch Helper
+
+on:
+  push:
+    branches:
+      - fix/bug-010-bug-014-notification-consumers
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Locate notification bootstrap and tests
+        shell: bash
+        run: |
+          set -euxo pipefail
+          grep -R -n "class NotificationBootstrap\|NotificationBootstrap" lib test || true
+          grep -R -n "notificationAutoStartProvider\|dailyRefreshTask\|reminderReconciliationRequests" lib test || true
