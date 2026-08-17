@@ -16,10 +16,12 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           ref: fix/bug-003-durable-restore-recovery
-      - name: Apply scoped remediation patch
-        run: git apply --check tool/bug003_apply.patch && git apply tool/bug003_apply.patch
+      - name: Apply scoped remediation edits
+        run: python tool/bug003_apply.py
+      - name: Verify patch cleanliness
+        run: git diff --check
       - name: Remove temporary branch-only patch harness
-        run: git rm .github/workflows/bug003-apply.yml tool/bug003_apply.patch
+        run: git rm .github/workflows/bug003-apply.yml tool/bug003_apply.patch tool/bug003_apply.py
       - name: Commit remediation implementation
         shell: bash
         run: |
