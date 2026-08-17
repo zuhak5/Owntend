@@ -617,6 +617,17 @@ WHERE id = 1
         message.contains('sqlite_locked');
   }
 
+  static const _assetPhotoDeletePayloadExpression = '''
+CASE
+  WHEN (SELECT bound_user_id FROM sync_account WHERE id = 1) IS NULL THEN NULL
+  WHEN lower(OLD.relative_path) LIKE '%.jpeg' THEN json_object('cleanup_object_path', (SELECT bound_user_id FROM sync_account WHERE id = 1) || '/assets/' || OLD.asset_id || '/' || OLD.id || '.jpg')
+  WHEN lower(OLD.relative_path) LIKE '%.jpg' THEN json_object('cleanup_object_path', (SELECT bound_user_id FROM sync_account WHERE id = 1) || '/assets/' || OLD.asset_id || '/' || OLD.id || '.jpg')
+  WHEN lower(OLD.relative_path) LIKE '%.png' THEN json_object('cleanup_object_path', (SELECT bound_user_id FROM sync_account WHERE id = 1) || '/assets/' || OLD.asset_id || '/' || OLD.id || '.png')
+  WHEN lower(OLD.relative_path) LIKE '%.webp' THEN json_object('cleanup_object_path', (SELECT bound_user_id FROM sync_account WHERE id = 1) || '/assets/' || OLD.asset_id || '/' || OLD.id || '.webp')
+  ELSE NULL
+END
+''';
+
   Future<void> _createSyncTriggers() async {
     const specs = <(String, String, String)>[
       ('areas', 'area', 'id'),
@@ -660,6 +671,9 @@ WHERE id = 1
         event: 'DELETE',
         rowPrefix: 'OLD',
         operation: 'delete',
+        payloadExpression: table == 'asset_photos'
+            ? _assetPhotoDeletePayloadExpression
+            : null,
       );
     }
 
@@ -728,6 +742,7 @@ WHERE id = 1
     required String rowPrefix,
     required String operation,
     String? extraWhen,
+    String? payloadExpression,
   }) async {
     final normalizedEvent = event.toLowerCase();
     final triggerName = 'sync_${table}_${entity}_$normalizedEvent';
@@ -752,6 +767,7 @@ WHERE id = 1
       'COALESCE((SELECT suppress_outbox FROM sync_runtime WHERE id = 1), 0) = 0',
       ?extraWhen,
     ].join(' AND ');
+    final payload = payloadExpression ?? 'NULL';
     await customStatement('DROP TRIGGER IF EXISTS $triggerName');
     await customStatement('''
 CREATE TRIGGER $triggerName
@@ -762,6 +778,7 @@ BEGIN
     entity,
     record_key,
     operation,
+    payload_json,
     changed_at,
     attempts,
     next_attempt_at,
@@ -772,6 +789,7 @@ BEGIN
     '$entity',
     $compositeKey,
     '$operation',
+    $payload,
     CAST(strftime('%s', 'now') AS INTEGER),
     0,
     NULL,
@@ -780,6 +798,7 @@ BEGIN
   )
   ON CONFLICT(entity, record_key) DO UPDATE SET
     operation = excluded.operation,
+    payload_json = excluded.payload_json,
     changed_at = excluded.changed_at,
     attempts = 0,
     next_attempt_at = NULL,

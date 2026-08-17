@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -467,7 +468,7 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
             recordKey: record.recordKey,
           );
           if (existing == null) {
-            return const RemoteWriteResult.applied(null);
+            return _appliedDeleteResult(record: record, userId: userId);
           }
           return await write(
             record: record,
@@ -494,13 +495,10 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
         );
         final deleted = _zeroOrOneRemoteRow(deletedRows);
         if (deleted != null) {
-          final cleanupPath = _remoteMediaPath(
-            record.spec,
-            Map<String, dynamic>.from(deleted),
-          );
-          return RemoteWriteResult.applied(
-            null,
-            cleanupObjectPaths: cleanupPath == null ? const [] : [cleanupPath],
+          return _appliedDeleteResult(
+            record: record,
+            userId: userId,
+            deletedValues: Map<String, dynamic>.from(deleted),
           );
         }
         final current = await fetch(
@@ -891,10 +889,15 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
         message: 'Cloud media path does not belong to this account.',
       );
     }
-    await _client.storage
-        .from(_bucket)
-        .remove([objectPath])
-        .timeout(_storageTimeout);
+    try {
+      await _client.storage
+          .from(_bucket)
+          .remove([objectPath])
+          .timeout(_storageTimeout);
+    } on StorageException catch (error) {
+      if (isStorageObjectMissingStatus(error.statusCode)) return;
+      rethrow;
+    }
   }
 
   Future<_MediaUpload> _uploadMedia({
@@ -1074,6 +1077,58 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
       throw SupabaseFailure.from(error);
     }
   }
+}
+
+RemoteWriteResult _appliedDeleteResult({
+  required SyncRecord record,
+  required String userId,
+  Map<String, dynamic>? deletedValues,
+}) {
+  return RemoteWriteResult.applied(
+    null,
+    cleanupObjectPaths: deleteCleanupObjectPaths(
+      record: record,
+      userId: userId,
+      deletedValues: deletedValues,
+    ),
+  );
+}
+
+@visibleForTesting
+List<String> deleteCleanupObjectPaths({
+  required SyncRecord record,
+  required String userId,
+  Map<String, dynamic>? deletedValues,
+}) {
+  final paths = <String>{};
+
+  void addPath(Object? rawPath) {
+    if (rawPath == null) return;
+    if (rawPath is! String || rawPath.trim().isEmpty) {
+      throw const SupabaseFailure(
+        kind: SupabaseFailureKind.incompatibleSchema,
+        message: 'Cloud media cleanup identity is malformed.',
+      );
+    }
+    if (!rawPath.startsWith('$userId/')) {
+      throw const SupabaseFailure(
+        kind: SupabaseFailureKind.storage,
+        message: 'Cloud media cleanup path does not belong to this account.',
+      );
+    }
+    paths.add(rawPath);
+  }
+
+  addPath(record.values['cleanup_object_path']);
+  if (deletedValues != null) {
+    addPath(_remoteMediaPath(record.spec, deletedValues));
+  }
+  return paths.toList(growable: false);
+}
+
+@visibleForTesting
+bool isStorageObjectMissingStatus(String? statusCode) {
+  return int.tryParse(statusCode ?? '') == 404;
 }
 
 Map<String, dynamic>? _zeroOrOneRemoteRow(List<Map<String, dynamic>> rows) {
