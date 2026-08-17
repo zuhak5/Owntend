@@ -25,6 +25,8 @@ class SyncCoordinator implements CloudSyncRepository {
     bool listenToAuthChanges = true,
     this.autoEnableOnAuthChange = true,
     this.localFinalizationTimeout = const Duration(seconds: 8),
+    this.initialHydrationLeaseRetryDelay = const Duration(seconds: 2),
+    this.initialHydrationLeaseWaitTimeout = const Duration(seconds: 30),
   }) : _connectivity = connectivity ?? const AlwaysOnlineSyncConnectivity(),
        _maintenanceCompletionReminderReconciler =
            reconcileMaintenanceCompletionReminders,
@@ -80,6 +82,8 @@ class SyncCoordinator implements CloudSyncRepository {
   final bool _automaticSyncEnabled;
   final bool autoEnableOnAuthChange;
   final Duration localFinalizationTimeout;
+  final Duration initialHydrationLeaseRetryDelay;
+  final Duration initialHydrationLeaseWaitTimeout;
   final StreamController<SyncStatus> _statusController =
       StreamController<SyncStatus>.broadcast();
   static const _localCleanupTimeout = Duration(seconds: 4);
@@ -88,7 +92,7 @@ class SyncCoordinator implements CloudSyncRepository {
   StreamSubscription<Object?>? _pendingSubscription;
   StreamSubscription<AuthStateChange>? _authSubscription;
   StreamSubscription<bool>? _connectivitySubscription;
-  Future<void>? _activeSync;
+  Future<SyncRunOutcome>? _activeSync;
   SyncWork? _activeWork;
   Timer? _automaticSyncTimer;
   Timer? _retryTimer;
@@ -222,8 +226,79 @@ class SyncCoordinator implements CloudSyncRepository {
     if (!pristineCloudBootstrap) {
       await _localStore.enqueueInitialSnapshot();
     }
-    await _startSync(mode: SyncMode.initialHydration);
+    await _awaitInitialHydrationReadiness(session.userId);
   });
+
+  Future<void> _awaitInitialHydrationReadiness(
+    String expectedUserId,
+  ) async {
+    final deadline = DateTime.now().add(initialHydrationLeaseWaitTimeout);
+    while (true) {
+      if (_accountDeletionInProgress ||
+          _authRepository.currentSession?.userId != expectedUserId) {
+        throw const SupabaseFailure(
+          kind: SupabaseFailureKind.authentication,
+          message: 'The cloud account changed before initial hydration completed.',
+        );
+      }
+
+      final outcome = await _startSyncWithOutcome(
+        mode: SyncMode.initialHydration,
+      );
+
+      if (_accountDeletionInProgress ||
+          _authRepository.currentSession?.userId != expectedUserId) {
+        throw const SupabaseFailure(
+          kind: SupabaseFailureKind.authentication,
+          message: 'The cloud account changed before initial hydration completed.',
+        );
+      }
+      if (await _localStore.hasCompleteSnapshotForUser(expectedUserId)) {
+        _phaseOverride = SyncPhase.ready;
+        _messageOverride = null;
+        await _emit();
+        return;
+      }
+
+      switch (outcome) {
+        case SyncRunOutcome.completed:
+          throw const SupabaseFailure(
+            kind: SupabaseFailureKind.unknown,
+            message:
+                'Initial cloud hydration completed without a durable Home snapshot. '
+                'Retry to finish startup safely.',
+            retryable: true,
+          );
+        case SyncRunOutcome.notEligible:
+          throw const SupabaseFailure(
+            kind: SupabaseFailureKind.unknown,
+            message:
+                'Initial cloud hydration is no longer eligible to continue. '
+                'Retry after cloud sync becomes available.',
+            retryable: true,
+          );
+        case SyncRunOutcome.waitingForSyncLease:
+          final now = DateTime.now();
+          if (!now.isBefore(deadline)) {
+            throw const SupabaseFailure(
+              kind: SupabaseFailureKind.unknown,
+              message:
+                  'Another sync operation is still running. '
+                  'Retry initial cloud hydration shortly.',
+              retryable: true,
+            );
+          }
+          final remaining = deadline.difference(now);
+          final delay =
+              initialHydrationLeaseRetryDelay.compareTo(remaining) <= 0
+              ? initialHydrationLeaseRetryDelay
+              : remaining;
+          if (delay > Duration.zero) {
+            await Future<void>.delayed(delay);
+          }
+      }
+    }
+  }
 
   @override
   Future<void> disable() => _serializeAccountTransition(() async {
@@ -340,10 +415,14 @@ class SyncCoordinator implements CloudSyncRepository {
     });
   }
 
-  Future<void> _startSync({required SyncMode mode}) {
+  Future<void> _startSync({required SyncMode mode}) async {
+    await _startSyncWithOutcome(mode: mode);
+  }
+
+  Future<SyncRunOutcome> _startSyncWithOutcome({required SyncMode mode}) {
     if (_accountDeletionInProgress) {
       AppLogger.info('sync_skipped_account_deletion_in_progress');
-      return Future<void>.value();
+      return Future<SyncRunOutcome>.value(SyncRunOutcome.notEligible);
     }
     if (_activeSync != null) {
       final activeWork = _activeWork;
@@ -447,18 +526,21 @@ class SyncCoordinator implements CloudSyncRepository {
     };
   }
 
-  Future<void> _runSync(SyncWork requestedWork, {required int attempt}) async {
+  Future<SyncRunOutcome> _runSync(
+    SyncWork requestedWork, {
+    required int attempt,
+  }) async {
     _ActiveAccountScope? activeScope;
-    if (_accountDeletionInProgress) return;
+    if (_accountDeletionInProgress) return SyncRunOutcome.notEligible;
     final session = _authRepository.currentSession;
     final account = await _localStore.existingAccount();
-    if (account == null) return;
-    if (!account.enabled) return;
+    if (account == null) return SyncRunOutcome.notEligible;
+    if (!account.enabled) return SyncRunOutcome.notEligible;
     if (session == null) {
       _phaseOverride = SyncPhase.signedOut;
       _messageOverride = 'Sign in again to resume cloud sync.';
       await _emit();
-      return;
+      return SyncRunOutcome.notEligible;
     }
     activeScope = _ActiveAccountScope(
       epoch: _accountEpoch,
@@ -470,20 +552,20 @@ class SyncCoordinator implements CloudSyncRepository {
       _messageOverride = 'Cloud account does not match this device data.';
       await _localStore.recordSyncBlocked(_messageOverride!);
       await _emit();
-      return;
+      return SyncRunOutcome.notEligible;
     }
     await _ensureActiveAccountScope(activeScope);
     final leaseOwner =
         '$leaseScope:${account.deviceId}:'
         '${DateTime.now().microsecondsSinceEpoch}';
     if (!await _localStore.acquireLease(leaseOwner)) {
-      _phaseOverride = SyncPhase.syncing;
+      _phaseOverride = SyncPhase.waitingForSyncLease;
       _messageOverride =
           'Another sync operation is already running. '
-          'Owntend will retry shortly.';
+          'Owntend is waiting for hydration readiness.';
       await _emit();
-      _scheduleAutomaticSync(delay: const Duration(seconds: 2));
-      return;
+      _scheduleAutomaticSync(delay: initialHydrationLeaseRetryDelay);
+      return SyncRunOutcome.waitingForSyncLease;
     }
 
     await _ensureActiveAccountScope(activeScope);
@@ -647,23 +729,24 @@ class SyncCoordinator implements CloudSyncRepository {
         await _ensureActiveAccountScope(activeScope);
         await _localStore.recordSyncSuccess(completedAt);
       }
-      if (attempt != _syncAttemptSerial) return;
+      if (attempt != _syncAttemptSerial) return SyncRunOutcome.notEligible;
       await _ensureActiveAccountScope(activeScope);
       _phaseOverride = SyncPhase.ready;
       _messageOverride = null;
+      return SyncRunOutcome.completed;
     } on _AccountScopeInactive {
       AppLogger.info(
         'sync_account_scope_discarded',
         fields: {'attempt': attempt},
       );
-      return;
+      return SyncRunOutcome.notEligible;
     } on Object catch (error) {
       if (!_isActiveAccountScope(activeScope)) {
         AppLogger.info(
           'sync_account_scope_failure_discarded',
           fields: {'attempt': attempt},
         );
-        return;
+        return SyncRunOutcome.notEligible;
       }
       final failure = SupabaseFailure.from(error);
       if (failure.kind == SupabaseFailureKind.authentication) {
