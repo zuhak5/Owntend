@@ -8,6 +8,7 @@ The current application version is defined only in `pubspec.yaml`. Released vers
 
 ### Fixed
 
+- Invoked automatic-backup due checks after authenticated startup readiness and on throttled foreground resumes without blocking the first useful UI frame.
 - Kept task inbox notifications unread when completion is cancelled or otherwise not applied, acknowledging them only after confirmed successful completion.
 - Wired authenticated notification startup to idempotent daily background refresh registration and added a crash-safe consumer for durable notification reconciliation requests.
 - Routed Realtime delete notifications through account-scoped authoritative reconciliation so peer delete hints cannot directly erase local rows, shadows, or pending outbox intent.
