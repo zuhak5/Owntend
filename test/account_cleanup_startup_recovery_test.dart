@@ -19,6 +19,40 @@ void main() {
     expect(source, contains('_retryPendingAccountCleanup'));
   });
 
+  test('successful sign-out completion cannot resume account-scoped work', () {
+    final startup = File(
+      'lib/src/features/startup/presentation/startup_bootstrap.dart',
+    ).readAsStringSync();
+    final sync = File(
+      'lib/src/core/sync/sync_coordinator.dart',
+    ).readAsStringSync();
+
+    expect(
+      startup,
+      contains('final session = ref\n                      .read(authRepositoryProvider)'),
+    );
+    expect(startup, contains('await coordinator?.completeAccountSignOut(userId);'));
+    expect(startup, contains('await cancelAccountScopedBackgroundWork();'));
+
+    final completionStart = sync.indexOf(
+      '  Future<void> completeAccountSignOut(String userId) {',
+    );
+    final rollbackStart = sync.indexOf(
+      '  Future<void> cancelAccountDeletion(String userId) {',
+      completionStart,
+    );
+    expect(completionStart, greaterThanOrEqualTo(0));
+    expect(rollbackStart, greaterThan(completionStart));
+
+    final completion = sync.substring(completionStart, rollbackStart);
+    expect(completion, contains("_advanceAccountEpoch('account_sign_out_completed')"));
+    expect(completion, contains('_cancelScheduledSyncWork();'));
+    expect(completion, contains('await _stopRealtime();'));
+    expect(completion, isNot(contains('configureBackgroundSync')));
+    expect(completion, isNot(contains('_ensureRealtime')));
+    expect(completion, isNot(contains('_scheduleAutomaticSync')));
+  });
+
   testWidgets('blocked cleanup startup state exposes an explicit retry', (
     tester,
   ) async {
