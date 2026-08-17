@@ -61,17 +61,11 @@ jobs:
               'lib/src/features/startup/presentation/startup_bootstrap.dart'
           )
           startup = startup_path.read_text()
-          old = """              accountDeletionCancelProvider.overrideWith(
-                (ref) => (userId) async {
-                  await ref
-                      .read(syncCoordinatorProvider)
-                      ?.cancelAccountDeletion(userId);
-                  await ref
-                      .read(notificationSchedulerProvider)
-                      .refreshSchedules();
-                },
-              ),
-          """
+          start = startup.index('              accountDeletionCancelProvider.overrideWith(')
+          end = startup.index(
+              '              accountDeletionLocalCleanupProvider.overrideWith(',
+              start,
+          )
           new = """              accountDeletionCancelProvider.overrideWith(
                 (ref) => (userId) async {
                   final coordinator = ref.read(syncCoordinatorProvider);
@@ -88,9 +82,7 @@ jobs:
                 },
               ),
           """
-          if old not in startup:
-            raise SystemExit('startup cancel provider anchor not found')
-          startup = startup.replace(old, new, 1)
+          startup = startup[:start] + new + startup[end:]
           startup_path.write_text(startup)
           PY
 
