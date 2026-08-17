@@ -44,8 +44,14 @@ class LocalAccountDataCleaner {
         'Destructive account cleanup requires an immutable account identity.',
       );
     }
-    final account = await _store.account();
-    if (account.boundUserId != null && account.boundUserId != userId) {
+    final account = await _store.existingAccount();
+    if (account?.boundUserId == null) {
+      if (!await _store.isDomainDataPristine()) {
+        throw StateError(
+          'Unbound local data cannot be attributed to the cleanup account.',
+        );
+      }
+    } else if (account!.boundUserId != userId) {
       throw StateError('Local data belongs to a different cloud identity.');
     }
     await _store.clearAllAccountData(expectedUserId: userId);
@@ -102,9 +108,11 @@ class LocalAccountDataCleaner {
         'Destructive account cleanup requires an immutable account identity.',
       );
     }
-    final account = await _store.account();
-    if (account.boundUserId != null && account.boundUserId != userId) {
-      throw StateError('Local data belongs to a different cloud identity.');
+    final account = await _store.existingAccount();
+    if (account?.boundUserId != userId) {
+      throw StateError(
+        'Local account identity does not match the deleted cloud account.',
+      );
     }
 
     final documents = await _documentsDirectory();
@@ -137,6 +145,13 @@ class LocalAccountDataCleaner {
       AppLogger.warning('account_cleanup_marker_identity_mismatch');
       throw StateError(
         'Pending account cleanup belongs to a different cloud identity.',
+      );
+    }
+    if (existingAccount?.boundUserId == null &&
+        !await _store.isDomainDataPristine()) {
+      AppLogger.warning('account_cleanup_unbound_non_pristine_data');
+      throw StateError(
+        'Pending account cleanup cannot attribute unbound local data safely.',
       );
     }
 
