@@ -26,7 +26,9 @@ FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION owntend_monetization_private.get_charged_operation_status(UUID, TEXT)
 TO service_role;
 
-CREATE OR REPLACE FUNCTION public.create_task_with_point_debit(p_operation JSONB)
+CREATE OR REPLACE FUNCTION owntend_monetization_private.create_task_with_point_debit_hash_qualified_impl(
+  p_operation JSONB
+)
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -69,11 +71,29 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.create_task_with_point_debit(JSONB) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.create_task_with_point_debit(JSONB)
+REVOKE ALL ON FUNCTION owntend_monetization_private.create_task_with_point_debit_hash_qualified_impl(JSONB)
+FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION owntend_monetization_private.create_task_with_point_debit_hash_qualified_impl(JSONB)
 TO authenticated, service_role;
 
-CREATE OR REPLACE FUNCTION public.create_asset_with_point_debit(p_operation JSONB)
+CREATE OR REPLACE FUNCTION public.create_task_with_point_debit(p_operation JSONB)
+RETURNS JSONB
+LANGUAGE sql
+SECURITY INVOKER
+SET search_path = ''
+AS $$
+  SELECT owntend_monetization_private.create_task_with_point_debit_hash_qualified_impl(
+    p_operation
+  );
+$$;
+
+REVOKE ALL ON FUNCTION public.create_task_with_point_debit(JSONB) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.create_task_with_point_debit(JSONB)
+TO authenticated;
+
+CREATE OR REPLACE FUNCTION owntend_monetization_private.create_asset_with_point_debit_hash_qualified_impl(
+  p_operation JSONB
+)
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -116,9 +136,25 @@ BEGIN
 END;
 $$;
 
+REVOKE ALL ON FUNCTION owntend_monetization_private.create_asset_with_point_debit_hash_qualified_impl(JSONB)
+FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION owntend_monetization_private.create_asset_with_point_debit_hash_qualified_impl(JSONB)
+TO authenticated, service_role;
+
+CREATE OR REPLACE FUNCTION public.create_asset_with_point_debit(p_operation JSONB)
+RETURNS JSONB
+LANGUAGE sql
+SECURITY INVOKER
+SET search_path = ''
+AS $$
+  SELECT owntend_monetization_private.create_asset_with_point_debit_hash_qualified_impl(
+    p_operation
+  );
+$$;
+
 REVOKE ALL ON FUNCTION public.create_asset_with_point_debit(JSONB) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.create_asset_with_point_debit(JSONB)
-TO authenticated, service_role;
+TO authenticated;
 
 CREATE OR REPLACE FUNCTION public.get_charged_operation_status(
   p_operation_id UUID,
