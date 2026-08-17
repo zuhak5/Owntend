@@ -243,6 +243,7 @@ select extensions.is(
     public.create_asset_with_point_debit(
       jsonb_build_object(
         'operation_id', '44444444-0000-0000-0000-000000000001',
+        'request_hash', 'c813adc62ab3f9d608220e84a969c7055803e54847eb667ece9e427f498a0b7d',
         'asset', jsonb_build_object(
           'id', 'points-general-asset',
           'name', 'General item',
@@ -304,6 +305,7 @@ select extensions.is(
     public.create_asset_with_point_debit(
       jsonb_build_object(
         'operation_id', '44444444-0000-0000-0000-000000000001',
+        'request_hash', 'c813adc62ab3f9d608220e84a969c7055803e54847eb667ece9e427f498a0b7d',
         'asset', jsonb_build_object(
           'id', 'points-general-asset',
           'name', 'General item',
@@ -374,6 +376,7 @@ select extensions.is(
     public.create_asset_with_point_debit(
       jsonb_build_object(
         'operation_id', '44444444-0000-0000-0000-000000000009',
+        'request_hash', 'a0bdc12ffb7f4d8ccbc5063a44b3745937acce7ce89a27f5ca4b8e5ae9d970aa',
         'asset', jsonb_build_object(
           'id', 'points-device-asset',
           'name', 'Air purifier',
@@ -409,6 +412,7 @@ select extensions.is(
     public.create_task_with_point_debit(
       jsonb_build_object(
         'operation_id', '44444444-0000-0000-0000-000000000002',
+        'request_hash', '9ac37a595de21e379e34080d15c2a666bb361ce2aa6c61c9cf8cfa7db70e468f',
         'plan', jsonb_build_object(
           'id', 'points-general-task',
           'asset_id', 'points-general-asset',
@@ -443,6 +447,7 @@ select extensions.is(
     public.create_asset_with_point_debit(
       jsonb_build_object(
         'operation_id', '44444444-0000-0000-0000-000000000003',
+        'request_hash', '7f7756932bfdfe6138ec4be10299f6e345b7b073e2396f9e11284a054491443d',
         'asset', jsonb_build_object(
           'id', 'points-safety-asset',
           'name', 'Smoke alarm',
@@ -486,6 +491,7 @@ select extensions.is(
     public.create_task_with_point_debit(
       jsonb_build_object(
         'operation_id', '44444444-0000-0000-0000-000000000004',
+        'request_hash', 'b3d88703c7b92efe53382222cb5b4b6c3c9c0463f41f2df8dfba13bb961b601a',
         'plan', jsonb_build_object(
           'id', 'points-safety-task',
           'asset_id', 'points-safety-asset',
@@ -768,6 +774,7 @@ select extensions.is(
     public.create_task_with_point_debit(
       jsonb_build_object(
         'operation_id', '44444444-0000-0000-0000-000000000005',
+        'request_hash', '5f71738f287b2e14234dd045d2386fca50c25aa5c0316acf39922a9fc2b59f17',
         'plan', jsonb_build_object(
           'id', 'points-insufficient-task',
           'asset_id', 'points-general-asset',
@@ -795,6 +802,7 @@ select extensions.is(
     public.create_asset_with_point_debit(
       jsonb_build_object(
         'operation_id', '44444444-0000-0000-0000-000000000008',
+        'request_hash', 'fb8baaa2045157233d22b1d6b5d19a2d0ace94ff77405be3db2f6dce6da81a86',
         'asset', jsonb_build_object(
           'id', 'points-zero-wallet-asset',
           'name', 'Created with zero points',
@@ -826,6 +834,7 @@ select extensions.is(
     public.create_task_with_point_debit(
       jsonb_build_object(
         'operation_id', '44444444-0000-0000-0000-000000000006',
+        'request_hash', '439b51ebcce5f41b1d3e09c65c32d82a43e66fd127ff398823ec1a74d66a878c',
         'plan', jsonb_build_object(
           'id', 'points-emergency-free-task',
           'asset_id', 'points-general-asset',
@@ -865,6 +874,7 @@ select extensions.is(
     public.create_task_with_point_debit(
       jsonb_build_object(
         'operation_id', '44444444-0000-0000-0000-000000000007',
+        'request_hash', '25a92381c8487426df847c8fc8846718ca5d84d21aa4807b630e7d952af25cb3',
         'plan', jsonb_build_object(
           'id', 'points-disabled-free-task',
           'asset_id', 'points-general-asset',
@@ -934,6 +944,7 @@ select extensions.is(
     public.create_task_with_point_debit(
       jsonb_build_object(
         'operation_id', '44444444-0000-0000-0000-000000000088',
+        'request_hash', 'b25a0a56459301efdbefa58c13b1c89c9d8d9f379474ea5fd03bc0a31f879b90',
         'plan', jsonb_build_object(
           'id', 'ctc-001-metadata-task',
           'asset_id', 'points-general-asset',
@@ -978,6 +989,7 @@ select extensions.throws_ok(
     select public.create_task_with_point_debit(
       jsonb_build_object(
         'operation_id', '44444444-0000-0000-0000-000000000088',
+        'request_hash', 'b25a0a56459301efdbefa58c13b1c89c9d8d9f379474ea5fd03bc0a31f879b90',
         'plan', jsonb_build_object(
           'id', 'different-task-id',
           'asset_id', 'points-general-asset',
@@ -1005,6 +1017,7 @@ select extensions.throws_ok(
     select public.create_task_with_point_debit(
       jsonb_build_object(
         'operation_id', '44444444-0000-0000-0000-000000000089',
+        'request_hash', 'c089d0be5e93e93d6160fd7310c5d84f8d7e5b189290606c80335630a77197e5',
         'plan', jsonb_build_object(
           'id', 'ctr-003-invalid-meta-task',
           'asset_id', 'points-general-asset',

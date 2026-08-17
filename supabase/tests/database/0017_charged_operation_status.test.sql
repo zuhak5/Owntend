@@ -25,7 +25,7 @@ select extensions.ok(
 
 select extensions.is(
   (
-    select pronargdefaults
+    select pronargdefaults::integer
     from pg_proc
     where oid = 'public.get_charged_operation_status(uuid, text)'::regprocedure
   ),
@@ -98,11 +98,14 @@ select extensions.is(
   'initial asset creation succeeds with already_processed = false'
 );
 
+set local role postgres;
 select extensions.is(
   (select client_request_hash from public.creation_point_operations where operation_id = 'a1111111-1111-1111-1111-111111111111'),
   'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
   'asset operation persists the immutable client request hash'
 );
+set local role authenticated;
+set local "request.jwt.claims" = '{"sub": "00000000-0000-0000-0000-00000000000a"}';
 
 select extensions.is(
   (select balance from public.point_wallets where user_id = '00000000-0000-0000-0000-00000000000a'),
@@ -201,11 +204,14 @@ select extensions.is(
   'task creation succeeds with already_processed = false'
 );
 
+set local role postgres;
 select extensions.is(
   (select client_request_hash from public.creation_point_operations where operation_id = '21111111-1111-1111-1111-111111111111'),
   'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
   'task operation persists the immutable client request hash'
 );
+set local role authenticated;
+set local "request.jwt.claims" = '{"sub": "00000000-0000-0000-0000-00000000000a"}';
 
 select extensions.is(
   (select balance from public.point_wallets where user_id = '00000000-0000-0000-0000-00000000000a'),
