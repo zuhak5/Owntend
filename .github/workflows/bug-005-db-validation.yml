@@ -66,10 +66,35 @@ jobs:
           old = '    select pronargdefaults\n'
           if text.count(old) != 1:
               raise SystemExit(f'expected one pronargdefaults assertion, found {text.count(old)}')
-          status_test.write_text(
-              text.replace(old, '    select pronargdefaults::integer\n', 1),
-              encoding='utf-8',
+          text = text.replace(old, '    select pronargdefaults::integer\n', 1)
+
+          internal_assertion = re.compile(
+              r"select extensions\.is\(\n"
+              r"  \(select client_request_hash from public\.creation_point_operations where operation_id = '([^']+)'\),\n"
+              r"  '([0-9a-f]{64})',\n"
+              r"  '([^']+)'\n"
+              r"\);"
           )
+
+          def make_postgres_assertion(match):
+              operation_id, expected_hash, message = match.groups()
+              return (
+                  'set local role postgres;\n'
+                  'select extensions.is(\n'
+                  f"  (select client_request_hash from public.creation_point_operations where operation_id = '{operation_id}'),\n"
+                  f"  '{expected_hash}',\n"
+                  f"  '{message}'\n"
+                  ');\n'
+                  'set local role authenticated;\n'
+                  'set local "request.jwt.claims" = \'{"sub": "00000000-0000-0000-0000-00000000000a"}\';'
+              )
+
+          text, assertion_count = internal_assertion.subn(make_postgres_assertion, text)
+          if assertion_count != 2:
+              raise SystemExit(
+                  f'expected two internal request-hash assertions, found {assertion_count}'
+              )
+          status_test.write_text(text, encoding='utf-8')
           PY
 
       - name: Start local Supabase stack
