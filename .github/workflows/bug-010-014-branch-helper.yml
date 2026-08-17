@@ -16,6 +16,13 @@ jobs:
       - name: Locate notification bootstrap and tests
         shell: bash
         run: |
-          set -euxo pipefail
-          grep -R -n "class NotificationBootstrap\|NotificationBootstrap" lib test || true
-          grep -R -n "notificationAutoStartProvider\|dailyRefreshTask\|reminderReconciliationRequests" lib test || true
+          set -euo pipefail
+          {
+            grep -R -n "class NotificationBootstrap\|NotificationBootstrap" lib test || true
+            grep -R -n "notificationAutoStartProvider\|dailyRefreshTask\|reminderReconciliationRequests" lib test || true
+          } | tee /tmp/inspection.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bug-010-014-inspection
+          path: /tmp/inspection.txt
+          if-no-files-found: error
