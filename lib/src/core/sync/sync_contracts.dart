@@ -3,11 +3,14 @@ enum SyncPhase {
   signedOut,
   ready,
   initializing,
+  waitingForSyncLease,
   syncing,
   offline,
   blocked,
   error,
 }
+
+enum SyncRunOutcome { completed, waitingForSyncLease, notEligible }
 
 enum SyncRealtimeConnection { disabled, connecting, connected, reconnecting }
 

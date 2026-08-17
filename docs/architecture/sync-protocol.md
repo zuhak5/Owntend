@@ -14,6 +14,7 @@ The coordinator exposes states equivalent to:
 - Signed out: no authenticated cloud account is bound.
 - Ready: initialized and able to schedule work.
 - Initializing: account binding and local runtime preparation are in progress.
+- Waiting for sync lease: initial hydration cannot own the local sync lease yet and remains non-ready while durable hydration completion is observed or retried.
 - Syncing: push, pull, reconciliation, or cleanup work is active.
 - Offline: network-dependent work is deferred while local operation continues.
 - Blocked: an authorization, account, conflict, or protocol condition requires intervention.
@@ -97,7 +98,9 @@ application and checkpoint advancement so retry replays the page safely.
 
 Initial hydration builds a trusted local view for a newly bound account. It must be restartable and must not present partial hydration as fully synchronized. Existing offline local work requires an explicit policy before cloud data is applied.
 
-Hydration completion should be recorded independently from ordinary incremental synchronization.
+Hydration completion is durable and independent from ordinary incremental synchronization. Authenticated startup may become ready only after the local store proves a complete snapshot for the currently authenticated account.
+
+A local sync-lease miss is not hydration success. The coordinator exposes a waiting-for-lease state and retries or observes the shared durable completion marker until hydration is complete. A foreground process may accept hydration completed by a background worker only after that durable marker is complete. The wait is bounded and becomes a retryable startup failure rather than silently publishing ready, and an account identity change while waiting fails closed.
 
 ## Realtime invalidation
 
