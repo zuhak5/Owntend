@@ -20,6 +20,7 @@ jobs:
           {
             grep -R -n "class NotificationBootstrap\|NotificationBootstrap" lib test || true
             grep -R -n "notificationAutoStartProvider\|dailyRefreshTask\|reminderReconciliationRequests" lib test || true
+            grep -R -n "FakeNotificationScheduler\|implements NotificationScheduler" test lib || true
           } | tee /tmp/inspection.txt
       - uses: actions/upload-artifact@v4
         with:
