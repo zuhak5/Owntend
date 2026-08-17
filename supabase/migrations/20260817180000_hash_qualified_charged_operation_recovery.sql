@@ -57,6 +57,13 @@ BEGIN
 
   result := owntend_monetization_private.create_task_with_point_debit_impl(p_operation);
 
+  -- Insufficient points is an explicit non-committed business result. The
+  -- underlying RPC intentionally creates no operation row in this case, so
+  -- there is no server operation identity to qualify or reconcile yet.
+  IF result->>'status' = 'insufficient_points' THEN
+    RETURN result;
+  END IF;
+
   UPDATE public.creation_point_operations
   SET client_request_hash = client_hash
   WHERE operation_id = operation_uuid
