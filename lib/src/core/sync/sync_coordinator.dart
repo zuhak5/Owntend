@@ -297,6 +297,26 @@ class SyncCoordinator implements CloudSyncRepository {
     });
   }
 
+  Future<void> completeAccountSignOut(String userId) {
+    return _serializeAccountTransition(() async {
+      if (_deletingUserId != null && _deletingUserId != userId) {
+        throw StateError(
+          'Sign-out completion does not match the active account transition.',
+        );
+      }
+      _accountDeletionInProgress = false;
+      _deletingUserId = null;
+      _advanceAccountEpoch('account_sign_out_completed');
+      _cancelScheduledSyncWork();
+      _deferredRemoteMedia.clear();
+      _mergeConfirmationRequired = false;
+      _phaseOverride = SyncPhase.signedOut;
+      _messageOverride = null;
+      await _stopRealtime();
+      await _emit();
+    });
+  }
+
   Future<void> cancelAccountDeletion(String userId) {
     return _serializeAccountTransition(() async {
       if (_deletingUserId != null && _deletingUserId != userId) return;

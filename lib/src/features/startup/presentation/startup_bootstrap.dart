@@ -36,9 +36,16 @@ class _OwntendBootstrapState extends State<OwntendBootstrap> {
               ),
               accountDeletionCancelProvider.overrideWith(
                 (ref) => (userId) async {
-                  await ref
-                      .read(syncCoordinatorProvider)
-                      ?.cancelAccountDeletion(userId);
+                  final coordinator = ref.read(syncCoordinatorProvider);
+                  final session = ref
+                      .read(authRepositoryProvider)
+                      ?.currentSession;
+                  if (session == null) {
+                    await coordinator?.completeAccountSignOut(userId);
+                    await cancelAccountScopedBackgroundWork();
+                    return;
+                  }
+                  await coordinator?.cancelAccountDeletion(userId);
                   await ref
                       .read(notificationSchedulerProvider)
                       .refreshSchedules();
@@ -225,6 +232,8 @@ class _DeferredOwntendBootstrap extends StatefulWidget {
 
 class _DeferredOwntendBootstrapState extends State<_DeferredOwntendBootstrap> {
   SupabaseClient? _supabaseClient;
+  Object? _accountCleanupRecoveryFailure;
+  bool _accountCleanupRetrying = false;
   bool _ready = false;
 
   @override
@@ -239,11 +248,7 @@ class _DeferredOwntendBootstrapState extends State<_DeferredOwntendBootstrap> {
     });
   }
 
-  Future<void> _initializeAfterFirstFrame() async {
-    final deviceLanguage = _supportedDeviceLanguage(
-      WidgetsBinding.instance.platformDispatcher.locale,
-    );
-    initializeRestoreForegroundService(localeCode: deviceLanguage.name);
+  Future<bool> _resumePendingAccountCleanup() async {
     try {
       final resumed =
           await LocalAccountDataCleaner(LocalSyncStore(widget.database))
@@ -258,12 +263,40 @@ class _DeferredOwntendBootstrapState extends State<_DeferredOwntendBootstrap> {
                 },
               );
       if (resumed) AppLogger.info('account_deletion_local_cleanup_resumed');
+      if (mounted && _accountCleanupRecoveryFailure != null) {
+        setState(() => _accountCleanupRecoveryFailure = null);
+      }
+      return true;
     } on Object catch (error) {
       AppLogger.warning(
-        'account_deletion_local_cleanup_resume_failed',
+        'account_deletion_local_cleanup_resume_blocked',
         error: error,
       );
+      if (mounted) {
+        setState(() => _accountCleanupRecoveryFailure = error);
+      }
+      return false;
     }
+  }
+
+  Future<void> _retryPendingAccountCleanup() async {
+    if (_accountCleanupRetrying) return;
+    setState(() => _accountCleanupRetrying = true);
+    try {
+      await _initializeAfterFirstFrame();
+    } finally {
+      if (mounted) {
+        setState(() => _accountCleanupRetrying = false);
+      }
+    }
+  }
+
+  Future<void> _initializeAfterFirstFrame() async {
+    final deviceLanguage = _supportedDeviceLanguage(
+      WidgetsBinding.instance.platformDispatcher.locale,
+    );
+    initializeRestoreForegroundService(localeCode: deviceLanguage.name);
+    if (!await _resumePendingAccountCleanup()) return;
     try {
       final support = await getApplicationSupportDirectory();
       final diagnosticStore = AppDiagnosticFileStore(
@@ -318,6 +351,12 @@ class _DeferredOwntendBootstrapState extends State<_DeferredOwntendBootstrap> {
 
   @override
   Widget build(BuildContext context) {
+    if (_accountCleanupRecoveryFailure != null) {
+      return OwntendStartupFailure(
+        accountCleanupBlocked: true,
+        onRetry: _accountCleanupRetrying ? null : _retryPendingAccountCleanup,
+      );
+    }
     if (!_ready) {
       return const OwntendStartupSurface(
         key: ValueKey('deferred-startup-loading'),
@@ -332,9 +371,16 @@ class _DeferredOwntendBootstrapState extends State<_DeferredOwntendBootstrap> {
 }
 
 class OwntendStartupFailure extends StatelessWidget {
-  const OwntendStartupFailure({this.cloudUnavailable = false, super.key});
+  const OwntendStartupFailure({
+    this.cloudUnavailable = false,
+    this.accountCleanupBlocked = false,
+    this.onRetry,
+    super.key,
+  });
 
   final bool cloudUnavailable;
+  final bool accountCleanupBlocked;
+  final Future<void> Function()? onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -363,13 +409,24 @@ class OwntendStartupFailure extends StatelessWidget {
                       const Icon(Icons.warning_amber_rounded, size: 48),
                       const SizedBox(height: 16),
                       Text(
-                        cloudUnavailable
+                        accountCleanupBlocked
+                            ? context.l10n.accountDeletionFailed
+                            : cloudUnavailable
                             ? context
                                   .l10n
                                   .cloudServicesAreUnavailablePleaseTryAgainLater
                             : context.l10n.thisBuildIsNotConfiguredCorrectly,
                         textAlign: TextAlign.center,
                       ),
+                      if (accountCleanupBlocked) ...[
+                        const SizedBox(height: 16),
+                        FilledButton(
+                          onPressed: onRetry == null
+                              ? null
+                              : () => unawaited(onRetry!()),
+                          child: Text(context.l10n.retry),
+                        ),
+                      ],
                     ],
                   ),
                 ),

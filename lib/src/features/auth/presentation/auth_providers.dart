@@ -4,12 +4,16 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/config/app_config.dart';
 import '../../../core/database/app_database.dart';
+import '../../../core/sync/account_safety_barrier.dart';
+import '../../../core/sync/background_sync_scheduler.dart';
+import '../data/account_safety_auth_repository.dart';
 import '../data/native_google_sign_in.dart';
 import '../data/supabase_auth_repository.dart';
 import '../domain/auth_repository.dart';
 
 typedef AccountDeletionLocalCleanup = Future<void> Function(String userId);
 typedef AccountDeletionLifecycleHook = Future<void> Function(String userId);
+typedef AccountScopedBackgroundCancellation = Future<void> Function();
 
 final appConfigProvider = Provider<AppConfig>((ref) => AppConfig.test());
 
@@ -26,6 +30,21 @@ final accountDeletionCancelProvider = Provider<AccountDeletionLifecycleHook>(
   (ref) => (_) async {},
 );
 
+final accountScopedBackgroundCancellationProvider =
+    Provider<AccountScopedBackgroundCancellation>(
+      (ref) => cancelAccountScopedBackgroundWork,
+    );
+
+final accountSafetyBarrierProvider = Provider<AccountSafetyBarrier>((ref) {
+  return AccountSafetyBarrier(
+    prepareAccountScope: ref.watch(accountDeletionPrepareProvider),
+    cancelBackgroundWork: ref.watch(
+      accountScopedBackgroundCancellationProvider,
+    ),
+    releaseAccountScope: ref.watch(accountDeletionCancelProvider),
+  );
+});
+
 final appBuildInfoProvider = FutureProvider<AppBuildInfo>((ref) async {
   final packageInfo = await PackageInfo.fromPlatform();
   return AppBuildInfo(
@@ -41,12 +60,16 @@ final authRepositoryProvider = Provider<AuthRepository?>((ref) {
   if (client == null) {
     return null;
   }
-  return SupabaseAuthRepository(
+  final delegate = SupabaseAuthRepository(
     client,
     NativeGoogleSignInGateway(serverClientId: config.googleWebClientId),
     onAccountDeletionPrepared: ref.watch(accountDeletionPrepareProvider),
     onAccountDeletionCancelled: ref.watch(accountDeletionCancelProvider),
     onAccountDeleted: ref.watch(accountDeletionLocalCleanupProvider),
+  );
+  return AccountSafetyAuthRepository(
+    delegate,
+    barrier: ref.watch(accountSafetyBarrierProvider),
   );
 });
 

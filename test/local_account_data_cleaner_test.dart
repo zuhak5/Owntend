@@ -122,7 +122,7 @@ void main() {
     await _seedBoundAccountData(database, store, 'user-1');
     await File(
       p.join(documents.path, '.owntend-account-deletion-cleanup-pending'),
-    ).writeAsString('pending');
+    ).writeAsString('user-1');
 
     expect(await cleaner.resumePendingCleanup(), isTrue);
     expect(
@@ -134,6 +134,153 @@ void main() {
     expect((await store.account()).boundUserId, isNull);
     expect(await cleaner.resumePendingCleanup(), isFalse);
   });
+
+  test(
+    'refuses marker cleanup when a different account is currently bound',
+    () async {
+      await _seedBoundAccountData(database, store, 'user-2');
+      final marker = File(
+        p.join(documents.path, '.owntend-account-deletion-cleanup-pending'),
+      );
+      await marker.writeAsString('user-1');
+      final privateFile = await _writePrivateFile(
+        documents,
+        'photos/private/photo.jpg',
+      );
+      var additionalCleanupCalled = false;
+
+      await expectLater(
+        cleaner.resumePendingCleanup(
+          additionalCleanup: (_) async {
+            additionalCleanupCalled = true;
+          },
+        ),
+        throwsStateError,
+      );
+
+      expect(
+        await (database.select(
+          database.areas,
+        )..where((area) => area.id.equals('private-area'))).get(),
+        hasLength(1),
+      );
+      expect((await store.account()).boundUserId, 'user-2');
+      expect(await privateFile.exists(), isTrue);
+      expect(await marker.exists(), isTrue);
+      expect(additionalCleanupCalled, isFalse);
+    },
+  );
+
+  test('refuses marker cleanup for unbound non-pristine local data', () async {
+    await database
+        .into(database.areas)
+        .insert(
+          AreasCompanion.insert(
+            id: 'private-area',
+            name: 'Private area',
+            kind: 'indoor',
+          ),
+        );
+    final marker = File(
+      p.join(documents.path, '.owntend-account-deletion-cleanup-pending'),
+    );
+    await marker.writeAsString('user-1');
+    final privateFile = await _writePrivateFile(
+      documents,
+      'photos/private/photo.jpg',
+    );
+    var additionalCleanupCalled = false;
+
+    await expectLater(
+      cleaner.resumePendingCleanup(
+        additionalCleanup: (_) async {
+          additionalCleanupCalled = true;
+        },
+      ),
+      throwsStateError,
+    );
+
+    expect(await store.existingAccount(), isNull);
+    expect(
+      await (database.select(
+        database.areas,
+      )..where((area) => area.id.equals('private-area'))).get(),
+      hasLength(1),
+    );
+    expect(await privateFile.exists(), isTrue);
+    expect(await marker.exists(), isTrue);
+    expect(additionalCleanupCalled, isFalse);
+  });
+
+  for (final invalidMarker in ['', 'pending']) {
+    test(
+      'refuses cleanup when durable marker identity is invalid: "$invalidMarker"',
+      () async {
+        await _seedBoundAccountData(database, store, 'user-1');
+        final marker = File(
+          p.join(documents.path, '.owntend-account-deletion-cleanup-pending'),
+        );
+        await marker.writeAsString(invalidMarker);
+        final privateFile = await _writePrivateFile(
+          documents,
+          'photos/private/photo.jpg',
+        );
+        var additionalCleanupCalled = false;
+
+        await expectLater(
+          cleaner.resumePendingCleanup(
+            additionalCleanup: (_) async {
+              additionalCleanupCalled = true;
+            },
+          ),
+          throwsStateError,
+        );
+
+        expect(
+          await (database.select(
+            database.areas,
+          )..where((area) => area.id.equals('private-area'))).get(),
+          hasLength(1),
+        );
+        expect((await store.account()).boundUserId, 'user-1');
+        expect(await privateFile.exists(), isTrue);
+        expect(await marker.exists(), isTrue);
+        expect(additionalCleanupCalled, isFalse);
+      },
+    );
+  }
+
+  test(
+    'replays cleanup after database clear when the durable marker remains',
+    () async {
+      await _seedBoundAccountData(database, store, 'user-1');
+      final marker = File(
+        p.join(documents.path, '.owntend-account-deletion-cleanup-pending'),
+      );
+      await marker.writeAsString('user-1');
+      await cleaner.clearDatabase('user-1');
+      final privateFile = await _writePrivateFile(
+        documents,
+        'photos/private/photo.jpg',
+      );
+      String? cleanedAccount;
+
+      expect(
+        await cleaner.resumePendingCleanup(
+          additionalCleanup: (userId) async {
+            expect(await marker.exists(), isTrue);
+            cleanedAccount = userId;
+          },
+        ),
+        isTrue,
+      );
+
+      expect(cleanedAccount, 'user-1');
+      expect(await privateFile.exists(), isFalse);
+      expect(await marker.exists(), isFalse);
+      expect((await store.account()).boundUserId, isNull);
+    },
+  );
 
   test(
     'replays account-scoped cleanup while the durable marker exists',
@@ -207,8 +354,9 @@ Future<void> _seedBoundAccountData(
       );
 }
 
-Future<void> _writePrivateFile(Directory root, String relativePath) async {
+Future<File> _writePrivateFile(Directory root, String relativePath) async {
   final file = File(p.joinAll([root.path, ...relativePath.split('/')]));
   await file.parent.create(recursive: true);
   await file.writeAsString('private-test-data');
+  return file;
 }
