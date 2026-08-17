@@ -106,6 +106,16 @@ void main() {
       nextDueDate: DateTime.utc(2026, 9, 1),
       healthGroup: HealthGroup.other,
       accountScope: 'account-1',
+      existingOperation: TaskCreationOperation(
+        operationId: 'op-reserved-next',
+        planId: 'plan-reserved-next',
+        accountScope: 'account-1',
+        requestPayload: const {},
+        requestHash: '',
+        state: TaskCreationOperationState.submitting,
+        createdAt: now,
+        updatedAt: now,
+      ),
     );
 
     expect(created, isFalse);
@@ -154,11 +164,26 @@ void main() {
         nextDueDate: DateTime.utc(2026, 9, 1),
         healthGroup: HealthGroup.other,
         accountScope: 'account-1',
+        existingOperation: TaskCreationOperation(
+          operationId: 'op-reserved-new',
+          planId: 'plan-reserved-new',
+          accountScope: 'account-1',
+          requestPayload: const {},
+          requestHash: '',
+          state: TaskCreationOperationState.submitting,
+          createdAt: DateTime.utc(2026, 8, 17),
+          updatedAt: DateTime.utc(2026, 8, 17),
+        ),
       );
 
       expect(created, isTrue);
       expect(monetization.createTaskCalls, hasLength(1));
       final outbound = monetization.createTaskCalls.single;
+      expect(outbound['operation_id'], 'op-reserved-new');
+      expect(
+        (outbound['plan'] as Map<String, dynamic>)['id'],
+        'plan-reserved-new',
+      );
       final requestHash = outbound['request_hash'];
       expect(requestHash, isA<String>());
       expect(requestHash as String, matches(RegExp(r'^[0-9a-f]{64}$')));
@@ -167,6 +192,8 @@ void main() {
         'account-1',
       );
       expect(operations, hasLength(1));
+      expect(operations.single.operationId, 'op-reserved-new');
+      expect(operations.single.planId, 'plan-reserved-new');
       expect(operations.single.requestHash, requestHash);
       expect(operations.single.state, TaskCreationOperationState.reconciled);
     },

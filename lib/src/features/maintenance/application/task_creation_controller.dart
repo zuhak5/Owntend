@@ -92,7 +92,21 @@ class TaskCreationController extends ValueNotifier<TaskCreationState> {
       final localSyncStore = ref.read(localSyncStoreProvider);
       final operationStore = ref.read(taskCreationOperationStoreProvider);
 
-      if (existingOperation == null && monetizationRepo != null) {
+      final hasRetainedPayload =
+          existingOperation?.requestPayload.isNotEmpty ?? false;
+      final hasRetainedHash =
+          existingOperation?.requestHash.trim().isNotEmpty ?? false;
+      if (existingOperation != null &&
+          (existingOperation.accountScope != accountScope ||
+              hasRetainedPayload != hasRetainedHash)) {
+        throw const TaskCreationFailure(
+          'The retained charged operation cannot be replayed safely.',
+          code: TaskCreationFailureCode.operationIdReused,
+        );
+      }
+      final isRetainedReplay = hasRetainedPayload && hasRetainedHash;
+
+      if (!isRetainedReplay && monetizationRepo != null) {
         await _recoverBeforeNewChargedOperation(
           operationStore: operationStore,
           accountScope: accountScope,
@@ -148,11 +162,9 @@ class TaskCreationController extends ValueNotifier<TaskCreationState> {
 
       final Map<String, dynamic> requestPayload;
       final String requestHash;
-      if (existingOperation != null) {
-        if (existingOperation.accountScope != accountScope ||
-            existingOperation.requestPayload.isEmpty ||
-            existingOperation.requestPayload['request_hash'] !=
-                existingOperation.requestHash) {
+      if (isRetainedReplay) {
+        if (existingOperation!.requestPayload['request_hash'] !=
+            existingOperation.requestHash) {
           throw const TaskCreationFailure(
             'The retained charged operation cannot be replayed safely.',
             code: TaskCreationFailureCode.operationIdReused,
