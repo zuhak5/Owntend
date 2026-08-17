@@ -31,46 +31,49 @@ void main() {
 
   tearDown(() => database.close());
 
-  test('ordinary sign-out keeps local account data and binding intact', () async {
-    final events = <String>[];
-    final delegate = _FakeAuthRepository(events: events);
-    final barrier = AccountSafetyBarrier(
-      prepareAccountScope: (userId) async {
-        events.add('prepare:$userId');
-        expect((await store.account()).boundUserId, userId);
-      },
-      cancelBackgroundWork: () async {
-        events.add('cancel-background');
-      },
-      releaseAccountScope: (userId) async {
-        events.add('release:$userId');
-      },
-    );
-    final repository = AccountSafetyAuthRepository(delegate, barrier: barrier);
+  test(
+    'ordinary sign-out keeps local account data and binding intact',
+    () async {
+      final events = <String>[];
+      final delegate = _FakeAuthRepository(events: events);
+      final barrier = AccountSafetyBarrier(
+        prepareAccountScope: (userId) async {
+          events.add('prepare:$userId');
+          expect((await store.account()).boundUserId, userId);
+        },
+        cancelBackgroundWork: () async {
+          events.add('cancel-background');
+        },
+        releaseAccountScope: (userId) async {
+          events.add('release:$userId');
+        },
+      );
+      final repository = AccountSafetyAuthRepository(delegate, barrier: barrier);
 
-    await repository.signOut();
+      await repository.signOut();
 
-    expect(
-      events,
-      <String>[
-        'prepare:user-1',
-        'cancel-background',
-        'delegate-sign-out',
-        'release:user-1',
-      ],
-    );
-    expect(delegate.currentSession, isNull);
-    final account = await store.account();
-    expect(account.boundUserId, 'user-1');
-    expect(account.enabled, isTrue);
-    expect(account.migrationState, 'active');
-    expect(
-      await (database.select(
-        database.areas,
-      )..where((area) => area.id.equals('private-area'))).get(),
-      hasLength(1),
-    );
-  });
+      expect(
+        events,
+        <String>[
+          'prepare:user-1',
+          'cancel-background',
+          'delegate-sign-out',
+          'release:user-1',
+        ],
+      );
+      expect(delegate.currentSession, isNull);
+      final account = await store.account();
+      expect(account.boundUserId, 'user-1');
+      expect(account.enabled, isTrue);
+      expect(account.migrationState, 'active');
+      expect(
+        await (database.select(
+          database.areas,
+        )..where((area) => area.id.equals('private-area'))).get(),
+        hasLength(1),
+      );
+    },
+  );
 
   test('background cancellation failure prevents auth sign-out', () async {
     final events = <String>[];
