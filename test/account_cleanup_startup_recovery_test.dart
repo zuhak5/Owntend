@@ -29,9 +29,14 @@ void main() {
 
     expect(
       startup,
-      contains('final session = ref\n                      .read(authRepositoryProvider)'),
+      contains(
+        'final session = ref\n                      .read(authRepositoryProvider)',
+      ),
     );
-    expect(startup, contains('await coordinator?.completeAccountSignOut(userId);'));
+    expect(
+      startup,
+      contains('await coordinator?.completeAccountSignOut(userId);'),
+    );
     expect(startup, contains('await cancelAccountScopedBackgroundWork();'));
 
     final completionStart = sync.indexOf(
@@ -45,7 +50,10 @@ void main() {
     expect(rollbackStart, greaterThan(completionStart));
 
     final completion = sync.substring(completionStart, rollbackStart);
-    expect(completion, contains("_advanceAccountEpoch('account_sign_out_completed')"));
+    expect(
+      completion,
+      contains("_advanceAccountEpoch('account_sign_out_completed')"),
+    );
     expect(completion, contains('_cancelScheduledSyncWork();'));
     expect(completion, contains('await _stopRealtime();'));
     expect(completion, isNot(contains('configureBackgroundSync')));
