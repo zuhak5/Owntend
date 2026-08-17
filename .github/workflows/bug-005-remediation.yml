@@ -1,0 +1,254 @@
+name: Temporary BUG-005 remediation
+
+on:
+  push:
+    branches:
+      - fix/bug-005-hash-qualified-charged-recovery
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bug-005-remediation
+  cancel-in-progress: true
+
+jobs:
+  patch-and-validate:
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out remediation branch
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: fix/bug-005-hash-qualified-charged-recovery
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: "3.47.0"
+          channel: stable
+          cache: true
+
+      - name: Resolve dependencies
+        run: flutter pub get --enforce-lockfile
+
+      - name: Apply narrow BUG-005 source and documentation patch
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+          import re
+
+          def replace_once(text, old, new, label):
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{label}: expected 1 match, found {count}")
+              return text.replace(old, new, 1)
+
+          monetization_path = Path('lib/src/features/monetization/monetization.dart')
+          monetization = monetization_path.read_text(encoding='utf-8')
+
+          old_exception = """class InsufficientPointsException implements Exception {
+            const InsufficientPointsException({required this.balance});
+
+            final int balance;
+
+            @override
+            String toString() => 'INSUFFICIENT_POINTS';
+          }
+
+          abstract class MonetizationRepository"""
+          new_exception = """class InsufficientPointsException implements Exception {
+            const InsufficientPointsException({required this.balance});
+
+            final int balance;
+
+            @override
+            String toString() => 'INSUFFICIENT_POINTS';
+          }
+
+          class OperationIdReusedException implements Exception {
+            const OperationIdReusedException();
+
+            @override
+            String toString() => 'OPERATION_ID_REUSED';
+          }
+
+          abstract class MonetizationRepository"""
+          monetization = replace_once(
+              monetization, old_exception, new_exception, 'operation conflict exception')
+
+          signature_old = """String operationId, {
+              String? requestHash,
+            })"""
+          signature_new = """String operationId, {
+              required String requestHash,
+            })"""
+          if monetization.count(signature_old) != 2:
+              raise SystemExit(
+                  f"status signature: expected 2 nullable signatures, found {monetization.count(signature_old)}")
+          monetization = monetization.replace(signature_old, signature_new)
+
+          params_old = "params: {'p_operation_id': operationId, 'p_request_hash': ?requestHash},"
+          monetization = replace_once(
+              monetization,
+              params_old,
+              "params: {'p_operation_id': operationId, 'p_request_hash': requestHash},",
+              'status request hash params',
+          )
+
+          status_old = """    final data = await client.rpc<Map<String, dynamic>>(
+                'get_charged_operation_status',
+                params: {'p_operation_id': operationId, 'p_request_hash': requestHash},
+              );
+              return ChargedOperationStatusResult.fromJson(data);
+          """
+          status_new = """    try {
+                final data = await client.rpc<Map<String, dynamic>>(
+                  'get_charged_operation_status',
+                  params: {
+                    'p_operation_id': operationId,
+                    'p_request_hash': requestHash,
+                  },
+                );
+                return ChargedOperationStatusResult.fromJson(data);
+              } on PostgrestException catch (error) {
+                if (error.message == 'OPERATION_ID_REUSED') {
+                  throw const OperationIdReusedException();
+                }
+                rethrow;
+              }
+          """
+          monetization = replace_once(
+              monetization, status_old, status_new, 'status conflict mapping')
+
+          insufficient_old = """      if (error.message == 'INSUFFICIENT_POINTS') {
+                  throw const InsufficientPointsException(balance: 0);
+                }
+          """
+          insufficient_new = """      if (error.message == 'OPERATION_ID_REUSED') {
+                  throw const OperationIdReusedException();
+                }
+                if (error.message == 'INSUFFICIENT_POINTS') {
+                  throw const InsufficientPointsException(balance: 0);
+                }
+          """
+          monetization = replace_once(
+              monetization,
+              insufficient_old,
+              insufficient_new,
+              'create RPC conflict mapping',
+          )
+          monetization_path.write_text(monetization, encoding='utf-8')
+
+          startup_path = Path('lib/src/features/startup/presentation/startup_bootstrap.dart')
+          startup = startup_path.read_text(encoding='utf-8')
+          startup_old = """    _offlineSnapshotCandidate = await _verifiedOfflineSnapshot(
+                session,
+                store: store,
+              );
+              if (!_isCurrentStartup(generation, session)) return;
+
+              final offlineSnapshot = _offlineSnapshotCandidate;
+          """
+          startup_new = """    _offlineSnapshotCandidate = await _verifiedOfflineSnapshot(
+                session,
+                store: store,
+              );
+              if (!_isCurrentStartup(generation, session)) return;
+
+              await _recoverPendingChargedOperations(session, generation);
+              if (!_isCurrentStartup(generation, session)) return;
+
+              final offlineSnapshot = _offlineSnapshotCandidate;
+          """
+          startup = replace_once(
+              startup, startup_old, startup_new, 'startup recovery ordering')
+
+          helper_anchor = """  Future<InitialHomeSnapshot?> _verifiedOfflineSnapshot(
+          """
+          helper = """  Future<void> _recoverPendingChargedOperations(
+              AuthSession session,
+              int generation,
+            ) async {
+              if (!_isCurrentStartup(generation, session)) return;
+              final resolver = _ref.read(chargedOperationResolverProvider);
+              if (resolver == null) return;
+              await resolver.resolvePendingOperations(session.userId);
+            }
+
+            Future<InitialHomeSnapshot?> _verifiedOfflineSnapshot(
+          """
+          startup = replace_once(
+              startup, helper_anchor, helper, 'startup recovery helper')
+          startup_path.write_text(startup, encoding='utf-8')
+
+          docs_path = Path('docs/architecture/monetization.md')
+          docs = docs_path.read_text(encoding='utf-8')
+          docs = docs.replace(
+              'This document describes the behavior present in the repository as of 2026-08-15.',
+              'This document describes the behavior present in the repository as of 2026-08-17.',
+              1,
+          )
+          baseline_bullet = "- The [points and monetization baseline migration](../../supabase/migrations/20260815000003_points_monetization.sql) for backend authority."
+          if baseline_bullet not in docs:
+              raise SystemExit('monetization migration documentation anchor missing')
+          docs = docs.replace(
+              baseline_bullet,
+              baseline_bullet + "\n- The [hash-qualified charged-operation recovery migration](../../supabase/migrations/20260817180000_hash_qualified_charged_operation_recovery.sql) for immutable recovery identity.",
+              1,
+          )
+          paragraph_pattern = re.compile(
+              r"When the server cannot confirm a charged operation, the client must not present it as completed or enqueue a blind wallet mutation\..*?prevent unbounded content retention\.\n",
+              re.DOTALL,
+          )
+          replacement = (
+              "When the server cannot confirm a charged operation, the client must not present it as completed or enqueue a blind wallet mutation. "
+              "User input may be preserved only as an explicitly unfinished draft in a workflow that supports it. Every creation operation uses a durable pre-RPC journal write (`TaskCreationOperationStore` / `ChargedOperationJournal`) before invoking backend RPCs. If durable write to secure storage fails, the RPC is not executed. New charged-creation payloads include a client-generated SHA-256 `request_hash`; the same value is retained in the durable journal. The backend keeps this client recovery identity separately as `creation_point_operations.client_request_hash`, while the existing `request_hash` remains the server-computed digest of canonical JSONB used to reject altered create-RPC replays.\n\n"
+              "Ambiguous operations (`outcomeUnknown` or interrupted `submitting`) are considered during authenticated startup before the cached-ready shortcut and again before a new charged task can mint another operation ID. `ChargedOperationResolver` calls `get_charged_operation_status(p_operation_id, p_request_hash)` with both immutable values; the public status RPC has no operation-ID-only default. Capability `1.2.0` returns the exact committed result only when both values match, returns `not_found` for an unknown operation in the authenticated account, and raises `OPERATION_ID_REUSED` for a known operation with a different hash. A `not_found` operation is resubmitted using the exact retained payload and operation ID; no replacement UUID is minted. Account scope is rechecked before applying remote recovery results. The canonical server result is reconciled into local state before the journal becomes terminal. Upon reaching terminal states (`reconciled` or `permanentRejected`), user-entered payloads are purged (`purgeTerminalPayloads`) to prevent unbounded content retention.\n"
+          )
+          docs, count = paragraph_pattern.subn(replacement, docs, count=1)
+          if count != 1:
+              raise SystemExit(f'monetization recovery documentation: expected 1 paragraph, found {count}')
+          docs_path.write_text(docs, encoding='utf-8')
+          '@ | python -
+
+      - name: Format focused Dart changes
+        run: >-
+          dart format
+          lib/src/features/monetization/monetization.dart
+          lib/src/features/monetization/charged_operation_resolver.dart
+          lib/src/features/maintenance/application/task_creation_controller.dart
+          lib/src/features/startup/presentation/startup_bootstrap.dart
+          test/charged_operation_journal_test.dart
+          test/bug_005_charged_operation_recovery_test.dart
+          test/bug_005_startup_recovery_wiring_test.dart
+
+      - name: Analyze
+        run: flutter analyze --no-pub
+
+      - name: Run focused BUG-005 tests
+        run: >-
+          flutter test --no-pub --concurrency=1
+          test/charged_operation_journal_test.dart
+          test/bug_005_charged_operation_recovery_test.dart
+          test/bug_005_startup_recovery_wiring_test.dart
+          test/task_creation_insufficient_points_test.dart
+
+      - name: Remove temporary harness and commit validated patch
+        shell: pwsh
+        run: |
+          git rm .github/workflows/bug-005-remediation.yml
+          git add lib/src/features/monetization/monetization.dart
+          git add lib/src/features/monetization/charged_operation_resolver.dart
+          git add lib/src/features/maintenance/application/task_creation_controller.dart
+          git add lib/src/features/startup/presentation/startup_bootstrap.dart
+          git add docs/architecture/monetization.md
+          git add test/charged_operation_journal_test.dart
+          git add test/bug_005_charged_operation_recovery_test.dart
+          git add test/bug_005_startup_recovery_wiring_test.dart
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Fix BUG-005 hash-qualified charged recovery"
+          git push origin HEAD:fix/bug-005-hash-qualified-charged-recovery
