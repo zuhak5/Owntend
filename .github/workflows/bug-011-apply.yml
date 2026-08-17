@@ -1,0 +1,144 @@
+name: Apply BUG-011 remediation patch
+
+on:
+  push:
+    branches:
+      - fix/bug-011-notification-completion-ack
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/bug-011-notification-completion-ack
+          fetch-depth: 0
+
+      - name: Apply production fix and focused tests
+        shell: python
+        run: |
+          from pathlib import Path
+
+          source_path = Path('lib/src/features/notifications/presentation/notifications_screen.dart')
+          source = source_path.read_text()
+          old = """    await completeTaskWithFeedback(context, ref, task, collectNotes: true);
+    await ref.read(notificationInboxRepositoryProvider).markRead(item.id);
+"""
+          new = """    await acknowledgeSuccessfulTaskCompletion(
+      completeTask: () =>
+          completeTaskWithFeedback(context, ref, task, collectNotes: true),
+      markRead: () =>
+          ref.read(notificationInboxRepositoryProvider).markRead(item.id),
+    );
+"""
+          if source.count(old) != 1:
+              raise SystemExit(f'expected one notification completion acknowledgement site, found {source.count(old)}')
+          source = source.replace(old, new, 1)
+
+          marker = """DateTime? _completedTaskNotificationAt(
+"""
+          helper = """@visibleForTesting
+Future<void> acknowledgeSuccessfulTaskCompletion({
+  required Future<bool> Function() completeTask,
+  required Future<void> Function() markRead,
+}) async {
+  final completed = await completeTask();
+  if (!completed) {
+    return;
+  }
+  await markRead();
+}
+
+"""
+          if source.count(marker) != 1:
+              raise SystemExit(f'expected one completion-record marker, found {source.count(marker)}')
+          source = source.replace(marker, helper + marker, 1)
+          source_path.write_text(source)
+
+          test_path = Path('test/bug_011_notification_completion_ack_test.dart')
+          test_path.write_text("""import 'package:flutter_test/flutter_test.dart';
+import 'package:owntend/main.dart';
+
+void main() {
+  group('BUG-011 notification completion acknowledgement', () {
+    test('non-applied completion leaves the notification unread', () async {
+      var markReadCalls = 0;
+
+      await acknowledgeSuccessfulTaskCompletion(
+        completeTask: () async => false,
+        markRead: () async {
+          markReadCalls += 1;
+        },
+      );
+
+      expect(markReadCalls, 0);
+    });
+
+    test('completion failure leaves the notification unread', () async {
+      var markReadCalls = 0;
+
+      await expectLater(
+        acknowledgeSuccessfulTaskCompletion(
+          completeTask: () async => throw StateError('completion failed'),
+          markRead: () async {
+            markReadCalls += 1;
+          },
+        ),
+        throwsStateError,
+      );
+
+      expect(markReadCalls, 0);
+    });
+
+    test('confirmed completion acknowledges the notification', () async {
+      var markReadCalls = 0;
+
+      await acknowledgeSuccessfulTaskCompletion(
+        completeTask: () async => true,
+        markRead: () async {
+          markReadCalls += 1;
+        },
+      );
+
+      expect(markReadCalls, 1);
+    });
+
+    test('acknowledgement failure does not replay completion', () async {
+      var completionCalls = 0;
+      var markReadCalls = 0;
+
+      await expectLater(
+        acknowledgeSuccessfulTaskCompletion(
+          completeTask: () async {
+            completionCalls += 1;
+            return true;
+          },
+          markRead: () async {
+            markReadCalls += 1;
+            throw StateError('mark read failed');
+          },
+        ),
+        throwsStateError,
+      );
+
+      expect(completionCalls, 1);
+      expect(markReadCalls, 1);
+    });
+  });
+}
+""")
+
+          workflow_path = Path('.github/workflows/bug-011-apply.yml')
+          workflow_path.unlink()
+
+      - name: Commit remediation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/src/features/notifications/presentation/notifications_screen.dart test/bug_011_notification_completion_ack_test.dart .github/workflows/bug-011-apply.yml
+          git commit -m "Fix BUG-011 notification completion acknowledgment"
+          git push origin HEAD:fix/bug-011-notification-completion-ack
