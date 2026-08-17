@@ -51,9 +51,20 @@ jobs:
           path: analyze-output.log
           if-no-files-found: ignore
       - name: Run focused remediation tests
+        shell: bash
         run: |
-          flutter test --no-pub --concurrency=1 --timeout 3m --reporter expanded test/bug_010_bug_014_notification_consumers_test.dart
-          flutter test --no-pub --concurrency=1 --timeout 3m --reporter expanded test/widget_test.dart --plain-name "notification bootstrap initializes without prompting"
+          set -o pipefail
+          {
+            flutter test --no-pub --concurrency=1 --timeout 3m --reporter expanded test/bug_010_bug_014_notification_consumers_test.dart
+            flutter test --no-pub --concurrency=1 --timeout 3m --reporter expanded test/widget_test.dart --plain-name "notification bootstrap initializes without prompting"
+          } 2>&1 | tee focused-test-output.log
+      - name: Upload focused test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bug-010-014-focused-tests
+          path: focused-test-output.log
+          if-no-files-found: ignore
       - name: Commit validated remediation
         shell: bash
         run: |
