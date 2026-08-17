@@ -33,7 +33,17 @@ jobs:
           flutter gen-l10n
           dart run build_runner build
       - name: Analyze
-        run: flutter analyze --no-pub
+        shell: bash
+        run: |
+          set -o pipefail
+          flutter analyze --no-pub 2>&1 | tee analyze-output.log
+      - name: Upload analyzer diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bug-010-014-analyze
+          path: analyze-output.log
+          if-no-files-found: ignore
       - name: Run focused remediation tests
         run: |
           flutter test --no-pub --concurrency=1 --timeout 3m --reporter expanded test/bug_010_bug_014_notification_consumers_test.dart
