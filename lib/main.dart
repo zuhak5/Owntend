@@ -43,6 +43,7 @@ import 'src/core/services/feedback_messenger.dart';
 export 'src/core/data/repositories.dart';
 import 'src/core/services/app_permission_coordinator.dart';
 import 'src/core/services/backup_service.dart';
+import 'src/core/services/restore_journal.dart';
 import 'src/core/services/diagnostic_export_service.dart';
 import 'src/core/services/feature_selectors.dart' as feature_selectors;
 import 'src/core/services/health_score_calculator.dart';
@@ -134,11 +135,18 @@ Future<void> main() async {
 
   Future<void> runOwntend() async {
     final database = AppDatabase();
+    final restoreJournalStore = RestoreJournalStore();
     _runOwntendProcess(
-      _DeferredOwntendBootstrap(
-        database: database,
-        config: config,
-        elapsedBeforeFirstFrame: startupClock.elapsed,
+      _RestoreRecoveryGate(
+        recover: () => RestoreRecoveryCoordinator(
+          journalStore: restoreJournalStore,
+          localSyncStore: LocalSyncStore(database),
+        ).recover(),
+        child: _DeferredOwntendBootstrap(
+          database: database,
+          config: config,
+          elapsedBeforeFirstFrame: startupClock.elapsed,
+        ),
       ),
     );
   }
@@ -162,6 +170,116 @@ Future<void> main() async {
 
 void _runOwntendProcess(Widget child) {
   runApp(OwntendProcessSplash(child: child));
+}
+
+class _RestoreRecoveryGate extends StatefulWidget {
+  const _RestoreRecoveryGate({required this.recover, required this.child});
+
+  final Future<void> Function() recover;
+  final Widget child;
+
+  @override
+  State<_RestoreRecoveryGate> createState() => _RestoreRecoveryGateState();
+}
+
+class _RestoreRecoveryGateState extends State<_RestoreRecoveryGate> {
+  Object? _failure;
+  bool _retrying = false;
+  bool _ready = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => unawaited(_recover()));
+  }
+
+  Future<void> _recover() async {
+    try {
+      await widget.recover();
+      if (!mounted) return;
+      setState(() {
+        _failure = null;
+        _ready = true;
+      });
+    } on Object catch (error, stackTrace) {
+      AppLogger.warning(
+        'startup_restore_recovery_blocked',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (!mounted) return;
+      setState(() => _failure = error);
+    }
+  }
+
+  Future<void> _retry() async {
+    if (_retrying) return;
+    setState(() => _retrying = true);
+    try {
+      await _recover();
+    } finally {
+      if (mounted) setState(() => _retrying = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_ready) return widget.child;
+    if (_failure == null) {
+      return const OwntendStartupSurface(
+        key: ValueKey('restore-recovery-loading'),
+      );
+    }
+
+    final deviceLocale = WidgetsBinding.instance.platformDispatcher.locale;
+    final locale = deviceLocale.languageCode == 'ar'
+        ? const Locale('ar')
+        : const Locale('en');
+    return MaterialApp(
+      title: 'Owntend',
+      debugShowCheckedModeBanner: false,
+      locale: locale,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      theme: OwntendTheme.light(),
+      home: Builder(
+        builder: (context) => Scaffold(
+          body: SafeArea(
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 480),
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.warning_amber_rounded, size: 48),
+                      const SizedBox(height: 16),
+                      Text(
+                        context.l10n.recovery,
+                        style: Theme.of(context).textTheme.headlineSmall,
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        context.l10n.needsAttention,
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 16),
+                      FilledButton(
+                        onPressed: _retrying ? null : () => unawaited(_retry()),
+                        child: Text(context.l10n.retry),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class OwntendApp extends ConsumerStatefulWidget {

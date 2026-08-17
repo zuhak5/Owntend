@@ -182,15 +182,24 @@ class ZipBackupService
     final zipFile = File(zipPath);
     final archiveHash = _sha256Hex(await zipFile.readAsBytes());
     final now = DateTime.now();
+    final localSyncStore = LocalSyncStore(db);
+    final syncAccount = await localSyncStore.account();
+    final boundUserId = syncAccount.boundUserId?.trim();
+    final accountScope = boundUserId == null || boundUserId.isEmpty
+        ? 'localOnly'
+        : boundUserId;
+    final updateCloudIntent =
+        accountScope != 'localOnly' &&
+        await localSyncStore.hasCompleteSnapshotForUser(accountScope);
 
     var journalEntry = RestoreJournalEntry(
       version: kCurrentRestoreJournalVersion,
       journalId: _uuid.v7(),
-      accountScope: 'localOnly',
+      accountScope: accountScope,
       archivePath: zipPath,
       archiveHash: archiveHash,
       phase: RestorePhase.validated,
-      updateCloudIntent: false,
+      updateCloudIntent: updateCloudIntent,
       createdAt: now,
       updatedAt: now,
     );
@@ -211,9 +220,13 @@ class ZipBackupService
         );
       }
 
+      final safetyBackupHash = _sha256Hex(
+        await File(safetyBackupPath).readAsBytes(),
+      );
       journalEntry = journalEntry.copyWith(
         phase: RestorePhase.safetyBackupComplete,
         safetyBackupPath: safetyBackupPath,
+        safetyBackupHash: safetyBackupHash,
         updatedAt: DateTime.now(),
       );
       await journalStore.saveEntry(journalEntry);
@@ -276,6 +289,17 @@ class ZipBackupService
 
       journalEntry = journalEntry.copyWith(
         phase: RestorePhase.mediaSwapped,
+        updatedAt: DateTime.now(),
+      );
+      await journalStore.saveEntry(journalEntry);
+
+      if (journalEntry.updateCloudIntent) {
+        await localSyncStore.enqueueRestoreSnapshot(DateTime.now());
+      } else {
+        await localSyncStore.pauseAfterLocalRestore();
+      }
+      journalEntry = journalEntry.copyWith(
+        phase: RestorePhase.cloudIntentDurable,
         updatedAt: DateTime.now(),
       );
       await journalStore.saveEntry(journalEntry);

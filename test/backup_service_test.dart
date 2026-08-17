@@ -11,6 +11,8 @@ import 'package:owntend/src/core/database/app_database.dart';
 import 'package:owntend/src/core/domain/contracts.dart';
 import 'package:owntend/src/core/domain/models.dart';
 import 'package:owntend/src/core/services/backup_service.dart';
+import 'package:owntend/src/core/services/restore_journal.dart';
+import 'package:owntend/src/core/sync/local_sync_store.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:sqlite3/sqlite3.dart';
@@ -185,6 +187,53 @@ void main() {
           )
           .toList();
       expect(stagedMedia, isEmpty);
+    });
+
+    test(
+      'captures account scope before the restore barrier and persists cloud intent',
+      () async {
+        final db = await _openDatabase(docs, databases);
+        await _seedRealisticData(db, root);
+        final syncStore = LocalSyncStore(db);
+        await syncStore.bindIdentity('user-a');
+        await syncStore.recordSyncSuccess(DateTime.now());
+
+        final journalStore = InMemoryRestoreJournalStore();
+        RestoreJournalEntry? entryAtBarrier;
+        final service = ZipBackupService(
+          db,
+          journalStore: journalStore,
+          onBeforeRestoreBarrier: () async {
+            entryAtBarrier = await journalStore.getActiveEntry();
+          },
+        );
+        final backupPath = await service.exportBackup();
+        await db.delete(db.syncOutbox).go();
+
+        await service.restoreBackup(backupPath);
+
+        expect(entryAtBarrier?.accountScope, 'user-a');
+        expect(entryAtBarrier?.updateCloudIntent, isTrue);
+        expect(await journalStore.getActiveEntry(), isNull);
+        expect(await syncStore.pendingCount(), greaterThan(0));
+      },
+    );
+
+    test('local-only restore durably pauses cloud synchronization', () async {
+      final db = await _openDatabase(docs, databases);
+      await _seedRealisticData(db, root);
+      final journalStore = InMemoryRestoreJournalStore();
+      final service = ZipBackupService(db, journalStore: journalStore);
+      final backupPath = await service.exportBackup();
+
+      await service.restoreBackup(backupPath);
+
+      final account = await LocalSyncStore(db).account();
+      expect(account.enabled, isFalse);
+      expect(account.boundUserId, isNull);
+      expect(account.migrationState, 'restorePaused');
+      expect(account.restorePending, isTrue);
+      expect(await journalStore.getActiveEntry(), isNull);
     });
 
     test('rolls media back when the database import fails', () async {

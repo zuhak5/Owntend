@@ -64,20 +64,21 @@ Validation must occur before any file is written outside a controlled staging di
 ## Restore sequence
 
 1. Open the archive without trusting names or metadata.
-2. Validate the format version and required manifest fields. Write `validated` phase to sidecar journal (`RestoreJournalStore`).
-3. Enforce entry-count, per-entry, total-expanded-size, and compression limits.
-4. Normalize every path and reject absolute, traversal, duplicate, or disallowed entries.
-5. Verify hashes and expected file types.
-6. Validate database/schema compatibility.
-7. Create a pre-restore safety backup of the current state and record `safetyBackupComplete` phase.
-8. Acquire restore barrier: suspend `SyncCoordinator`, cancel WorkManager background jobs, and clear scheduled reminders. Write `servicesSuspended` phase.
-9. Extract media into a private staging directory (`.restore-$token`), register the sidecar root in `SidecarRegistryStore`, and write `mediaStaged` phase.
-10. Begin SQLite database transaction (`dbCommitStarted`), import table data, and record `dbCommitComplete`.
-11. Atomically swap staged media directories (`.restore-$token` -> active path, previous -> `.previous-$token`), register `.previous-$token` sidecars in `SidecarRegistryStore`, and write `mediaSwapped` phase.
-12. Make outbox restore intent durable (`localOnlyPause` vs `enqueueRestoreSnapshot`) and record `cloudIntentDurable` phase.
-13. Rebuild derived runtime state, notifications, and search index (`derivedRebuilt`).
-14. Delete `.previous-$token` and `.restore-$token` media directories (`cleanupPending`), remove them from `SidecarRegistryStore`, and write `terminal` phase to clear journal. If deletion fails, update `SidecarRegistryStore` with `SidecarState.pendingCleanup` and error details for future startup sweepers or account deletion.
-15. If interrupted, `RestoreJournalResolver` on startup deterministically rolls back pre-DB-commit phases (< `dbCommitStarted`) or rolls forward post-commit phases (>= `dbCommitStarted`). On startup, `SidecarRegistryStore.sweepOrphans(...)` cleans terminal or legacy sidecars while preserving sidecars linked to active restore journals. If a journal version is newer than supported (`kCurrentRestoreJournalVersion`), startup blocks to prevent data corruption.
+2. Validate the format version and required manifest fields. Before any destructive phase, write `validated` to the process-durable secure-storage journal (`RestoreJournalStore`). Production has no in-memory journal fallback.
+3. Capture the immutable local account scope and whether the current fully hydrated account requires `enqueueRestoreSnapshot`; local-only or non-ready state records the pause disposition instead. This decision is journaled before services are suspended.
+4. Enforce entry-count, per-entry, total-expanded-size, and compression limits.
+5. Normalize every path and reject absolute, traversal, duplicate, or disallowed entries.
+6. Verify hashes and expected file types.
+7. Validate database/schema compatibility.
+8. Create a pre-restore safety backup of the current state, hash it, and record `safetyBackupComplete`.
+9. Acquire restore barrier: suspend `SyncCoordinator`, cancel WorkManager background jobs, and clear scheduled reminders. Write `servicesSuspended` phase.
+10. Extract media into a private staging directory (`.restore-$token`), register the sidecar root in `SidecarRegistryStore`, and write `mediaStaged` phase.
+11. Begin SQLite database transaction (`dbCommitStarted`), import table data, and record `dbCommitComplete`.
+12. Atomically swap staged media directories (`.restore-$token` -> active path, previous -> `.previous-$token`), register `.previous-$token` sidecars in `SidecarRegistryStore`, and write `mediaSwapped` phase.
+13. Make the recorded restore disposition durable (`pauseAfterLocalRestore` or `enqueueRestoreSnapshot`) and record `cloudIntentDurable` before terminal journal cleanup.
+14. Rebuild derived runtime state, notifications, and search index (`derivedRebuilt`) where owned by their existing lifecycle.
+15. Delete `.previous-$token` and `.restore-$token` media directories (`cleanupPending`), remove them from `SidecarRegistryStore`, and write `terminal` phase to clear journal. If deletion fails, update `SidecarRegistryStore` with `SidecarState.pendingCleanup` and error details for future startup sweepers or account deletion.
+16. If interrupted, the process-level restore recovery gate runs before deferred account cleanup, cloud bootstrap, authentication hydration, realtime, or background sync. `RestoreJournalResolver` rolls back pre-DB-commit phases (< `dbCommitStarted`) or rolls forward post-commit phases (>= `dbCommitStarted`), fails closed on account-scope mismatch, and does not clear the journal until the recorded cloud disposition is durable. Recovery failure leaves startup blocked with retry. After successful resolution, `SidecarRegistryStore.sweepOrphans(...)` cleans terminal or legacy sidecars. A newer unsupported journal version also blocks startup.
 
 ## Compatibility
 

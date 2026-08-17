@@ -49,8 +49,15 @@ final weatherRepositoryProvider = Provider<WeatherRepository>(
   ),
 );
 
+final restoreJournalStoreProvider = Provider<RestoreJournalStore>(
+  (ref) => RestoreJournalStore(),
+);
+
 final backupRepositoryProvider = Provider<BackupRepository>(
-  (ref) => ZipBackupService(ref.watch(databaseProvider)),
+  (ref) => ZipBackupService(
+    ref.watch(databaseProvider),
+    journalStore: ref.watch(restoreJournalStoreProvider),
+  ),
 );
 
 final backupStateProvider = FutureProvider<BackupState>(
