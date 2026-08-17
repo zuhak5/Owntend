@@ -17,18 +17,23 @@ A successful Google UI interaction is not sufficient if the Supabase session can
 
 ## Sign-out sequence
 
-Sign-out, session loss, remote revocation, and startup unsupported session cleanup use one central, awaited, idempotent sign-out barrier (`signOutOrchestrationProvider` / `executeSignOutSequence`):
+Ordinary user sign-out is deliberately **non-destructive**. It does not clear the local database, unlink the stored account binding, or reuse the account-deletion cleanup path. Production authentication is wrapped by `AccountSafetyAuthRepository`, which requires an `AccountSafetyBarrier` before it delegates to Supabase/Google sign-out.
 
-1. Stop or suspend active synchronization (`SyncCoordinator.suspend()`).
-2. Cancel all account-scoped WorkManager tasks (`cancelAccountScopedBackgroundWork()`) including daily maintenance refresh and background sync.
-3. Clear all scheduled notifications, local inbox notifications, and active reminder schedule snapshots (`NotificationService.clearAllScheduledReminders()`).
-4. Advance local account epoch and clear binding metadata in `LocalSyncStore.clearBinding()`.
-5. Sign out from Supabase Auth (`SignOutScope.local` or `SignOutScope.global`) and Google Sign-In (`NativeGoogleSignInGateway.signOut()`).
-6. Reset Sentry telemetry account scope (`clearSentryAccountScope`).
+For an authenticated account, the sign-out sequence is:
 
-Worker callbacks (`homeKeeperWorkManagerCallback`, `runCloudSyncInBackground`) fail closed behind an account guard that verifies active session state, bound identity match (`boundUserId == session.user.id`), and non-quarantined status before executing any domain reads, streak mutations, inbox writes, or weather HTTP requests.
+1. Capture the current Supabase user ID as the immutable expected account identity.
+2. Enter the coordinator's account-transition barrier for that identity. The coordinator advances the account epoch, rejects new automatic sync work, stops realtime, and waits for or safely detaches in-flight account work.
+3. Cancel all account-scoped WorkManager tasks with `cancelAccountScopedBackgroundWork()`, including daily refresh, restore recovery, and legacy cloud-sync work. This cancellation is not best-effort for sign-out: failure propagates and cloud/provider sign-out does not run.
+4. Re-check that the authenticated identity is still the captured user ID.
+5. Only after the barrier succeeds, delegate to Supabase Auth (`SignOutScope.local` or `SignOutScope.global`) and Google Sign-In.
+6. Release the coordinator barrier after the attempt. If sign-out itself failed, the still-authenticated session can resume normal account-scoped work; if sign-out succeeded, the coordinator observes the signed-out auth state while the local account binding remains intact.
+7. Reset Sentry telemetry account scope after successful delegated sign-out.
 
-Sign-out is not account deletion. Cloud data remains unless the deletion workflow succeeds.
+A barrier preparation failure is fail-closed: the authenticated session remains in place and the caller can retry. Releasing the in-memory barrier after an attempted sign-out is recovery cleanup and never authorizes destructive local data deletion.
+
+Worker callbacks (`homeKeeperWorkManagerCallback`, `runCloudSyncInBackground`) independently fail closed behind their own account guard before performing account-scoped work.
+
+Sign-out is not account deletion. Local data and cloud data remain unless the separate deletion workflow succeeds.
 
 ## In-app deletion sequence
 
@@ -48,6 +53,18 @@ Sign-out is not account deletion. Cloud data remains unless the deletion workflo
 12. Pending or temporarily unavailable status keeps synchronization suspended and the secure recovery record intact. A definitive `recovery_not_found` clears the stale recovery record and safely cancels the barrier without claiming deletion.
 13. Restart recovery resumes status lookup and finishes local cleanup when cloud deletion succeeded but the client stopped before completion.
 14. After receiving a completed receipt (from `delete-account` or `account-deletion-status`), the client completes local cleanup including all sidecar media directories via `LocalAccountDataCleaner` and `SidecarRegistryStore`. If ANY sidecar directory fails to delete, local cleanup throws and blocks completion, keeping the cleanup marker active. Only after all local canonical and sidecar media copies are completely purged does the client record that local cleanup is terminal and send an idempotent capability-bound acknowledgement to the backend. The backend transitions the operation from `completed` to `acknowledged` and makes the row eligible for shorter-window GC.
+
+### Interrupted local cleanup identity
+
+`LocalAccountDataCleaner` persists the exact account user ID in `.owntend-account-deletion-cleanup-pending` before destructive local cleanup begins. Recovery treats that durable marker identity as authoritative:
+
+- Blank markers and the historical `pending` placeholder are invalid and are never rebound to whichever account happens to be active later.
+- If the marker identifies Account A while the local database is bound to Account B, recovery deletes nothing, preserves the marker, and reports an identity-mismatch failure for retry/recovery handling.
+- If the database was already cleared before a crash, a valid Account A marker can replay the remaining cleanup with no current binding; this keeps the operation idempotent without borrowing another account's identity.
+- Additional account-scoped cleanup receives the marker's recorded user ID only after the database and canonical file cleanup have passed the identity guard.
+- The marker is removed only after the complete local cleanup succeeds.
+
+These rules ensure that work authorized for one account cannot be reinterpreted as destructive work for another account after restart or account switching.
 
 ## Browser deletion sequence
 
