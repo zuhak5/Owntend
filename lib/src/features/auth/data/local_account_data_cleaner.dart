@@ -57,7 +57,7 @@ class LocalAccountDataCleaner {
     await _store.clearAllAccountData(expectedUserId: userId);
   }
 
-  Future<void> _clearFiles() async {
+  Future<void> clearFiles() async {
     final documents = await _documentsDirectory();
     for (final name in _documentDirectories) {
       await _deleteDirectoryWithin(documents, name);
@@ -163,7 +163,7 @@ class LocalAccountDataCleaner {
 
   Future<void> _clear({required String expectedUserId}) async {
     await clearDatabase(expectedUserId);
-    await _clearFiles();
+    await clearFiles();
   }
 
   File _marker(Directory documents) =>
