@@ -27,25 +27,16 @@ jobs:
         run: |
           @'
           from pathlib import Path
-
-          def replace_once(text, old, new, label):
-              count = text.count(old)
-              if count != 1:
-                  raise SystemExit(f"{label}: expected 1 match, found {count}")
-              return text.replace(old, new, 1)
+          import re
 
           path = Path('lib/src/features/maintenance/application/task_creation_controller.dart')
           text = path.read_text(encoding='utf-8')
-          old = """      if (existingOperation == null && monetizationRepo != null) {
-                await _recoverBeforeNewChargedOperation(
-                  operationStore: operationStore,
-                  accountScope: accountScope,
-                );
-              }
-
-              final operationId = existingOperation?.operationId ?? _uuid.v7();
-          """
-          new = """      final hasRetainedPayload =
+          gate_pattern = re.compile(
+              r"      if \(existingOperation == null && monetizationRepo != null\) \{.*?"
+              r"      final operationId = existingOperation\?\.operationId \?\? _uuid\.v7\(\);",
+              re.S,
+          )
+          gate_replacement = """      final hasRetainedPayload =
                   existingOperation?.requestPayload.isNotEmpty ?? false;
               final hasRetainedHash =
                   existingOperation?.requestHash.trim().isNotEmpty ?? false;
@@ -66,27 +57,17 @@ jobs:
                 );
               }
 
-              final operationId = existingOperation?.operationId ?? _uuid.v7();
-          """
-          text = replace_once(text, old, new, 'recovery gate')
+              final operationId = existingOperation?.operationId ?? _uuid.v7();"""
+          text, count = gate_pattern.subn(gate_replacement, text, count=1)
+          if count != 1:
+              raise SystemExit(f'recovery gate: expected 1 match, found {count}')
 
-          old = """      if (existingOperation != null) {
-                if (existingOperation.accountScope != accountScope ||
-                    existingOperation.requestPayload.isEmpty ||
-                    existingOperation.requestPayload['request_hash'] !=
-                        existingOperation.requestHash) {
-                  throw const TaskCreationFailure(
-                    'The retained charged operation cannot be replayed safely.',
-                    code: TaskCreationFailureCode.operationIdReused,
-                  );
-                }
-                requestHash = existingOperation.requestHash;
-                requestPayload = Map<String, dynamic>.from(
-                  existingOperation.requestPayload,
-                );
-              } else {
-          """
-          new = """      if (isRetainedReplay) {
+          replay_pattern = re.compile(
+              r"      if \(existingOperation != null\) \{.*?"
+              r"      \} else \{\n        requestHash = computedRequestHash;",
+              re.S,
+          )
+          replay_replacement = """      if (isRetainedReplay) {
                 if (existingOperation!.requestPayload['request_hash'] !=
                     existingOperation.requestHash) {
                   throw const TaskCreationFailure(
@@ -99,19 +80,20 @@ jobs:
                   existingOperation.requestPayload,
                 );
               } else {
-          """
-          text = replace_once(text, old, new, 'replay selection')
+                requestHash = computedRequestHash;"""
+          text, count = replay_pattern.subn(replay_replacement, text, count=1)
+          if count != 1:
+              raise SystemExit(f'replay selection: expected 1 match, found {count}')
           path.write_text(text, encoding='utf-8')
 
           test_path = Path('test/bug_005_charged_operation_recovery_test.dart')
           test = test_path.read_text(encoding='utf-8')
-          first = """      healthGroup: HealthGroup.other,
+          marker = """    healthGroup: HealthGroup.other,
               accountScope: 'account-1',
             );
 
-            expect(created, isFalse);
-          """
-          first_new = """      healthGroup: HealthGroup.other,
+            expect(created, isFalse);"""
+          replacement = """    healthGroup: HealthGroup.other,
               accountScope: 'account-1',
               existingOperation: TaskCreationOperation(
                 operationId: 'op-reserved-next',
@@ -125,17 +107,20 @@ jobs:
               ),
             );
 
-            expect(created, isFalse);
-          """
-          test = replace_once(test, first, first_new, 'pending recovery with reserved IDs')
+            expect(created, isFalse);"""
+          if marker not in test:
+              marker = marker.replace('            ', '    ')
+              replacement = replacement.replace('            ', '    ')
+          if marker not in test:
+              raise SystemExit('pending recovery test anchor missing')
+          test = test.replace(marker, replacement, 1)
 
-          second = """        healthGroup: HealthGroup.other,
+          marker = """      healthGroup: HealthGroup.other,
                 accountScope: 'account-1',
               );
 
-              expect(created, isTrue);
-          """
-          second_new = """        healthGroup: HealthGroup.other,
+              expect(created, isTrue);"""
+          replacement = """      healthGroup: HealthGroup.other,
                 accountScope: 'account-1',
                 existingOperation: TaskCreationOperation(
                   operationId: 'op-reserved-new',
@@ -149,9 +134,13 @@ jobs:
                 ),
               );
 
-              expect(created, isTrue);
-          """
-          test = replace_once(test, second, second_new, 'new task with reserved IDs')
+              expect(created, isTrue);"""
+          if marker not in test:
+              marker = marker.replace('              ', '      ')
+              replacement = replacement.replace('              ', '      ')
+          if marker not in test:
+              raise SystemExit('new operation test anchor missing')
+          test = test.replace(marker, replacement, 1)
           test_path.write_text(test, encoding='utf-8')
           '@ | python -
       - name: Format
