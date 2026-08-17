@@ -8,6 +8,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../../core/domain/models.dart';
 import '../../../core/sync/sync_providers.dart';
+import '../../monetization/charged_operation_resolver.dart';
 import '../../monetization/monetization.dart';
 import '../data/task_creation_operation_store.dart';
 import '../domain/task_creation.dart';
@@ -46,6 +47,19 @@ final taskCreationOperationStoreProvider = Provider<TaskCreationOperationStore>(
   },
 );
 
+final chargedOperationResolverProvider = Provider<ChargedOperationResolver?>(
+  (ref) {
+    final monetizationRepo = ref.watch(monetizationRepositoryProvider);
+    final localSyncStore = ref.watch(localSyncStoreProvider);
+    if (monetizationRepo == null || localSyncStore == null) return null;
+    return ChargedOperationResolver(
+      monetizationRepo: monetizationRepo,
+      localSyncStore: localSyncStore,
+      operationStore: ref.watch(taskCreationOperationStoreProvider),
+    );
+  },
+);
+
 final taskCreationControllerProvider = Provider<TaskCreationController>((ref) {
   return TaskCreationController(ref: ref);
 });
@@ -77,6 +91,13 @@ class TaskCreationController extends ValueNotifier<TaskCreationState> {
       final monetizationRepo = ref.read(monetizationRepositoryProvider);
       final localSyncStore = ref.read(localSyncStoreProvider);
       final operationStore = ref.read(taskCreationOperationStoreProvider);
+
+      if (existingOperation == null && monetizationRepo != null) {
+        await _recoverBeforeNewChargedOperation(
+          operationStore: operationStore,
+          accountScope: accountScope,
+        );
+      }
 
       final operationId = existingOperation?.operationId ?? _uuid.v7();
       final planId = existingOperation?.planId ?? _uuid.v7();
@@ -116,14 +137,38 @@ class TaskCreationController extends ValueNotifier<TaskCreationState> {
             }
           : <String, dynamic>{};
 
-      final requestPayload = {
+      final unsignedRequestPayload = {
         'operation_id': operationId,
         'plan': planPayload,
         'metadata': metadataPayload,
       };
+      final computedRequestHash = sha256
+          .convert(utf8.encode(jsonEncode(unsignedRequestPayload)))
+          .toString();
 
-      final payloadString = jsonEncode(requestPayload);
-      final requestHash = sha256.convert(utf8.encode(payloadString)).toString();
+      final Map<String, dynamic> requestPayload;
+      final String requestHash;
+      if (existingOperation != null) {
+        if (existingOperation.accountScope != accountScope ||
+            existingOperation.requestPayload.isEmpty ||
+            existingOperation.requestPayload['request_hash'] !=
+                existingOperation.requestHash) {
+          throw const TaskCreationFailure(
+            'The retained charged operation cannot be replayed safely.',
+            code: TaskCreationFailureCode.operationIdReused,
+          );
+        }
+        requestHash = existingOperation.requestHash;
+        requestPayload = Map<String, dynamic>.from(
+          existingOperation.requestPayload,
+        );
+      } else {
+        requestHash = computedRequestHash;
+        requestPayload = {
+          ...unsignedRequestPayload,
+          'request_hash': requestHash,
+        };
+      }
 
       final operation = TaskCreationOperation(
         operationId: operationId,
@@ -136,11 +181,10 @@ class TaskCreationController extends ValueNotifier<TaskCreationState> {
         updatedAt: now,
       );
 
-      // CTC-002: Persist operation BEFORE network request
+      // CTC-002: Persist operation BEFORE network request.
       await operationStore.saveOperation(operation);
 
       if (monetizationRepo != null) {
-        // Submit RPC to server
         final PointDebitResult result;
         try {
           result = await monetizationRepo.createTask(requestPayload);
@@ -153,24 +197,36 @@ class TaskCreationController extends ValueNotifier<TaskCreationState> {
               lastErrorMessage: 'INSUFFICIENT_POINTS',
             ),
           );
-          throw TaskCreationFailure(
+          throw const TaskCreationFailure(
             'INSUFFICIENT_POINTS',
             code: TaskCreationFailureCode.insufficientPoints,
           );
+        } on OperationIdReusedException {
+          await operationStore.saveOperation(
+            operation.copyWith(
+              state: TaskCreationOperationState.permanentRejected,
+              lastErrorCode: 'operation_id_reused',
+              lastErrorMessage: 'OPERATION_ID_REUSED',
+            ),
+          );
+          throw const TaskCreationFailure(
+            'OPERATION_ID_REUSED',
+            code: TaskCreationFailureCode.operationIdReused,
+          );
         } catch (e) {
-          // CTR-001: Timeout or network failure -> mark outcomeUnknown
           final updatedOp = operation.copyWith(
             state: TaskCreationOperationState.outcomeUnknown,
             lastErrorMessage: e.toString(),
           );
           await operationStore.saveOperation(updatedOp);
-          throw TaskCreationFailure(
+          throw const TaskCreationFailure(
             'Network request failed or timed out. Outcome is preserved for safe retry.',
             code: TaskCreationFailureCode.networkTimeout,
           );
         }
 
-        // CTC-006 & CTC-007: Reconcile canonical creation composite
+        // CTC-006 & CTC-007: Reconcile canonical creation composite before
+        // the durable operation journal is made terminal.
         if (localSyncStore != null) {
           await localSyncStore.reconcileTaskCreationComposite(
             planId: planId,
@@ -179,7 +235,6 @@ class TaskCreationController extends ValueNotifier<TaskCreationState> {
           );
         }
 
-        // Mark operation reconciled and purge payload
         final reconciledOp = operation.copyWith(
           state: TaskCreationOperationState.reconciled,
           requestPayload: const {},
@@ -209,4 +264,39 @@ class TaskCreationController extends ValueNotifier<TaskCreationState> {
       return false;
     }
   }
+
+  Future<void> _recoverBeforeNewChargedOperation({
+    required TaskCreationOperationStore operationStore,
+    required String accountScope,
+  }) async {
+    final before = await operationStore.listOperationsForAccount(accountScope);
+    final recoverable = before.where(_isRecoverableChargedOperation).toList();
+    if (recoverable.isEmpty) return;
+
+    final resolver = ref.read(chargedOperationResolverProvider);
+    if (resolver == null) {
+      throw const TaskCreationFailure(
+        'A previous charged operation must be recovered before creating another task.',
+        code: TaskCreationFailureCode.serverError,
+      );
+    }
+
+    await resolver.resolvePendingOperations(accountScope);
+    final after = await operationStore.listOperationsForAccount(accountScope);
+    if (after.any(_isRecoverableChargedOperation)) {
+      throw const TaskCreationFailure(
+        'A previous charged operation is still awaiting recovery. Try again after connectivity is restored.',
+        code: TaskCreationFailureCode.networkTimeout,
+      );
+    }
+
+    throw const TaskCreationFailure(
+      'A previous charged operation was recovered. Review its result before creating another charged task.',
+      code: TaskCreationFailureCode.serverError,
+    );
+  }
+
+  bool _isRecoverableChargedOperation(TaskCreationOperation operation) =>
+      operation.state == TaskCreationOperationState.submitting ||
+      operation.state == TaskCreationOperationState.outcomeUnknown;
 }
