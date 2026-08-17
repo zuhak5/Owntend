@@ -24,6 +24,7 @@ jobs:
         run: |
           python3 tool/bug_010_014_branch_helper.py
           python3 tool/bug_010_014_branch_fixups.py
+          python3 tool/bug_010_014_test_fixups.py
       - name: Set up Flutter
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
         with:
