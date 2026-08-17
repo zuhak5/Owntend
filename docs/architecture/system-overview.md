@@ -89,7 +89,9 @@ Application SnackBars are coordinated through one protected queue. An active Und
 
 ## Notifications and background execution
 
-The Android host declares permissions and components required for internet access, optional approximate location, notifications, optional exact alarms, boot handling, wake locks, vibration, foreground data synchronization, and local notification receivers. Background work restores or reconciles reminders and synchronization without introducing fine or background location.
+The Android host declares permissions and components required for internet access, optional approximate location, notifications, optional exact alarms, boot handling, wake locks, vibration, foreground data synchronization, and local notification receivers. Notification plugin initialization is separate from account-scoped periodic registration: after authenticated readiness, `NotificationBootstrap` verifies that the active Supabase session matches the bound local account before it register/updates the unique daily WorkManager refresh. The worker independently reloads and revalidates the same account boundary before reading or scheduling anything.
+
+Durable notification-reconciliation requests live in Drift and are consumed after authenticated notification bootstrap, after relevant foreground maintenance reconciliation, and by the daily WorkManager path. A consumer coalesces pending requests into one schedule refresh and removes only the exact request versions covered by a successful refresh; failures retain the request with bounded retry metadata, so restart or a later trigger can replay it safely. Background work restores or reconciles reminders and synchronization without introducing fine or background location.
 
 ## Backup and restore
 

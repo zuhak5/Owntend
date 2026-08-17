@@ -1,6 +1,6 @@
 # Owntend Privacy and Data Use
 
-_Last reviewed: August 13, 2026_
+_Last reviewed: August 17, 2026_
 
 This document describes the data-handling design represented by the current Owntend source code. It is technical project documentation, not a substitute for jurisdiction-specific legal review or store disclosures.
 
@@ -55,9 +55,9 @@ Owntend sends a manually selected or privacy-reduced approximate weather coordin
 
 ## Notifications and background work
 
-Owntend schedules local maintenance notifications and may use exact alarms, boot restoration, wake locks, foreground data-sync service capability, and Workmanager. Notification preferences, Android notification permission, channel state, and effective reminder capability are separate. Exact timing is optional; when exact-alarm access is unavailable, supported reminders use degraded inexact scheduling rather than treating the preference as permission. Notification content can reveal maintenance information on the device lock screen; users should configure operating-system notification privacy according to their needs.
+Owntend schedules local maintenance notifications and may use exact alarms, boot restoration, wake locks, foreground data-sync service capability, and Workmanager. Notification preferences, Android notification permission, channel state, and effective reminder capability are separate. Exact timing is optional; when exact-alarm access is unavailable, supported reminders use degraded inexact scheduling rather than treating the preference as permission. The local database can also retain bounded notification-reconciliation scope, reason, attempt, and retry/error metadata until the scheduler successfully refreshes and acknowledges the request. Notification content can reveal maintenance information on the device lock screen; users should configure operating-system notification privacy according to their needs.
 
-Signing out or losing an authenticated session invokes a central sign-out barrier that cancels all account-scoped WorkManager jobs, clears scheduled notifications, local inbox rows, and reminder snapshots, and unbinds the local database identity. WorkManager background worker callbacks fail closed behind an account guard verifying active session state, bound user match, and non-quarantined status before executing any domain reads, streak mutations, inbox writes, or weather HTTP requests.
+Ordinary sign-out invokes the central account-safety barrier to quiesce synchronization/realtime work and cancel account-scoped WorkManager jobs before provider sign-out. Ordinary sign-out is non-destructive: it does not clear local domain data, notification inbox rows, reminder snapshots, or the local account binding merely because the session ends. Destructive local cleanup belongs to the separate account-deletion/recovery path after its identity and cloud-receipt requirements are satisfied. WorkManager background worker callbacks fail closed behind an account guard verifying active session state, bound user match, and non-quarantined status before executing any domain reads, streak mutations, inbox writes, or weather HTTP requests.
 
 The current Android manifest does not request fine or background location.
 
@@ -69,7 +69,7 @@ Android platform backup is disabled for the application in the current manifest;
 
 ## Retention and deletion
 
-Local data remains until it is deleted through application behavior, cleared by the user or operating system, removed during sign-out/account cleanup, or replaced through restore.
+Local data remains until it is deleted through application behavior, cleared by the user or operating system, removed during destructive account cleanup, or replaced through restore. Ordinary sign-out does not itself delete the local working set.
 
 For in-app account deletion, Owntend requires recent same-identity Google reauthentication, first attempting lightweight verification of the already signed-in account and showing Google's chooser only when that is unavailable. It then suspends synchronization, creates a secure recovery operation, invokes the protected `delete-account` Edge Function, and verifies the deletion result. If the destructive response is ambiguous or the app restarts, it queries `account-deletion-status` with the same key and expected account before completing device-local database, media, session, notification, cache, and recovery-record cleanup. Pending or temporary status preserves the synchronization barrier and record; a definitive not-found result clears the stale record without claiming deletion.
 
