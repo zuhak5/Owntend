@@ -31,9 +31,6 @@ void main() {
     expect(failureGuard, greaterThan(completionCall));
     expect(failureReturn, greaterThan(failureGuard));
     expect(markRead, greaterThan(failureReturn));
-    expect(
-      RegExp(r'\.markRead\(item\.id\);').allMatches(method).length,
-      1,
-    );
+    expect(RegExp(r'\.markRead\(item\.id\);').allMatches(method).length, 1);
   });
 }
