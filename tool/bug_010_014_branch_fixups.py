@@ -49,9 +49,16 @@ new_constructor = """  NotificationReconciliationConsumer({
 if old_constructor not in text:
     raise SystemExit("missing consumer constructor block")
 text = text.replace(old_constructor, new_constructor, 1)
-text = text.replace("_database.", "database.")
-text = text.replace("_scheduler.", "scheduler.")
-text = text.replace("_accountGuard(", "accountGuard(")
+for old, new in (
+    ("_database.select", "database.select"),
+    ("_database.transaction", "database.transaction"),
+    ("_database.delete", "database.delete"),
+    ("_database.update", "database.update"),
+    ("_database.notificationReconciliationRequests", "database.notificationReconciliationRequests"),
+    ("_scheduler.refreshSchedules", "scheduler.refreshSchedules"),
+    ("_accountGuard(", "accountGuard("),
+):
+    text = text.replace(old, new)
 path.write_text(text)
 
 replace_once(
