@@ -3,10 +3,12 @@ import '../../../core/utils/redacting_logger.dart';
 import '../domain/auth_repository.dart';
 
 class AccountSafetyAuthRepository implements AuthRepository {
-  AccountSafetyAuthRepository(
-    this._delegate, {
+  factory AccountSafetyAuthRepository(
+    AuthRepository delegate, {
     required AccountSafetyBarrier barrier,
-  }) : _barrier = barrier;
+  }) => AccountSafetyAuthRepository._(delegate, barrier);
+
+  AccountSafetyAuthRepository._(this._delegate, this._barrier);
 
   final AuthRepository _delegate;
   final AccountSafetyBarrier _barrier;
