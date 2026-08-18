@@ -2,13 +2,12 @@
 -- Client-facing feed RPCs are SECURITY INVOKER, derive ownership from auth.uid(),
 -- and are executable only by authenticated. Trigger logging remains SECURITY
 -- DEFINER but is not directly callable by Data API roles.
+--
+-- Existing Supabase projects can retain automatic Data API function grants.
+-- Do not rely on default-privilege changes alone: every function below receives
+-- an explicit post-definition REVOKE followed by the minimum required GRANT.
 
 BEGIN;
-
--- Supabase projects can retain explicit Data API grants on newly-created
--- postgres-owned functions. Make future application functions opt-in instead.
-ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
-  REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC, anon, authenticated, service_role;
 
 CREATE OR REPLACE FUNCTION public.get_sync_feed_capability()
 RETURNS TABLE (
