@@ -17,10 +17,6 @@ SET capability_version = '1.0.0',
     updated_at = clock_timestamp()
 WHERE id = 'global';
 
-ALTER TABLE public.server_change_feed
-  RENAME CONSTRAINT server_change_feed_entity_type_v2_check
-  TO server_change_feed_entity_type_check;
-
 CREATE OR REPLACE FUNCTION public.get_sync_feed_capability()
 RETURNS TABLE (
   enabled BOOLEAN,
