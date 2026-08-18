@@ -6,17 +6,17 @@ import 'package:owntend/src/core/database/app_database.dart';
 import 'package:owntend/src/core/sync/local_sync_store.dart';
 
 void main() {
-  group('AppDatabase baseline v1 schema and lifecycle', () {
+  group('AppDatabase schema v2 and lifecycle', () {
     late File dbFile;
     late AppDatabase db;
 
     setUp(() async {
       dbFile = File(
-        '${Directory.systemTemp.path}/owntend_baseline_v1_'
+        '${Directory.systemTemp.path}/owntend_schema_v2_'
         '${DateTime.now().microsecondsSinceEpoch}.sqlite',
       );
       db = AppDatabase(executor: NativeDatabase(dbFile));
-      // Force database opening and beforeOpen execution
+      // Force database opening and beforeOpen execution.
       await db.customSelect('SELECT 1').get();
     });
 
@@ -27,17 +27,17 @@ void main() {
       }
     });
 
-    test('initializes with baseline schema version 1', () async {
-      expect(AppDatabase.currentSchemaVersion, 1);
-      expect(db.schemaVersion, 1);
+    test('initializes with schema version 2', () async {
+      expect(AppDatabase.currentSchemaVersion, 2);
+      expect(db.schemaVersion, 2);
 
       final userVersionRow = await db
           .customSelect('PRAGMA user_version')
           .getSingle();
-      expect(userVersionRow.read<int>('user_version'), 1);
+      expect(userVersionRow.read<int>('user_version'), 2);
     });
 
-    test('creates all 26 canonical active tables', () async {
+    test('creates all canonical active tables including search state', () async {
       final rows = await db
           .customSelect(
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'",
@@ -72,6 +72,7 @@ void main() {
         'sync_media_cleanup',
         'sync_account',
         'notification_reconciliation_requests',
+        'search_index_state',
       };
 
       for (final table in expectedTables) {
@@ -90,6 +91,41 @@ void main() {
       expect(definition, contains('fts5'));
       expect(definition, contains('display_body'));
       expect(definition, contains('search_terms'));
+    });
+
+    test('creates durable search generation state and invalidation triggers', () async {
+      final state = await db
+          .customSelect(
+            'SELECT source_generation, indexed_generation '
+            'FROM search_index_state WHERE id = 1',
+          )
+          .getSingle();
+      expect(state.read<int>('source_generation'), greaterThan(0));
+      expect(
+        state.read<int>('indexed_generation'),
+        lessThan(state.read<int>('source_generation')),
+      );
+
+      final triggerRows = await db
+          .customSelect(
+            "SELECT name FROM sqlite_master WHERE type = 'trigger' AND name LIKE 'search_%'",
+          )
+          .get();
+      final triggerNames = triggerRows
+          .map((row) => row.read<String>('name'))
+          .toSet();
+      expect(triggerNames, hasLength(36));
+      expect(triggerNames, contains('search_areas_insert'));
+      expect(triggerNames, contains('search_rooms_update'));
+      expect(triggerNames, contains('search_categories_delete'));
+      expect(triggerNames, contains('search_device_details_update'));
+      expect(triggerNames, contains('search_pet_details_update'));
+      expect(triggerNames, contains('search_plant_details_update'));
+      expect(triggerNames, contains('search_safety_details_update'));
+      expect(triggerNames, contains('search_tags_update'));
+      expect(triggerNames, contains('search_asset_tags_insert'));
+      expect(triggerNames, contains('search_asset_photos_update'));
+      expect(triggerNames, contains('search_maintenance_plans_delete'));
     });
 
     test('creates required indexes and foreign keys', () async {
@@ -187,5 +223,50 @@ void main() {
       expect(account.quarantineReason, isNull);
       expect(account.legacyOwnerId, isNull);
     });
+  });
+
+  test('migrates schema v1 databases to durable search generation v2', () async {
+    final dbFile = File(
+      '${Directory.systemTemp.path}/owntend_v1_to_v2_'
+      '${DateTime.now().microsecondsSinceEpoch}.sqlite',
+    );
+    AppDatabase? db;
+    try {
+      db = AppDatabase(executor: NativeDatabase(dbFile));
+      await db.customSelect('SELECT 1').get();
+      await db.customStatement('DROP TABLE search_index_state');
+      await db.customStatement('PRAGMA user_version = 1');
+      await db.close();
+      db = null;
+
+      db = AppDatabase(executor: NativeDatabase(dbFile));
+      await db.customSelect('SELECT 1').get();
+
+      final userVersionRow = await db
+          .customSelect('PRAGMA user_version')
+          .getSingle();
+      expect(userVersionRow.read<int>('user_version'), 2);
+
+      final state = await db
+          .customSelect(
+            'SELECT source_generation, indexed_generation '
+            'FROM search_index_state WHERE id = 1',
+          )
+          .getSingle();
+      expect(state.read<int>('source_generation'), greaterThan(0));
+      expect(state.read<int>('indexed_generation'), 0);
+
+      final triggerRows = await db
+          .customSelect(
+            "SELECT name FROM sqlite_master WHERE type = 'trigger' AND name LIKE 'search_%'",
+          )
+          .get();
+      expect(triggerRows, hasLength(36));
+    } finally {
+      await db?.close();
+      if (await dbFile.exists()) {
+        await dbFile.delete();
+      }
+    }
   });
 }
