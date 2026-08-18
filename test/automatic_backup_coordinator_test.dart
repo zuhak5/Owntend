@@ -8,9 +8,7 @@ import 'package:owntend/src/core/services/automatic_backup_coordinator.dart';
 void main() {
   test('post-ready runs; pre-ready resume does not', () async {
     final repo = _FakeBackupRepository();
-    final coordinator = AutomaticBackupCoordinator(
-      backupRepository: repo,
-    );
+    final coordinator = AutomaticBackupCoordinator(backupRepository: repo);
 
     await coordinator.onAppResumed();
     expect(repo.automaticChecks, 0);
@@ -59,9 +57,7 @@ void main() {
     final repo = _FakeBackupRepository();
     final pending = Completer<String?>();
     repo.pendingAutomaticCheck = pending;
-    final coordinator = AutomaticBackupCoordinator(
-      backupRepository: repo,
-    );
+    final coordinator = AutomaticBackupCoordinator(backupRepository: repo);
 
     final postReady = coordinator.onPostReady();
     final resumed = coordinator.onAppResumed();
