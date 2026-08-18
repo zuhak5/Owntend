@@ -14,6 +14,81 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  prepare-settings-diff:
+    name: Prepare focused Settings diff
+    if: github.actor == 'zuhak5' && github.head_ref == 'agent/problem-2-settings-layout'
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check out feature branch with history
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: agent/problem-2-settings-layout
+          fetch-depth: 0
+
+      - name: Extract and run temporary minimizer
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import textwrap
+
+          workflow = Path('.github/workflows/settings-diff-minimize.yml').read_text(encoding='utf-8')
+          lines = workflow.splitlines()
+          start = next(i for i, line in enumerate(lines) if "python - <<'PY'" in line)
+          end = next(i for i in range(start + 1, len(lines)) if lines[i].strip() == 'PY')
+          script = textwrap.dedent('\n'.join(lines[start + 1:end])) + '\n'
+          Path('settings_minimize_tmp.py').write_text(script, encoding='utf-8')
+          PY
+          python settings_minimize_tmp.py
+          rm settings_minimize_tmp.py
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: "3.47.0"
+          channel: stable
+          cache: true
+
+      - name: Resolve dependencies and generated sources
+        shell: pwsh
+        run: |
+          flutter pub get --enforce-lockfile
+          flutter gen-l10n
+          dart run build_runner build
+
+      - name: Format and validate focused Settings changes
+        shell: pwsh
+        run: |
+          dart format lib/src/features/settings/presentation/settings_screen.dart test/settings_layout_test.dart
+          flutter test --no-pub test/settings_layout_test.dart
+          flutter test --no-pub --update-goldens --plain-name "production surfaces have stable English and Arabic visual baselines" test/widget_test.dart
+
+      - name: Commit only focused Settings outputs
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $Allowed = @(
+            "lib/src/features/settings/presentation/settings_screen.dart",
+            "test/settings_layout_test.dart",
+            "test/goldens/production_settings_en.png",
+            "test/goldens/production_settings_ar.png"
+          )
+          git add -- $Allowed
+          git diff --cached --quiet
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "No focused changes to commit."
+            exit 0
+          }
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Minimize Settings layout diff [settings-minimize]"
+          git push origin HEAD:agent/problem-2-settings-layout
+
   validate:
     name: Format, analyze, and test
     runs-on: windows-latest
@@ -75,7 +150,6 @@ jobs:
         run: flutter pub get --enforce-lockfile
 
       - name: Verify pubspec.lock is unchanged
-        # Any mutation after the enforced resolution is an integrity failure.
         shell: pwsh
         run: |
           $LockChanges = (git status --porcelain pubspec.lock 2>&1 | Out-String).Trim()
