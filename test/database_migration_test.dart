@@ -37,7 +37,7 @@ void main() {
       expect(userVersionRow.read<int>('user_version'), 2);
     });
 
-    test('creates all canonical active tables including search state', () async {
+    test('creates canonical tables including search state', () async {
       final rows = await db
           .customSelect(
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'",
@@ -93,7 +93,7 @@ void main() {
       expect(definition, contains('search_terms'));
     });
 
-    test('creates durable search generation state and invalidation triggers', () async {
+    test('creates search generation state and invalidation triggers', () async {
       final state = await db
           .customSelect(
             'SELECT source_generation, indexed_generation '
@@ -225,7 +225,7 @@ void main() {
     });
   });
 
-  test('migrates schema v1 databases to durable search generation v2', () async {
+  test('migrates schema v1 to search generation v2', () async {
     final dbFile = File(
       '${Directory.systemTemp.path}/owntend_v1_to_v2_'
       '${DateTime.now().microsecondsSinceEpoch}.sqlite',
