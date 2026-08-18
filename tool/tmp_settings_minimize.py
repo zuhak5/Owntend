@@ -45,10 +45,12 @@ def add_standalone_tile_grid(title: str, key: str | None = None) -> None:
         tile_pos = text.rfind("ListTile(", 0, title_pos)
         line_end = text.index("\n", tile_pos) + 1
         tile_line_start = text.rfind("\n", 0, tile_pos) + 1
-        child_indent = text[tile_line_start:tile_pos] + "  "
+        tile_prefix = text[tile_line_start:tile_pos]
+        leading_ws = re.match(r"\s*", tile_prefix).group(0)
+        parameter_indent = leading_ws + "  "
         text = (
             text[:line_end]
-            + f"{child_indent}key: const ValueKey('{key}'),\n"
+            + f"{parameter_indent}key: const ValueKey('{key}'),\n"
             + text[line_end:]
         )
 
