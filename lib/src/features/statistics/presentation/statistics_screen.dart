@@ -517,9 +517,9 @@ class TaskDistributionChart extends StatelessWidget {
                   alignment: AlignmentDirectional.centerStart,
                   child: Wrap(
                     key: const ValueKey('statistics-distribution-legend'),
-                    spacing: HkSpacing.xs,
-                    runSpacing: HkSpacing.xs,
-                    alignment: WrapAlignment.start,
+                    spacing: HkSpacing.space4,
+                    runSpacing: HkSpacing.space4,
+                    alignment: WrapAlignment.center,
                     children: [
                       for (var index = 0; index < entries.length; index++)
                         ConstrainedBox(
@@ -568,16 +568,16 @@ class _StatisticsLegendItem extends StatelessWidget {
         border: Border.all(color: color.withValues(alpha: 0.28)),
       ),
       child: Padding(
-        padding: const EdgeInsetsDirectional.fromSTEB(8, 5, 9, 5),
+        padding: const EdgeInsetsDirectional.fromSTEB(6, 4, 7, 4),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 8,
-              height: 8,
+              width: 6,
+              height: 6,
               decoration: BoxDecoration(color: color, shape: BoxShape.circle),
             ),
-            const SizedBox(width: 6),
+            const SizedBox(width: 4),
             Flexible(
               child: Text(
                 label,
