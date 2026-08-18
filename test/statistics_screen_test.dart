@@ -135,46 +135,47 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('narrow 2x Statistics layout wraps labels in English and Arabic', (
-    tester,
-  ) async {
-    _setViewport(tester, const Size(320, 900));
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
+  testWidgets(
+    'narrow 2x Statistics layout wraps labels in English and Arabic',
+    (tester) async {
+      _setViewport(tester, const Size(320, 900));
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
 
-    for (final locale in const [Locale('en'), Locale('ar')]) {
-      await tester.pumpWidget(
-        _statisticsApp(
-          _oneSeriesSummary,
-          locale: locale,
-          textScaler: const TextScaler.linear(2),
-        ),
-      );
-      await tester.pumpAndSettle();
+      for (final locale in const [Locale('en'), Locale('ar')]) {
+        await tester.pumpWidget(
+          _statisticsApp(
+            _oneSeriesSummary,
+            locale: locale,
+            textScaler: const TextScaler.linear(2),
+          ),
+        );
+        await tester.pumpAndSettle();
 
-      final l10n = lookupAppLocalizations(locale);
-      final completionLabel = tester.widget<Text>(
-        find.text(l10n.historyCompletion),
-      );
-      final overdueLabel = tester.widget<Text>(find.text(l10n.activeOverdue));
-      final completion = find.byKey(
-        const ValueKey('statistics-metric-completion'),
-      );
-      final overdue = find.byKey(const ValueKey('statistics-metric-overdue'));
+        final l10n = lookupAppLocalizations(locale);
+        final completionLabel = tester.widget<Text>(
+          find.text(l10n.historyCompletion),
+        );
+        final overdueLabel = tester.widget<Text>(find.text(l10n.activeOverdue));
+        final completion = find.byKey(
+          const ValueKey('statistics-metric-completion'),
+        );
+        final overdue = find.byKey(const ValueKey('statistics-metric-overdue'));
 
-      expect(completionLabel.overflow, isNull);
-      expect(overdueLabel.overflow, isNull);
-      expect(
-        tester.getTopLeft(overdue).dy,
-        greaterThan(tester.getTopLeft(completion).dy),
-      );
-      expect(
-        Directionality.of(tester.element(find.byType(StatisticsScreen))),
-        locale.languageCode == 'ar' ? TextDirection.rtl : TextDirection.ltr,
-      );
-      expect(tester.takeException(), isNull);
-    }
-  });
+        expect(completionLabel.overflow, isNull);
+        expect(overdueLabel.overflow, isNull);
+        expect(
+          tester.getTopLeft(overdue).dy,
+          greaterThan(tester.getTopLeft(completion).dy),
+        );
+        expect(
+          Directionality.of(tester.element(find.byType(StatisticsScreen))),
+          locale.languageCode == 'ar' ? TextDirection.rtl : TextDirection.ltr,
+        );
+        expect(tester.takeException(), isNull);
+      }
+    },
+  );
 
   testWidgets('task distribution wraps measured legend items without scaling', (
     tester,
