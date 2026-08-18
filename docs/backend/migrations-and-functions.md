@@ -92,6 +92,10 @@ For the V1 zero-user production launch, the database is defined by 5 clean basel
 4. [`20260815000004_task_completion_and_rpc.sql`](../../supabase/migrations/20260815000004_task_completion_and_rpc.sql): Server-authoritative `complete_maintenance_task` RPC with canonical timestamps, v1/v2 payload compatibility, and causal ordering.
 5. [`20260815000005_account_deletion_and_recovery.sql`](../../supabase/migrations/20260815000005_account_deletion_and_recovery.sql): Account deletion operation lifecycle, multi-stage recovery, acknowledgement protocol, and scheduled pruning.
 
+## Pre-enable change-feed hardening
+
+[`20260818040000_change_feed_contract_v2.sql`](../../supabase/migrations/20260818040000_change_feed_contract_v2.sql) is an intentionally forward-only hardening migration because the audit could not prove every hosted environment was still at a disposable baseline. It adds typed `key_data`, canonical one-to-one client/server entity identifiers, an exhaustive private key encoder used by the feed trigger, protocol version `2.0.0`, and corrected parity semantics. The migration explicitly leaves the feed capability disabled. Applying or enabling this contract in a hosted project is a separate authorized operation and is not implied by repository CI.
+
 ## Deployment evidence
 
 Record migration identifiers, function versions/source commits, local test results, hosted target, deployment operator, compatibility assumptions, and any required mobile release ordering.
