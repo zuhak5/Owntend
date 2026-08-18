@@ -1,0 +1,45 @@
+name: Format ENV Dart patch
+
+on:
+  push:
+    branches:
+      - fix/env-001-003-change-feed-contract
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: "3.47.0"
+          channel: stable
+          cache: true
+
+      - name: Format ENV Dart files and commit
+        shell: bash
+        run: |
+          dart format \
+            lib/src/core/sync/local_sync_store_change_feed.dart \
+            lib/src/core/sync/sync_coordinator.dart \
+            test/env_001_003_change_feed_contract_test.dart
+          rm .github/workflows/env-dart-format.yml
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            lib/src/core/sync/local_sync_store_change_feed.dart \
+            lib/src/core/sync/sync_coordinator.dart \
+            test/env_001_003_change_feed_contract_test.dart \
+            .github/workflows/env-dart-format.yml
+          git diff --cached --quiet && exit 0
+          git commit -m "Format ENV change-feed Dart changes"
+          git push origin HEAD:fix/env-001-003-change-feed-contract
