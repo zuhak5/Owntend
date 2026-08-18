@@ -23,16 +23,18 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Format a diagnostic copy
+      - name: Format diagnostic copies
         shell: bash
         run: |
-          cp lib/src/features/settings/presentation/settings_screen.dart /tmp/settings_screen.dart
-          dart format /tmp/settings_screen.dart
+          mkdir -p /tmp/settings-format
+          cp lib/src/features/settings/presentation/settings_screen.dart /tmp/settings-format/settings_screen.dart
+          cp test/settings_layout_test.dart /tmp/settings-format/settings_layout_test.dart
+          dart format /tmp/settings-format
 
-      - name: Upload formatted diagnostic copy
+      - name: Upload formatted diagnostic copies
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: settings-formatted-source
-          path: /tmp/settings_screen.dart
+          path: /tmp/settings-format
           if-no-files-found: error
           retention-days: 1
