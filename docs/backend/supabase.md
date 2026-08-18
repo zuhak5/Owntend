@@ -52,7 +52,7 @@ Review `SECURITY DEFINER` functions carefully:
 - Validate inputs and bound resource use.
 - Make externally retried mutations idempotent.
 
-Prefer `SECURITY INVOKER` whenever existing table grants and RLS can enforce the caller's authority. Application-owned functions created by the `postgres` role in the exposed `public` schema use opt-in execution privileges: default execution is revoked from `PUBLIC`, `anon`, `authenticated`, and `service_role`, and each intended Data API RPC must receive an explicit minimal `GRANT EXECUTE` in the same migration.
+Prefer `SECURITY INVOKER` whenever existing table grants and RLS can enforce the caller's authority. Existing Supabase projects can retain automatic Data API function grants, so application migrations must not rely on default-privilege changes alone: after creating or replacing each exposed function, explicitly revoke execution from `PUBLIC` and every unintended API role, then grant only the minimum intended callers. Database tests and hosted Advisors must verify those effective ACLs before rollout.
 
 Never disable RLS to resolve an application error.
 
