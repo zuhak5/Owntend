@@ -27,7 +27,7 @@ void main() {
       await db.close();
     });
 
-    test('all searchable source families invalidate without manual rebuild', () async {
+    test('source families invalidate without manual rebuild', () async {
       final categories = await assets.listCategories();
       final roomId = await assets.saveRoom(
         areaId: 'area_search',
@@ -131,7 +131,10 @@ void main() {
         const AssetsCompanion(name: Value('Heat Pump')),
       );
       expect(await _hasResult(search, 'Heat', 'asset', deviceId), isTrue);
-      expect(await _hasResult(search, 'Old Boiler', 'asset', deviceId), isFalse);
+      expect(
+        await _hasResult(search, 'Old Boiler', 'asset', deviceId),
+        isFalse,
+      );
 
       await (db.update(
         db.deviceDetailsTable,
@@ -225,19 +228,31 @@ void main() {
         roomId: roomId,
       );
       await search.rebuildIndex();
-      expect(await _hasResult(search, 'ArchiveTarget', 'asset', assetId), isTrue);
+      expect(
+        await _hasResult(search, 'ArchiveTarget', 'asset', assetId),
+        isTrue,
+      );
 
       await assets.archiveAsset(assetId);
-      expect(await _hasResult(search, 'ArchiveTarget', 'asset', assetId), isFalse);
+      expect(
+        await _hasResult(search, 'ArchiveTarget', 'asset', assetId),
+        isFalse,
+      );
 
       await assets.restoreAsset(assetId);
-      expect(await _hasResult(search, 'ArchiveTarget', 'asset', assetId), isTrue);
+      expect(
+        await _hasResult(search, 'ArchiveTarget', 'asset', assetId),
+        isTrue,
+      );
 
       await assets.deleteAsset(assetId);
-      expect(await _hasResult(search, 'ArchiveTarget', 'asset', assetId), isFalse);
+      expect(
+        await _hasResult(search, 'ArchiveTarget', 'asset', assetId),
+        isFalse,
+      );
     });
 
-    test('bulk suppressed sync writes dirty once and next query catches up', () async {
+    test('suppressed sync writes dirty and next query catches up', () async {
       final roomId = await assets.saveRoom(
         areaId: 'area_search',
         name: 'Bulk Room',
@@ -268,7 +283,7 @@ void main() {
       expect(fresh.source, fresh.indexed);
     });
 
-    test('failed rebuild rolls back and a later query retries safely', () async {
+    test('failed rebuild rolls back and later query retries', () async {
       final roomId = await assets.saveRoom(
         areaId: 'area_search',
         name: 'Failure Room',
@@ -282,7 +297,9 @@ void main() {
 
       final failing = DriftSearchRepository(
         db,
-        beforeIndexCommit: () async => throw StateError('injected rebuild failure'),
+        beforeIndexCommit: () async {
+          throw StateError('injected rebuild failure');
+        },
       );
       await expectLater(failing.search('RetryNeedle'), throwsStateError);
       final dirty = await _generation(db);
@@ -297,7 +314,7 @@ void main() {
       expect(fresh.source, fresh.indexed);
     });
 
-    test('malformed generation and missing FTS storage force recovery', () async {
+    test('malformed state and missing FTS force recovery', () async {
       final roomId = await assets.saveRoom(
         areaId: 'area_search',
         name: 'Recovery Room',
