@@ -101,6 +101,14 @@ Restore can introduce local state that differs from the cloud. The implementatio
 
 Restore media only from validated paths and supported MIME/file types. Stage replacement before deleting current files. Metadata must not refer to files that failed verification or extraction.
 
+## Automatic backup lifecycle
+
+Automatic backup policy remains owned by `ZipBackupService`: enablement, the last successful backup timestamp, the durable 24-hour due interval, and exclusive backup/restore execution are checked there.
+
+Lifecycle invocation is owned separately. After authenticated startup reaches the ready state, Owntend schedules the first automatic due-check after the ready frame so backup work cannot delay the first useful UI. Foreground resumes may request another due-check, but successful checks are throttled in memory for 15 minutes; the service's durable 24-hour policy remains authoritative for whether an archive is actually created. A failed due-check does not advance the foreground throttle, so the next eligible lifecycle trigger can retry.
+
+Leaving authenticated-ready state resets lifecycle eligibility. Resume events before readiness therefore cannot start an automatic backup.
+
 ## Retention
 
 Automatic backup retention should be bounded and deterministic. Safety backups created for restore must not be removed until restore is confirmed. User-exported backups outside application storage remain under user control.

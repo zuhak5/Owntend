@@ -42,6 +42,7 @@ import 'src/core/services/action_feedback_service.dart';
 import 'src/core/services/feedback_messenger.dart';
 export 'src/core/data/repositories.dart';
 import 'src/core/services/app_permission_coordinator.dart';
+import 'src/core/services/automatic_backup_coordinator.dart';
 import 'src/core/services/backup_service.dart';
 import 'src/core/services/restore_journal.dart';
 import 'src/core/services/diagnostic_export_service.dart';
@@ -294,12 +295,22 @@ class OwntendApp extends ConsumerStatefulWidget {
 class _OwntendAppState extends ConsumerState<OwntendApp>
     with WidgetsBindingObserver {
   Locale _deviceLocale = WidgetsBinding.instance.platformDispatcher.locale;
+  late final StartupBootstrapController _startupController;
+  late final AutomaticBackupCoordinator _automaticBackupCoordinator;
+  String? _automaticBackupReadyUserId;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     final startup = ref.read(startupBootstrapControllerProvider);
+    _startupController = startup;
+    _automaticBackupCoordinator = AutomaticBackupCoordinator(
+      backupRepositoryFactory: () => ref.read(backupRepositoryProvider),
+      automaticStartEnabled: () => ref.read(backupAutoStartProvider),
+    );
+    startup.stateListenable.addListener(_handleAutomaticBackupStartupState);
+    _handleAutomaticBackupStartupState();
     ref.listenManual(authStateProvider, (previous, next) {
       startup.handleAuthValue(next);
     }, fireImmediately: true);
@@ -307,6 +318,36 @@ class _OwntendAppState extends ConsumerState<OwntendApp>
       startup.handleSyncStatusValue(next);
     }, fireImmediately: true);
     ref.listenManual(streakRefreshProvider, (_, _) {});
+  }
+
+  void _handleAutomaticBackupStartupState() {
+    final state = _startupController.currentState;
+    final readyUserId = state.kind == StartupBootstrapKind.authenticatedReady
+        ? state.session?.userId
+        : null;
+    if (readyUserId == null) {
+      _automaticBackupReadyUserId = null;
+      _automaticBackupCoordinator.reset();
+      return;
+    }
+    if (_automaticBackupReadyUserId == readyUserId) return;
+    _automaticBackupReadyUserId = readyUserId;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final current = _startupController.currentState;
+      if (current.kind != StartupBootstrapKind.authenticatedReady ||
+          current.session?.userId != readyUserId) {
+        return;
+      }
+      unawaited(_automaticBackupCoordinator.onPostReady());
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_automaticBackupCoordinator.onAppResumed());
+    }
   }
 
   @override
@@ -320,6 +361,10 @@ class _OwntendAppState extends ConsumerState<OwntendApp>
 
   @override
   void dispose() {
+    _startupController.stateListenable.removeListener(
+      _handleAutomaticBackupStartupState,
+    );
+    _automaticBackupCoordinator.reset();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
