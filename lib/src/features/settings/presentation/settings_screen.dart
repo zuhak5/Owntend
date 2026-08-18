@@ -349,8 +349,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                     subtitle: Text(
                       weather == null
                           ? context.l10n.setACityZipOrCurrentDeviceLocation
-                          : '${location?.label ?? context.l10n.home}\
-${_localizedWeatherSummary(context, weather.weatherCode)} · ${_formatInteger(context, weather.temperature.round())}°C',
+                          : '${location?.label ?? context.l10n.home}\n${_localizedWeatherSummary(context, weather.weatherCode)} · ${_formatInteger(context, weather.temperature.round())}°C',
                     ),
                     trailing: Wrap(
                       spacing: 4,
