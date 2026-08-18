@@ -45,7 +45,7 @@ jobs:
         run: |
           cd supabase/functions/admob-ssv-handler && deno test --frozen --allow-env --allow-net index_test.ts && cd ../../..
           cd supabase/functions/delete-account && deno test --frozen --allow-env --allow-net index_test.ts && cd ../../..
-          cd supabase/functions/account-deletion-status && deno test --frozen --allow-env --allow-net index_test.ts && cd ../../..
+          cd supabase/functions/account-deletion-status && deno test --frozen --allow-env --allow-net index_test.ts
 
   web-and-static-contracts:
     name: Google contract/static checks
@@ -169,3 +169,91 @@ jobs:
           path: artifacts/supabase-advisors.json
           if-no-files-found: error
           retention-days: 14
+
+  purge-stale-actions-runs:
+    name: Purge stale Actions runs from repository registry
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.event.head_commit.message == 'Purge stale Actions runs through repository run registry'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Delete runs belonging to workflow records absent from main
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}"
+          auth=(-H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28")
+
+          canonical_paths=$(cat <<'EOF'
+          .github/workflows/audit-supabase-advisors.yml
+          .github/workflows/build-play-android.yml
+          .github/workflows/build-production-android.yml
+          .github/workflows/deploy-download-site.yml
+          .github/workflows/deploy-supabase-migrations.yml
+          .github/workflows/validate-flutter.yml
+          .github/workflows/validate-google-backend.yml
+          EOF
+          )
+
+          curl --fail-with-body --silent --show-error "${auth[@]}" "$api/actions/workflows?per_page=100" > /tmp/workflows.json
+          : > /tmp/stale-workflow-ids
+          echo "Workflow registry before purge:"
+          jq -r '.workflows[] | [.id, .state, .path, .name] | @tsv' /tmp/workflows.json
+          while IFS=$'\t' read -r workflow_id workflow_path; do
+            if ! printf '%s\n' "$canonical_paths" | grep -Fxq "$workflow_path"; then
+              echo "$workflow_id" >> /tmp/stale-workflow-ids
+            fi
+          done < <(jq -r '.workflows[] | [.id, .path] | @tsv' /tmp/workflows.json)
+
+          sort -u /tmp/stale-workflow-ids -o /tmp/stale-workflow-ids
+          echo "Stale workflow IDs:"
+          cat /tmp/stale-workflow-ids || true
+
+          pass=0
+          while :; do
+            pass=$((pass + 1))
+            : > /tmp/stale-run-ids
+            page=1
+            while :; do
+              payload="$(curl --fail-with-body --silent --show-error "${auth[@]}" "$api/actions/runs?per_page=100&page=$page")"
+              count="$(jq '.workflow_runs | length' <<< "$payload")"
+              while IFS=$'\t' read -r run_id workflow_id; do
+                if grep -Fxq "$workflow_id" /tmp/stale-workflow-ids; then
+                  echo "$run_id" >> /tmp/stale-run-ids
+                fi
+              done < <(jq -r '.workflow_runs[] | [.id, .workflow_id] | @tsv' <<< "$payload")
+              [ "$count" -lt 100 ] && break
+              page=$((page + 1))
+            done
+
+            sort -u /tmp/stale-run-ids -o /tmp/stale-run-ids
+            if [ ! -s /tmp/stale-run-ids ]; then
+              echo "No stale workflow runs remain after pass $pass."
+              break
+            fi
+
+            echo "Deleting $(wc -l < /tmp/stale-run-ids) stale runs on pass $pass..."
+            while IFS= read -r run_id; do
+              [ -z "$run_id" ] && continue
+              code="$(curl --silent --show-error -o /tmp/delete-response -w '%{http_code}' -X DELETE "${auth[@]}" "$api/actions/runs/$run_id")"
+              if [ "$code" = "204" ]; then
+                echo "Deleted run $run_id"
+              elif [ "$code" = "409" ]; then
+                echo "Cancelling active stale run $run_id before deletion"
+                curl --silent --show-error -X POST "${auth[@]}" "$api/actions/runs/$run_id/cancel" >/dev/null || true
+              else
+                echo "Delete run $run_id returned HTTP $code"
+                cat /tmp/delete-response || true
+              fi
+            done < /tmp/stale-run-ids
+
+            [ "$pass" -ge 8 ] && { echo "Stale runs remain after 8 passes"; exit 1; }
+            sleep 2
+          done
+
+          echo "Workflow registry after stale-run purge:"
+          curl --fail-with-body --silent --show-error "${auth[@]}" "$api/actions/workflows?per_page=100" | jq -r '.workflows[] | [.id, .state, .path, .name] | @tsv'
