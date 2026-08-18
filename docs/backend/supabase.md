@@ -60,7 +60,9 @@ Review `SECURITY DEFINER` functions carefully:
 - Validate inputs and bound resource use.
 - Make externally retried mutations idempotent.
 
-Prefer `SECURITY INVOKER` whenever existing table grants and RLS can enforce the caller's authority. Existing Supabase projects can retain automatic Data API function grants, so application migrations must not rely on default-privilege changes alone: after creating or replacing each exposed function, explicitly revoke execution from `PUBLIC` and every unintended API role, then grant only the minimum intended callers. Database tests and hosted Advisors must verify those effective ACLs before rollout.
+Prefer `SECURITY INVOKER` whenever existing table grants and RLS can enforce the caller's authority. If a client operation genuinely requires elevated database privileges, keep the privileged `SECURITY DEFINER` implementation in a non-exposed private schema and expose only a minimal authenticated `SECURITY INVOKER` wrapper through `public`. Existing Supabase projects can retain automatic Data API function grants, so application migrations must not rely on default-privilege changes alone: after creating or replacing each exposed function, explicitly revoke execution from `PUBLIC` and every unintended API role, then grant only the minimum intended callers. Database tests and hosted Advisors must verify those effective ACLs before rollout.
+
+Ownership policies use statement-stable helper caching where safe: `(select auth.uid())` replaces per-row `auth.uid()` calls, and statement-constant `current_setting()` checks are wrapped the same way. Row-dependent authorization helpers are not cached because doing so could change authorization semantics.
 
 Never disable RLS to resolve an application error.
 
@@ -85,7 +87,9 @@ RPC contracts should define:
 - Server timestamp/revision semantics.
 - Audit and privacy-safe diagnostics.
 
-`get_charged_operation_status(p_operation_id uuid, p_request_hash text)` enables client journal reconciliation following transport failure. Lookups are strictly same-account and operation-bound; querying another user's operation returns `status: 'not_found'` without revealing operation existence, while reuse with a mismatched request hash is rejected.
+`get_charged_operation_status(p_operation_id uuid, p_request_hash text)` enables client journal reconciliation following transport failure. Lookups are strictly same-account and operation-bound; querying another user's operation returns `status: 'not_found'` without revealing operation existence, while reuse with a mismatched request hash is rejected. The public function is `SECURITY INVOKER`; its elevated journal lookup lives in `owntend_monetization_private` and still derives the caller from `auth.uid()`.
+
+The media RPCs `stage_media_upload`, `finalize_asset_photo_upload`, and `set_primary_asset_photo` follow the same boundary. Their public functions are authenticated `SECURITY INVOKER` wrappers, while privileged implementations live in the non-exposed `owntend_media_private` schema with explicit execution grants and safe search paths. This preserves server-authoritative mutation without exposing an authenticated-callable `SECURITY DEFINER` function in the Data API schema.
 
 ## Storage
 
@@ -103,7 +107,11 @@ The launch baseline adds the 17 synchronized app tables to `supabase_realtime` a
 
 Change-feed Data API privileges are fail closed. `get_sync_feed_capability()`, `fetch_user_change_feed(...)`, `validate_change_feed_parity()`, and `get_user_change_feed_watermark()` are authenticated-only `SECURITY INVOKER` functions. The parity and watermark RPCs accept no user identifier and derive ownership exclusively from `auth.uid()`. Cross-account operational inspection belongs to protected SQL tooling rather than a client-callable definer function. `fn_log_server_change_feed()` remains `SECURITY DEFINER` because authenticated clients cannot insert into the feed table, but direct execution is revoked from all Data API roles; it is reached only through the table triggers.
 
-After a hosted pre-launch reset, the feed may be enabled only after the exact-main baseline is proven hosted: no pending migration drift, protocol `1.0.1`, zero malformed feed rows, correct effective RPC ACLs, no unresolved feed-related security Advisor findings, and parity success for every hosted account (or verified zero accounts).
+After a hosted pre-launch reset or migration deployment, the feed may be enabled only after the exact-main baseline is proven hosted: no pending migration drift, protocol `1.0.1`, zero malformed feed rows, correct effective RPC ACLs, no unresolved blocking feed/security Advisor findings, and parity success for every hosted account (or verified zero accounts).
+
+## Hosted Advisor audit
+
+`Audit Supabase Advisors` runs only from exact current `main` and queries both hosted security and performance Advisors through a protected environment. Its sanitized artifact retains every finding. `WARN`, `ERROR`, and unknown severities are blocking unless a narrowly documented exception is explicitly allowlisted; `INFO` findings remain visible but are non-blocking. This distinction is important on a newly reset zero-user database, where unused-index telemetry has no representative workload behind it.
 
 ## Edge Functions
 

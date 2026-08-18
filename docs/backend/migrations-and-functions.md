@@ -74,6 +74,8 @@ Test:
 - Account deletion cleanup.
 - Point and reward conservation where applicable.
 - Effective RPC ACLs rather than relying on assumed default privileges.
+- Public API functions that require elevated internals remain `SECURITY INVOKER` wrappers rather than authenticated-executable `SECURITY DEFINER` functions in exposed schemas.
+- Statement-stable RLS helpers such as `auth.uid()` and `current_setting()` use init-plan-safe `SELECT` wrapping when their result does not depend on the current row.
 
 ## Edge Function inventory
 
@@ -92,6 +94,7 @@ Receives Google Mobile Ads server-side verification callbacks. It validates prov
 ## Function engineering rules
 
 - Prefer `SECURITY INVOKER` when ordinary grants plus RLS can enforce caller authority; reserve `SECURITY DEFINER` for operations that genuinely require elevated database privileges.
+- A client-callable operation that genuinely needs elevated database privileges must expose a minimal `SECURITY INVOKER` function in the Data API schema and keep its `SECURITY DEFINER` implementation in a non-exposed private schema. The private implementation still derives identity from trusted session state and receives only the minimum schema/function grants required by the wrapper.
 - For every `SECURITY DEFINER` function, set a safe `search_path`, derive identity from trusted session state, and grant execution only to the minimum role set.
 - Treat each Data API function as an explicit ACL boundary. Supabase projects can retain automatic function grants, so every application function must issue post-definition `REVOKE` statements for `PUBLIC` and unintended API roles, then grant only the exact intended callers.
 - Verify effective function ACLs in database tests and hosted Advisors before rollout.
@@ -104,6 +107,16 @@ Receives Google Mobile Ads server-side verification callbacks. It validates prov
 - Do not log tokens, signatures, direct identifiers, user content, signed URLs, or raw payloads.
 - If Sentry is enabled for a function, use request-scoped capture only and report only genuine server failures. Do not attach JWTs, recovery keys, claim IDs, user IDs, raw callback query strings, or webhook payload bodies.
 - Test malformed, unauthorized, replayed, expired, and partial-failure paths.
+
+## Hosted Advisor gate
+
+The protected `Audit Supabase Advisors` workflow queries both security and performance Advisors from exact current `main` and stores a sanitized report artifact. Advisor results are classified deliberately:
+
+- `WARN`, `ERROR`, and unknown severities are blocking unless a narrowly documented title is explicitly allowlisted.
+- `INFO` findings are retained in the report as non-blocking evidence. In particular, an unused-index observation on a freshly reset zero-traffic database is not sufficient evidence that an index is unnecessary.
+- Management API errors fail closed.
+
+Database-side pgTAP coverage independently locks the exposed RPC security mode, effective ACL boundary, RLS init-plan form, and required foreign-key indexes so the hosted Advisor check is not the only line of defense.
 
 ## Deno validation
 
@@ -124,10 +137,11 @@ The zero-user launch database is defined by the ordered baseline modules under `
 9. [`20260815000009_charged_operation_recovery.sql`](../../supabase/migrations/20260815000009_charged_operation_recovery.sql): hash-qualified charged-operation recovery and capability `1.2.0`.
 10. [`20260815000010_change_feed.sql`](../../supabase/migrations/20260815000010_change_feed.sql): canonical 17-entity change-feed identity, typed `key_data`, durable delete keys, triggers, paging, and parity foundation.
 11. [`20260815000011_change_feed_access.sql`](../../supabase/migrations/20260815000011_change_feed_access.sql): final feed protocol `1.0.1`, authenticated-only `SECURITY INVOKER` RPCs, `auth.uid()` account scope, explicit Data API ACL normalization, and trigger-only definer execution.
+12. [`20260815000012_api_security_and_rls.sql`](../../supabase/migrations/20260815000012_api_security_and_rls.sql): Advisor-safe public RPC wrappers over private privileged media/monetization implementations, init-plan-safe ownership policies, and the covering notifications foreign-key index.
 
 The former duplicate baseline replays and remediation-era forward patch files are intentionally absent. They represented audit history for an environment that had not launched, not a compatibility contract that Owntend needs to preserve.
 
-The checked-in feed capability remains disabled. After the hosted database is rebuilt from this baseline, enablement still requires exact-main hosted verification: no pending migration drift, protocol `1.0.1`, zero malformed feed rows, effective feed RPC ACLs matching the baseline, no unresolved feed-related security Advisor findings, and parity success for every hosted account (or explicit evidence that the reset contains zero accounts).
+The checked-in feed capability remains disabled. After hosted migrations match this baseline, enablement still requires exact-main hosted verification: no pending migration drift, protocol `1.0.1`, zero malformed feed rows, effective feed RPC ACLs matching the baseline, no unresolved blocking feed/security Advisor findings, and parity success for every hosted account (or explicit evidence that the environment contains zero accounts).
 
 ## Deployment evidence
 
