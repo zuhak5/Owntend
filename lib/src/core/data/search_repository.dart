@@ -71,10 +71,7 @@ String _joinSearchParts(Iterable<String?> parts) => parts
     .where((part) => part.isNotEmpty)
     .join(' ');
 
-typedef _SearchIndexState = ({
-  int sourceGeneration,
-  int indexedGeneration,
-});
+typedef _SearchIndexState = ({int sourceGeneration, int indexedGeneration});
 
 class DriftSearchRepository implements SearchRepository {
   DriftSearchRepository(this.db, {this.beforeIndexCommit});
