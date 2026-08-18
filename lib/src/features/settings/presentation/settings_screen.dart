@@ -89,984 +89,901 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 760),
-          child: SettingsRowLayout(
-            child: Scrollbar(
-              child: ListView(
-                keyboardDismissBehavior:
-                    ScrollViewKeyboardDismissBehavior.onDrag,
-                padding: const EdgeInsetsDirectional.fromSTEB(
-                  HkSpacing.gutter,
-                  HkSpacing.xs,
-                  HkSpacing.gutter,
-                  112,
-                ),
-                children: [
-                  const HkNativeAdCard(placement: 'settings'),
-                  hk_ui.PremiumCard(
-                    padding: const EdgeInsets.all(HkSpacing.md),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _SettingsCardHeader(
-                          icon: Symbols.contrast_rounded,
-                          title: context.l10n.appearance,
-                        ),
-                        const SizedBox(height: HkSpacing.sm),
-                        LayoutBuilder(
-                          builder: (context, constraints) {
-                            final textScaler = MediaQuery.textScalerOf(context);
-                            final isCompactLayout =
-                                constraints.maxWidth < 360 ||
-                                textScaler.scale(1) > 1.2;
-                            final useShortLabel =
-                                constraints.maxWidth < 320 ||
-                                (constraints.maxWidth < 420 &&
-                                    textScaler.scale(1) > 1.4);
-                            return SizedBox(
-                              width: double.infinity,
-                              child: MediaQuery.withClampedTextScaling(
-                                maxScaleFactor: isCompactLayout ? 1.15 : 1.3,
-                                child: SegmentedButton<ThemePreference>(
-                                  showSelectedIcon: false,
-                                  style: isCompactLayout
-                                      ? SegmentedButton.styleFrom(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 4,
-                                            vertical: 6,
+          child: Scrollbar(
+            child: ListView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 112),
+              children: [
+                const HkNativeAdCard(placement: 'settings'),
+                hk_ui.PremiumCard(
+                  padding: const EdgeInsets.all(HkSpacing.md),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _SettingsCardHeader(
+                        icon: Symbols.contrast_rounded,
+                        title: context.l10n.appearance,
+                      ),
+                      const SizedBox(height: HkSpacing.sm),
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          final textScaler = MediaQuery.textScalerOf(context);
+                          final isCompactLayout =
+                              constraints.maxWidth < 360 ||
+                              textScaler.scale(1) > 1.2;
+                          final useShortLabel =
+                              constraints.maxWidth < 320 ||
+                              (constraints.maxWidth < 420 &&
+                                  textScaler.scale(1) > 1.4);
+                          return SizedBox(
+                            width: double.infinity,
+                            child: MediaQuery.withClampedTextScaling(
+                              maxScaleFactor: isCompactLayout ? 1.15 : 1.3,
+                              child: SegmentedButton<ThemePreference>(
+                                showSelectedIcon: false,
+                                style: isCompactLayout
+                                    ? SegmentedButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 4,
+                                          vertical: 6,
+                                        ),
+                                        visualDensity: VisualDensity.compact,
+                                      )
+                                    : null,
+                                segments: [
+                                  ButtonSegment(
+                                    value: ThemePreference.light,
+                                    label: FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      child: Text(
+                                        context.l10n.light,
+                                        maxLines: 1,
+                                        softWrap: false,
+                                      ),
+                                    ),
+                                    icon: isCompactLayout
+                                        ? null
+                                        : const Icon(
+                                            Symbols.light_mode_rounded,
                                           ),
-                                          visualDensity: VisualDensity.compact,
-                                        )
-                                      : null,
-                                  segments: [
-                                    ButtonSegment(
-                                      value: ThemePreference.light,
-                                      label: FittedBox(
-                                        fit: BoxFit.scaleDown,
-                                        child: Text(
-                                          context.l10n.light,
-                                          maxLines: 1,
-                                          softWrap: false,
-                                        ),
+                                  ),
+                                  ButtonSegment(
+                                    value: ThemePreference.dark,
+                                    label: FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      child: Text(
+                                        context.l10n.dark,
+                                        maxLines: 1,
+                                        softWrap: false,
                                       ),
-                                      icon: isCompactLayout
-                                          ? null
-                                          : const Icon(
-                                              Symbols.light_mode_rounded,
-                                            ),
                                     ),
-                                    ButtonSegment(
-                                      value: ThemePreference.dark,
-                                      label: FittedBox(
-                                        fit: BoxFit.scaleDown,
-                                        child: Text(
-                                          context.l10n.dark,
-                                          maxLines: 1,
-                                          softWrap: false,
-                                        ),
+                                    icon: isCompactLayout
+                                        ? null
+                                        : const Icon(Symbols.dark_mode_rounded),
+                                  ),
+                                  ButtonSegment(
+                                    value: ThemePreference.system,
+                                    label: FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      child: Text(
+                                        useShortLabel
+                                            ? context.l10n.auto
+                                            : context.l10n.automatic,
+                                        maxLines: 1,
+                                        softWrap: false,
                                       ),
-                                      icon: isCompactLayout
-                                          ? null
-                                          : const Icon(
-                                              Symbols.dark_mode_rounded,
-                                            ),
                                     ),
-                                    ButtonSegment(
-                                      value: ThemePreference.system,
-                                      label: FittedBox(
-                                        fit: BoxFit.scaleDown,
-                                        child: Text(
-                                          useShortLabel
-                                              ? context.l10n.auto
-                                              : context.l10n.automatic,
-                                          maxLines: 1,
-                                          softWrap: false,
-                                        ),
-                                      ),
-                                      icon: isCompactLayout
-                                          ? null
-                                          : const Icon(
-                                              Symbols.schedule_rounded,
-                                            ),
-                                    ),
-                                  ],
-                                  selected: {themePreference},
-                                  onSelectionChanged: (selection) {
-                                    final preference = selection.single;
-                                    _setThemePreference(
-                                      context,
-                                      ref,
-                                      preference,
-                                    );
-                                  },
+                                    icon: isCompactLayout
+                                        ? null
+                                        : const Icon(Symbols.schedule_rounded),
+                                  ),
+                                ],
+                                selected: {themePreference},
+                                onSelectionChanged: (selection) {
+                                  final preference = selection.single;
+                                  _setThemePreference(context, ref, preference);
+                                },
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: HkSpacing.space6),
+                      Text(
+                        themePreference == ThemePreference.system
+                            ? context
+                                  .l10n
+                                  .automaticUsesYourLocalTimeLightFrom6AmTo6PmDarkOvernight
+                            : context
+                                  .l10n
+                                  .manualSelectionStaysActiveUntilYouChooseAnotherMode,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: HkSpacing.sm),
+                hk_ui.LanguageSelectorDropdown(
+                  selectorKey: const ValueKey('settings-language-selector'),
+                  hitTargetKey: const ValueKey(
+                    'settings-language-selector-hit-target',
+                  ),
+                  language: localePreference.language,
+                  chevronSize: 20,
+                  onChanged: (selection) =>
+                      _setAppLanguage(context, ref, selection),
+                  triggerBuilder: (context, label, isOpen, chevron) {
+                    final scheme = Theme.of(context).colorScheme;
+                    return hk_ui.PremiumCard(
+                      padding: EdgeInsets.zero,
+                      borderColor: isOpen
+                          ? scheme.primary.withValues(alpha: 0.65)
+                          : null,
+                      backgroundColor: isOpen
+                          ? Color.alphaBlend(
+                              scheme.primary.withValues(alpha: 0.035),
+                              scheme.surfaceContainerLowest,
+                            )
+                          : null,
+                      child: ConstrainedBox(
+                        key: const ValueKey('settings-language-row'),
+                        constraints: const BoxConstraints(minHeight: 72),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: HkSpacing.space6,
+                            vertical: HkSpacing.xs,
+                          ),
+                          child: Row(
+                            children: [
+                              const _SettingsTileIcon(
+                                icon: Symbols.language_rounded,
+                              ),
+                              const SizedBox(width: HkSpacing.sm),
+                              Expanded(
+                                flex: 3,
+                                child: Text(
+                                  context.l10n.language,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.titleMedium
+                                      ?.copyWith(fontWeight: FontWeight.w800),
                                 ),
                               ),
-                            );
-                          },
-                        ),
-                        const SizedBox(height: HkSpacing.space6),
-                        Text(
-                          themePreference == ThemePreference.system
-                              ? context
-                                    .l10n
-                                    .automaticUsesYourLocalTimeLightFrom6AmTo6PmDarkOvernight
-                              : context
-                                    .l10n
-                                    .manualSelectionStaysActiveUntilYouChooseAnotherMode,
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color:
-                                Theme.of(context).colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: HkSpacing.sm),
-                  hk_ui.LanguageSelectorDropdown(
-                    selectorKey: const ValueKey('settings-language-selector'),
-                    hitTargetKey: const ValueKey(
-                      'settings-language-selector-hit-target',
-                    ),
-                    language: localePreference.language,
-                    chevronSize: 20,
-                    onChanged: (selection) =>
-                        _setAppLanguage(context, ref, selection),
-                    triggerBuilder: (context, label, isOpen, chevron) {
-                      final scheme = Theme.of(context).colorScheme;
-                      return hk_ui.PremiumCard(
-                        padding: EdgeInsets.zero,
-                        borderColor: isOpen
-                            ? scheme.primary.withValues(alpha: 0.65)
-                            : null,
-                        backgroundColor: isOpen
-                            ? Color.alphaBlend(
-                                scheme.primary.withValues(alpha: 0.035),
-                                scheme.surfaceContainerLowest,
-                              )
-                            : null,
-                        child: ConstrainedBox(
-                          key: const ValueKey('settings-language-row'),
-                          constraints: const BoxConstraints(
-                            minHeight: SettingsRowLayout.minRowHeight,
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: SettingsRowLayout.rowContentInset,
-                              vertical: HkSpacing.xs,
-                            ),
-                            child: Row(
-                              children: [
-                                const _SettingsTileIcon(
-                                  icon: Symbols.language_rounded,
-                                ),
-                                const SizedBox(
-                                  width: SettingsRowLayout.iconTextGap,
-                                ),
-                                Expanded(
-                                  flex: 3,
-                                  child: Text(
-                                    context.l10n.language,
-                                    maxLines: 2,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleMedium
-                                        ?.copyWith(
-                                          fontWeight: FontWeight.w800,
-                                        ),
-                                  ),
-                                ),
-                                const SizedBox(
-                                  width: SettingsRowLayout.iconTextGap,
-                                ),
-                                Flexible(
-                                  flex: 2,
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Flexible(
-                                        child: Text(
-                                          label,
-                                          maxLines: 2,
-                                          textAlign: TextAlign.end,
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .labelLarge
-                                              ?.copyWith(
-                                                color: scheme.onSurfaceVariant,
-                                                fontWeight: FontWeight.w700,
-                                              ),
-                                        ),
+                              const SizedBox(width: HkSpacing.sm),
+                              Flexible(
+                                flex: 2,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        label,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .labelLarge
+                                            ?.copyWith(
+                                              color: scheme.onSurfaceVariant,
+                                              fontWeight: FontWeight.w700,
+                                            ),
                                       ),
-                                      const SizedBox(
-                                        width: HkSpacing.space4,
-                                      ),
-                                      chevron,
-                                    ],
-                                  ),
+                                    ),
+                                    const SizedBox(width: HkSpacing.space4),
+                                    chevron,
+                                  ],
                                 ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: HkSpacing.sm),
-                  if (consent?.privacyOptionsRequired ?? false) ...[
-                    hk_ui.PremiumCard(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: SettingsRowLayout.rowContentInset,
-                      ),
-                      child: ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: const _SettingsTileIcon(
-                          icon: Symbols.privacy_tip_rounded,
-                        ),
-                        title: Text(context.l10n.privacyChoices),
-                        subtitle: Text(context.l10n.privacyChoicesSubtitle),
-                        trailing: Icon(
-                          Directionality.of(context) == TextDirection.rtl
-                              ? Symbols.chevron_left_rounded
-                              : Symbols.chevron_right_rounded,
-                        ),
-                        onTap: () => ref
-                            .read(consentServiceProvider)
-                            .showPrivacyOptions(),
-                      ),
-                    ),
-                    const SizedBox(height: HkSpacing.sm),
-                  ],
-                  if (appConfig.environment != AppEnvironment.prod &&
-                      supportsMobileAdDebugging) ...[
-                    hk_ui.PremiumCard(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: SettingsRowLayout.rowContentInset,
-                      ),
-                      child: ListTile(
-                        key: const ValueKey('settings-ad-inspector'),
-                        contentPadding: EdgeInsets.zero,
-                        leading: const _SettingsTileIcon(
-                          icon: Symbols.bug_report_rounded,
-                        ),
-                        title: Text(context.l10n.adInspector),
-                        subtitle: Text(context.l10n.adInspectorSubtitle),
-                        trailing: Icon(
-                          Directionality.of(context) == TextDirection.rtl
-                              ? Symbols.chevron_left_rounded
-                              : Symbols.chevron_right_rounded,
-                        ),
-                        onTap: () => _openAdInspector(context, ref),
-                      ),
-                    ),
-                    const SizedBox(height: HkSpacing.sm),
-                  ],
-                  hk_ui.PremiumCard(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: SettingsRowLayout.rowContentInset,
-                    ),
-                    child: ListTile(
-                      key: const ValueKey('settings-weather-row'),
-                      contentPadding: EdgeInsets.zero,
-                      leading: _SettingsTileIcon(
-                        icon: weather == null
-                            ? Symbols.location_on_rounded
-                            : _weatherIcon(weather.weatherCode),
-                      ),
-                      title: Text(context.l10n.weatherLocation),
-                      subtitle: Text(
-                        weather == null
-                            ? context.l10n.setACityZipOrCurrentDeviceLocation
-                            : '${location?.label ?? context.l10n.home}\n${_localizedWeatherSummary(context, weather.weatherCode)} · ${_formatInteger(context, weather.temperature.round())}°C',
-                      ),
-                      trailing: Wrap(
-                        spacing: HkSpacing.space4,
-                        children: [
-                          IconButton(
-                            tooltip: context.l10n.searchLocation,
-                            onPressed: () => _searchLocation(context, ref),
-                            icon: const Icon(Symbols.search_rounded),
-                          ),
-                          IconButton(
-                            tooltip: context.l10n.useDeviceLocation,
-                            onPressed: () => _useDeviceLocation(context, ref),
-                            icon: const Icon(Symbols.my_location_rounded),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: HkSpacing.sm),
-                  hk_ui.PremiumCard(
-                    padding: const EdgeInsets.all(HkSpacing.md),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _SettingsCardHeader(
-                          icon: Symbols.notifications_active_rounded,
-                          title: context.l10n.notifications,
-                        ),
-                        const SizedBox(height: HkSpacing.md),
-                        _SettingsSubsectionLabel(
-                          label: context.l10n.permissions,
-                        ),
-                        const SizedBox(height: HkSpacing.xs),
-                        _SettingsPanel(
-                          child: Column(
-                            children: [
-                              if (capabilitySetup == null)
-                                const Padding(
-                                  padding: EdgeInsets.all(HkSpacing.sm),
-                                  child: LinearProgressIndicator(),
-                                )
-                              else ...[
-                                _NotificationStatusRow(
-                                  icon: Symbols.notifications_rounded,
-                                  label: context.l10n.deviceReminders,
-                                  value: _effectiveCapabilityLabel(
-                                    context,
-                                    capabilitySetup
-                                        .notifications
-                                        .deviceReminderState,
-                                  ),
-                                  good:
-                                      capabilitySetup
-                                          .notifications
-                                          .deviceReminderState ==
-                                      EffectiveCapabilityState.active,
-                                ),
-                                _NotificationStatusRow(
-                                  icon: Symbols.alarm_on_rounded,
-                                  label: context.l10n.alarmsAndReminders,
-                                  value: _effectiveCapabilityLabel(
-                                    context,
-                                    capabilitySetup
-                                        .notifications
-                                        .exactTimingState,
-                                    approximateWhenDegraded: true,
-                                  ),
-                                  good:
-                                      capabilitySetup
-                                          .notifications
-                                          .exactTimingState ==
-                                      EffectiveCapabilityState.active,
-                                ),
-                                _NotificationStatusRow(
-                                  icon: Symbols.inbox_rounded,
-                                  label: context.l10n.inAppInbox,
-                                  value: _effectiveCapabilityLabel(
-                                    context,
-                                    capabilitySetup.notifications.inboxState,
-                                  ),
-                                  good:
-                                      capabilitySetup
-                                          .notifications
-                                          .inboxState ==
-                                      EffectiveCapabilityState.active,
-                                ),
-                                _NotificationStatusRow(
-                                  icon: Symbols.rainy_rounded,
-                                  label: context.l10n.weatherAlerts,
-                                  value: _effectiveCapabilityLabel(
-                                    context,
-                                    capabilitySetup
-                                        .notifications
-                                        .weatherAlertState,
-                                  ),
-                                  good:
-                                      capabilitySetup
-                                          .notifications
-                                          .weatherAlertState ==
-                                      EffectiveCapabilityState.active,
-                                ),
-                              ],
-                              const Divider(height: HkSpacing.md),
-                              ListTile(
-                                key: const ValueKey(
-                                  'settings-permission-education',
-                                ),
-                                contentPadding: EdgeInsets.zero,
-                                leading: const _SettingsTileIcon(
-                                  icon: Symbols.health_and_safety_rounded,
-                                ),
-                                title: Text(
-                                  context.l10n.permissionSetup,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                                subtitle: Text(
-                                  context.l10n.permissionSetupSubtitle,
-                                ),
-                                trailing: Icon(
-                                  Directionality.of(context) ==
-                                          TextDirection.rtl
-                                      ? Symbols.chevron_left_rounded
-                                      : Symbols.chevron_right_rounded,
-                                ),
-                                onTap: () =>
-                                    _openPermissionSetup(context, ref),
                               ),
                             ],
                           ),
                         ),
-                        const SizedBox(height: HkSpacing.md),
-                        _SettingsSubsectionLabel(
-                          label: context.l10n.preferences,
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: HkSpacing.sm),
+                if (consent?.privacyOptionsRequired ?? false) ...[
+                  hk_ui.PremiumCard(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: HkSpacing.space6,
+                      vertical: HkSpacing.xs,
+                    ),
+                    child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const _SettingsTileIcon(
+                        icon: Symbols.privacy_tip_rounded,
+                      ),
+                      title: Text(context.l10n.privacyChoices),
+                      subtitle: Text(context.l10n.privacyChoicesSubtitle),
+                      trailing: Icon(
+                        Directionality.of(context) == TextDirection.rtl
+                            ? Symbols.chevron_left_rounded
+                            : Symbols.chevron_right_rounded,
+                      ),
+                      onTap: () =>
+                          ref.read(consentServiceProvider).showPrivacyOptions(),
+                    ),
+                  ),
+                  const SizedBox(height: HkSpacing.sm),
+                ],
+                if (appConfig.environment != AppEnvironment.prod &&
+                    supportsMobileAdDebugging) ...[
+                  hk_ui.PremiumCard(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: HkSpacing.space6,
+                      vertical: HkSpacing.xs,
+                    ),
+                    child: ListTile(
+                      key: const ValueKey('settings-ad-inspector'),
+                      contentPadding: EdgeInsets.zero,
+                      leading: const _SettingsTileIcon(
+                        icon: Symbols.bug_report_rounded,
+                      ),
+                      title: Text(context.l10n.adInspector),
+                      subtitle: Text(context.l10n.adInspectorSubtitle),
+                      trailing: Icon(
+                        Directionality.of(context) == TextDirection.rtl
+                            ? Symbols.chevron_left_rounded
+                            : Symbols.chevron_right_rounded,
+                      ),
+                      onTap: () => _openAdInspector(context, ref),
+                    ),
+                  ),
+                  const SizedBox(height: HkSpacing.sm),
+                ],
+                hk_ui.PremiumCard(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: HkSpacing.space6,
+                    vertical: HkSpacing.xs,
+                  ),
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: _SettingsTileIcon(
+                      icon: weather == null
+                          ? Symbols.location_on_rounded
+                          : _weatherIcon(weather.weatherCode),
+                    ),
+                    title: Text(context.l10n.weatherLocation),
+                    subtitle: Text(
+                      weather == null
+                          ? context.l10n.setACityZipOrCurrentDeviceLocation
+                          : '${location?.label ?? context.l10n.home}\n${_localizedWeatherSummary(context, weather.weatherCode)} · ${_formatInteger(context, weather.temperature.round())}°C',
+                    ),
+                    trailing: Wrap(
+                      spacing: 4,
+                      children: [
+                        IconButton(
+                          tooltip: context.l10n.searchLocation,
+                          onPressed: () => _searchLocation(context, ref),
+                          icon: const Icon(Symbols.search_rounded),
                         ),
-                        const SizedBox(height: HkSpacing.xs),
-                        _SettingsPanel(
-                          child: Column(
-                            children: [
+                        IconButton(
+                          tooltip: context.l10n.useDeviceLocation,
+                          onPressed: () => _useDeviceLocation(context, ref),
+                          icon: const Icon(Symbols.my_location_rounded),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: HkSpacing.sm),
+                hk_ui.PremiumCard(
+                  padding: const EdgeInsets.all(HkSpacing.md),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _SettingsCardHeader(
+                        icon: Symbols.notifications_active_rounded,
+                        title: context.l10n.notifications,
+                      ),
+                      const SizedBox(height: HkSpacing.md),
+                      _SettingsSubsectionLabel(label: context.l10n.permissions),
+                      const SizedBox(height: HkSpacing.xs),
+                      _SettingsPanel(
+                        child: Column(
+                          children: [
+                            if (capabilitySetup == null)
+                              const Padding(
+                                padding: EdgeInsets.all(HkSpacing.sm),
+                                child: LinearProgressIndicator(),
+                              )
+                            else ...[
+                              _NotificationStatusRow(
+                                icon: Symbols.notifications_rounded,
+                                label: context.l10n.deviceReminders,
+                                value: _effectiveCapabilityLabel(
+                                  context,
+                                  capabilitySetup
+                                      .notifications
+                                      .deviceReminderState,
+                                ),
+                                good:
+                                    capabilitySetup
+                                        .notifications
+                                        .deviceReminderState ==
+                                    EffectiveCapabilityState.active,
+                              ),
+                              _NotificationStatusRow(
+                                icon: Symbols.alarm_on_rounded,
+                                label: context.l10n.alarmsAndReminders,
+                                value: _effectiveCapabilityLabel(
+                                  context,
+                                  capabilitySetup
+                                      .notifications
+                                      .exactTimingState,
+                                  approximateWhenDegraded: true,
+                                ),
+                                good:
+                                    capabilitySetup
+                                        .notifications
+                                        .exactTimingState ==
+                                    EffectiveCapabilityState.active,
+                              ),
+                              _NotificationStatusRow(
+                                icon: Symbols.inbox_rounded,
+                                label: context.l10n.inAppInbox,
+                                value: _effectiveCapabilityLabel(
+                                  context,
+                                  capabilitySetup.notifications.inboxState,
+                                ),
+                                good:
+                                    capabilitySetup.notifications.inboxState ==
+                                    EffectiveCapabilityState.active,
+                              ),
+                              _NotificationStatusRow(
+                                icon: Symbols.rainy_rounded,
+                                label: context.l10n.weatherAlerts,
+                                value: _effectiveCapabilityLabel(
+                                  context,
+                                  capabilitySetup
+                                      .notifications
+                                      .weatherAlertState,
+                                ),
+                                good:
+                                    capabilitySetup
+                                        .notifications
+                                        .weatherAlertState ==
+                                    EffectiveCapabilityState.active,
+                              ),
+                            ],
+                            const Divider(height: HkSpacing.md),
+                            ListTile(
+                              key: const ValueKey(
+                                'settings-permission-education',
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: HkSpacing.xs,
+                              ),
+                              leading: const _SettingsTileIcon(
+                                icon: Symbols.health_and_safety_rounded,
+                              ),
+                              title: Text(
+                                context.l10n.permissionSetup,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              subtitle: Text(
+                                context.l10n.permissionSetupSubtitle,
+                              ),
+                              trailing: Icon(
+                                Directionality.of(context) == TextDirection.rtl
+                                    ? Symbols.chevron_left_rounded
+                                    : Symbols.chevron_right_rounded,
+                              ),
+                              onTap: () => _openPermissionSetup(context, ref),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: HkSpacing.md),
+                      _SettingsSubsectionLabel(label: context.l10n.preferences),
+                      const SizedBox(height: HkSpacing.xs),
+                      _SettingsPanel(
+                        child: Column(
+                          children: [
+                            SwitchListTile(
+                              contentPadding: EdgeInsets.zero,
+                              secondary: const Icon(
+                                Icons.notifications_active_outlined,
+                              ),
+                              title: Text(context.l10n.owntendAlerts),
+                              subtitle: Text(
+                                context.l10n.owntendAlertsDescription,
+                              ),
+                              value: notificationPreferences.enabled,
+                              onChanged: (value) =>
+                                  _saveNotificationPreferences(
+                                    context,
+                                    ref,
+                                    notificationPreferences,
+                                    notificationPreferences.copyWith(
+                                      enabled: value,
+                                    ),
+                                  ),
+                            ),
+                            const _SettingsPreferenceDivider(),
+                            if (capabilitySetup != null &&
+                                notificationPreferences.allowsLocalReminders &&
+                                capabilitySetup
+                                        .notifications
+                                        .deviceReminderState !=
+                                    EffectiveCapabilityState.active)
+                              _EffectiveCapabilityPreferenceTile(
+                                key: const ValueKey(
+                                  'device-reminders-recovery',
+                                ),
+                                icon: Symbols.alarm_rounded,
+                                title: context.l10n.deviceReminders,
+                                subtitle: context
+                                    .l10n
+                                    .scheduledAndroidReminderDelivery,
+                                state: capabilitySetup
+                                    .notifications
+                                    .deviceReminderState,
+                                onFix: () =>
+                                    _enableDeviceReminders(context, ref),
+                              )
+                            else
                               SwitchListTile(
-                                key: const ValueKey('settings-alerts-row'),
                                 contentPadding: EdgeInsets.zero,
-                                secondary: const _SettingsPlainIcon(
-                                  icon: Icons.notifications_active_outlined,
-                                ),
-                                title: Text(context.l10n.owntendAlerts),
+                                secondary: const Icon(Symbols.alarm_rounded),
+                                title: Text(context.l10n.deviceReminders),
                                 subtitle: Text(
-                                  context.l10n.owntendAlertsDescription,
+                                  context.l10n.scheduledAndroidReminderDelivery,
                                 ),
-                                value: notificationPreferences.enabled,
-                                onChanged: (value) =>
-                                    _saveNotificationPreferences(
+                                value:
+                                    notificationPreferences.enabled &&
+                                    notificationPreferences.localReminders,
+                                onChanged: notificationPreferences.enabled
+                                    ? (value) => value
+                                          ? _enableDeviceReminders(context, ref)
+                                          : _saveNotificationPreferences(
+                                              context,
+                                              ref,
+                                              notificationPreferences,
+                                              notificationPreferences.copyWith(
+                                                localReminders: false,
+                                                preferExactReminders: false,
+                                              ),
+                                            )
+                                    : null,
+                              ),
+                            if (capabilitySetup != null &&
+                                notificationPreferences.preferExactReminders &&
+                                capabilitySetup
+                                        .notifications
+                                        .exactTimingState !=
+                                    EffectiveCapabilityState.active)
+                              _EffectiveCapabilityPreferenceTile(
+                                key: const ValueKey('exact-reminders-recovery'),
+                                icon: Symbols.alarm_on_rounded,
+                                title: context.l10n.preciseReminderAlarms,
+                                subtitle: context
+                                    .l10n
+                                    .askAndroidForAlarmsAndRemindersAccess,
+                                state: capabilitySetup
+                                    .notifications
+                                    .exactTimingState,
+                                approximateWhenDegraded: true,
+                                onFix:
+                                    notificationPreferences.allowsLocalReminders
+                                    ? () => _enableExactTiming(context, ref)
+                                    : null,
+                              )
+                            else
+                              SwitchListTile(
+                                contentPadding: EdgeInsets.zero,
+                                secondary: const Icon(Symbols.alarm_on_rounded),
+                                title: Text(context.l10n.preciseReminderAlarms),
+                                subtitle: Text(
+                                  context
+                                      .l10n
+                                      .askAndroidForAlarmsAndRemindersAccess,
+                                ),
+                                value:
+                                    notificationPreferences.enabled &&
+                                    notificationPreferences
+                                        .preferExactReminders,
+                                onChanged:
+                                    notificationPreferences.allowsLocalReminders
+                                    ? (value) => value
+                                          ? _enableExactTiming(context, ref)
+                                          : _saveNotificationPreferences(
+                                              context,
+                                              ref,
+                                              notificationPreferences,
+                                              notificationPreferences.copyWith(
+                                                preferExactReminders: false,
+                                              ),
+                                            )
+                                    : null,
+                              ),
+                            const _SettingsPreferenceDivider(),
+                            SwitchListTile(
+                              contentPadding: EdgeInsets.zero,
+                              secondary: const Icon(Symbols.inbox_rounded),
+                              title: Text(context.l10n.inAppInbox),
+                              subtitle: Text(
+                                context.l10n.unreadTaskWeatherAndDigestUpdates,
+                              ),
+                              value:
+                                  notificationPreferences.enabled &&
+                                  notificationPreferences.inAppInbox,
+                              onChanged: notificationPreferences.enabled
+                                  ? (value) => _saveNotificationPreferences(
                                       context,
                                       ref,
                                       notificationPreferences,
                                       notificationPreferences.copyWith(
-                                        enabled: value,
+                                        inAppInbox: value,
                                       ),
+                                    )
+                                  : null,
+                            ),
+                            SwitchListTile(
+                              contentPadding: EdgeInsets.zero,
+                              secondary: const Icon(Symbols.rainy_rounded),
+                              title: Text(context.l10n.weatherAlerts),
+                              subtitle: Text(
+                                context.l10n.weatherAlertsInboxDescription,
+                              ),
+                              value:
+                                  notificationPreferences.enabled &&
+                                  notificationPreferences.weatherAlerts,
+                              onChanged: notificationPreferences.enabled
+                                  ? (value) => _saveNotificationPreferences(
+                                      context,
+                                      ref,
+                                      notificationPreferences,
+                                      notificationPreferences.copyWith(
+                                        weatherAlerts: value,
+                                      ),
+                                    )
+                                  : null,
+                            ),
+                            const _SettingsPreferenceDivider(),
+                            SwitchListTile(
+                              contentPadding: EdgeInsets.zero,
+                              secondary: const Icon(
+                                Symbols.do_not_disturb_on_rounded,
+                              ),
+                              title: Text(context.l10n.quietHours),
+                              subtitle: Text(
+                                '${_minutesLabel(context, notificationPreferences.quietHoursStartMinutes)} - ${_minutesLabel(context, notificationPreferences.quietHoursEndMinutes)}',
+                              ),
+                              value:
+                                  notificationPreferences.enabled &&
+                                  notificationPreferences.quietHoursEnabled,
+                              onChanged: notificationPreferences.enabled
+                                  ? (value) => _saveNotificationPreferences(
+                                      context,
+                                      ref,
+                                      notificationPreferences,
+                                      notificationPreferences.copyWith(
+                                        quietHoursEnabled: value,
+                                      ),
+                                    )
+                                  : null,
+                            ),
+                            if (notificationPreferences.quietHoursEnabled) ...[
+                              Padding(
+                                padding: const EdgeInsetsDirectional.only(
+                                  start: HkSpacing.sm,
+                                ),
+                                child: Column(
+                                  children: [
+                                    ListTile(
+                                      contentPadding: EdgeInsets.zero,
+                                      leading: const Icon(
+                                        Symbols.bedtime_rounded,
+                                      ),
+                                      title: Text(context.l10n.quietHoursStart),
+                                      subtitle: Text(
+                                        _minutesLabel(
+                                          context,
+                                          notificationPreferences
+                                              .quietHoursStartMinutes,
+                                        ),
+                                      ),
+                                      trailing: Icon(
+                                        Directionality.of(context) ==
+                                                TextDirection.rtl
+                                            ? Symbols.chevron_left_rounded
+                                            : Symbols.chevron_right_rounded,
+                                      ),
+                                      onTap: notificationPreferences.enabled
+                                          ? () => _pickQuietHour(
+                                              context,
+                                              ref,
+                                              notificationPreferences,
+                                              start: true,
+                                            )
+                                          : null,
                                     ),
-                              ),
-                              const _SettingsPreferenceDivider(),
-                              if (capabilitySetup != null &&
-                                  notificationPreferences
-                                      .allowsLocalReminders &&
-                                  capabilitySetup
-                                          .notifications
-                                          .deviceReminderState !=
-                                      EffectiveCapabilityState.active)
-                                _EffectiveCapabilityPreferenceTile(
-                                  key: const ValueKey(
-                                    'device-reminders-recovery',
-                                  ),
-                                  icon: Symbols.alarm_rounded,
-                                  title: context.l10n.deviceReminders,
-                                  subtitle: context
-                                      .l10n
-                                      .scheduledAndroidReminderDelivery,
-                                  state: capabilitySetup
-                                      .notifications
-                                      .deviceReminderState,
-                                  onFix: () =>
-                                      _enableDeviceReminders(context, ref),
-                                )
-                              else
-                                SwitchListTile(
-                                  contentPadding: EdgeInsets.zero,
-                                  secondary: const _SettingsPlainIcon(
-                                    icon: Symbols.alarm_rounded,
-                                  ),
-                                  title: Text(context.l10n.deviceReminders),
-                                  subtitle: Text(
-                                    context
-                                        .l10n
-                                        .scheduledAndroidReminderDelivery,
-                                  ),
-                                  value:
-                                      notificationPreferences.enabled &&
-                                      notificationPreferences.localReminders,
-                                  onChanged: notificationPreferences.enabled
-                                      ? (value) => value
-                                            ? _enableDeviceReminders(
-                                                context,
-                                                ref,
-                                              )
-                                            : _saveNotificationPreferences(
-                                                context,
-                                                ref,
-                                                notificationPreferences,
-                                                notificationPreferences.copyWith(
-                                                  localReminders: false,
-                                                  preferExactReminders: false,
-                                                ),
-                                              )
-                                      : null,
-                                ),
-                              if (capabilitySetup != null &&
-                                  notificationPreferences
-                                      .preferExactReminders &&
-                                  capabilitySetup
-                                          .notifications
-                                          .exactTimingState !=
-                                      EffectiveCapabilityState.active)
-                                _EffectiveCapabilityPreferenceTile(
-                                  key: const ValueKey(
-                                    'exact-reminders-recovery',
-                                  ),
-                                  icon: Symbols.alarm_on_rounded,
-                                  title: context.l10n.preciseReminderAlarms,
-                                  subtitle: context
-                                      .l10n
-                                      .askAndroidForAlarmsAndRemindersAccess,
-                                  state: capabilitySetup
-                                      .notifications
-                                      .exactTimingState,
-                                  approximateWhenDegraded: true,
-                                  onFix: notificationPreferences
-                                          .allowsLocalReminders
-                                      ? () => _enableExactTiming(context, ref)
-                                      : null,
-                                )
-                              else
-                                SwitchListTile(
-                                  contentPadding: EdgeInsets.zero,
-                                  secondary: const _SettingsPlainIcon(
-                                    icon: Symbols.alarm_on_rounded,
-                                  ),
-                                  title: Text(
-                                    context.l10n.preciseReminderAlarms,
-                                  ),
-                                  subtitle: Text(
-                                    context
-                                        .l10n
-                                        .askAndroidForAlarmsAndRemindersAccess,
-                                  ),
-                                  value:
-                                      notificationPreferences.enabled &&
-                                      notificationPreferences
-                                          .preferExactReminders,
-                                  onChanged:
-                                      notificationPreferences
-                                          .allowsLocalReminders
-                                      ? (value) => value
-                                            ? _enableExactTiming(context, ref)
-                                            : _saveNotificationPreferences(
-                                                context,
-                                                ref,
-                                                notificationPreferences,
-                                                notificationPreferences.copyWith(
-                                                  preferExactReminders: false,
-                                                ),
-                                              )
-                                      : null,
-                                ),
-                              const _SettingsPreferenceDivider(),
-                              SwitchListTile(
-                                contentPadding: EdgeInsets.zero,
-                                secondary: const _SettingsPlainIcon(
-                                  icon: Symbols.inbox_rounded,
-                                ),
-                                title: Text(context.l10n.inAppInbox),
-                                subtitle: Text(
-                                  context
-                                      .l10n
-                                      .unreadTaskWeatherAndDigestUpdates,
-                                ),
-                                value:
-                                    notificationPreferences.enabled &&
-                                    notificationPreferences.inAppInbox,
-                                onChanged: notificationPreferences.enabled
-                                    ? (value) => _saveNotificationPreferences(
-                                        context,
-                                        ref,
-                                        notificationPreferences,
-                                        notificationPreferences.copyWith(
-                                          inAppInbox: value,
-                                        ),
-                                      )
-                                    : null,
-                              ),
-                              SwitchListTile(
-                                contentPadding: EdgeInsets.zero,
-                                secondary: const _SettingsPlainIcon(
-                                  icon: Symbols.rainy_rounded,
-                                ),
-                                title: Text(context.l10n.weatherAlerts),
-                                subtitle: Text(
-                                  context.l10n.weatherAlertsInboxDescription,
-                                ),
-                                value:
-                                    notificationPreferences.enabled &&
-                                    notificationPreferences.weatherAlerts,
-                                onChanged: notificationPreferences.enabled
-                                    ? (value) => _saveNotificationPreferences(
-                                        context,
-                                        ref,
-                                        notificationPreferences,
-                                        notificationPreferences.copyWith(
-                                          weatherAlerts: value,
-                                        ),
-                                      )
-                                    : null,
-                              ),
-                              const _SettingsPreferenceDivider(),
-                              SwitchListTile(
-                                contentPadding: EdgeInsets.zero,
-                                secondary: const _SettingsPlainIcon(
-                                  icon: Symbols.do_not_disturb_on_rounded,
-                                ),
-                                title: Text(context.l10n.quietHours),
-                                subtitle: Text(
-                                  '${_minutesLabel(context, notificationPreferences.quietHoursStartMinutes)} - ${_minutesLabel(context, notificationPreferences.quietHoursEndMinutes)}',
-                                ),
-                                value:
-                                    notificationPreferences.enabled &&
-                                    notificationPreferences.quietHoursEnabled,
-                                onChanged: notificationPreferences.enabled
-                                    ? (value) => _saveNotificationPreferences(
-                                        context,
-                                        ref,
-                                        notificationPreferences,
-                                        notificationPreferences.copyWith(
-                                          quietHoursEnabled: value,
-                                        ),
-                                      )
-                                    : null,
-                              ),
-                              if (notificationPreferences
-                                  .quietHoursEnabled) ...[
-                                Padding(
-                                  padding:
-                                      const EdgeInsetsDirectional.only(
-                                        start: HkSpacing.sm,
+                                    ListTile(
+                                      contentPadding: EdgeInsets.zero,
+                                      leading: const Icon(
+                                        Symbols.wb_sunny_rounded,
                                       ),
-                                  child: Column(
-                                    children: [
-                                      ListTile(
-                                        contentPadding: EdgeInsets.zero,
-                                        leading: const _SettingsPlainIcon(
-                                          icon: Symbols.bedtime_rounded,
+                                      title: Text(context.l10n.quietHoursEnd),
+                                      subtitle: Text(
+                                        _minutesLabel(
+                                          context,
+                                          notificationPreferences
+                                              .quietHoursEndMinutes,
                                         ),
-                                        title: Text(
-                                          context.l10n.quietHoursStart,
-                                        ),
-                                        subtitle: Text(
-                                          _minutesLabel(
-                                            context,
-                                            notificationPreferences
-                                                .quietHoursStartMinutes,
-                                          ),
-                                        ),
-                                        trailing: Icon(
-                                          Directionality.of(context) ==
-                                                  TextDirection.rtl
-                                              ? Symbols.chevron_left_rounded
-                                              : Symbols.chevron_right_rounded,
-                                        ),
-                                        onTap: notificationPreferences.enabled
-                                            ? () => _pickQuietHour(
-                                                context,
-                                                ref,
-                                                notificationPreferences,
-                                                start: true,
-                                              )
-                                            : null,
                                       ),
-                                      ListTile(
-                                        contentPadding: EdgeInsets.zero,
-                                        leading: const _SettingsPlainIcon(
-                                          icon: Symbols.wb_sunny_rounded,
-                                        ),
-                                        title: Text(
-                                          context.l10n.quietHoursEnd,
-                                        ),
-                                        subtitle: Text(
-                                          _minutesLabel(
-                                            context,
-                                            notificationPreferences
-                                                .quietHoursEndMinutes,
-                                          ),
-                                        ),
-                                        trailing: Icon(
-                                          Directionality.of(context) ==
-                                                  TextDirection.rtl
-                                              ? Symbols.chevron_left_rounded
-                                              : Symbols.chevron_right_rounded,
-                                        ),
-                                        onTap: notificationPreferences.enabled
-                                            ? () => _pickQuietHour(
-                                                context,
-                                                ref,
-                                                notificationPreferences,
-                                                start: false,
-                                              )
-                                            : null,
+                                      trailing: const Icon(
+                                        Symbols.chevron_right_rounded,
                                       ),
-                                      SwitchListTile(
-                                        contentPadding: EdgeInsets.zero,
-                                        secondary: const _SettingsPlainIcon(
-                                          icon: Symbols.priority_high_rounded,
-                                        ),
-                                        title: Text(
-                                          context.l10n.criticalRemindersBypass,
-                                        ),
-                                        subtitle: Text(
-                                          context
-                                              .l10n
-                                              .criticalTasksCanStillAlertDuringQuietHours,
-                                        ),
-                                        value:
-                                            notificationPreferences.enabled &&
-                                            notificationPreferences
-                                                .criticalBypassQuietHours,
-                                        onChanged:
-                                            notificationPreferences.enabled
-                                            ? (
-                                                value,
-                                              ) => _saveNotificationPreferences(
-                                                context,
-                                                ref,
-                                                notificationPreferences,
-                                                notificationPreferences.copyWith(
-                                                  criticalBypassQuietHours:
-                                                      value,
-                                                ),
-                                              )
-                                            : null,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                              SwitchListTile(
-                                contentPadding: EdgeInsets.zero,
-                                secondary: const _SettingsPlainIcon(
-                                  icon: Symbols.privacy_tip_rounded,
-                                ),
-                                title: Text(
-                                  context.l10n.hideLockScreenDetails,
-                                ),
-                                subtitle: Text(
-                                  context
-                                      .l10n
-                                      .showGenericReminderTextOutsideTheApp,
-                                ),
-                                value:
-                                    notificationPreferences.enabled &&
-                                    notificationPreferences.privacyMode,
-                                onChanged: notificationPreferences.enabled
-                                    ? (value) => _saveNotificationPreferences(
-                                        context,
-                                        ref,
-                                        notificationPreferences,
-                                        notificationPreferences.copyWith(
-                                          privacyMode: value,
-                                        ),
-                                      )
-                                    : null,
-                              ),
-                              SwitchListTile(
-                                contentPadding: EdgeInsets.zero,
-                                secondary: const _SettingsPlainIcon(
-                                  icon: Symbols.summarize_rounded,
-                                ),
-                                title: Text(context.l10n.dailyDigest),
-                                subtitle: Text(
-                                  context.l10n.groupedReminderSummary,
-                                ),
-                                value:
-                                    notificationPreferences.enabled &&
-                                    notificationPreferences.dailyDigest,
-                                onChanged: notificationPreferences.enabled
-                                    ? (value) => _saveNotificationPreferences(
-                                        context,
-                                        ref,
-                                        notificationPreferences,
-                                        notificationPreferences.copyWith(
-                                          dailyDigest: value,
-                                        ),
-                                      )
-                                    : null,
-                              ),
-                              const _SettingsPreferenceDivider(),
-                              ListTile(
-                                contentPadding: EdgeInsets.zero,
-                                leading: const _SettingsPlainIcon(
-                                  icon: Symbols.snooze_rounded,
-                                ),
-                                title: Text(context.l10n.defaultSnooze),
-                                subtitle: Text(
-                                  _durationLabel(
-                                    context,
-                                    Duration(
-                                      minutes: notificationPreferences
-                                          .defaultSnoozeMinutes,
+                                      onTap: notificationPreferences.enabled
+                                          ? () => _pickQuietHour(
+                                              context,
+                                              ref,
+                                              notificationPreferences,
+                                              start: false,
+                                            )
+                                          : null,
                                     ),
-                                  ),
-                                ),
-                                trailing: DropdownButton<int>(
-                                  value: notificationPreferences
-                                      .defaultSnoozeMinutes,
-                                  items: [
-                                    for (final minutes in snoozeOptions)
-                                      DropdownMenuItem(
-                                        value: minutes,
-                                        child: Text(
-                                          _durationLabel(
-                                            context,
-                                            Duration(minutes: minutes),
-                                          ),
-                                        ),
+                                    SwitchListTile(
+                                      contentPadding: EdgeInsets.zero,
+                                      secondary: const Icon(
+                                        Symbols.priority_high_rounded,
                                       ),
-                                  ],
-                                  onChanged: notificationPreferences.enabled
-                                      ? (minutes) {
-                                          if (minutes == null) {
-                                            return;
-                                          }
-                                          _saveNotificationPreferences(
-                                            context,
-                                            ref,
-                                            notificationPreferences,
-                                            notificationPreferences.copyWith(
-                                              defaultSnoozeMinutes: minutes,
-                                            ),
-                                          );
-                                        }
-                                      : null,
-                                ),
-                              ),
-                              ListTile(
-                                contentPadding: EdgeInsets.zero,
-                                leading: const _SettingsPlainIcon(
-                                  icon: Symbols.notifications_rounded,
-                                ),
-                                title: Text(
-                                  context.l10n.maxRemindersPerDay,
-                                ),
-                                subtitle: Text(
-                                  context.l10n.reminderCountLabel(
-                                    notificationPreferences.maxRemindersPerDay,
-                                  ),
-                                ),
-                                trailing: DropdownButton<int>(
-                                  value:
-                                      notificationPreferences.maxRemindersPerDay,
-                                  items: [
-                                    for (final count in const [
-                                      2,
-                                      4,
-                                      6,
-                                      8,
-                                      12,
-                                      24,
-                                    ])
-                                      DropdownMenuItem(
-                                        value: count,
-                                        child: Text(
-                                          _formatInteger(context, count),
-                                        ),
+                                      title: Text(
+                                        context.l10n.criticalRemindersBypass,
                                       ),
-                                  ],
-                                  onChanged: notificationPreferences.enabled
-                                      ? (count) {
-                                          if (count == null) {
-                                            return;
-                                          }
-                                          _saveNotificationPreferences(
-                                            context,
-                                            ref,
-                                            notificationPreferences,
-                                            notificationPreferences.copyWith(
-                                              maxRemindersPerDay: count,
-                                            ),
-                                          );
-                                        }
-                                      : null,
-                                ),
-                              ),
-                              ListTile(
-                                contentPadding: EdgeInsets.zero,
-                                leading: const _SettingsPlainIcon(
-                                  icon: Symbols.schedule_rounded,
-                                ),
-                                title: Text(context.l10n.reminderTime),
-                                subtitle: Text(
-                                  _hourLabel(
-                                    context,
-                                    notificationPreferences.reminderHour,
-                                  ),
-                                ),
-                                trailing: DropdownButton<int>(
-                                  value: notificationPreferences.reminderHour,
-                                  items: [
-                                    for (final hour in reminderHours)
-                                      DropdownMenuItem(
-                                        value: hour,
-                                        child: Text(
-                                          _hourLabel(context, hour),
-                                        ),
+                                      subtitle: Text(
+                                        context
+                                            .l10n
+                                            .criticalTasksCanStillAlertDuringQuietHours,
                                       ),
+                                      value:
+                                          notificationPreferences.enabled &&
+                                          notificationPreferences
+                                              .criticalBypassQuietHours,
+                                      onChanged: notificationPreferences.enabled
+                                          ? (
+                                              value,
+                                            ) => _saveNotificationPreferences(
+                                              context,
+                                              ref,
+                                              notificationPreferences,
+                                              notificationPreferences.copyWith(
+                                                criticalBypassQuietHours: value,
+                                              ),
+                                            )
+                                          : null,
+                                    ),
                                   ],
-                                  onChanged: notificationPreferences.enabled
-                                      ? (hour) {
-                                          if (hour == null) {
-                                            return;
-                                          }
-                                          _saveNotificationPreferences(
-                                            context,
-                                            ref,
-                                            notificationPreferences,
-                                            notificationPreferences.copyWith(
-                                              reminderHour: hour,
-                                            ),
-                                          );
-                                        }
-                                      : null,
                                 ),
-                              ),
-                              ListTile(
-                                contentPadding: EdgeInsets.zero,
-                                leading: const _SettingsPlainIcon(
-                                  icon: Symbols.event_note_rounded,
-                                ),
-                                title: Text(context.l10n.digestTime),
-                                subtitle: Text(
-                                  _hourLabel(
-                                    context,
-                                    notificationPreferences.digestHour,
-                                  ),
-                                ),
-                                trailing: DropdownButton<int>(
-                                  value: notificationPreferences.digestHour,
-                                  items: [
-                                    for (final hour in digestHours)
-                                      DropdownMenuItem(
-                                        value: hour,
-                                        child: Text(
-                                          _hourLabel(context, hour),
-                                        ),
-                                      ),
-                                  ],
-                                  onChanged: notificationPreferences.enabled
-                                      ? (hour) {
-                                          if (hour == null) {
-                                            return;
-                                          }
-                                          _saveNotificationPreferences(
-                                            context,
-                                            ref,
-                                            notificationPreferences,
-                                            notificationPreferences.copyWith(
-                                              digestHour: hour,
-                                            ),
-                                          );
-                                        }
-                                      : null,
-                                ),
-                              ),
-                              _ReminderSettingsActions(
-                                onSendTest: () =>
-                                    _sendTestNotification(context, ref),
                               ),
                             ],
-                          ),
+                            SwitchListTile(
+                              contentPadding: EdgeInsets.zero,
+                              secondary: const Icon(
+                                Symbols.privacy_tip_rounded,
+                              ),
+                              title: Text(context.l10n.hideLockScreenDetails),
+                              subtitle: Text(
+                                context
+                                    .l10n
+                                    .showGenericReminderTextOutsideTheApp,
+                              ),
+                              value:
+                                  notificationPreferences.enabled &&
+                                  notificationPreferences.privacyMode,
+                              onChanged: notificationPreferences.enabled
+                                  ? (value) => _saveNotificationPreferences(
+                                      context,
+                                      ref,
+                                      notificationPreferences,
+                                      notificationPreferences.copyWith(
+                                        privacyMode: value,
+                                      ),
+                                    )
+                                  : null,
+                            ),
+                            SwitchListTile(
+                              contentPadding: EdgeInsets.zero,
+                              secondary: const Icon(Symbols.summarize_rounded),
+                              title: Text(context.l10n.dailyDigest),
+                              subtitle: Text(
+                                context.l10n.groupedReminderSummary,
+                              ),
+                              value:
+                                  notificationPreferences.enabled &&
+                                  notificationPreferences.dailyDigest,
+                              onChanged: notificationPreferences.enabled
+                                  ? (value) => _saveNotificationPreferences(
+                                      context,
+                                      ref,
+                                      notificationPreferences,
+                                      notificationPreferences.copyWith(
+                                        dailyDigest: value,
+                                      ),
+                                    )
+                                  : null,
+                            ),
+                            const _SettingsPreferenceDivider(),
+                            ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: const Icon(Symbols.snooze_rounded),
+                              title: Text(context.l10n.defaultSnooze),
+                              subtitle: Text(
+                                _durationLabel(
+                                  context,
+                                  Duration(
+                                    minutes: notificationPreferences
+                                        .defaultSnoozeMinutes,
+                                  ),
+                                ),
+                              ),
+                              trailing: DropdownButton<int>(
+                                value: notificationPreferences
+                                    .defaultSnoozeMinutes,
+                                items: [
+                                  for (final minutes in snoozeOptions)
+                                    DropdownMenuItem(
+                                      value: minutes,
+                                      child: Text(
+                                        _durationLabel(
+                                          context,
+                                          Duration(minutes: minutes),
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                                onChanged: notificationPreferences.enabled
+                                    ? (minutes) {
+                                        if (minutes == null) {
+                                          return;
+                                        }
+                                        _saveNotificationPreferences(
+                                          context,
+                                          ref,
+                                          notificationPreferences,
+                                          notificationPreferences.copyWith(
+                                            defaultSnoozeMinutes: minutes,
+                                          ),
+                                        );
+                                      }
+                                    : null,
+                              ),
+                            ),
+                            ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: const Icon(
+                                Symbols.notifications_rounded,
+                              ),
+                              title: Text(context.l10n.maxRemindersPerDay),
+                              subtitle: Text(
+                                context.l10n.reminderCountLabel(
+                                  notificationPreferences.maxRemindersPerDay,
+                                ),
+                              ),
+                              trailing: DropdownButton<int>(
+                                value:
+                                    notificationPreferences.maxRemindersPerDay,
+                                items: [
+                                  for (final count in const [
+                                    2,
+                                    4,
+                                    6,
+                                    8,
+                                    12,
+                                    24,
+                                  ])
+                                    DropdownMenuItem(
+                                      value: count,
+                                      child: Text(
+                                        _formatInteger(context, count),
+                                      ),
+                                    ),
+                                ],
+                                onChanged: notificationPreferences.enabled
+                                    ? (count) {
+                                        if (count == null) {
+                                          return;
+                                        }
+                                        _saveNotificationPreferences(
+                                          context,
+                                          ref,
+                                          notificationPreferences,
+                                          notificationPreferences.copyWith(
+                                            maxRemindersPerDay: count,
+                                          ),
+                                        );
+                                      }
+                                    : null,
+                              ),
+                            ),
+                            ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: const Icon(Symbols.schedule_rounded),
+                              title: Text(context.l10n.reminderTime),
+                              subtitle: Text(
+                                _hourLabel(
+                                  context,
+                                  notificationPreferences.reminderHour,
+                                ),
+                              ),
+                              trailing: DropdownButton<int>(
+                                value: notificationPreferences.reminderHour,
+                                items: [
+                                  for (final hour in reminderHours)
+                                    DropdownMenuItem(
+                                      value: hour,
+                                      child: Text(_hourLabel(context, hour)),
+                                    ),
+                                ],
+                                onChanged: notificationPreferences.enabled
+                                    ? (hour) {
+                                        if (hour == null) {
+                                          return;
+                                        }
+                                        _saveNotificationPreferences(
+                                          context,
+                                          ref,
+                                          notificationPreferences,
+                                          notificationPreferences.copyWith(
+                                            reminderHour: hour,
+                                          ),
+                                        );
+                                      }
+                                    : null,
+                              ),
+                            ),
+                            ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: const Icon(Symbols.event_note_rounded),
+                              title: Text(context.l10n.digestTime),
+                              subtitle: Text(
+                                _hourLabel(
+                                  context,
+                                  notificationPreferences.digestHour,
+                                ),
+                              ),
+                              trailing: DropdownButton<int>(
+                                value: notificationPreferences.digestHour,
+                                items: [
+                                  for (final hour in digestHours)
+                                    DropdownMenuItem(
+                                      value: hour,
+                                      child: Text(_hourLabel(context, hour)),
+                                    ),
+                                ],
+                                onChanged: notificationPreferences.enabled
+                                    ? (hour) {
+                                        if (hour == null) {
+                                          return;
+                                        }
+                                        _saveNotificationPreferences(
+                                          context,
+                                          ref,
+                                          notificationPreferences,
+                                          notificationPreferences.copyWith(
+                                            digestHour: hour,
+                                          ),
+                                        );
+                                      }
+                                    : null,
+                              ),
+                            ),
+                            _ReminderSettingsActions(
+                              onSendTest: () =>
+                                  _sendTestNotification(context, ref),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),
@@ -1480,30 +1397,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   }
 }
 
-class SettingsRowLayout extends StatelessWidget {
-  const SettingsRowLayout({required this.child, super.key});
-
-  static const double rowContentInset = HkSpacing.space20;
-  static const double leadingWidth = 40;
-  static const double iconTextGap = HkSpacing.sm;
-  static const double minRowHeight = 72;
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTileTheme(
-      data: Theme.of(context).listTileTheme.copyWith(
-        dense: false,
-        minLeadingWidth: leadingWidth,
-        horizontalTitleGap: iconTextGap,
-        minVerticalPadding: HkSpacing.xs,
-      ),
-      child: child,
-    );
-  }
-}
-
 class _SettingsCardHeader extends StatelessWidget {
   const _SettingsCardHeader({required this.icon, required this.title});
 
@@ -1515,13 +1408,12 @@ class _SettingsCardHeader extends StatelessWidget {
     return Row(
       children: [
         _SettingsTileIcon(icon: icon),
-        const SizedBox(width: SettingsRowLayout.iconTextGap),
+        const SizedBox(width: HkSpacing.sm),
         Expanded(
           child: Text(
             title,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w800,
-            ),
+            style: Theme.of(context).textTheme.titleMedium
+                ?.copyWith(fontWeight: FontWeight.w800),
           ),
         ),
       ],
@@ -1561,9 +1453,7 @@ class _SettingsPanel extends StatelessWidget {
       color: scheme.surfaceContainerLow.withValues(alpha: 0.72),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(HkRadii.lg),
-        side: BorderSide(
-          color: scheme.outlineVariant.withValues(alpha: 0.72),
-        ),
+        side: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.72)),
       ),
       clipBehavior: Clip.antiAlias,
       child: Padding(
@@ -1584,7 +1474,7 @@ class _SettingsTileIcon extends StatelessWidget {
   const _SettingsTileIcon({
     required this.icon,
     this.color,
-    this.size = SettingsRowLayout.leadingWidth,
+    this.size = 40,
     this.iconSize = 21,
   });
 
@@ -1609,37 +1499,17 @@ class _SettingsTileIcon extends StatelessWidget {
   }
 }
 
-class _SettingsPlainIcon extends StatelessWidget {
-  const _SettingsPlainIcon({required this.icon});
-
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox.square(
-      dimension: SettingsRowLayout.leadingWidth,
-      child: Center(child: Icon(icon)),
-    );
-  }
-}
-
 class _SettingsPreferenceDivider extends StatelessWidget {
   const _SettingsPreferenceDivider();
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsetsDirectional.only(
-        start:
-            SettingsRowLayout.leadingWidth + SettingsRowLayout.iconTextGap,
-        end: HkSpacing.xs,
-      ),
-      child: Divider(
-        height: HkSpacing.space4,
-        color: Theme.of(context).colorScheme.outlineVariant.withValues(
-          alpha: 0.72,
-        ),
-      ),
+    return Divider(
+      height: HkSpacing.space4,
+      indent: 52,
+      endIndent: HkSpacing.xs,
+      color: Theme.of(context).colorScheme.outlineVariant
+          .withValues(alpha: 0.72),
     );
   }
 }
@@ -1652,7 +1522,7 @@ class _ReminderSettingsActions extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsetsDirectional.fromSTEB(
+      padding: const EdgeInsets.fromLTRB(
         HkSpacing.xs,
         HkSpacing.xs,
         HkSpacing.xs,
@@ -1695,12 +1565,7 @@ class _NotificationStatusRow extends StatelessWidget {
             constraints.maxWidth < 276 || textScaler.scale(14) > 17.5;
         final labelRow = Row(
           children: [
-            _SettingsTileIcon(
-              icon: icon,
-              color: color,
-              size: 32,
-              iconSize: 18,
-            ),
+            _SettingsTileIcon(icon: icon, color: color, size: 32, iconSize: 18),
             const SizedBox(width: HkSpacing.xs),
             Expanded(
               child: Text(
@@ -1772,7 +1637,10 @@ class _EffectiveCapabilityPreferenceTile extends StatelessWidget {
     return Semantics(
       container: true,
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: HkSpacing.sm),
+        padding: const EdgeInsets.symmetric(
+          horizontal: HkSpacing.xs,
+          vertical: HkSpacing.sm,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -1780,16 +1648,15 @@ class _EffectiveCapabilityPreferenceTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _SettingsTileIcon(icon: icon, color: color),
-                const SizedBox(width: SettingsRowLayout.iconTextGap),
+                const SizedBox(width: HkSpacing.sm),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         title,
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
+                        style: Theme.of(context).textTheme.titleSmall
+                            ?.copyWith(fontWeight: FontWeight.w800),
                       ),
                       const SizedBox(height: HkSpacing.space4),
                       Text(
@@ -1841,9 +1708,10 @@ String _effectiveCapabilityLabel(
 }) {
   return switch (state) {
     EffectiveCapabilityState.active => context.l10n.allowed,
-    EffectiveCapabilityState.degraded => approximateWhenDegraded
-        ? context.l10n.approximateTiming
-        : context.l10n.limited,
+    EffectiveCapabilityState.degraded =>
+      approximateWhenDegraded
+          ? context.l10n.approximateTiming
+          : context.l10n.limited,
     EffectiveCapabilityState.blocked => context.l10n.blocked,
     EffectiveCapabilityState.disabledByUser => context.l10n.disabled,
     EffectiveCapabilityState.notConfigured => context.l10n.notSet,
@@ -1852,16 +1720,14 @@ String _effectiveCapabilityLabel(
 }
 
 String _hourLabel(BuildContext context, int hour) {
-  return MaterialLocalizations.of(
-    context,
-  ).formatTimeOfDay(TimeOfDay(hour: hour, minute: 0));
+  return MaterialLocalizations.of(context)
+      .formatTimeOfDay(TimeOfDay(hour: hour, minute: 0));
 }
 
 String _minutesLabel(BuildContext context, int minutes) {
   final clamped = minutes.clamp(0, 1439).toInt();
-  return MaterialLocalizations.of(context).formatTimeOfDay(
-    TimeOfDay(hour: clamped ~/ 60, minute: clamped % 60),
-  );
+  return MaterialLocalizations.of(context)
+      .formatTimeOfDay(TimeOfDay(hour: clamped ~/ 60, minute: clamped % 60));
 }
 
 TimeOfDay _timeOfDayFromMinutes(int minutes) {
