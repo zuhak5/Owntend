@@ -35,13 +35,16 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
-          import textwrap
 
           workflow = Path('.github/workflows/settings-diff-minimize.yml').read_text(encoding='utf-8')
           lines = workflow.splitlines()
           start = next(i for i, line in enumerate(lines) if "python - <<'PY'" in line)
           end = next(i for i in range(start + 1, len(lines)) if lines[i].strip() == 'PY')
-          script = textwrap.dedent('\n'.join(lines[start + 1:end])) + '\n'
+          raw_script = lines[start + 1:end]
+          script = '\n'.join(
+              line[10:] if line.startswith('          ') else line
+              for line in raw_script
+          ) + '\n'
           Path('settings_minimize_tmp.py').write_text(script, encoding='utf-8')
           PY
           python settings_minimize_tmp.py
@@ -150,6 +153,7 @@ jobs:
         run: flutter pub get --enforce-lockfile
 
       - name: Verify pubspec.lock is unchanged
+        # Any mutation after the enforced resolution is an integrity failure.
         shell: pwsh
         run: |
           $LockChanges = (git status --porcelain pubspec.lock 2>&1 | Out-String).Trim()
