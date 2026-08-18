@@ -23,6 +23,24 @@ HomeLocation privacyReducedLocation(HomeLocation location) {
   );
 }
 
+typedef _WeatherRequestKey = ({
+  String label,
+  double latitude,
+  double longitude,
+  String? timezone,
+  String source,
+});
+
+_WeatherRequestKey _weatherRequestKey(HomeLocation location) {
+  return (
+    label: location.label,
+    latitude: location.latitude,
+    longitude: location.longitude,
+    timezone: location.timezone,
+    source: location.source,
+  );
+}
+
 class OpenMeteoWeatherRepository implements WeatherRepository {
   OpenMeteoWeatherRepository({
     required this.db,
@@ -33,7 +51,9 @@ class OpenMeteoWeatherRepository implements WeatherRepository {
   final AppDatabase db;
   final SettingsRepository settingsRepository;
   final http.Client _httpClient;
-  Future<WeatherSnapshot?>? _refreshInFlight;
+  Future<WeatherSnapshot?>? _locationSelectionInFlight;
+  final _refreshInFlightByLocation =
+      <_WeatherRequestKey, Future<WeatherSnapshot?>>{};
 
   @override
   Stream<WeatherSnapshot?> watchWeather() {
@@ -61,26 +81,60 @@ class OpenMeteoWeatherRepository implements WeatherRepository {
 
   @override
   Future<WeatherSnapshot?> refreshWeather() {
-    final activeRefresh = _refreshInFlight;
-    if (activeRefresh != null) {
-      return activeRefresh;
+    final selecting = _locationSelectionInFlight;
+    if (selecting != null) {
+      return selecting;
     }
-    late final Future<WeatherSnapshot?> refresh;
-    refresh = _performWeatherRefresh().whenComplete(() {
-      if (identical(_refreshInFlight, refresh)) {
-        _refreshInFlight = null;
-      }
-    });
-    _refreshInFlight = refresh;
-    return refresh;
+
+    final completer = Completer<WeatherSnapshot?>();
+    final selection = completer.future;
+    _locationSelectionInFlight = selection;
+    unawaited(
+      settingsRepository.homeLocation().then<void>(
+        (rawLocation) {
+          if (identical(_locationSelectionInFlight, selection)) {
+            _locationSelectionInFlight = null;
+          }
+          completer.complete(_refreshWeatherForLocation(rawLocation));
+        },
+        onError: (Object error, StackTrace stackTrace) {
+          if (identical(_locationSelectionInFlight, selection)) {
+            _locationSelectionInFlight = null;
+          }
+          completer.completeError(error, stackTrace);
+        },
+      ),
+    );
+    return selection;
   }
 
-  Future<WeatherSnapshot?> _performWeatherRefresh() async {
-    final rawLocation = await settingsRepository.homeLocation();
+  Future<WeatherSnapshot?> _refreshWeatherForLocation(
+    HomeLocation? rawLocation,
+  ) {
     if (rawLocation == null) {
       return cachedWeather();
     }
     final location = privacyReducedLocation(rawLocation);
+    final requestKey = _weatherRequestKey(location);
+    final activeRefresh = _refreshInFlightByLocation[requestKey];
+    if (activeRefresh != null) {
+      return activeRefresh;
+    }
+
+    late final Future<WeatherSnapshot?> refresh;
+    refresh = _performWeatherRefresh(location, requestKey).whenComplete(() {
+      if (identical(_refreshInFlightByLocation[requestKey], refresh)) {
+        _refreshInFlightByLocation.remove(requestKey);
+      }
+    });
+    _refreshInFlightByLocation[requestKey] = refresh;
+    return refresh;
+  }
+
+  Future<WeatherSnapshot?> _performWeatherRefresh(
+    HomeLocation location,
+    _WeatherRequestKey requestKey,
+  ) async {
     final uri = Uri.https('api.open-meteo.com', '/v1/forecast', {
       'latitude': location.latitude.toStringAsFixed(2),
       'longitude': location.longitude.toStringAsFixed(2),
@@ -101,11 +155,32 @@ class OpenMeteoWeatherRepository implements WeatherRepository {
         return await cachedWeather();
       }
       final snapshot = _snapshotFromOpenMeteo(decoded, location);
-      await _setSetting('weather_cache', jsonEncode(_snapshotToJson(snapshot)));
+      final stored = await _storeSnapshotIfCurrent(requestKey, snapshot);
+      if (!stored) {
+        return await cachedWeather();
+      }
       return snapshot;
     } catch (_) {
       return await cachedWeather();
     }
+  }
+
+  Future<bool> _storeSnapshotIfCurrent(
+    _WeatherRequestKey requestKey,
+    WeatherSnapshot snapshot,
+  ) {
+    return db.transaction(() async {
+      final currentRawLocation = await settingsRepository.homeLocation();
+      if (currentRawLocation == null) {
+        return false;
+      }
+      final currentLocation = privacyReducedLocation(currentRawLocation);
+      if (_weatherRequestKey(currentLocation) != requestKey) {
+        return false;
+      }
+      await _setSetting('weather_cache', jsonEncode(_snapshotToJson(snapshot)));
+      return true;
+    });
   }
 
   @override
