@@ -8,6 +8,7 @@ The current application version is defined only in `pubspec.yaml`. Released vers
 
 ### Fixed
 
+- Kept full-text search mutation-consistent by tracking durable source/index generations so edits, archive/restore/delete operations, sync writes, and restarts rebuild stale derived search data before returning results.
 - Prevented delayed weather refreshes for a previous home location from overwriting the cache after the selected location changes.
 - Invoked automatic-backup due checks after authenticated startup readiness and on throttled foreground resumes without blocking the first useful UI frame.
 - Kept task inbox notifications unread when completion is cancelled or otherwise not applied, acknowledging them only after confirmed successful completion.

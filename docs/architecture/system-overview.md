@@ -40,6 +40,8 @@ Riverpod is the dependency and state-management mechanism. GoRouter is the navig
 
 Drift manages the SQLite database. The schema stores product entities and operational state including synchronization outbox entries, pull cursors, remote shadows, hydration/runtime state, account binding, reminder snapshots, and cleanup work.
 
+The FTS5 search index is a derived local materialized view. SQLite invalidation triggers advance a durable source generation whenever any searchable authoritative table changes, while the search repository records the generation represented by the last successful full index rebuild. Search queries validate those generations and rebuild transactionally when needed, so route lifetime, sync-origin writes, restore, or process restart cannot make a stale index an accepted source of truth.
+
 The local database is the immediate user-facing working set. Cloud synchronization does not make every UI read depend on network availability.
 
 ## Cloud backend
@@ -95,7 +97,7 @@ Durable notification-reconciliation requests live in Drift and are consumed afte
 
 ## Backup and restore
 
-Owntend produces versioned ZIP archives with a manifest and hashes. Restore treats archives as untrusted input, validates compatibility and extraction bounds, creates a safety backup, stages media, applies data, and rolls back on failure.
+Owntend produces versioned ZIP archives with a manifest and hashes. Restore treats archives as untrusted input, validates compatibility and extraction bounds, creates a safety backup, stages media, applies data, and rolls back on failure. Derived search state is not imported as user authority; restored searchable rows invalidate the local FTS generation and are rebuilt before search results are returned.
 
 ## Observability
 

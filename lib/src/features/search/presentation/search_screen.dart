@@ -12,14 +12,12 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   Timer? _debounce;
   List<SearchResult> _results = const [];
   bool _loading = false;
-  bool _indexReady = false;
   String? _error;
 
   @override
   void initState() {
     super.initState();
     _controller.addListener(_scheduleSearch);
-    unawaited(_rebuildIndex());
   }
 
   @override
@@ -28,15 +26,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     _controller.removeListener(_scheduleSearch);
     _controller.dispose();
     super.dispose();
-  }
-
-  Future<void> _rebuildIndex() async {
-    try {
-      await ref.read(searchRepositoryProvider).rebuildIndex();
-      _indexReady = true;
-    } catch (_) {
-      // Search still renders its explicit error when a user queries.
-    }
   }
 
   void _scheduleSearch() {
@@ -63,12 +52,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       _error = null;
     });
     try {
-      final repository = ref.read(searchRepositoryProvider);
-      if (!_indexReady) {
-        await repository.rebuildIndex();
-        _indexReady = true;
-      }
-      final results = await repository.search(query);
+      final results = await ref.read(searchRepositoryProvider).search(query);
       if (!mounted) return;
       setState(() {
         _results = results;

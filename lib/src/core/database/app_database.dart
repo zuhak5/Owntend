@@ -493,9 +493,23 @@ class AppDatabase extends _$AppDatabase {
 
   static const databaseName = 'owntend';
   static const databaseFileName = '$databaseName.sqlite';
-  static const currentSchemaVersion = 1;
+  static const currentSchemaVersion = 2;
   static const _sqliteBusyTimeoutMs = 8000;
   static const _startupRecoveryAttempts = 5;
+  static const _searchIndexSourceTables = <String>[
+    'areas',
+    'rooms',
+    'categories',
+    'assets',
+    'device_details',
+    'pet_details',
+    'plant_details',
+    'safety_details',
+    'tags',
+    'asset_tags',
+    'asset_photos',
+    'maintenance_plans',
+  ];
 
   static QueryExecutor _openDatabaseConnection() {
     return driftDatabase(
@@ -548,12 +562,19 @@ class AppDatabase extends _$AppDatabase {
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) async {
       await m.createAll();
+      await _createSearchIndexGenerationInfrastructure();
+    },
+    onUpgrade: (m, from, to) async {
+      if (from < 2 && to >= 2) {
+        await _createSearchIndexGenerationInfrastructure();
+      }
     },
     beforeOpen: (details) async {
       await customStatement('PRAGMA busy_timeout = $_sqliteBusyTimeoutMs');
       await customStatement('PRAGMA foreign_keys = ON');
       await _createIndexes();
       await _createSearchIndex();
+      await _createSearchIndexGenerationInfrastructure();
       await _seedSyncRuntime();
       await _recoverExpiredSyncRuntimeLease();
       await _createSyncTriggers();
@@ -847,6 +868,40 @@ END
     ];
     for (final statement in statements) {
       await customStatement(statement);
+    }
+  }
+
+  Future<void> _createSearchIndexGenerationInfrastructure() async {
+    await customStatement('''
+CREATE TABLE IF NOT EXISTS search_index_state (
+  id INTEGER NOT NULL PRIMARY KEY CHECK (id = 1),
+  source_generation INTEGER NOT NULL CHECK (source_generation >= 0),
+  indexed_generation INTEGER NOT NULL CHECK (indexed_generation >= 0)
+)
+''');
+    await customStatement('''
+INSERT OR IGNORE INTO search_index_state(
+  id,
+  source_generation,
+  indexed_generation
+) VALUES (1, 1, 0)
+''');
+
+    for (final table in _searchIndexSourceTables) {
+      for (final event in ['INSERT', 'UPDATE', 'DELETE']) {
+        final normalizedEvent = event.toLowerCase();
+        final triggerName = 'search_${table}_$normalizedEvent';
+        await customStatement('DROP TRIGGER IF EXISTS $triggerName');
+        await customStatement('''
+CREATE TRIGGER $triggerName
+AFTER $event ON $table
+BEGIN
+  UPDATE search_index_state
+  SET source_generation = source_generation + 1
+  WHERE id = 1;
+END
+''');
+      }
     }
   }
 
