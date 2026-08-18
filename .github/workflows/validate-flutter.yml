@@ -14,6 +14,59 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  prepare-statistics-format:
+    name: Prepare focused Statistics formatting
+    if: github.actor == 'zuhak5' && github.head_ref == 'agent/problem-3-statistics-layout'
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: agent/problem-3-statistics-layout
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: "3.47.0"
+          channel: stable
+          cache: true
+
+      - name: Resolve dependencies and generated sources
+        shell: pwsh
+        run: |
+          flutter pub get --enforce-lockfile
+          flutter gen-l10n
+          dart run build_runner build
+
+      - name: Format only Problem 3 files
+        shell: pwsh
+        run: |
+          dart format lib/src/features/statistics/presentation/statistics_screen.dart test/statistics_screen_test.dart
+
+      - name: Commit only formatted Statistics files
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $Allowed = @(
+            "lib/src/features/statistics/presentation/statistics_screen.dart",
+            "test/statistics_screen_test.dart"
+          )
+          git add -- $Allowed
+          git diff --cached --quiet
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "No focused formatting changes to commit."
+            exit 0
+          }
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Format Statistics Problem 3 files [statistics-format]"
+          git push origin HEAD:agent/problem-3-statistics-layout
+
   validate:
     name: Format, analyze, and test
     runs-on: windows-latest
