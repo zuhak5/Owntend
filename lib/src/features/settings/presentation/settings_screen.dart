@@ -205,82 +205,28 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                   ),
                 ),
                 const SizedBox(height: HkSpacing.sm),
-                hk_ui.PremiumCard(
-                  padding: EdgeInsets.zero,
-                  child: Semantics(
-                    container: true,
-                    button: true,
-                    label: context.l10n.language,
-                    value: hk_ui.languageSelectorLabel(
-                      context,
-                      localePreference.language,
-                    ),
-                    child: PopupMenuButton<AppLanguage>(
-                      key: const ValueKey('settings-language-selector'),
-                      useRootNavigator: true,
-                      tooltip: '',
+                hk_ui.LanguageSelectorDropdown(
+                  selectorKey: const ValueKey('settings-language-selector'),
+                  hitTargetKey: const ValueKey(
+                    'settings-language-selector-hit-target',
+                  ),
+                  language: localePreference.language,
+                  chevronSize: 20,
+                  onChanged: (selection) =>
+                      _setAppLanguage(context, ref, selection),
+                  triggerBuilder: (context, label, isOpen, chevron) {
+                    final scheme = Theme.of(context).colorScheme;
+                    return hk_ui.PremiumCard(
                       padding: EdgeInsets.zero,
-                      offset: const Offset(0, 6),
-                      onSelected: (selection) =>
-                          _setAppLanguage(context, ref, selection),
-                      itemBuilder: (context) {
-                        final menuScheme = Theme.of(context).colorScheme;
-                        return AppLanguage.values
-                            .map(
-                              (option) => PopupMenuItem<AppLanguage>(
-                                key: ValueKey('language-option-${option.name}'),
-                                value: option,
-                                child: Row(
-                                  children: [
-                                    SizedBox(
-                                      width: 20,
-                                      child: option == localePreference.language
-                                          ? Icon(
-                                              Symbols.check_rounded,
-                                              size: 18,
-                                              color: menuScheme.primary,
-                                            )
-                                          : null,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Directionality(
-                                        textDirection: option == AppLanguage.ar
-                                            ? TextDirection.rtl
-                                            : TextDirection.ltr,
-                                        child: Text(
-                                          hk_ui.languageSelectorLabel(
-                                            context,
-                                            option,
-                                          ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodyMedium
-                                              ?.copyWith(
-                                                fontWeight:
-                                                    option ==
-                                                        localePreference
-                                                            .language
-                                                    ? FontWeight.w700
-                                                    : FontWeight.w500,
-                                                color:
-                                                    option ==
-                                                        localePreference
-                                                            .language
-                                                    ? menuScheme.primary
-                                                    : menuScheme.onSurface,
-                                              ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
+                      borderColor: isOpen
+                          ? scheme.primary.withValues(alpha: 0.65)
+                          : null,
+                      backgroundColor: isOpen
+                          ? Color.alphaBlend(
+                              scheme.primary.withValues(alpha: 0.035),
+                              scheme.surfaceContainerLowest,
                             )
-                            .toList(growable: false);
-                      },
+                          : null,
                       child: ConstrainedBox(
                         key: const ValueKey('settings-language-row'),
                         constraints: const BoxConstraints(minHeight: 72),
@@ -313,31 +259,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                                   children: [
                                     Flexible(
                                       child: Text(
-                                        hk_ui.languageSelectorLabel(
-                                          context,
-                                          localePreference.language,
-                                        ),
+                                        label,
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                         style: Theme.of(context)
                                             .textTheme
                                             .labelLarge
                                             ?.copyWith(
-                                              color: Theme.of(context)
-                                                  .colorScheme
-                                                  .onSurfaceVariant,
+                                              color: scheme.onSurfaceVariant,
                                               fontWeight: FontWeight.w700,
                                             ),
                                       ),
                                     ),
                                     const SizedBox(width: HkSpacing.space4),
-                                    Icon(
-                                      Symbols.expand_more_rounded,
-                                      size: 20,
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .onSurfaceVariant,
-                                    ),
+                                    chevron,
                                   ],
                                 ),
                               ),
@@ -345,8 +280,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                           ),
                         ),
                       ),
-                    ),
-                  ),
+                    );
+                  },
                 ),
                 const SizedBox(height: HkSpacing.sm),
                 if (consent?.privacyOptionsRequired ?? false) ...[

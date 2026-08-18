@@ -110,13 +110,22 @@ String languageSelectorLabel(BuildContext context, AppLanguage language) {
   };
 }
 
-/// Compact locale picker showing the active language with a dropdown menu.
-class LanguageSelectorDropdown extends StatelessWidget {
+typedef LanguageSelectorTriggerBuilder = Widget Function(
+  BuildContext context,
+  String label,
+  bool isOpen,
+  Widget chevron,
+);
+
+/// Shared anchored locale picker used by onboarding and Settings.
+class LanguageSelectorDropdown extends StatefulWidget {
   const LanguageSelectorDropdown({
     required this.language,
     required this.onChanged,
     this.selectorKey,
     this.hitTargetKey,
+    this.triggerBuilder,
+    this.chevronSize = 18,
     super.key,
   });
 
@@ -124,95 +133,223 @@ class LanguageSelectorDropdown extends StatelessWidget {
   final ValueChanged<AppLanguage>? onChanged;
   final Key? selectorKey;
   final Key? hitTargetKey;
+  final LanguageSelectorTriggerBuilder? triggerBuilder;
+  final double chevronSize;
+
+  @override
+  State<LanguageSelectorDropdown> createState() =>
+      _LanguageSelectorDropdownState();
+}
+
+class _LanguageSelectorDropdownState extends State<LanguageSelectorDropdown> {
+  static const _menuGap = 6.0;
+
+  final MenuController _menuController = MenuController();
+  final GlobalKey _anchorKey = GlobalKey();
+  double? _menuWidth;
+  bool _isOpen = false;
+  bool _openScheduled = false;
+
+  @override
+  void didUpdateWidget(covariant LanguageSelectorDropdown oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.onChanged == null && _menuController.isOpen) {
+      _menuController.close();
+    }
+  }
+
+  void _toggleMenu() {
+    if (widget.onChanged == null) return;
+    if (_menuController.isOpen) {
+      _menuController.close();
+      return;
+    }
+    if (_openScheduled) return;
+
+    final width = _anchorKey.currentContext?.size?.width;
+    if (width == null || width <= 0) return;
+    if (_menuWidth != width) {
+      _openScheduled = true;
+      setState(() => _menuWidth = width);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _openScheduled = false;
+        if (widget.onChanged != null && !_menuController.isOpen) {
+          _menuController.open();
+        }
+      });
+      return;
+    }
+    _menuController.open();
+  }
+
+  void _handleOpen() {
+    if (mounted && !_isOpen) {
+      setState(() => _isOpen = true);
+    }
+  }
+
+  void _handleClose() {
+    _openScheduled = false;
+    if (mounted && _isOpen) {
+      setState(() => _isOpen = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final label = languageSelectorLabel(context, language);
+    final label = languageSelectorLabel(context, widget.language);
+    final reduceMotion = HkMotion.reduceMotionOf(context);
+    final chevron = AnimatedRotation(
+      key: const ValueKey('language-selector-chevron'),
+      turns: _isOpen ? 0.5 : 0,
+      duration: reduceMotion
+          ? Duration.zero
+          : const Duration(milliseconds: 160),
+      curve: Curves.easeOutCubic,
+      child: Icon(
+        Symbols.expand_more_rounded,
+        size: widget.chevronSize,
+        color: scheme.onSurfaceVariant,
+      ),
+    );
+    final menuWidth = _menuWidth;
 
-    return Semantics(
-      container: true,
-      button: true,
-      label: context.l10n.language,
-      child: SizedBox(
-        key: hitTargetKey,
-        height: kOwntendHeaderActionHeight,
-        child: PopupMenuButton<AppLanguage>(
-          key: selectorKey,
-          useRootNavigator: true,
-          enabled: onChanged != null,
-          tooltip: '',
-          padding: EdgeInsets.zero,
-          offset: const Offset(0, 6),
-          onSelected: onChanged,
-          itemBuilder: (context) {
-            return AppLanguage.values
-                .map(
-                  (option) => PopupMenuItem<AppLanguage>(
-                    key: ValueKey('language-option-${option.name}'),
-                    value: option,
-                    child: _LanguageMenuRow(
-                      label: languageSelectorLabel(context, option),
-                      textDirection: option == AppLanguage.ar
-                          ? TextDirection.rtl
-                          : TextDirection.ltr,
-                      selected: option == language,
-                    ),
-                  ),
-                )
-                .toList(growable: false);
-          },
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: scheme.surface.withValues(alpha: 0.94),
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(
-                color: HkColors.appBorder.withValues(alpha: 0.75),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: HkColors.appTextPrimary.withValues(alpha: 0.08),
-                  blurRadius: 8,
-                  offset: const Offset(0, 3),
-                ),
-              ],
-            ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Symbols.language_rounded,
-                    size: 18,
-                    color: scheme.onSurfaceVariant,
-                  ),
-                  const SizedBox(width: 8),
-                  Flexible(
-                    child: Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: textTheme.labelSmall?.copyWith(
-                        color: scheme.onSurface,
-                        fontSize: 13,
-                        height: 1,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  Icon(
-                    Symbols.expand_more_rounded,
-                    size: 18,
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ],
-              ),
-            ),
+    return PopScope(
+      canPop: !_isOpen,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop && _isOpen) {
+          _menuController.close();
+        }
+      },
+      child: MenuAnchor(
+        controller: _menuController,
+        useRootOverlay: true,
+        crossAxisUnconstrained: false,
+        consumeOutsideTap: false,
+        alignmentOffset: const Offset(0, _menuGap),
+        style: MenuStyle(
+          alignment: AlignmentDirectional.bottomStart,
+          padding: const WidgetStatePropertyAll<EdgeInsetsGeometry>(
+            EdgeInsets.zero,
           ),
+          fixedSize: menuWidth == null
+              ? null
+              : WidgetStatePropertyAll<Size>(Size.fromWidth(menuWidth)),
         ),
+        onOpen: _handleOpen,
+        onClose: _handleClose,
+        menuChildren: [
+          for (final option in AppLanguage.values)
+            MenuItemButton(
+              key: ValueKey('language-option-${option.name}'),
+              closeOnActivate: true,
+              onPressed: widget.onChanged == null
+                  ? null
+                  : () => widget.onChanged?.call(option),
+              child: Semantics(
+                selected: option == widget.language,
+                child: _LanguageMenuRow(
+                  label: languageSelectorLabel(context, option),
+                  textDirection: option == AppLanguage.ar
+                      ? TextDirection.rtl
+                      : TextDirection.ltr,
+                  selected: option == widget.language,
+                  optionName: option.name,
+                ),
+              ),
+            ),
+        ],
+        builder: (context, controller, child) {
+          final trigger =
+              widget.triggerBuilder?.call(context, label, _isOpen, chevron) ??
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: _isOpen
+                      ? Color.alphaBlend(
+                          scheme.primary.withValues(alpha: 0.06),
+                          scheme.surface.withValues(alpha: 0.94),
+                        )
+                      : scheme.surface.withValues(alpha: 0.94),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: _isOpen
+                        ? scheme.primary.withValues(alpha: 0.72)
+                        : HkColors.appBorder.withValues(alpha: 0.75),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: HkColors.appTextPrimary.withValues(alpha: 0.08),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Symbols.language_rounded,
+                        size: 18,
+                        color: scheme.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: textTheme.labelSmall?.copyWith(
+                            color: scheme.onSurface,
+                            fontSize: 13,
+                            height: 1,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      chevron,
+                    ],
+                  ),
+                ),
+              );
+
+          return SizedBox(
+            key: _anchorKey,
+            child: Semantics(
+              key: widget.selectorKey,
+              container: true,
+              button: true,
+              enabled: widget.onChanged != null,
+              expanded: _isOpen,
+              excludeSemantics: true,
+              label: context.l10n.language,
+              value: label,
+              onTap: widget.onChanged == null ? null : _toggleMenu,
+              child: ConstrainedBox(
+                key: widget.hitTargetKey,
+                constraints: const BoxConstraints(
+                  minHeight: kOwntendHeaderActionHeight,
+                ),
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: InkWell(
+                    onTap: widget.onChanged == null ? null : _toggleMenu,
+                    borderRadius: BorderRadius.circular(HkRadii.lg),
+                    child: trigger,
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -223,39 +360,62 @@ class _LanguageMenuRow extends StatelessWidget {
     required this.label,
     required this.textDirection,
     required this.selected,
+    required this.optionName,
   });
 
   final String label;
   final TextDirection textDirection;
   final bool selected;
+  final String optionName;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Row(
-      children: [
-        SizedBox(
-          width: 20,
-          child: selected
-              ? Icon(Symbols.check_rounded, size: 18, color: scheme.primary)
-              : null,
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Directionality(
-            textDirection: textDirection,
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                color: selected ? scheme.primary : scheme.onSurface,
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 32),
+      child: SizedBox(
+        width: double.infinity,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Padding(
+              padding: const EdgeInsetsDirectional.symmetric(horizontal: 28),
+              child: Directionality(
+                textDirection: textDirection,
+                child: Text(
+                  label,
+                  key: ValueKey('language-option-label-$optionName'),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    color: selected ? scheme.primary : scheme.onSurface,
+                  ),
+                ),
               ),
             ),
-          ),
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: SizedBox(
+                width: 20,
+                child: selected
+                    ? Icon(
+                        Symbols.check_rounded,
+                        key: ValueKey('language-option-check-$optionName'),
+                        size: 18,
+                        color: scheme.primary,
+                      )
+                    : null,
+              ),
+            ),
+            const Align(
+              alignment: AlignmentDirectional.centerEnd,
+              child: SizedBox(width: 20),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }
