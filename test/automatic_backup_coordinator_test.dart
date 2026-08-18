@@ -6,75 +6,74 @@ import 'package:owntend/src/core/domain/contracts.dart';
 import 'package:owntend/src/core/services/automatic_backup_coordinator.dart';
 
 void main() {
-  test('post-ready triggers a due check while pre-ready resume does not', () async {
-    final repository = _FakeBackupRepository();
+  test('post-ready runs; pre-ready resume does not', () async {
+    final repo = _FakeBackupRepository();
     final coordinator = AutomaticBackupCoordinator(
-      backupRepository: repository,
+      backupRepository: repo,
     );
 
     await coordinator.onAppResumed();
-    expect(repository.automaticChecks, 0);
+    expect(repo.automaticChecks, 0);
 
     await coordinator.onPostReady();
-    expect(repository.automaticChecks, 1);
+    expect(repo.automaticChecks, 1);
   });
 
-  test('successful due checks throttle repeated foreground resumes', () async {
-    final repository = _FakeBackupRepository();
+  test('successful checks throttle foreground resumes', () async {
+    final repo = _FakeBackupRepository();
     var now = DateTime.utc(2026, 8, 18, 1);
     final coordinator = AutomaticBackupCoordinator(
-      backupRepository: repository,
+      backupRepository: repo,
       foregroundThrottle: const Duration(minutes: 10),
       now: () => now,
     );
 
     await coordinator.onPostReady();
-    expect(repository.automaticChecks, 1);
+    expect(repo.automaticChecks, 1);
 
     now = now.add(const Duration(minutes: 5));
     await coordinator.onAppResumed();
-    expect(repository.automaticChecks, 1);
+    expect(repo.automaticChecks, 1);
 
     now = now.add(const Duration(minutes: 6));
     await coordinator.onAppResumed();
-    expect(repository.automaticChecks, 2);
+    expect(repo.automaticChecks, 2);
   });
 
-  test('failed due checks remain immediately retryable', () async {
-    final repository = _FakeBackupRepository()
-      ..failNext = StateError('simulated backup failure');
+  test('failed checks remain retryable', () async {
+    final repo = _FakeBackupRepository();
+    repo.failNext = StateError('simulated backup failure');
     final coordinator = AutomaticBackupCoordinator(
-      backupRepository: repository,
+      backupRepository: repo,
       foregroundThrottle: const Duration(hours: 1),
     );
 
     await coordinator.onPostReady();
-    expect(repository.automaticChecks, 1);
+    expect(repo.automaticChecks, 1);
 
     await coordinator.onAppResumed();
-    expect(repository.automaticChecks, 2);
+    expect(repo.automaticChecks, 2);
   });
 
-  test('concurrent lifecycle triggers share one in-flight due check', () async {
-    final repository = _FakeBackupRepository();
+  test('concurrent triggers share one due check', () async {
+    final repo = _FakeBackupRepository();
     final pending = Completer<String?>();
-    repository.pendingAutomaticCheck = pending;
+    repo.pendingAutomaticCheck = pending;
     final coordinator = AutomaticBackupCoordinator(
-      backupRepository: repository,
+      backupRepository: repo,
     );
 
     final postReady = coordinator.onPostReady();
     final resumed = coordinator.onAppResumed();
 
-    expect(repository.automaticChecks, 1);
+    expect(repo.automaticChecks, 1);
     pending.complete(null);
     await Future.wait([postReady, resumed]);
   });
 
-  test('app wiring defers startup backup until after ready frame and resumes', () {
-    final source = File(
-      'lib/main.dart',
-    ).readAsStringSync().replaceAll('\r\n', '\n');
+  test('startup wiring defers backup until ready and resume', () {
+    final rawSource = File('lib/main.dart').readAsStringSync();
+    final source = rawSource.replaceAll('\r\n', '\n');
 
     expect(
       source,
