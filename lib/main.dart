@@ -306,7 +306,7 @@ class _OwntendAppState extends ConsumerState<OwntendApp>
     final startup = ref.read(startupBootstrapControllerProvider);
     _startupController = startup;
     _automaticBackupCoordinator = AutomaticBackupCoordinator(
-      backupRepository: ref.read(backupRepositoryProvider),
+      backupRepositoryFactory: () => ref.read(backupRepositoryProvider),
       automaticStartEnabled: () => ref.read(backupAutoStartProvider),
     );
     startup.stateListenable.addListener(_handleAutomaticBackupStartupState);
