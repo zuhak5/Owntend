@@ -3,14 +3,14 @@ import '../utils/redacting_logger.dart';
 
 class AutomaticBackupCoordinator {
   AutomaticBackupCoordinator({
-    required this.backupRepository,
+    required this.backupRepositoryFactory,
     bool Function()? automaticStartEnabled,
     DateTime Function()? now,
     this.foregroundThrottle = const Duration(minutes: 15),
   }) : _automaticStartEnabled = automaticStartEnabled ?? _enabledByDefault,
        _now = now ?? DateTime.now;
 
-  final BackupRepository backupRepository;
+  final BackupRepository Function() backupRepositoryFactory;
   final bool Function() _automaticStartEnabled;
   final DateTime Function() _now;
   final Duration foregroundThrottle;
@@ -64,7 +64,7 @@ class AutomaticBackupCoordinator {
 
   Future<void> _performDueCheck() async {
     try {
-      await backupRepository.exportAutomaticBackupIfDue();
+      await backupRepositoryFactory().exportAutomaticBackupIfDue();
       _lastSuccessfulDueCheckAt = _now().toUtc();
     } on Object catch (error, stackTrace) {
       AppLogger.warning(
