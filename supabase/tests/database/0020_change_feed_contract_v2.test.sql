@@ -8,14 +8,14 @@ select extensions.plan(8);
 
 select extensions.is(
   (select capability_version from public.sync_feed_capabilities where id = 'global'),
-  '2.0.0'::text,
-  'change-feed capability advertises protocol v2'
+  '1.0.0'::text,
+  'change-feed capability advertises the initial hardened protocol'
 );
 
 select extensions.is(
   (select enabled from public.sync_feed_capabilities where id = 'global'),
   false,
-  'change-feed capability remains disabled after hardening migration'
+  'change-feed capability remains disabled in the pre-launch baseline'
 );
 
 with fixtures(table_name, row_data) as (
@@ -76,15 +76,15 @@ select extensions.throws_ok(
 );
 
 insert into auth.users (id, email)
-values ('00000000-0000-0000-0000-00000000002a', 'feed-v2@example.com');
+values ('00000000-0000-0000-0000-00000000002a', 'feed-contract@example.com');
 truncate table public.server_change_feed restart identity;
 
 insert into public.areas (
   user_id, id, name, kind, sort_order, created_at, updated_at, revision
 ) values (
   '00000000-0000-0000-0000-00000000002a',
-  'area-v2',
-  'Area V2',
+  'area-contract',
+  'Area Contract',
   'indoor',
   1,
   '2026-01-01T00:00:00Z',
@@ -93,14 +93,14 @@ insert into public.areas (
 );
 
 select extensions.is(
-  (select entity_type from public.server_change_feed where record_id = 'area-v2'),
+  (select entity_type from public.server_change_feed where record_id = 'area-contract'),
   'area'::text,
   'trigger emits canonical area entity identifier'
 );
 
 select extensions.is(
-  (select key_data from public.server_change_feed where record_id = 'area-v2'),
-  '{"id":"area-v2"}'::jsonb,
+  (select key_data from public.server_change_feed where record_id = 'area-contract'),
+  '{"id":"area-contract"}'::jsonb,
   'trigger persists typed key_data'
 );
 
@@ -109,14 +109,14 @@ set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-00000000002a"}
 
 select extensions.is(
   public.fetch_user_change_feed(0, 50)->'changes'->0->'key_data',
-  '{"id":"area-v2"}'::jsonb,
+  '{"id":"area-contract"}'::jsonb,
   'authenticated feed page returns typed key_data'
 );
 
 select extensions.is(
   public.fetch_user_change_feed(0, 50)->>'capability_version',
-  '2.0.0'::text,
-  'feed page carries the same protocol version as capability discovery'
+  '1.0.0'::text,
+  'feed page carries the same initial protocol version as capability discovery'
 );
 
 rollback;
