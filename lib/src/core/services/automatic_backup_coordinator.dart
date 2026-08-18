@@ -2,13 +2,12 @@ import '../domain/contracts.dart';
 import '../utils/redacting_logger.dart';
 
 class AutomaticBackupCoordinator {
-  AutomaticBackupCoordinator({
-    required BackupRepository backupRepository,
+  AutomaticBackupCoordinator(
+    this._backupRepository, {
     bool Function()? automaticStartEnabled,
     DateTime Function()? now,
     this.foregroundThrottle = const Duration(minutes: 15),
-  }) : _backupRepository = backupRepository,
-       _automaticStartEnabled = automaticStartEnabled ?? _enabledByDefault,
+  }) : _automaticStartEnabled = automaticStartEnabled ?? _enabledByDefault,
        _now = now ?? DateTime.now;
 
   final BackupRepository _backupRepository;
