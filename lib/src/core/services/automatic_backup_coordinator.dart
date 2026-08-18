@@ -2,15 +2,15 @@ import '../domain/contracts.dart';
 import '../utils/redacting_logger.dart';
 
 class AutomaticBackupCoordinator {
-  AutomaticBackupCoordinator(
-    this._backupRepository, {
+  AutomaticBackupCoordinator({
+    required this.backupRepository,
     bool Function()? automaticStartEnabled,
     DateTime Function()? now,
     this.foregroundThrottle = const Duration(minutes: 15),
   }) : _automaticStartEnabled = automaticStartEnabled ?? _enabledByDefault,
        _now = now ?? DateTime.now;
 
-  final BackupRepository _backupRepository;
+  final BackupRepository backupRepository;
   final bool Function() _automaticStartEnabled;
   final DateTime Function() _now;
   final Duration foregroundThrottle;
@@ -64,7 +64,7 @@ class AutomaticBackupCoordinator {
 
   Future<void> _performDueCheck() async {
     try {
-      await _backupRepository.exportAutomaticBackupIfDue();
+      await backupRepository.exportAutomaticBackupIfDue();
       _lastSuccessfulDueCheckAt = _now().toUtc();
     } on Object catch (error, stackTrace) {
       AppLogger.warning(
