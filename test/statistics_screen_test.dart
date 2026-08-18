@@ -179,7 +179,6 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
 
     final semantics = tester.ensureSemantics();
-    addTearDown(semantics.dispose);
 
     await tester.pumpWidget(
       _statisticsApp(
@@ -216,6 +215,7 @@ void main() {
     );
     expect(semanticsData.value, contains('6'));
     expect(semanticsData.value, contains('1'));
+    semantics.dispose();
     expect(tester.takeException(), isNull);
   });
 
