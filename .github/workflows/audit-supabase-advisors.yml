@@ -2,8 +2,6 @@ name: Audit Supabase Advisors
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
 
 permissions:
   contents: read
@@ -15,7 +13,6 @@ concurrency:
 jobs:
   validate-advisor-source:
     name: Require current main Advisor source
-    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -49,7 +46,6 @@ jobs:
 
   advisors:
     name: Hosted security and performance advisors
-    if: github.event_name == 'workflow_dispatch'
     needs: validate-advisor-source
     runs-on: ubuntu-latest
     environment: production-supabase-advisors
@@ -95,84 +91,3 @@ jobs:
           path: artifacts/supabase-advisors.json
           if-no-files-found: error
           retention-days: 14
-
-  legacy-actions-history-cleanup:
-    name: Purge legacy Actions run names
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.event.head_commit.message == 'Purge legacy Actions run names'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    permissions:
-      actions: write
-      contents: write
-    steps:
-      - name: Delete runs whose stored workflow identity is no longer current
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          api="https://api.github.com/repos/${GITHUB_REPOSITORY}"
-          auth=(-H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28")
-
-          curl --fail-with-body --silent --show-error "${auth[@]}" "$api/actions/workflows?per_page=100" > /tmp/registry.json
-          jq -e '.workflows | length == 7 and all(.state == "active")' /tmp/registry.json >/dev/null
-
-          scan_legacy_runs() {
-            : > /tmp/legacy-run-ids
-            : > /tmp/legacy-run-details
-            page=1
-            while :; do
-              payload="$(curl --fail-with-body --silent --show-error "${auth[@]}" "$api/actions/runs?per_page=100&page=$page")"
-              count="$(jq '.workflow_runs | length' <<< "$payload")"
-              while IFS=$'\t' read -r run_id workflow_id run_name run_path; do
-                expected="$(jq -r --arg id "$workflow_id" '.workflows[] | select((.id|tostring) == $id) | [.name, .path, .state] | @tsv' /tmp/registry.json)"
-                if [ -z "$expected" ]; then
-                  echo "$run_id" >> /tmp/legacy-run-ids
-                  printf '%s\t%s\t%s\t%s\t%s\n' "$run_id" "$workflow_id" "$run_name" "$run_path" 'missing-workflow-id' >> /tmp/legacy-run-details
-                  continue
-                fi
-                IFS=$'\t' read -r expected_name expected_path expected_state <<< "$expected"
-                if [ "$expected_state" != "active" ] || [ "$run_name" != "$expected_name" ] || [ "$run_path" != "$expected_path" ]; then
-                  echo "$run_id" >> /tmp/legacy-run-ids
-                  printf '%s\t%s\t%s\t%s\t%s | %s\n' "$run_id" "$workflow_id" "$run_name" "$run_path" "$expected_name" "$expected_path" >> /tmp/legacy-run-details
-                fi
-              done < <(jq -r '.workflow_runs[] | [.id, .workflow_id, .name, .path] | @tsv' <<< "$payload")
-              [ "$count" -lt 100 ] && break
-              page=$((page + 1))
-            done
-            sort -u /tmp/legacy-run-ids -o /tmp/legacy-run-ids
-          }
-
-          deleted=0
-          for pass in $(seq 1 10); do
-            scan_legacy_runs
-            [ ! -s /tmp/legacy-run-ids ] && break
-            echo "Pass $pass: deleting $(wc -l < /tmp/legacy-run-ids) legacy-name/path runs"
-            cat /tmp/legacy-run-details || true
-            while IFS= read -r run_id; do
-              [ -z "$run_id" ] && continue
-              code="$(curl --silent --show-error -o /tmp/delete-response -w '%{http_code}' -X DELETE "${auth[@]}" "$api/actions/runs/$run_id")"
-              if [ "$code" = "204" ]; then
-                deleted=$((deleted + 1))
-              elif [ "$code" = "409" ]; then
-                curl --silent --show-error -X POST "${auth[@]}" "$api/actions/runs/$run_id/cancel" >/dev/null || true
-              else
-                echo "Delete $run_id returned HTTP $code"
-                cat /tmp/delete-response || true
-              fi
-            done < /tmp/legacy-run-ids
-            sleep 2
-          done
-
-          scan_legacy_runs
-          remaining="$(wc -l < /tmp/legacy-run-ids | tr -d ' ')"
-          jq -n --arg sha "$GITHUB_SHA" --argjson deleted "$deleted" --argjson remaining "$remaining" \
-            --rawfile details /tmp/legacy-run-details \
-            '{cleanup_sha:$sha, deleted_legacy_runs:$deleted, remaining_legacy_runs:$remaining, remaining_details:($details | split("\n") | map(select(length > 0)))}' \
-            > /tmp/run-snapshot.json
-
-          encoded="$(base64 -w0 /tmp/run-snapshot.json)"
-          curl --fail-with-body --silent --show-error -X PUT "${auth[@]}" \
-            -H 'Content-Type: application/json' \
-            "$api/contents/.actions-run-name-snapshot.json" \
-            -d "$(jq -n --arg message 'Write temporary Actions run-name snapshot' --arg content "$encoded" '{message:$message,content:$content,branch:"main"}')" >/dev/null
