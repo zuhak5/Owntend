@@ -88,9 +88,9 @@ set local role authenticated;
 set local "request.jwt.claims" = '{"sub": "00000000-0000-0000-0000-00000000000a"}';
 
 select extensions.results_eq(
-  $$ select is_parity from public.validate_change_feed_parity('00000000-0000-0000-0000-00000000000a') where entity_type = 'areas' $$,
+  $$ select is_parity from public.validate_change_feed_parity('00000000-0000-0000-0000-00000000000a') where entity_type = 'area' $$,
   $$ values (true) $$,
-  'Dark parity validator verifies areas entity count matches change feed net count'
+  'Dark parity validator verifies canonical area entity count matches change feed net count'
 );
 
 -- 6. Resnapshot Required Test
