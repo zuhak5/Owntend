@@ -41,10 +41,7 @@ void main() {
     expect(_chevron(tester).turns, 0.5);
 
     final menuRect = tester.getRect(english);
-    expect(
-      (menuRect.width - anchorRect.width).abs(),
-      lessThanOrEqualTo(1),
-    );
+    expect((menuRect.width - anchorRect.width).abs(), lessThanOrEqualTo(1));
     expect(menuRect.top, greaterThanOrEqualTo(anchorRect.bottom + 5));
     expect((menuRect.left - anchorRect.left).abs(), lessThanOrEqualTo(1));
     expect(
@@ -76,10 +73,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final anchor = find.byKey(const ValueKey('test-language-hit-target'));
-    expect(
-      Directionality.of(tester.element(anchor)),
-      TextDirection.rtl,
-    );
+    expect(Directionality.of(tester.element(anchor)), TextDirection.rtl);
     final anchorRect = tester.getRect(anchor);
 
     await tester.tap(anchor);
