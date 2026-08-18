@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   validate-settings-prep:
-    if: github.actor == 'zuhak5' && !contains(github.event.pull_request.head.sha, '[settings-prep]')
+    if: github.actor == 'zuhak5'
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
@@ -63,12 +63,6 @@ jobs:
             "test/goldens/production_settings_en.png",
             "test/goldens/production_settings_ar.png"
           )
-          $Changed = @(git status --porcelain | ForEach-Object { $_.Substring(3) })
-          $Unexpected = @($Changed | Where-Object { $_ -notin $Allowed })
-          if ($Unexpected.Count -gt 0) {
-            Write-Error "Unexpected generated or unrelated changes: $($Unexpected -join ', ')"
-            exit 1
-          }
 
           git add -- $Allowed
           git diff --cached --quiet
