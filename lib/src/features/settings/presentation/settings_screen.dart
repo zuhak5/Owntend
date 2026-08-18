@@ -92,7 +92,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
           child: Scrollbar(
             child: ListView(
               keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 112),
+              padding: const EdgeInsetsDirectional.fromSTEB(16, 8, 16, 112),
               children: [
                 const HkNativeAdCard(placement: 'settings'),
                 hk_ui.PremiumCard(
@@ -232,7 +232,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                         constraints: const BoxConstraints(minHeight: 72),
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
-                            horizontal: HkSpacing.space6,
+                            horizontal: SettingsRowGrid.contentInset,
                             vertical: HkSpacing.xs,
                           ),
                           child: Row(
@@ -287,11 +287,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 if (consent?.privacyOptionsRequired ?? false) ...[
                   hk_ui.PremiumCard(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: HkSpacing.space6,
+                      horizontal: SettingsRowGrid.contentInset,
                       vertical: HkSpacing.xs,
                     ),
                     child: ListTile(
                       contentPadding: EdgeInsets.zero,
+                      minLeadingWidth: SettingsRowGrid.leadingWidth,
+                      horizontalTitleGap: SettingsRowGrid.iconToTextGap,
                       leading: const _SettingsTileIcon(
                         icon: Symbols.privacy_tip_rounded,
                       ),
@@ -312,12 +314,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                     supportsMobileAdDebugging) ...[
                   hk_ui.PremiumCard(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: HkSpacing.space6,
+                      horizontal: SettingsRowGrid.contentInset,
                       vertical: HkSpacing.xs,
                     ),
                     child: ListTile(
                       key: const ValueKey('settings-ad-inspector'),
                       contentPadding: EdgeInsets.zero,
+                      minLeadingWidth: SettingsRowGrid.leadingWidth,
+                      horizontalTitleGap: SettingsRowGrid.iconToTextGap,
                       leading: const _SettingsTileIcon(
                         icon: Symbols.bug_report_rounded,
                       ),
@@ -335,11 +339,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 ],
                 hk_ui.PremiumCard(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: HkSpacing.space6,
+                    horizontal: SettingsRowGrid.contentInset,
                     vertical: HkSpacing.xs,
                   ),
                   child: ListTile(
+                    key: const ValueKey('settings-weather-row'),
                     contentPadding: EdgeInsets.zero,
+                    minLeadingWidth: SettingsRowGrid.leadingWidth,
+                    horizontalTitleGap: SettingsRowGrid.iconToTextGap,
                     leading: _SettingsTileIcon(
                       icon: weather == null
                           ? Symbols.location_on_rounded
@@ -453,9 +460,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                               key: const ValueKey(
                                 'settings-permission-education',
                               ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: HkSpacing.xs,
-                              ),
+                              contentPadding: EdgeInsets.zero,
                               leading: const _SettingsTileIcon(
                                 icon: Symbols.health_and_safety_rounded,
                               ),
@@ -485,9 +490,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                         child: Column(
                           children: [
                             SwitchListTile(
+                              key: const ValueKey('settings-alerts-row'),
                               contentPadding: EdgeInsets.zero,
-                              secondary: const Icon(
-                                Icons.notifications_active_outlined,
+                              secondary: const _SettingsPlainIcon(
+                                icon: Icons.notifications_active_outlined,
                               ),
                               title: Text(context.l10n.owntendAlerts),
                               subtitle: Text(
@@ -529,7 +535,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                             else
                               SwitchListTile(
                                 contentPadding: EdgeInsets.zero,
-                                secondary: const Icon(Symbols.alarm_rounded),
+                                secondary: const _SettingsPlainIcon(
+                                  icon: Symbols.alarm_rounded,
+                                ),
                                 title: Text(context.l10n.deviceReminders),
                                 subtitle: Text(
                                   context.l10n.scheduledAndroidReminderDelivery,
@@ -576,7 +584,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                             else
                               SwitchListTile(
                                 contentPadding: EdgeInsets.zero,
-                                secondary: const Icon(Symbols.alarm_on_rounded),
+                                secondary: const _SettingsPlainIcon(
+                                  icon: Symbols.alarm_on_rounded,
+                                ),
                                 title: Text(context.l10n.preciseReminderAlarms),
                                 subtitle: Text(
                                   context
@@ -604,7 +614,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                             const _SettingsPreferenceDivider(),
                             SwitchListTile(
                               contentPadding: EdgeInsets.zero,
-                              secondary: const Icon(Symbols.inbox_rounded),
+                              secondary: const _SettingsPlainIcon(
+                                icon: Symbols.inbox_rounded,
+                              ),
                               title: Text(context.l10n.inAppInbox),
                               subtitle: Text(
                                 context.l10n.unreadTaskWeatherAndDigestUpdates,
@@ -625,7 +637,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                             ),
                             SwitchListTile(
                               contentPadding: EdgeInsets.zero,
-                              secondary: const Icon(Symbols.rainy_rounded),
+                              secondary: const _SettingsPlainIcon(
+                                icon: Symbols.rainy_rounded,
+                              ),
                               title: Text(context.l10n.weatherAlerts),
                               subtitle: Text(
                                 context.l10n.weatherAlertsInboxDescription,
@@ -647,8 +661,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                             const _SettingsPreferenceDivider(),
                             SwitchListTile(
                               contentPadding: EdgeInsets.zero,
-                              secondary: const Icon(
-                                Symbols.do_not_disturb_on_rounded,
+                              secondary: const _SettingsPlainIcon(
+                                icon: Symbols.do_not_disturb_on_rounded,
                               ),
                               title: Text(context.l10n.quietHours),
                               subtitle: Text(
@@ -677,8 +691,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                                   children: [
                                     ListTile(
                                       contentPadding: EdgeInsets.zero,
-                                      leading: const Icon(
-                                        Symbols.bedtime_rounded,
+                                      leading: const _SettingsPlainIcon(
+                                        icon: Symbols.bedtime_rounded,
                                       ),
                                       title: Text(context.l10n.quietHoursStart),
                                       subtitle: Text(
@@ -705,8 +719,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                                     ),
                                     ListTile(
                                       contentPadding: EdgeInsets.zero,
-                                      leading: const Icon(
-                                        Symbols.wb_sunny_rounded,
+                                      leading: const _SettingsPlainIcon(
+                                        icon: Symbols.wb_sunny_rounded,
                                       ),
                                       title: Text(context.l10n.quietHoursEnd),
                                       subtitle: Text(
@@ -716,8 +730,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                                               .quietHoursEndMinutes,
                                         ),
                                       ),
-                                      trailing: const Icon(
-                                        Symbols.chevron_right_rounded,
+                                      trailing: Icon(
+                                        Directionality.of(context) ==
+                                                TextDirection.rtl
+                                            ? Symbols.chevron_left_rounded
+                                            : Symbols.chevron_right_rounded,
                                       ),
                                       onTap: notificationPreferences.enabled
                                           ? () => _pickQuietHour(
@@ -730,8 +747,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                                     ),
                                     SwitchListTile(
                                       contentPadding: EdgeInsets.zero,
-                                      secondary: const Icon(
-                                        Symbols.priority_high_rounded,
+                                      secondary: const _SettingsPlainIcon(
+                                        icon: Symbols.priority_high_rounded,
                                       ),
                                       title: Text(
                                         context.l10n.criticalRemindersBypass,
@@ -764,8 +781,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                             ],
                             SwitchListTile(
                               contentPadding: EdgeInsets.zero,
-                              secondary: const Icon(
-                                Symbols.privacy_tip_rounded,
+                              secondary: const _SettingsPlainIcon(
+                                icon: Symbols.privacy_tip_rounded,
                               ),
                               title: Text(context.l10n.hideLockScreenDetails),
                               subtitle: Text(
@@ -789,7 +806,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                             ),
                             SwitchListTile(
                               contentPadding: EdgeInsets.zero,
-                              secondary: const Icon(Symbols.summarize_rounded),
+                              secondary: const _SettingsPlainIcon(
+                                icon: Symbols.summarize_rounded,
+                              ),
                               title: Text(context.l10n.dailyDigest),
                               subtitle: Text(
                                 context.l10n.groupedReminderSummary,
@@ -811,7 +830,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                             const _SettingsPreferenceDivider(),
                             ListTile(
                               contentPadding: EdgeInsets.zero,
-                              leading: const Icon(Symbols.snooze_rounded),
+                              leading: const _SettingsPlainIcon(
+                                icon: Symbols.snooze_rounded,
+                              ),
                               title: Text(context.l10n.defaultSnooze),
                               subtitle: Text(
                                 _durationLabel(
@@ -856,8 +877,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                             ),
                             ListTile(
                               contentPadding: EdgeInsets.zero,
-                              leading: const Icon(
-                                Symbols.notifications_rounded,
+                              leading: const _SettingsPlainIcon(
+                                icon: Symbols.notifications_rounded,
                               ),
                               title: Text(context.l10n.maxRemindersPerDay),
                               subtitle: Text(
@@ -903,7 +924,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                             ),
                             ListTile(
                               contentPadding: EdgeInsets.zero,
-                              leading: const Icon(Symbols.schedule_rounded),
+                              leading: const _SettingsPlainIcon(
+                                icon: Symbols.schedule_rounded,
+                              ),
                               title: Text(context.l10n.reminderTime),
                               subtitle: Text(
                                 _hourLabel(
@@ -939,7 +962,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                             ),
                             ListTile(
                               contentPadding: EdgeInsets.zero,
-                              leading: const Icon(Symbols.event_note_rounded),
+                              leading: const _SettingsPlainIcon(
+                                icon: Symbols.event_note_rounded,
+                              ),
                               title: Text(context.l10n.digestTime),
                               subtitle: Text(
                                 _hourLabel(
@@ -1397,6 +1422,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   }
 }
 
+class SettingsRowGrid extends StatelessWidget {
+  const SettingsRowGrid({required this.child, super.key});
+
+  static const double contentInset = HkSpacing.space20;
+  static const double leadingWidth = 40;
+  static const double iconToTextGap = HkSpacing.sm;
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTileTheme(
+      data: Theme.of(context).listTileTheme.copyWith(
+        minLeadingWidth: leadingWidth,
+        horizontalTitleGap: iconToTextGap,
+      ),
+      child: child,
+    );
+  }
+}
+
 class _SettingsCardHeader extends StatelessWidget {
   const _SettingsCardHeader({required this.icon, required this.title});
 
@@ -1461,9 +1507,11 @@ class _SettingsPanel extends StatelessWidget {
           horizontal: HkSpacing.space4,
           vertical: HkSpacing.space4,
         ),
-        child: IconTheme(
-          data: IconThemeData(color: scheme.primary),
-          child: child,
+        child: SettingsRowGrid(
+          child: IconTheme(
+            data: IconThemeData(color: scheme.primary),
+            child: child,
+          ),
         ),
       ),
     );
@@ -1474,7 +1522,7 @@ class _SettingsTileIcon extends StatelessWidget {
   const _SettingsTileIcon({
     required this.icon,
     this.color,
-    this.size = 40,
+    this.size = SettingsRowGrid.leadingWidth,
     this.iconSize = 21,
   });
 
@@ -1499,17 +1547,35 @@ class _SettingsTileIcon extends StatelessWidget {
   }
 }
 
+class _SettingsPlainIcon extends StatelessWidget {
+  const _SettingsPlainIcon({required this.icon});
+
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox.square(
+      dimension: SettingsRowGrid.leadingWidth,
+      child: Center(child: Icon(icon)),
+    );
+  }
+}
+
 class _SettingsPreferenceDivider extends StatelessWidget {
   const _SettingsPreferenceDivider();
 
   @override
   Widget build(BuildContext context) {
-    return Divider(
-      height: HkSpacing.space4,
-      indent: 52,
-      endIndent: HkSpacing.xs,
-      color: Theme.of(context).colorScheme.outlineVariant
-          .withValues(alpha: 0.72),
+    return Padding(
+      padding: const EdgeInsetsDirectional.only(
+        start: SettingsRowGrid.leadingWidth + SettingsRowGrid.iconToTextGap,
+        end: HkSpacing.xs,
+      ),
+      child: Divider(
+        height: HkSpacing.space4,
+        color: Theme.of(context).colorScheme.outlineVariant
+            .withValues(alpha: 0.72),
+      ),
     );
   }
 }
@@ -1637,10 +1703,7 @@ class _EffectiveCapabilityPreferenceTile extends StatelessWidget {
     return Semantics(
       container: true,
       child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: HkSpacing.xs,
-          vertical: HkSpacing.sm,
-        ),
+        padding: const EdgeInsets.symmetric(vertical: HkSpacing.sm),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
