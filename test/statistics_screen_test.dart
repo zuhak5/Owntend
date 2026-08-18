@@ -115,6 +115,10 @@ void main() {
     final distribution = find.byKey(
       const ValueKey('statistics-chart-distribution'),
     );
+    final monthlySize = tester.getSize(monthly);
+    final distributionSize = tester.getSize(distribution);
+    final monthlyTop = tester.getTopLeft(monthly).dy;
+    final distributionTop = tester.getTopLeft(distribution).dy;
 
     expect(
       (tester.getSize(completion).width - tester.getSize(overdue).width).abs(),
@@ -124,14 +128,8 @@ void main() {
       (tester.getTopLeft(completion).dy - tester.getTopLeft(overdue).dy).abs(),
       lessThan(0.5),
     );
-    expect(
-      (tester.getSize(monthly).width - tester.getSize(distribution).width).abs(),
-      lessThan(0.5),
-    );
-    expect(
-      (tester.getTopLeft(monthly).dy - tester.getTopLeft(distribution).dy).abs(),
-      lessThan(0.5),
-    );
+    expect((monthlySize.width - distributionSize.width).abs(), lessThan(0.5));
+    expect((monthlyTop - distributionTop).abs(), lessThan(0.5));
     expect(tester.takeException(), isNull);
   });
 
