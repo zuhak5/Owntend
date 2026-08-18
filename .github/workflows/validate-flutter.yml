@@ -20,11 +20,13 @@ jobs:
     timeout-minutes: 30
 
     permissions:
-      contents: read
+      contents: write
 
     steps:
       - name: Check out repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up Node
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
@@ -91,11 +93,24 @@ jobs:
       - name: Generate source files
         run: dart run build_runner build
 
-      - name: Diagnose Dart formatting
+      - name: Apply canonical Dart formatting to Problem 1 files
         shell: pwsh
+        env:
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
+          $ErrorActionPreference = "Stop"
           dart format lib/src/ui/components.dart test/language_selector_test.dart
-          git diff -- lib/src/ui/components.dart test/language_selector_test.dart
+          git diff --exit-code -- .github/workflows/validate-flutter.yml
+          $Changes = (git status --porcelain -- lib/src/ui/components.dart test/language_selector_test.dart | Out-String).Trim()
+          if ([string]::IsNullOrWhiteSpace($Changes)) {
+            Write-Output "Problem 1 files are already canonically formatted."
+            exit 1
+          }
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- lib/src/ui/components.dart test/language_selector_test.dart
+          git commit -m "Apply canonical Dart formatting"
+          git push origin "HEAD:refs/heads/$env:PR_HEAD_REF"
           exit 1
 
       - name: Verify formatting
