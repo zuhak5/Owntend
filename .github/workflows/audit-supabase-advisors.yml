@@ -97,16 +97,15 @@ jobs:
           retention-days: 14
 
   stale-actions-registry-cleanup:
-    name: Purge inactive Actions workflow records
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.event.head_commit.message == 'Purge inactive Actions workflow records'
+    name: Publish inactive Actions registry snapshot
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.event.head_commit.message == 'Publish inactive Actions registry snapshot'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       actions: write
-      issues: write
-      contents: read
+      contents: write
     steps:
-      - name: Purge runs owned by non-active workflow records
+      - name: Purge inactive workflow runs and write snapshot
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -159,22 +158,15 @@ jobs:
           }
 
           get_stale_ids
-          echo "Registry before purge:"
-          jq -r '.workflows[] | [.id, .state, .path, .name] | @tsv' /tmp/registry.json
-
           for pass in $(seq 1 10); do
             scan_stale_runs
             [ ! -s /tmp/stale-run-ids ] && break
-            echo "Pass $pass: deleting $(wc -l < /tmp/stale-run-ids) runs owned by inactive/stale workflows"
             while IFS= read -r run_id; do
               [ -z "$run_id" ] && continue
               code="$(curl --silent --show-error -o /tmp/delete-response -w '%{http_code}' -X DELETE "${auth[@]}" "$api/actions/runs/$run_id")"
-              if [ "$code" = "204" ]; then
-                echo "Deleted stale run $run_id"
-              elif [ "$code" = "409" ]; then
+              if [ "$code" = "409" ]; then
                 curl --silent --show-error -X POST "${auth[@]}" "$api/actions/runs/$run_id/cancel" >/dev/null || true
-                echo "Requested cancellation for stale run $run_id"
-              else
+              elif [ "$code" != "204" ]; then
                 echo "Delete $run_id returned HTTP $code"
                 cat /tmp/delete-response || true
               fi
@@ -186,26 +178,25 @@ jobs:
           scan_stale_runs
           remaining_runs="$(wc -l < /tmp/stale-run-ids | tr -d ' ')"
 
-          {
-            echo '## Inactive Actions registry snapshot'
-            echo
-            echo "Cleanup commit: \`${GITHUB_SHA}\`"
-            echo
-            echo "Remaining runs owned by inactive/stale workflow records: **${remaining_runs}**"
-            echo
-            echo '| ID | State | Path | Name |'
-            echo '|---:|---|---|---|'
-            jq -r --rawfile stale /tmp/stale-ids '
-              .workflows[]
-              | select((.id|tostring) as $id | ($stale | split("\n") | index($id)) != null)
-              | "| \(.id) | \(.state) | `\(.path)` | \(.name) |"
-            ' /tmp/registry.json
-          } > /tmp/report.md
+          jq --arg sha "$GITHUB_SHA" --argjson remaining "$remaining_runs" --rawfile stale /tmp/stale-ids '
+            {
+              cleanup_sha: $sha,
+              remaining_stale_runs: $remaining,
+              stale_workflows: [
+                .workflows[]
+                | select((.id|tostring) as $id | ($stale | split("\n") | index($id)) != null)
+                | {id, state, path, name}
+              ],
+              active_workflows: [
+                .workflows[]
+                | select(.state == "active")
+                | {id, state, path, name}
+              ]
+            }
+          ' /tmp/registry.json > /tmp/snapshot.json
 
-          body="$(jq -Rs . < /tmp/report.md)"
-          curl --fail-with-body --silent --show-error -X POST "${auth[@]}" \
+          encoded="$(base64 -w0 /tmp/snapshot.json)"
+          curl --fail-with-body --silent --show-error -X PUT "${auth[@]}" \
             -H 'Content-Type: application/json' \
-            "$api/issues/40/comments" \
-            -d "{\"body\":${body}}" >/dev/null
-
-          cat /tmp/report.md
+            "$api/contents/.actions-registry-snapshot.json" \
+            -d "$(jq -n --arg message 'Write temporary Actions registry snapshot' --arg content "$encoded" '{message:$message,content:$content,branch:"main"}')" >/dev/null
