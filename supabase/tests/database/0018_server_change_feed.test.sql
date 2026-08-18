@@ -39,13 +39,13 @@ select extensions.results_eq(
   $$ select entity_type, record_id, op_type
      from public.server_change_feed
      where user_id = '00000000-0000-0000-0000-00000000000a'
-       and entity_type = 'profiles'
-       and record_id = '00000000-0000-0000-0000-00000000000a'
+       and entity_type = 'profile'
+       and record_id = 'profile'
      order by change_seq asc
      limit 1 $$,
   $$ values (
-    'profiles',
-    '00000000-0000-0000-0000-00000000000a',
+    'profile',
+    'profile',
     'INSERT'
   ) $$,
   'Auth user initialization logs profile INSERT change feed entry'
@@ -71,9 +71,9 @@ select extensions.results_eq(
   $$ select entity_type, record_id, op_type
      from public.server_change_feed
      where user_id = '00000000-0000-0000-0000-00000000000a'
-       and entity_type = 'areas'
+       and entity_type = 'area'
        and record_id = 'area-1' $$,
-  $$ values ('areas', 'area-1', 'INSERT') $$,
+  $$ values ('area', 'area-1', 'INSERT') $$,
   'INSERT on areas automatically logs INSERT change feed entry'
 );
 
@@ -103,7 +103,7 @@ select extensions.results_eq(
   $$ select count(distinct change_seq)
      from public.server_change_feed
      where user_id = '00000000-0000-0000-0000-00000000000a'
-       and entity_type = 'areas' $$,
+       and entity_type = 'area' $$,
   $$ values (3::bigint) $$,
   'All 3 area operations created unique monotonic change sequences'
 );

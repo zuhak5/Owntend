@@ -89,7 +89,7 @@ Asset and photo identifiers are text throughout the synced tables and media RPC 
 
 Realtime is an invalidation mechanism, not a replacement for authenticated pull and revision checks. The client must tolerate dropped, duplicated, delayed, and out-of-order events.
 
-The baseline adds the 17 synchronized app tables to `supabase_realtime` and uses `REPLICA IDENTITY FULL`. `fn_log_server_change_feed()` derives record keys by table shape: ordinary `id`, detail `asset_id`, metadata `plan_id`, setting `key`, profile `user_id`, and the `asset_id|tag_id` composite for asset tags. Realtime payloads remain hints; durable insert, update, and delete authority comes from authenticated pulls and the owner-scoped change feed.
+The baseline adds the 17 synchronized app tables to `supabase_realtime` and uses `REPLICA IDENTITY FULL`. Change-feed protocol v2 maps those same tables one-to-one to canonical client entity identifiers and persists typed `key_data` for each row, including both columns of the `asset_tag` composite key. The forward hardening migration deliberately keeps `sync_feed_capabilities.enabled = false`; hosted enablement requires separate compatibility/parity verification. Realtime payloads remain hints; durable insert, update, and delete authority comes from authenticated pulls and the owner-scoped change feed.
 
 ## Edge Functions
 
