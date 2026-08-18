@@ -66,8 +66,7 @@ void main() {
       expect(
         textStarts.first - iconStarts.first,
         closeTo(
-          SettingsRowGrid.leadingWidth / 2 +
-              SettingsRowGrid.iconToTextGap,
+          SettingsRowGrid.leadingWidth / 2 + SettingsRowGrid.iconToTextGap,
           1,
         ),
       );
@@ -101,9 +100,7 @@ void main() {
         await tester.pumpAndSettle();
 
         final alerts = find.byKey(const ValueKey('grid-alerts-row'));
-        final weatherAction = find.byKey(
-          const ValueKey('grid-weather-action'),
-        );
+        final weatherAction = find.byKey(const ValueKey('grid-weather-action'));
         expect(tester.getSize(alerts).height, greaterThanOrEqualTo(48));
         expect(tester.getSize(weatherAction).width, greaterThanOrEqualTo(48));
         expect(tester.getSize(weatherAction).height, greaterThanOrEqualTo(48));
@@ -116,26 +113,28 @@ void main() {
     },
   );
 
-  test('Settings screen applies the grid without reviving physical offsets', () {
-    final source = File(
-      'lib/src/features/settings/presentation/settings_screen.dart',
-    ).readAsStringSync();
+  test(
+    'Settings screen applies the grid without reviving physical offsets',
+    () {
+      final source = File(
+        'lib/src/features/settings/presentation/settings_screen.dart',
+      ).readAsStringSync();
 
-    expect(source, contains('SettingsRowGrid('));
-    expect(source, contains("ValueKey('settings-weather-row')"));
-    expect(source, contains("ValueKey('settings-alerts-row')"));
-    expect(source, contains('_SettingsPlainIcon('));
-    expect(source, contains('EdgeInsetsDirectional.only('));
-    expect(source, isNot(contains('indent: 52')));
-    expect(
-      SettingsRowGrid.contentInset,
-      HkSpacing.md + HkSpacing.space4,
-    );
-  });
+      expect(source, contains('SettingsRowGrid('));
+      expect(source, contains("ValueKey('settings-weather-row')"));
+      expect(source, contains("ValueKey('settings-alerts-row')"));
+      expect(source, contains('_SettingsPlainIcon('));
+      expect(source, contains('EdgeInsetsDirectional.only('));
+      expect(source, isNot(contains('indent: 52')));
+      expect(SettingsRowGrid.contentInset, HkSpacing.md + HkSpacing.space4);
+    },
+  );
 }
 
 double _logicalCenter(Rect rect, double width, TextDirection direction) {
-  return direction == TextDirection.ltr ? rect.center.dx : width - rect.center.dx;
+  return direction == TextDirection.ltr
+      ? rect.center.dx
+      : width - rect.center.dx;
 }
 
 double _logicalStart(Rect rect, double width, TextDirection direction) {
@@ -174,13 +173,14 @@ class _GridHost extends StatelessWidget {
       home: Builder(
         builder: (context) {
           return MediaQuery(
-            data: MediaQuery.of(context).copyWith(
-              textScaler: TextScaler.linear(textScale),
-            ),
+            data: MediaQuery.of(context)
+                .copyWith(textScaler: TextScaler.linear(textScale)),
             child: Scaffold(
               body: SettingsRowGrid(
                 child: ListView(
-                  padding: const EdgeInsetsDirectional.symmetric(horizontal: 16),
+                  padding: const EdgeInsetsDirectional.symmetric(
+                    horizontal: 16,
+                  ),
                   children: [
                     Padding(
                       padding: const EdgeInsetsDirectional.symmetric(
@@ -193,9 +193,7 @@ class _GridHost extends StatelessWidget {
                             key: ValueKey('grid-language-icon'),
                             icon: Icons.language,
                           ),
-                          const SizedBox(
-                            width: SettingsRowGrid.iconToTextGap,
-                          ),
+                          const SizedBox(width: SettingsRowGrid.iconToTextGap),
                           Expanded(
                             child: Text(
                               rtl ? 'اللغة' : 'Language',

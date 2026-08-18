@@ -161,7 +161,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                                       ),
                                       icon: isCompactLayout
                                           ? null
-                                          : const Icon(Symbols.dark_mode_rounded),
+                                          : const Icon(
+                                              Symbols.dark_mode_rounded,
+                                            ),
                                     ),
                                     ButtonSegment(
                                       value: ThemePreference.system,
@@ -177,7 +179,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                                       ),
                                       icon: isCompactLayout
                                           ? null
-                                          : const Icon(Symbols.schedule_rounded),
+                                          : const Icon(
+                                              Symbols.schedule_rounded,
+                                            ),
                                     ),
                                   ],
                                   selected: {themePreference},
@@ -203,10 +207,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                               : context
                                     .l10n
                                     .manualSelectionStaysActiveUntilYouChooseAnotherMode,
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color:
-                                Theme.of(context).colorScheme.onSurfaceVariant,
-                          ),
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
+                              ),
                         ),
                       ],
                     ),
@@ -256,7 +262,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                                     context.l10n.language,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: Theme.of(context).textTheme.titleMedium
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
                                         ?.copyWith(fontWeight: FontWeight.w800),
                                   ),
                                 ),
@@ -487,8 +495,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                                       ? Symbols.chevron_left_rounded
                                       : Symbols.chevron_right_rounded,
                                 ),
-                                onTap: () =>
-                                    _openPermissionSetup(context, ref),
+                                onTap: () => _openPermissionSetup(context, ref),
                               ),
                             ],
                           ),
@@ -570,10 +577,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                                                 context,
                                                 ref,
                                                 notificationPreferences,
-                                                notificationPreferences.copyWith(
-                                                  localReminders: false,
-                                                  preferExactReminders: false,
-                                                ),
+                                                notificationPreferences
+                                                    .copyWith(
+                                                      localReminders: false,
+                                                      preferExactReminders:
+                                                          false,
+                                                    ),
                                               )
                                       : null,
                                 ),
@@ -597,7 +606,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                                       .notifications
                                       .exactTimingState,
                                   approximateWhenDegraded: true,
-                                  onFix: notificationPreferences
+                                  onFix:
+                                      notificationPreferences
                                           .allowsLocalReminders
                                       ? () => _enableExactTiming(context, ref)
                                       : null,
@@ -629,9 +639,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                                                 context,
                                                 ref,
                                                 notificationPreferences,
-                                                notificationPreferences.copyWith(
-                                                  preferExactReminders: false,
-                                                ),
+                                                notificationPreferences
+                                                    .copyWith(
+                                                      preferExactReminders:
+                                                          false,
+                                                    ),
                                               )
                                       : null,
                                 ),
@@ -711,10 +723,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                               if (notificationPreferences
                                   .quietHoursEnabled) ...[
                                 Padding(
-                                  padding:
-                                      const EdgeInsetsDirectional.only(
-                                        start: HkSpacing.sm,
-                                      ),
+                                  padding: const EdgeInsetsDirectional.only(
+                                    start: HkSpacing.sm,
+                                  ),
                                   child: Column(
                                     children: [
                                       ListTile(
@@ -752,9 +763,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                                         leading: const _SettingsPlainIcon(
                                           icon: Symbols.wb_sunny_rounded,
                                         ),
-                                        title: Text(
-                                          context.l10n.quietHoursEnd,
-                                        ),
+                                        title: Text(context.l10n.quietHoursEnd),
                                         subtitle: Text(
                                           _minutesLabel(
                                             context,
@@ -802,10 +811,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                                                 context,
                                                 ref,
                                                 notificationPreferences,
-                                                notificationPreferences.copyWith(
-                                                  criticalBypassQuietHours:
-                                                      value,
-                                                ),
+                                                notificationPreferences
+                                                    .copyWith(
+                                                      criticalBypassQuietHours:
+                                                          value,
+                                                    ),
                                               )
                                             : null,
                                       ),
@@ -818,9 +828,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                                 secondary: const _SettingsPlainIcon(
                                   icon: Symbols.privacy_tip_rounded,
                                 ),
-                                title: Text(
-                                  context.l10n.hideLockScreenDetails,
-                                ),
+                                title: Text(context.l10n.hideLockScreenDetails),
                                 subtitle: Text(
                                   context
                                       .l10n
@@ -916,17 +924,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                                 leading: const _SettingsPlainIcon(
                                   icon: Symbols.notifications_rounded,
                                 ),
-                                title: Text(
-                                  context.l10n.maxRemindersPerDay,
-                                ),
+                                title: Text(context.l10n.maxRemindersPerDay),
                                 subtitle: Text(
                                   context.l10n.reminderCountLabel(
                                     notificationPreferences.maxRemindersPerDay,
                                   ),
                                 ),
                                 trailing: DropdownButton<int>(
-                                  value:
-                                      notificationPreferences.maxRemindersPerDay,
+                                  value: notificationPreferences
+                                      .maxRemindersPerDay,
                                   items: [
                                     for (final count in const [
                                       2,
@@ -1740,9 +1746,7 @@ class _EffectiveCapabilityPreferenceTile extends StatelessWidget {
     return Semantics(
       container: true,
       child: Padding(
-        padding: const EdgeInsets.symmetric(
-          vertical: HkSpacing.sm,
-        ),
+        padding: const EdgeInsets.symmetric(vertical: HkSpacing.sm),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
