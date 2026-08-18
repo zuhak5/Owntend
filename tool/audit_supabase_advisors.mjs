@@ -83,16 +83,23 @@ export async function auditSupabaseAdvisors({
   const allowed = findings.filter((finding) =>
     allowedAdvisorTitles.has(finding.title),
   );
+  const informational = findings.filter(
+    (finding) =>
+      !allowedAdvisorTitles.has(finding.title) && finding.level === 'INFO',
+  );
   const actionable = findings.filter(
-    (finding) => !allowedAdvisorTitles.has(finding.title),
+    (finding) =>
+      !allowedAdvisorTitles.has(finding.title) && finding.level !== 'INFO',
   );
   return {
     projectRef: resolvedRef,
     checkedAt: new Date().toISOString(),
     findingCount: findings.length,
     allowedExceptionCount: allowed.length,
+    informationalCount: informational.length,
     actionableCount: actionable.length,
     allowed,
+    informational,
     actionable,
   };
 }
@@ -127,12 +134,19 @@ async function main() {
   console.log(
     `Supabase Advisors: ${report.findingCount} total, ` +
       `${report.allowedExceptionCount} explicitly allowed, ` +
+      `${report.informationalCount} informational, ` +
       `${report.actionableCount} actionable.`,
   );
-  for (const finding of [...report.actionable, ...report.allowed]) {
+  for (const finding of [
+    ...report.actionable,
+    ...report.allowed,
+    ...report.informational,
+  ]) {
     const disposition = allowedAdvisorTitles.has(finding.title)
       ? 'ALLOWED'
-      : 'ACTION REQUIRED';
+      : finding.level === 'INFO'
+        ? 'INFO'
+        : 'ACTION REQUIRED';
     console.log(
       `[${disposition}] [${finding.kind}] [${finding.level}] ` +
         `${finding.name}: ${finding.title}`,
