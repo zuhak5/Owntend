@@ -4,12 +4,13 @@ create extension if not exists pgtap with schema extensions;
 set local role postgres;
 set search_path = public, extensions, pg_catalog;
 
-select extensions.plan(14);
+select extensions.plan(15);
 
 -- 1. Check RPC Existence & Function Grants
 select extensions.has_function('public', 'get_sync_feed_capability', ARRAY[]::text[], 'get_sync_feed_capability RPC exists');
 select extensions.has_function('public', 'fetch_user_change_feed', ARRAY['bigint', 'integer'], 'fetch_user_change_feed RPC exists');
-select extensions.has_function('public', 'validate_change_feed_parity', ARRAY['uuid'], 'validate_change_feed_parity RPC exists');
+select extensions.has_function('public', 'validate_change_feed_parity', ARRAY[]::text[], 'owner-scoped validate_change_feed_parity RPC exists');
+select extensions.hasnt_function('public', 'validate_change_feed_parity', ARRAY['uuid'], 'caller-selected parity RPC was removed');
 
 select extensions.ok(
   not (select has_function_privilege('anon', 'public.fetch_user_change_feed(bigint, integer)', 'execute')),
@@ -88,9 +89,9 @@ set local role authenticated;
 set local "request.jwt.claims" = '{"sub": "00000000-0000-0000-0000-00000000000a"}';
 
 select extensions.results_eq(
-  $$ select is_parity from public.validate_change_feed_parity('00000000-0000-0000-0000-00000000000a') where entity_type = 'area' $$,
+  $$ select is_parity from public.validate_change_feed_parity() where entity_type = 'area' $$,
   $$ values (true) $$,
-  'Dark parity validator verifies canonical area entity count matches change feed net count'
+  'Dark parity validator derives User A from auth.uid and matches change feed net count'
 );
 
 -- 6. Resnapshot Required Test
