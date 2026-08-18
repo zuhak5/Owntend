@@ -286,3 +286,5 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "Minimize Settings layout diff [settings-minimize]"
           git push origin HEAD:agent/problem-2-settings-layout
+
+# Temporary branch-only helper; removed before final review.
