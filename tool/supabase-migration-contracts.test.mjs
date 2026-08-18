@@ -80,7 +80,7 @@ test('profile revision baseline protects NULL initialization from metadata trigg
   );
 });
 
-test('prelaunch hosted reset is explicit, exact-main, project-bound, and lifecycle-gated', async () => {
+test('prelaunch hosted reset is explicit, exact-main, project-bound, lifecycle-gated, and non-interactive', async () => {
   const workflow = await fs.readFile(supabaseDeploymentWorkflow, 'utf8');
 
   assert.match(workflow, /reset-prelaunch-database/);
@@ -94,10 +94,12 @@ test('prelaunch hosted reset is explicit, exact-main, project-bound, and lifecyc
   assert.match(workflow, /test "\$source_sha" = "\$remote_sha"/);
   assert.match(workflow, /test "\$INPUT_PROJECT_REF" = "\$expected_ref"/);
   assert.match(workflow, /environment: production-supabase-migrations/);
-  assert.match(workflow, /npx supabase db reset --linked --no-seed/);
+  assert.match(workflow, /npx supabase db reset --linked --no-seed --yes/);
   assert.match(workflow, /npx supabase db push --linked --dry-run/);
 
-  const resetIndex = workflow.indexOf('npx supabase db reset --linked --no-seed');
+  const resetIndex = workflow.indexOf(
+    'npx supabase db reset --linked --no-seed --yes',
+  );
   const finalDryRunIndex = workflow.lastIndexOf(
     'npx supabase db push --linked --dry-run',
   );
