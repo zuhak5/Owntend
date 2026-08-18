@@ -4,7 +4,7 @@ create extension if not exists pgtap with schema extensions;
 set local role postgres;
 set search_path = public, extensions, pg_catalog;
 
-select extensions.plan(22);
+select extensions.plan(26);
 
 -- ENV-004 public API shape: client RPCs are owner-scoped and no longer accept
 -- a caller-selected user id.
@@ -83,19 +83,28 @@ select extensions.ok(
   'authenticated cannot execute trigger logger'
 );
 
--- Future postgres-owned public functions are opt-in for Data API roles.
-create function public._env004_default_acl_probe()
-returns integer
-language sql
-security invoker
-set search_path = ''
-as $$ select 1 $$;
-
+-- service_role is not part of the mobile change-feed API surface. Protected
+-- operator checks use direct SQL, so these RPCs remain explicit authenticated-only
+-- endpoints rather than silently inheriting Supabase's existing-project defaults.
 select extensions.ok(
-  not has_function_privilege('anon', 'public._env004_default_acl_probe()', 'execute')
-  and not has_function_privilege('authenticated', 'public._env004_default_acl_probe()', 'execute')
-  and not has_function_privilege('service_role', 'public._env004_default_acl_probe()', 'execute'),
-  'postgres default function privileges do not auto-grant Data API execution'
+  not has_function_privilege('service_role', 'public.get_sync_feed_capability()', 'execute'),
+  'service_role cannot execute capability RPC'
+);
+select extensions.ok(
+  not has_function_privilege('service_role', 'public.fetch_user_change_feed(bigint,integer)', 'execute'),
+  'service_role cannot execute feed pull RPC'
+);
+select extensions.ok(
+  not has_function_privilege('service_role', 'public.validate_change_feed_parity()', 'execute'),
+  'service_role cannot execute parity RPC'
+);
+select extensions.ok(
+  not has_function_privilege('service_role', 'public.get_user_change_feed_watermark()', 'execute'),
+  'service_role cannot execute watermark RPC'
+);
+select extensions.ok(
+  not has_function_privilege('service_role', 'public.fn_log_server_change_feed()', 'execute'),
+  'service_role cannot execute trigger logger'
 );
 
 rollback;
