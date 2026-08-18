@@ -110,13 +110,12 @@ String languageSelectorLabel(BuildContext context, AppLanguage language) {
   };
 }
 
-typedef LanguageSelectorTriggerBuilder =
-    Widget Function(
-      BuildContext context,
-      String label,
-      bool isOpen,
-      Widget chevron,
-    );
+typedef LanguageSelectorTriggerBuilder = Widget Function(
+  BuildContext context,
+  String label,
+  bool isOpen,
+  Widget chevron,
+);
 
 /// Shared anchored locale picker used by onboarding and Settings.
 class LanguageSelectorDropdown extends StatefulWidget {
@@ -265,12 +264,7 @@ class _LanguageSelectorDropdownState extends State<LanguageSelectorDropdown> {
         ],
         builder: (context, controller, child) {
           final trigger =
-              widget.triggerBuilder?.call(
-                context,
-                label,
-                _isOpen,
-                chevron,
-              ) ??
+              widget.triggerBuilder?.call(context, label, _isOpen, chevron) ??
               DecoratedBox(
                 decoration: BoxDecoration(
                   color: _isOpen
@@ -1064,8 +1058,7 @@ class BreathingStatusIcon extends StatefulWidget {
   State<BreathingStatusIcon> createState() => _BreathingStatusIconState();
 }
 
-class _BreathingStatusIconState
-    extends State<BreathingStatusIcon>
+class _BreathingStatusIconState extends State<BreathingStatusIcon>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller = AnimationController(
     vsync: this,

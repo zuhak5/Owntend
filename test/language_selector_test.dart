@@ -105,7 +105,9 @@ void main() {
       expect(find.byKey(const ValueKey('language-option-en')), findsNothing);
       expect(
         Directionality.of(
-          tester.element(find.byKey(const ValueKey('test-language-hit-target'))),
+          tester.element(
+            find.byKey(const ValueKey('test-language-hit-target')),
+          ),
         ),
         TextDirection.ltr,
       );
@@ -219,9 +221,8 @@ class _SelectorHostState extends State<_SelectorHost> {
         body: Builder(
           builder: (context) {
             return MediaQuery(
-              data: MediaQuery.of(context).copyWith(
-                textScaler: TextScaler.linear(widget.textScale),
-              ),
+              data: MediaQuery.of(context)
+                  .copyWith(textScaler: TextScaler.linear(widget.textScale)),
               child: Align(
                 alignment: Alignment.topCenter,
                 child: SizedBox(
