@@ -1,0 +1,83 @@
+name: Settings PR Preparation
+
+on:
+  push:
+    branches:
+      - agent/problem-2-settings-layout
+
+permissions:
+  contents: write
+
+jobs:
+  prepare-settings-pr:
+    if: github.actor == 'zuhak5' && !contains(github.event.head_commit.message, '[settings-prep]')
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: agent/problem-2-settings-layout
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: "3.47.0"
+          channel: stable
+          cache: true
+
+      - name: Resolve dependencies and generated sources
+        shell: pwsh
+        run: |
+          flutter pub get --enforce-lockfile
+          flutter gen-l10n
+          dart run build_runner build
+
+      - name: Format touched Dart files
+        shell: pwsh
+        run: >-
+          dart format
+          lib/src/features/settings/presentation/settings_screen.dart
+          test/settings_layout_test.dart
+
+      - name: Run focused Settings layout regression test
+        shell: pwsh
+        run: flutter test --no-pub test/settings_layout_test.dart
+
+      - name: Refresh intended Settings goldens
+        shell: pwsh
+        run: >-
+          flutter test
+          --no-pub
+          --update-goldens
+          --plain-name "production surfaces have stable English and Arabic visual baselines"
+          test/widget_test.dart
+
+      - name: Commit only formatter and Settings golden outputs
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $Allowed = @(
+            "lib/src/features/settings/presentation/settings_screen.dart",
+            "test/settings_layout_test.dart",
+            "test/goldens/production_settings_en.png",
+            "test/goldens/production_settings_ar.png"
+          )
+          $Changed = @(git status --porcelain | ForEach-Object { $_.Substring(3) })
+          $Unexpected = @($Changed | Where-Object { $_ -notin $Allowed })
+          if ($Unexpected.Count -gt 0) {
+            Write-Error "Unexpected generated or unrelated changes: $($Unexpected -join ', ')"
+            exit 1
+          }
+
+          git add -- $Allowed
+          git diff --cached --quiet
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "No preparation changes to commit."
+            exit 0
+          }
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Format Settings fix and refresh intended goldens [settings-prep]"
+          git push origin HEAD:agent/problem-2-settings-layout
