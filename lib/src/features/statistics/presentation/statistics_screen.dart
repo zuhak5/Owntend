@@ -311,7 +311,10 @@ class MonthlyCompletionsChart extends StatelessWidget {
         .clamp(1, 10000)
         .toDouble();
     final semanticValue = entries
-        .map((entry) => '${_statisticsMonthLabel(context, entry.key)} ${entry.value}')
+        .map(
+          (entry) =>
+              '${_statisticsMonthLabel(context, entry.key)} ${entry.value}',
+        )
         .join(', ');
 
     return Semantics(
@@ -417,9 +420,8 @@ String _statisticsMonthLabel(BuildContext context, String value) {
   final year = int.tryParse(parts[0]);
   final month = int.tryParse(parts[1]);
   if (year == null || month == null || month < 1 || month > 12) return value;
-  return DateFormat.MMM(Localizations.localeOf(context).toLanguageTag()).format(
-    DateTime(year, month),
-  );
+  final localeTag = Localizations.localeOf(context).toLanguageTag();
+  return DateFormat.MMM(localeTag).format(DateTime(year, month));
 }
 
 class TaskDistributionChart extends StatelessWidget {
@@ -453,6 +455,16 @@ class TaskDistributionChart extends StatelessWidget {
           (entry) => '${_healthGroupLabel(context, entry.key)} ${entry.value}',
         )
         .join(', ');
+    final sectionTitleStyle =
+        Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: Colors.white,
+          fontWeight: FontWeight.w700,
+        ) ??
+        const TextStyle(
+          fontSize: 11,
+          color: Colors.white,
+          fontWeight: FontWeight.w700,
+        );
 
     return Semantics(
       key: const ValueKey('statistics-distribution-chart-semantics'),
@@ -490,16 +502,7 @@ class TaskDistributionChart extends StatelessWidget {
                             ).format(entries[index].value / total),
                             color: colors[index % colors.length],
                             radius: radius,
-                            titleStyle:
-                                Theme.of(context).textTheme.labelSmall?.copyWith(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w700,
-                                    ) ??
-                                const TextStyle(
-                                  fontSize: 11,
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w700,
-                                ),
+                            titleStyle: sectionTitleStyle,
                           ),
                       ],
                     ),
