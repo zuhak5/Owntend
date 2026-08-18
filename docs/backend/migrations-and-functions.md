@@ -94,7 +94,7 @@ For the V1 zero-user production launch, the database is defined by 5 clean basel
 
 ## Pre-enable change-feed hardening
 
-[`20260818040000_change_feed_contract_v2.sql`](../../supabase/migrations/20260818040000_change_feed_contract_v2.sql) is an intentionally forward-only hardening migration because the audit could not prove every hosted environment was still at a disposable baseline. It adds typed `key_data`, canonical one-to-one client/server entity identifiers, an exhaustive private key encoder used by the feed trigger, protocol version `2.0.0`, and corrected parity semantics. The migration explicitly leaves the feed capability disabled. Applying or enabling this contract in a hosted project is a separate authorized operation and is not implied by repository CI.
+[`20260818040000_change_feed_contract_v2.sql`](../../supabase/migrations/20260818040000_change_feed_contract_v2.sql) is an intentionally forward-only hardening migration because the audit could not prove every hosted environment was still at a disposable baseline. It adds typed `key_data`, canonical one-to-one client/server entity identifiers, an exhaustive private key encoder used by the feed trigger, protocol version `2.0.0`, and corrected parity semantics. The migration explicitly leaves the feed capability disabled. [`20260818040500_qualify_change_feed_parity.sql`](../../supabase/migrations/20260818040500_qualify_change_feed_parity.sql) is a companion forward migration that qualifies parity-query column references for PostgreSQL schema lint without changing feed semantics or capability state. Applying or enabling this contract in a hosted project is a separate authorized operation and is not implied by repository CI.
 
 ## Deployment evidence
 
