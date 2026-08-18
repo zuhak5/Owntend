@@ -4,12 +4,13 @@ create extension if not exists pgtap with schema extensions;
 set local role postgres;
 set search_path = public, extensions, pg_catalog;
 
-select extensions.plan(14);
+select extensions.plan(15);
 
 -- 1. Table and Function Existence Checks
 select extensions.has_table('public', 'server_change_feed', 'server_change_feed table exists');
 select extensions.has_function('public', 'fn_log_server_change_feed', 'fn_log_server_change_feed trigger function exists');
-select extensions.has_function('public', 'get_user_change_feed_watermark', ARRAY['uuid'], 'get_user_change_feed_watermark RPC exists');
+select extensions.has_function('public', 'get_user_change_feed_watermark', ARRAY[]::text[], 'owner-scoped get_user_change_feed_watermark RPC exists');
+select extensions.hasnt_function('public', 'get_user_change_feed_watermark', ARRAY['uuid'], 'caller-selected watermark RPC was removed');
 
 -- Grants Check
 select extensions.ok(
@@ -130,11 +131,11 @@ select extensions.results_eq(
   'User B RLS policy permits reading only User B profile and area records'
 );
 
--- 5. Test Watermark Helper Function
+-- 5. Test owner-scoped Watermark Helper Function
 select extensions.results_eq(
-  $$ select total_changes from public.get_user_change_feed_watermark('00000000-0000-0000-0000-00000000000b') $$,
+  $$ select total_changes from public.get_user_change_feed_watermark() $$,
   $$ values (2::bigint) $$,
-  'Watermark helper includes User B profile and area changes'
+  'Watermark helper derives User B from auth.uid and includes only User B changes'
 );
 
 -- 6. The pre-launch baseline has no legacy backfill surface.
