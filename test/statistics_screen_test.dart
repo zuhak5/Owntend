@@ -49,15 +49,16 @@ Widget _statisticsApp(
     overrides: [
       statisticsProvider.overrideWith((ref) => Stream.value(summary)),
     ],
-    child: MediaQuery(
-      data: MediaQueryData(textScaler: textScaler),
-      child: MaterialApp(
-        locale: locale,
-        supportedLocales: AppLocalizations.supportedLocales,
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        theme: testLightTheme(),
-        home: const StatisticsScreen(),
+    child: MaterialApp(
+      locale: locale,
+      supportedLocales: AppLocalizations.supportedLocales,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      theme: testLightTheme(),
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context).copyWith(textScaler: textScaler),
+        child: child!,
       ),
+      home: const StatisticsScreen(),
     ),
   );
 }
@@ -69,8 +70,6 @@ void _setViewport(WidgetTester tester, Size size) {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-
-  setUp(() {});
 
   testWidgets('tall Statistics viewport stays content-driven and scrollable', (
     tester,
@@ -84,7 +83,9 @@ void main() {
 
     expect(find.byType(SingleChildScrollView), findsOneWidget);
     expect(
-      tester.getSize(find.byKey(const ValueKey('statistics-chart-monthly'))).height,
+      tester
+          .getSize(find.byKey(const ValueKey('statistics-chart-monthly')))
+          .height,
       lessThan(400),
     );
     expect(
@@ -202,7 +203,9 @@ void main() {
       findsNothing,
     );
     expect(
-      tester.getTopLeft(find.byKey(const ValueKey('statistics-legend-other'))).dy,
+      tester
+          .getTopLeft(find.byKey(const ValueKey('statistics-legend-other')))
+          .dy,
       greaterThan(
         tester
             .getTopLeft(find.byKey(const ValueKey('statistics-legend-safety')))
@@ -210,12 +213,19 @@ void main() {
       ),
     );
 
-    final node = tester.getSemantics(
-      find.byKey(const ValueKey('statistics-distribution-chart-semantics')),
+    final semanticsData = tester
+        .getSemantics(
+          find.byKey(
+            const ValueKey('statistics-distribution-chart-semantics'),
+          ),
+        )
+        .getSemanticsData();
+    expect(
+      semanticsData.label,
+      lookupAppLocalizations(const Locale('en')).taskDistribution,
     );
-    expect(node.label, lookupAppLocalizations(const Locale('en')).taskDistribution);
-    expect(node.value, contains('6'));
-    expect(node.value, contains('1'));
+    expect(semanticsData.value, contains('6'));
+    expect(semanticsData.value, contains('1'));
     expect(tester.takeException(), isNull);
   });
 
@@ -256,7 +266,9 @@ void main() {
       findsOneWidget,
     );
     expect(
-      tester.getSize(find.byKey(const ValueKey('statistics-monthly-empty'))).height,
+      tester
+          .getSize(find.byKey(const ValueKey('statistics-monthly-empty')))
+          .height,
       lessThan(220),
     );
     expect(
