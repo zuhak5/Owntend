@@ -94,6 +94,10 @@ jobs:
       - name: Verify formatting
         run: dart format --output=none --set-exit-if-changed lib test
 
+      - name: Capture BUG-015 formatted source
+        if: failure()
+        run: dart format test/bug_015_search_generation_test.dart
+
       - name: Parse production PowerShell scripts
         shell: pwsh
         run: |
@@ -142,7 +146,9 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: flutter-test-output
-          path: flutter-test-output.log
+          path: |
+            flutter-test-output.log
+            test/bug_015_search_generation_test.dart
           if-no-files-found: warn
           retention-days: 7
 
