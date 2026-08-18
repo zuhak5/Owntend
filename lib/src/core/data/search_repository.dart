@@ -71,15 +71,89 @@ String _joinSearchParts(Iterable<String?> parts) => parts
     .where((part) => part.isNotEmpty)
     .join(' ');
 
+typedef _SearchIndexState = ({
+  int sourceGeneration,
+  int indexedGeneration,
+});
+
 class DriftSearchRepository implements SearchRepository {
-  DriftSearchRepository(this.db);
+  DriftSearchRepository(this.db, {this.beforeIndexCommit});
 
   final AppDatabase db;
+  final Future<void> Function()? beforeIndexCommit;
+  Future<void>? _rebuildInFlight;
 
   @override
-  Future<void> rebuildIndex() async {
+  Future<void> rebuildIndex() => _serializeRebuild(force: true);
+
+  @override
+  Future<List<domain.SearchResult>> search(String query) async {
+    final match = _searchMatch(query);
+    if (match == null) {
+      return [];
+    }
+
+    for (var attempt = 0; attempt < 3; attempt++) {
+      await _ensureFreshIndex();
+      final results = await _queryIndex(match);
+      final state = await _readIndexState();
+      if (_stateIsValid(state) &&
+          state!.sourceGeneration == state.indexedGeneration) {
+        return results;
+      }
+    }
+
+    throw StateError(
+      'Searchable data changed repeatedly while the search index was being read.',
+    );
+  }
+
+  Future<void> _ensureFreshIndex() async {
+    final state = await _readIndexState();
+    final storageValid = await _searchIndexStorageIsValid();
+    final stateValid = _stateIsValid(state);
+    if (storageValid &&
+        stateValid &&
+        state!.sourceGeneration == state.indexedGeneration) {
+      return;
+    }
+    await _serializeRebuild(force: !storageValid || !stateValid);
+  }
+
+  Future<void> _serializeRebuild({required bool force}) {
+    final active = _rebuildInFlight;
+    if (active != null) {
+      return active;
+    }
+
+    late final Future<void> rebuild;
+    rebuild = _rebuildIndex(force: force).whenComplete(() {
+      if (identical(_rebuildInFlight, rebuild)) {
+        _rebuildInFlight = null;
+      }
+    });
+    _rebuildInFlight = rebuild;
+    return rebuild;
+  }
+
+  Future<void> _rebuildIndex({required bool force}) async {
     await db.transaction(() async {
-      await db.customStatement('DELETE FROM search_index');
+      var state = await _readIndexState();
+      if (!_stateIsValid(state)) {
+        await _resetIndexState();
+        state = (sourceGeneration: 1, indexedGeneration: 0);
+      }
+      if (!force && state!.sourceGeneration == state.indexedGeneration) {
+        return;
+      }
+
+      final representedGeneration = state!.sourceGeneration;
+      if (force) {
+        await _recreateSearchIndexStorage();
+      } else {
+        await db.customStatement('DELETE FROM search_index');
+      }
+
       final areaRows = await (db.select(
         db.areas,
       )..where((area) => area.archivedAt.isNull())).get();
@@ -152,15 +226,87 @@ class DriftSearchRepository implements SearchRepository {
       )..where((plan) => plan.archivedAt.isNull())).get()) {
         await _insert('plan', plan.id, plan.title, plan.instructions ?? '', '');
       }
+
+      await beforeIndexCommit?.call();
+      await db.customStatement(
+        'UPDATE search_index_state '
+        'SET indexed_generation = ? WHERE id = 1',
+        [representedGeneration],
+      );
     });
   }
 
-  @override
-  Future<List<domain.SearchResult>> search(String query) async {
-    final match = _searchMatch(query);
-    if (match == null) {
-      return [];
+  Future<_SearchIndexState?> _readIndexState() async {
+    try {
+      final row = await db
+          .customSelect(
+            'SELECT source_generation, indexed_generation '
+            'FROM search_index_state WHERE id = 1',
+            readsFrom: {},
+          )
+          .getSingleOrNull();
+      if (row == null) {
+        return null;
+      }
+      return (
+        sourceGeneration: row.read<int>('source_generation'),
+        indexedGeneration: row.read<int>('indexed_generation'),
+      );
+    } catch (_) {
+      return null;
     }
+  }
+
+  bool _stateIsValid(_SearchIndexState? state) {
+    return state != null &&
+        state.sourceGeneration >= 0 &&
+        state.indexedGeneration >= 0 &&
+        state.indexedGeneration <= state.sourceGeneration;
+  }
+
+  Future<bool> _searchIndexStorageIsValid() async {
+    final row = await db
+        .customSelect(
+          "SELECT sql FROM sqlite_master "
+          "WHERE type = 'table' AND name = 'search_index'",
+          readsFrom: {},
+        )
+        .getSingleOrNull();
+    if (row == null) {
+      return false;
+    }
+    final definition = row.read<String>('sql').toLowerCase();
+    return definition.contains('fts5') &&
+        definition.contains('display_body') &&
+        definition.contains('search_terms');
+  }
+
+  Future<void> _resetIndexState() async {
+    await db.customStatement('''
+CREATE TABLE IF NOT EXISTS search_index_state (
+  id INTEGER NOT NULL PRIMARY KEY CHECK (id = 1),
+  source_generation INTEGER NOT NULL CHECK (source_generation >= 0),
+  indexed_generation INTEGER NOT NULL CHECK (indexed_generation >= 0)
+)
+''');
+    await db.customStatement('DELETE FROM search_index_state');
+    await db.customStatement(
+      'INSERT INTO search_index_state('
+      'id, source_generation, indexed_generation'
+      ') VALUES (1, 1, 0)',
+    );
+  }
+
+  Future<void> _recreateSearchIndexStorage() async {
+    await db.customStatement('DROP TABLE IF EXISTS search_index');
+    await db.customStatement(
+      'CREATE VIRTUAL TABLE search_index USING fts5('
+      'entity_type UNINDEXED, entity_id UNINDEXED, title, '
+      'display_body, search_terms)',
+    );
+  }
+
+  Future<List<domain.SearchResult>> _queryIndex(String match) async {
     final rows = await db
         .customSelect(
           "SELECT entity_type, entity_id, title, snippet(search_index, 3, '', '', '...', 12) AS snippet "
