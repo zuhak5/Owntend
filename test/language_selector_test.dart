@@ -10,105 +10,107 @@ import 'package:owntend/src/ui/components.dart' as hk_ui;
 import 'test_theme.dart';
 
 void main() {
-  testWidgets('selector matches anchor geometry and exposes open state in LTR', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      const _SelectorHost(initialLanguage: AppLanguage.en, width: 240),
-    );
-    await tester.pumpAndSettle();
+  testWidgets(
+    'selector matches anchor geometry and exposes open state in LTR',
+    (tester) async {
+      await tester.pumpWidget(
+        const _SelectorHost(initialLanguage: AppLanguage.en, width: 240),
+      );
+      await tester.pumpAndSettle();
 
-    final anchor = find.byKey(const ValueKey('test-language-hit-target'));
-    final anchorRect = tester.getRect(anchor);
-    expect(_chevron(tester).turns, 0);
+      final anchor = find.byKey(const ValueKey('test-language-hit-target'));
+      final anchorRect = tester.getRect(anchor);
+      expect(_chevron(tester).turns, 0);
 
-    await tester.tap(anchor);
-    await tester.pumpAndSettle();
+      await tester.tap(anchor);
+      await tester.pumpAndSettle();
 
-    final english = find.byKey(const ValueKey('language-option-en'));
-    final englishLabel = find.byKey(
-      const ValueKey('language-option-label-en'),
-    );
-    final englishCheck = find.byKey(
-      const ValueKey('language-option-check-en'),
-    );
-    final arabicCheck = find.byKey(
-      const ValueKey('language-option-check-ar'),
-    );
-    expect(english, findsOneWidget);
-    expect(englishCheck, findsOneWidget);
-    expect(arabicCheck, findsNothing);
-    expect(_chevron(tester).turns, 0.5);
+      final english = find.byKey(const ValueKey('language-option-en'));
+      final englishLabel = find.byKey(
+        const ValueKey('language-option-label-en'),
+      );
+      final englishCheck = find.byKey(
+        const ValueKey('language-option-check-en'),
+      );
+      final arabicCheck = find.byKey(
+        const ValueKey('language-option-check-ar'),
+      );
+      expect(english, findsOneWidget);
+      expect(englishCheck, findsOneWidget);
+      expect(arabicCheck, findsNothing);
+      expect(_chevron(tester).turns, 0.5);
 
-    final menuRect = tester.getRect(english);
-    expect((menuRect.width - anchorRect.width).abs(), lessThanOrEqualTo(1));
-    expect(menuRect.top, greaterThanOrEqualTo(anchorRect.bottom + 5));
-    expect((menuRect.left - anchorRect.left).abs(), lessThanOrEqualTo(1));
-    expect(
-      (tester.getRect(englishLabel).center.dx - menuRect.center.dx).abs(),
-      lessThanOrEqualTo(1),
-    );
-    expect(
-      tester.getRect(englishCheck).center.dx,
-      lessThan(tester.getRect(englishLabel).center.dx),
-    );
+      final menuRect = tester.getRect(english);
+      expect((menuRect.width - anchorRect.width).abs(), lessThanOrEqualTo(1));
+      expect(menuRect.top, greaterThanOrEqualTo(anchorRect.bottom + 5));
+      expect((menuRect.left - anchorRect.left).abs(), lessThanOrEqualTo(1));
+      expect(
+        (tester.getRect(englishLabel).center.dx - menuRect.center.dx).abs(),
+        lessThanOrEqualTo(1),
+      );
+      expect(
+        tester.getRect(englishCheck).center.dx,
+        lessThan(tester.getRect(englishLabel).center.dx),
+      );
 
-    await tester.tapAt(const Offset(8, 560));
-    await tester.pumpAndSettle();
-    expect(english, findsNothing);
-    expect(_chevron(tester).turns, 0);
-  });
+      await tester.tapAt(const Offset(8, 560));
+      await tester.pumpAndSettle();
+      expect(english, findsNothing);
+      expect(_chevron(tester).turns, 0);
+    },
+  );
 
-  testWidgets('selector mirrors directional indicator and changes locale in RTL', (
-    tester,
-  ) async {
-    AppLanguage? selected;
-    await tester.pumpWidget(
-      _SelectorHost(
-        initialLanguage: AppLanguage.ar,
-        width: 240,
-        onChanged: (value) => selected = value,
-      ),
-    );
-    await tester.pumpAndSettle();
+  testWidgets(
+    'selector mirrors directional indicator and changes locale in RTL',
+    (tester) async {
+      AppLanguage? selected;
+      await tester.pumpWidget(
+        _SelectorHost(
+          initialLanguage: AppLanguage.ar,
+          width: 240,
+          onChanged: (value) => selected = value,
+        ),
+      );
+      await tester.pumpAndSettle();
 
-    final anchor = find.byKey(const ValueKey('test-language-hit-target'));
-    expect(Directionality.of(tester.element(anchor)), TextDirection.rtl);
-    final anchorRect = tester.getRect(anchor);
+      final anchor = find.byKey(const ValueKey('test-language-hit-target'));
+      expect(Directionality.of(tester.element(anchor)), TextDirection.rtl);
+      final anchorRect = tester.getRect(anchor);
 
-    await tester.tap(anchor);
-    await tester.pumpAndSettle();
+      await tester.tap(anchor);
+      await tester.pumpAndSettle();
 
-    final arabic = find.byKey(const ValueKey('language-option-ar'));
-    final arabicLabel = find.byKey(
-      const ValueKey('language-option-label-ar'),
-    );
-    final arabicCheck = find.byKey(
-      const ValueKey('language-option-check-ar'),
-    );
-    final menuRect = tester.getRect(arabic);
-    expect((menuRect.right - anchorRect.right).abs(), lessThanOrEqualTo(1));
-    expect(
-      (tester.getRect(arabicLabel).center.dx - menuRect.center.dx).abs(),
-      lessThanOrEqualTo(1),
-    );
-    expect(
-      tester.getRect(arabicCheck).center.dx,
-      greaterThan(tester.getRect(arabicLabel).center.dx),
-    );
+      final arabic = find.byKey(const ValueKey('language-option-ar'));
+      final arabicLabel = find.byKey(
+        const ValueKey('language-option-label-ar'),
+      );
+      final arabicCheck = find.byKey(
+        const ValueKey('language-option-check-ar'),
+      );
+      final menuRect = tester.getRect(arabic);
+      expect((menuRect.right - anchorRect.right).abs(), lessThanOrEqualTo(1));
+      expect(
+        (tester.getRect(arabicLabel).center.dx - menuRect.center.dx).abs(),
+        lessThanOrEqualTo(1),
+      );
+      expect(
+        tester.getRect(arabicCheck).center.dx,
+        greaterThan(tester.getRect(arabicLabel).center.dx),
+      );
 
-    await tester.tap(find.byKey(const ValueKey('language-option-en')));
-    await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('language-option-en')));
+      await tester.pumpAndSettle();
 
-    expect(selected, AppLanguage.en);
-    expect(find.byKey(const ValueKey('language-option-en')), findsNothing);
-    expect(
-      Directionality.of(
-        tester.element(find.byKey(const ValueKey('test-language-hit-target'))),
-      ),
-      TextDirection.ltr,
-    );
-  });
+      expect(selected, AppLanguage.en);
+      expect(find.byKey(const ValueKey('language-option-en')), findsNothing);
+      expect(
+        Directionality.of(
+          tester.element(find.byKey(const ValueKey('test-language-hit-target'))),
+        ),
+        TextDirection.ltr,
+      );
+    },
+  );
 
   testWidgets('system back closes the menu without replacing the route', (
     tester,
