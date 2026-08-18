@@ -19,9 +19,7 @@ Ownership must remain tied to the authenticated account in cloud storage. Local 
 - Maintenance plans define title, recurrence, due state, and asset association.
 - Maintenance history records completion events.
 - Optional plan metadata includes task type, location label, estimated duration,
-  required materials, reminder guidance, and sort order. In the consolidated
-  baseline schema (Drift `currentSchemaVersion = 1`), all 26 active tables, triggers,
-  FTS5 search index, and default seeds are created directly at baseline.
+  required materials, reminder guidance, and sort order.
 - Attachments and media can accompany relevant records.
 - Reminder snapshots represent the last scheduling decision used to reconcile local notifications.
 - Recommendation, timeline, health/readiness, warranty-alert, and streak models derive product insight from domain state.
@@ -39,6 +37,17 @@ Completion identifiers and recurrence calculations must remain idempotent across
 
 Sensitive session data belongs in secure storage rather than ordinary settings rows.
 
+## Search derived state
+
+Drift schema 2 adds durable local generation metadata for the FTS5 search cache. The singleton `search_index_state` row stores:
+
+- `source_generation`: the generation of committed searchable authoritative data; and
+- `indexed_generation`: the generation represented by the current `search_index` snapshot.
+
+SQLite triggers increment `source_generation` after INSERT, UPDATE, or DELETE on every authoritative table whose values contribute to search: areas, rooms, categories, assets, specialized asset-detail tables, tags and asset-tag links, asset-photo captions, and maintenance plans. The FTS5 table and generation row are derived local state, not synchronized user-domain authority.
+
+`DriftSearchRepository` owns freshness. A query may use the existing FTS snapshot only when the generation state is structurally valid and both generations match. Otherwise the repository serializes a transactional full rebuild and advances `indexed_generation` only after the rebuilt snapshot succeeds. A failed rebuild therefore leaves a detectable generation mismatch; a later query, including after process restart, retries instead of knowingly returning stale results. Search UI routes do not own or preserve index correctness.
+
 ## Synchronization metadata
 
 The local schema includes operational records such as:
@@ -52,6 +61,8 @@ The local schema includes operational records such as:
 - Reminder reconciliation state.
 
 These tables are part of the synchronization protocol, not disposable caches. Deleting or resetting them can lose local intent or attach data to the wrong account.
+
+Search generation metadata is intentionally separate from synchronization metadata. Remote/hydration writes still touch the authoritative searchable tables, so the same database triggers invalidate FTS state even while outbox generation is suppressed.
 
 ## Cloud-only authority
 
@@ -85,9 +96,13 @@ For every new or changed field:
 9. Update deletion and privacy inventories.
 10. Add focused repository, backend, synchronization, and UI tests.
 
+The current Drift schema version is 2. Schema 2 adds only the local derived search-generation state and its invalidation triggers; no Supabase schema or synchronized wire contract changes with that version bump.
+
 ## Indexing and constraints
 
 Use database constraints for invariants that must hold independently of Flutter. Add indexes based on real query and synchronization access patterns. Review uniqueness together with soft deletion, account ownership, retries, and idempotency.
+
+FTS correctness is generation-bound: authoritative searchable mutations dirty the index at the database boundary, and queries restore freshness before returning results. Force rebuild remains a recovery path for missing or malformed derived search storage.
 
 ## Deletion
 
