@@ -91,6 +91,13 @@ jobs:
       - name: Generate source files
         run: dart run build_runner build
 
+      - name: Diagnose Dart formatting
+        shell: pwsh
+        run: |
+          dart format lib/src/ui/components.dart test/language_selector_test.dart
+          git diff -- lib/src/ui/components.dart test/language_selector_test.dart
+          exit 1
+
       - name: Verify formatting
         run: dart format --output=none --set-exit-if-changed lib test
 
