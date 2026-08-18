@@ -12,7 +12,7 @@ Supabase provides Owntend's authenticated cloud layer:
 - Private `user-media` Storage.
 - Edge Functions for account deletion, deletion-status recovery, and AdMob server-side verification.
 
-The committed local configuration is `supabase/config.toml`. SQL migrations are append-only history under `supabase/migrations/`; database tests are under `supabase/tests/database/`.
+The committed local configuration is `supabase/config.toml`. While `AGENTS.md` remains pre-launch/zero-user, SQL files under `supabase/migrations/` are the clean launch baseline and may be consolidated directly. After launch they become append-only production history. Database tests are under `supabase/tests/database/`.
 
 ## Local environment
 
@@ -33,6 +33,14 @@ npm run supabase:test
 ```
 
 Do not link to or mutate a hosted project during ordinary local validation.
+
+## Pre-launch hosted reset
+
+The zero-user launch baseline is validated by starting Supabase from an empty local database. When an already-linked hosted project is disposable and the maintainer explicitly authorizes a reset, use the protected `Deploy Supabase Migrations` workflow rather than direct SQL or an unprotected CLI invocation.
+
+The `reset-prelaunch-database` operation requires exact current `main`, the exact protected project reference, confirmation `reset-prelaunch-zero-user`, the unchecked lifecycle marker in `AGENTS.md`, and approval through the `production-supabase-migrations` environment. It runs `supabase db reset --linked --no-seed`, then verifies hosted migration history and requires a final dry-run with no pending migrations.
+
+This operation destroys disposable hosted Auth/test data and user-created database state. It is a pre-launch-only mechanism and must not be used once the project has active users or production data.
 
 ## Authentication
 
@@ -91,9 +99,11 @@ Asset and photo identifiers are text throughout the synced tables and media RPC 
 
 Realtime is an invalidation mechanism, not a replacement for authenticated pull and revision checks. The client must tolerate dropped, duplicated, delayed, and out-of-order events.
 
-The baseline adds the 17 synchronized app tables to `supabase_realtime` and uses `REPLICA IDENTITY FULL`. Change-feed protocol v2 maps those same tables one-to-one to canonical client entity identifiers and persists typed `key_data` for each row, including both columns of the `asset_tag` composite key. The forward hardening migration deliberately keeps `sync_feed_capabilities.enabled = false`; hosted enablement requires separate compatibility/parity verification. Realtime payloads remain hints; durable insert, update, and delete authority comes from authenticated pulls and the owner-scoped change feed.
+The launch baseline adds the 17 synchronized app tables to `supabase_realtime` and uses `REPLICA IDENTITY FULL`. The only shipped change-feed contract starts at protocol `1.0.1`; it maps those same tables one-to-one to canonical client entity identifiers and persists typed `key_data` for each row, including both columns of the `asset_tag` composite key. `sync_feed_capabilities.enabled` remains `false` in the baseline, so a hosted reset does not itself enable the feature. Realtime payloads remain hints; durable insert, update, and delete authority comes from authenticated pulls and the owner-scoped change feed.
 
 Change-feed Data API privileges are fail closed. `get_sync_feed_capability()`, `fetch_user_change_feed(...)`, `validate_change_feed_parity()`, and `get_user_change_feed_watermark()` are authenticated-only `SECURITY INVOKER` functions. The parity and watermark RPCs accept no user identifier and derive ownership exclusively from `auth.uid()`. Cross-account operational inspection belongs to protected SQL tooling rather than a client-callable definer function. `fn_log_server_change_feed()` remains `SECURITY DEFINER` because authenticated clients cannot insert into the feed table, but direct execution is revoked from all Data API roles; it is reached only through the table triggers.
+
+After a hosted pre-launch reset, the feed may be enabled only after the exact-main baseline is proven hosted: no pending migration drift, protocol `1.0.1`, zero malformed feed rows, correct effective RPC ACLs, no unresolved feed-related security Advisor findings, and parity success for every hosted account (or verified zero accounts).
 
 ## Edge Functions
 

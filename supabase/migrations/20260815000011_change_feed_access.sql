@@ -1,4 +1,4 @@
--- ENV-004: Normalize change-feed RPC privileges before hosted enablement.
+-- Finalize the pre-launch change-feed contract and Data API boundary.
 -- Client-facing feed RPCs are SECURITY INVOKER, derive ownership from auth.uid(),
 -- and are executable only by authenticated. Trigger logging remains SECURITY
 -- DEFINER but is not directly callable by Data API roles.
@@ -8,6 +8,14 @@
 -- an explicit post-definition REVOKE followed by the minimum required GRANT.
 
 BEGIN;
+
+-- This is the only shipped pre-launch feed contract. Earlier audit iterations
+-- were never released, so the hardened contract starts at protocol 1.0.1.
+UPDATE public.sync_feed_capabilities
+SET capability_version = '1.0.1',
+    enabled = false,
+    updated_at = clock_timestamp()
+WHERE id = 'global';
 
 CREATE OR REPLACE FUNCTION public.get_sync_feed_capability()
 RETURNS TABLE (
@@ -118,7 +126,7 @@ BEGIN
     'next_seq', v_next_seq,
     'has_more', v_has_more,
     'resnapshot_required', v_resnapshot_required,
-    'capability_version', COALESCE(v_cap_version, '2.0.0'),
+    'capability_version', COALESCE(v_cap_version, '1.0.1'),
     'capability_enabled', COALESCE(v_cap_enabled, false)
   );
 END;
@@ -129,8 +137,8 @@ FROM PUBLIC, anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.fetch_user_change_feed(BIGINT, INT)
 TO authenticated;
 
--- Remove the caller-selected user variant. The mobile healing scan already
--- calls this RPC without parameters; ownership is now always auth.uid().
+-- The mobile healing scan calls this RPC without parameters; ownership is
+-- always the authenticated account rather than a caller-selected user id.
 DROP FUNCTION IF EXISTS public.validate_change_feed_parity(UUID);
 
 CREATE FUNCTION public.validate_change_feed_parity()
