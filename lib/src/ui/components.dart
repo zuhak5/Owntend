@@ -206,7 +206,9 @@ class _LanguageSelectorDropdownState extends State<LanguageSelectorDropdown> {
     final chevron = AnimatedRotation(
       key: const ValueKey('language-selector-chevron'),
       turns: _isOpen ? 0.5 : 0,
-      duration: reduceMotion ? Duration.zero : const Duration(milliseconds: 160),
+      duration: reduceMotion
+          ? Duration.zero
+          : const Duration(milliseconds: 160),
       curve: Curves.easeOutCubic,
       child: Icon(
         Symbols.expand_more_rounded,
@@ -216,137 +218,145 @@ class _LanguageSelectorDropdownState extends State<LanguageSelectorDropdown> {
     );
     final menuWidth = _menuWidth;
 
-    return MenuAnchor(
-      controller: _menuController,
-      useRootOverlay: true,
-      crossAxisUnconstrained: false,
-      consumeOutsideTap: false,
-      alignmentOffset: const Offset(0, _menuGap),
-      style: MenuStyle(
-        alignment: AlignmentDirectional.bottomStart,
-        padding: const WidgetStatePropertyAll<EdgeInsetsGeometry>(
-          EdgeInsets.zero,
+    return PopScope(
+      canPop: !_isOpen,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop && _isOpen) {
+          _menuController.close();
+        }
+      },
+      child: MenuAnchor(
+        controller: _menuController,
+        useRootOverlay: true,
+        crossAxisUnconstrained: false,
+        consumeOutsideTap: false,
+        alignmentOffset: const Offset(0, _menuGap),
+        style: MenuStyle(
+          alignment: AlignmentDirectional.bottomStart,
+          padding: const WidgetStatePropertyAll<EdgeInsetsGeometry>(
+            EdgeInsets.zero,
+          ),
+          fixedSize: menuWidth == null
+              ? null
+              : WidgetStatePropertyAll<Size>(Size.fromWidth(menuWidth)),
         ),
-        fixedSize: menuWidth == null
-            ? null
-            : WidgetStatePropertyAll<Size>(Size.fromWidth(menuWidth)),
-      ),
-      onOpen: _handleOpen,
-      onClose: _handleClose,
-      menuChildren: [
-        for (final option in AppLanguage.values)
-          MenuItemButton(
-            key: ValueKey('language-option-${option.name}'),
-            closeOnActivate: true,
-            onPressed: widget.onChanged == null
-                ? null
-                : () => widget.onChanged?.call(option),
-            child: Semantics(
-              selected: option == widget.language,
-              child: _LanguageMenuRow(
-                label: languageSelectorLabel(context, option),
-                textDirection: option == AppLanguage.ar
-                    ? TextDirection.rtl
-                    : TextDirection.ltr,
+        onOpen: _handleOpen,
+        onClose: _handleClose,
+        menuChildren: [
+          for (final option in AppLanguage.values)
+            MenuItemButton(
+              key: ValueKey('language-option-${option.name}'),
+              closeOnActivate: true,
+              onPressed: widget.onChanged == null
+                  ? null
+                  : () => widget.onChanged?.call(option),
+              child: Semantics(
                 selected: option == widget.language,
-                optionName: option.name,
+                child: _LanguageMenuRow(
+                  label: languageSelectorLabel(context, option),
+                  textDirection: option == AppLanguage.ar
+                      ? TextDirection.rtl
+                      : TextDirection.ltr,
+                  selected: option == widget.language,
+                  optionName: option.name,
+                ),
               ),
             ),
-          ),
-      ],
-      builder: (context, controller, child) {
-        final trigger =
-            widget.triggerBuilder?.call(
-              context,
-              label,
-              _isOpen,
-              chevron,
-            ) ??
-            DecoratedBox(
-              decoration: BoxDecoration(
-                color: _isOpen
-                    ? Color.alphaBlend(
-                        scheme.primary.withValues(alpha: 0.06),
-                        scheme.surface.withValues(alpha: 0.94),
-                      )
-                    : scheme.surface.withValues(alpha: 0.94),
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(
+        ],
+        builder: (context, controller, child) {
+          final trigger =
+              widget.triggerBuilder?.call(
+                context,
+                label,
+                _isOpen,
+                chevron,
+              ) ??
+              DecoratedBox(
+                decoration: BoxDecoration(
                   color: _isOpen
-                      ? scheme.primary.withValues(alpha: 0.72)
-                      : HkColors.appBorder.withValues(alpha: 0.75),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: HkColors.appTextPrimary.withValues(alpha: 0.08),
-                    blurRadius: 8,
-                    offset: const Offset(0, 3),
+                      ? Color.alphaBlend(
+                          scheme.primary.withValues(alpha: 0.06),
+                          scheme.surface.withValues(alpha: 0.94),
+                        )
+                      : scheme.surface.withValues(alpha: 0.94),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: _isOpen
+                        ? scheme.primary.withValues(alpha: 0.72)
+                        : HkColors.appBorder.withValues(alpha: 0.75),
                   ),
-                ],
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Symbols.language_rounded,
-                      size: 18,
-                      color: scheme.onSurfaceVariant,
+                  boxShadow: [
+                    BoxShadow(
+                      color: HkColors.appTextPrimary.withValues(alpha: 0.08),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
                     ),
-                    const SizedBox(width: 8),
-                    Flexible(
-                      child: Text(
-                        label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: textTheme.labelSmall?.copyWith(
-                          color: scheme.onSurface,
-                          fontSize: 13,
-                          height: 1,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    chevron,
                   ],
                 ),
-              ),
-            );
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Symbols.language_rounded,
+                        size: 18,
+                        color: scheme.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: textTheme.labelSmall?.copyWith(
+                            color: scheme.onSurface,
+                            fontSize: 13,
+                            height: 1,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      chevron,
+                    ],
+                  ),
+                ),
+              );
 
-        return SizedBox(
-          key: _anchorKey,
-          child: Semantics(
-            key: widget.selectorKey,
-            container: true,
-            button: true,
-            enabled: widget.onChanged != null,
-            expanded: _isOpen,
-            excludeSemantics: true,
-            label: context.l10n.language,
-            value: label,
-            onTap: widget.onChanged == null ? null : _toggleMenu,
-            child: ConstrainedBox(
-              key: widget.hitTargetKey,
-              constraints: const BoxConstraints(
-                minHeight: kOwntendHeaderActionHeight,
-              ),
-              child: Material(
-                type: MaterialType.transparency,
-                child: InkWell(
-                  onTap: widget.onChanged == null ? null : _toggleMenu,
-                  borderRadius: BorderRadius.circular(HkRadii.lg),
-                  child: trigger,
+          return SizedBox(
+            key: _anchorKey,
+            child: Semantics(
+              key: widget.selectorKey,
+              container: true,
+              button: true,
+              enabled: widget.onChanged != null,
+              expanded: _isOpen,
+              excludeSemantics: true,
+              label: context.l10n.language,
+              value: label,
+              onTap: widget.onChanged == null ? null : _toggleMenu,
+              child: ConstrainedBox(
+                key: widget.hitTargetKey,
+                constraints: const BoxConstraints(
+                  minHeight: kOwntendHeaderActionHeight,
+                ),
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: InkWell(
+                    onTap: widget.onChanged == null ? null : _toggleMenu,
+                    borderRadius: BorderRadius.circular(HkRadii.lg),
+                    child: trigger,
+                  ),
                 ),
               ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 }
