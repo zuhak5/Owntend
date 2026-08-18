@@ -52,6 +52,8 @@ Review `SECURITY DEFINER` functions carefully:
 - Validate inputs and bound resource use.
 - Make externally retried mutations idempotent.
 
+Prefer `SECURITY INVOKER` whenever existing table grants and RLS can enforce the caller's authority. Existing Supabase projects can retain automatic Data API function grants, so application migrations must not rely on default-privilege changes alone: after creating or replacing each exposed function, explicitly revoke execution from `PUBLIC` and every unintended API role, then grant only the minimum intended callers. Database tests and hosted Advisors must verify those effective ACLs before rollout.
+
 Never disable RLS to resolve an application error.
 
 The pre-launch cloud schema follows the fields emitted by Flutter for device, pet, plant, and safety details plus maintenance-plan metadata. Cloud-only aliases remain intentional for maintenance plans (`description`, `interval_count`, `interval_unit`) and streaks (`longest_streak`, `last_completion_date`); `SyncEntitySpec.remoteRenames` is the executable client mapping. Direct client insertion of a new charged maintenance plan is denied. Authenticated reconciliation can only update a plan that the atomic creation or completion RPC already established.
@@ -69,13 +71,13 @@ RPC contracts should define:
 - Authentication and ownership.
 - Input schema and limits.
 - Idempotency key behavior and advisory-lock (`pg_advisory_xact_lock`) parity.
-- Success and duplicate-success responses (including `get_charged_operation_status` capability version `1.1.0` for lost-response recovery).
+- Success and duplicate-success responses (including `get_charged_operation_status` capability version `1.2.0` for lost-response recovery).
 - Conflict and stale-revision responses.
 - Retryable versus terminal errors.
 - Server timestamp/revision semantics.
 - Audit and privacy-safe diagnostics.
 
-`get_charged_operation_status(p_operation_id uuid, p_request_hash text default null)` enables client journal reconciliation following transport failure. Lookups are strictly same-account and operation-bound; querying another user's operation returns `status: 'not_found'` without revealing operation existence.
+`get_charged_operation_status(p_operation_id uuid, p_request_hash text)` enables client journal reconciliation following transport failure. Lookups are strictly same-account and operation-bound; querying another user's operation returns `status: 'not_found'` without revealing operation existence, while reuse with a mismatched request hash is rejected.
 
 ## Storage
 
@@ -90,6 +92,8 @@ Asset and photo identifiers are text throughout the synced tables and media RPC 
 Realtime is an invalidation mechanism, not a replacement for authenticated pull and revision checks. The client must tolerate dropped, duplicated, delayed, and out-of-order events.
 
 The baseline adds the 17 synchronized app tables to `supabase_realtime` and uses `REPLICA IDENTITY FULL`. Change-feed protocol v2 maps those same tables one-to-one to canonical client entity identifiers and persists typed `key_data` for each row, including both columns of the `asset_tag` composite key. The forward hardening migration deliberately keeps `sync_feed_capabilities.enabled = false`; hosted enablement requires separate compatibility/parity verification. Realtime payloads remain hints; durable insert, update, and delete authority comes from authenticated pulls and the owner-scoped change feed.
+
+Change-feed Data API privileges are fail closed. `get_sync_feed_capability()`, `fetch_user_change_feed(...)`, `validate_change_feed_parity()`, and `get_user_change_feed_watermark()` are authenticated-only `SECURITY INVOKER` functions. The parity and watermark RPCs accept no user identifier and derive ownership exclusively from `auth.uid()`. Cross-account operational inspection belongs to protected SQL tooling rather than a client-callable definer function. `fn_log_server_change_feed()` remains `SECURITY DEFINER` because authenticated clients cannot insert into the feed table, but direct execution is revoked from all Data API roles; it is reached only through the table triggers.
 
 ## Edge Functions
 

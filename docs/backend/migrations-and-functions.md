@@ -69,6 +69,11 @@ Receives Google Mobile Ads server-side verification callbacks. It validates prov
 
 ## Function engineering rules
 
+- Prefer `SECURITY INVOKER` when ordinary grants plus RLS can enforce caller authority; reserve `SECURITY DEFINER` for operations that genuinely require elevated database privileges.
+- For every `SECURITY DEFINER` function, set a safe `search_path`, derive identity from trusted session state, and grant execution only to the minimum role set.
+- Treat each Data API function as an explicit ACL boundary. Existing Supabase projects can retain automatic function grants, so every application migration must issue post-definition `REVOKE` statements for `PUBLIC` and unintended API roles, then grant only the exact intended callers. Do not treat a global default-privilege setting as sufficient evidence by itself.
+- Verify effective function ACLs in database tests and hosted Advisors before rollout.
+- Never expose an arbitrary `p_user_id` argument on a client-callable privileged function when `auth.uid()` is the authorization boundary. Administrative cross-account inspection belongs to protected SQL or other operator-only tooling.
 - Validate method, content type, query/body schema, size, and required headers.
 - Keep secrets in the Supabase function environment.
 - Use bounded timeouts and retries for external or Storage work.
@@ -94,8 +99,12 @@ For the V1 zero-user production launch, the database is defined by 5 clean basel
 
 ## Pre-enable change-feed hardening
 
-[`20260818040000_change_feed_contract_v2.sql`](../../supabase/migrations/20260818040000_change_feed_contract_v2.sql) is an intentionally forward-only hardening migration because the audit could not prove every hosted environment was still at a disposable baseline. It adds typed `key_data`, canonical one-to-one client/server entity identifiers, an exhaustive private key encoder used by the feed trigger, protocol version `2.0.0`, and corrected parity semantics. The migration explicitly leaves the feed capability disabled. [`20260818040500_qualify_change_feed_parity.sql`](../../supabase/migrations/20260818040500_qualify_change_feed_parity.sql) is a companion forward migration that qualifies parity-query column references for PostgreSQL schema lint without changing feed semantics or capability state. Applying or enabling this contract in a hosted project is a separate authorized operation and is not implied by repository CI.
+[`20260818040000_change_feed_contract_v2.sql`](../../supabase/migrations/20260818040000_change_feed_contract_v2.sql) is an intentionally forward-only hardening migration because the audit could not prove every hosted environment was still at a disposable baseline. It adds typed `key_data`, canonical one-to-one client/server entity identifiers, an exhaustive private key encoder used by the feed trigger, protocol version `2.0.0`, and corrected parity semantics. The migration explicitly leaves the feed capability disabled. [`20260818040500_qualify_change_feed_parity.sql`](../../supabase/migrations/20260818040500_qualify_change_feed_parity.sql) is a companion forward migration that qualifies parity-query column references for PostgreSQL schema lint without changing feed semantics or capability state.
+
+[`20260818121720_change_feed_rpc_privilege_hardening.sql`](../../supabase/migrations/20260818121720_change_feed_rpc_privilege_hardening.sql) is the ENV-004 enablement-gate migration discovered during hosted verification. It explicitly normalizes retained Data API grants after each affected function definition, converts the four client-facing change-feed RPCs to `SECURITY INVOKER`, removes caller-selected UUID overloads for parity and watermark inspection, and revokes direct execution of the `SECURITY DEFINER` trigger logger. It deliberately avoids depending on project-wide default-function ACL changes because effective hosted/function ACLs are the rollout authority. It does not enable the feed.
+
+Applying or enabling the change-feed contract in a hosted project remains a separate authorized operation and is not implied by repository CI. The hosted gate must verify exact-main migration state, protocol `2.0.0`, zero malformed feed rows, zero parity failures for every hosted account, and no unresolved change-feed security-advisor findings before `sync_feed_capabilities.enabled` can be changed to `true`.
 
 ## Deployment evidence
 
-Record migration identifiers, function versions/source commits, local test results, hosted target, deployment operator, compatibility assumptions, and any required mobile release ordering.
+Record migration identifiers, function versions/source commits, local test results, hosted target, deployment operator, compatibility assumptions, advisor results, parity results, and any required mobile release ordering.
