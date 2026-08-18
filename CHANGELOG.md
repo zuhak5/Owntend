@@ -9,6 +9,7 @@ The current application version is defined only in `pubspec.yaml`. Released vers
 ### Fixed
 
 - Unified the English/Arabic language selector across onboarding and Settings with anchor-width menus, directional RTL positioning, centered selected labels, and visible open-state accessibility feedback.
+- Standardized Settings row gutters, leading-icon columns, text starts, trailing controls, and RTL-aware dividers across Language, Weather, permissions, and notification preferences without changing their behavior.
 - Rebaselined the zero-user Supabase schema into one clean pre-launch migration sequence, removed duplicate/remediation-era migration history, normalized the hardened change-feed contract as launch protocol `1.0.1`, and added an exact-main protected workflow for an explicitly confirmed destructive pre-launch hosted reset.
 - Removed authenticated-executable `SECURITY DEFINER` RPCs from the exposed Supabase API schema by routing privileged media and charged-operation status work through private implementations, optimized statement-stable RLS helpers, added the missing notification foreign-key index, and made hosted Advisor `INFO` findings non-blocking evidence while preserving fail-closed handling for warnings and unknown severities.
 - Hardened change-feed RPC privileges so client-facing feed functions run as `SECURITY INVOKER`, derive account scope from authenticated identity, reject anonymous execution, and no longer expose caller-selected user IDs ahead of any feed enablement.
