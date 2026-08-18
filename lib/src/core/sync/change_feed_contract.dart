@@ -1,7 +1,7 @@
 import '../supabase/supabase_failure.dart';
 import 'sync_dtos.dart';
 
-const syncFeedContractVersion = '2.0.0';
+const syncFeedContractVersion = '1.0.0';
 const _syncFeedOperations = {'INSERT', 'UPDATE', 'DELETE'};
 
 class ParsedSyncFeedChange {
