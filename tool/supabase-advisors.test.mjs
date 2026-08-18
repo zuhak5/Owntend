@@ -16,7 +16,7 @@ function response(lints) {
   };
 }
 
-test('audits both advisor families and allows only the named exception', async () => {
+test('audits both advisor families, blocks non-info findings, and preserves info evidence', async () => {
   const requested = [];
   const report = await auditSupabaseAdvisors({
     accessToken: 'test-token',
@@ -35,6 +35,10 @@ test('audits both advisor families and allows only the named exception', async (
             title: 'Function Search Path Mutable',
             level: 'WARN',
           },
+          {
+            name: 'future_unknown',
+            title: 'Future Advisor Severity',
+          },
         ]);
       }
       return response([
@@ -50,13 +54,18 @@ test('audits both advisor families and allows only the named exception', async (
   assert.equal(requested.length, 2);
   assert.equal(report.projectRef, 'project-ref');
   assert.equal(report.allowedExceptionCount, 1);
+  assert.equal(report.informationalCount, 1);
   assert.equal(report.actionableCount, 2);
   assert.deepEqual(
     report.actionable.map(({ level, name }) => ({ level, name })),
     [
       { level: 'WARN', name: 'mutable_search_path' },
-      { level: 'INFO', name: 'unused_index' },
+      { level: 'UNKNOWN', name: 'future_unknown' },
     ],
+  );
+  assert.deepEqual(
+    report.informational.map(({ level, name }) => ({ level, name })),
+    [{ level: 'INFO', name: 'unused_index' }],
   );
   assert.deepEqual([...allowedAdvisorTitles], [
     'Leaked Password Protection Disabled',
