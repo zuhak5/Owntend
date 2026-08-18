@@ -181,20 +181,22 @@ class _StatisticMetric extends StatelessWidget {
                     children: [
                       Text(
                         label,
-                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                          color: scheme.onSurface,
-                          fontWeight: FontWeight.w800,
-                          height: 1.15,
-                        ),
+                        style: Theme.of(context).textTheme.labelMedium
+                            ?.copyWith(
+                              color: scheme.onSurface,
+                              fontWeight: FontWeight.w800,
+                              height: 1.15,
+                            ),
                       ),
                       const SizedBox(height: HkSpacing.space4),
                       Text(
                         value,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: scheme.onSurface,
-                          fontWeight: FontWeight.w900,
-                          height: 1.05,
-                        ),
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
+                              color: scheme.onSurface,
+                              fontWeight: FontWeight.w900,
+                              height: 1.05,
+                            ),
                       ),
                     ],
                   ),
@@ -277,9 +279,8 @@ class _StatisticsInlineEmptyState extends StatelessWidget {
             Text(
               body,
               textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: scheme.onSurfaceVariant,
-              ),
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(color: scheme.onSurfaceVariant),
             ),
           ],
         ),
@@ -456,10 +457,8 @@ class TaskDistributionChart extends StatelessWidget {
         )
         .join(', ');
     final sectionTitleStyle =
-        Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: Colors.white,
-          fontWeight: FontWeight.w700,
-        ) ??
+        Theme.of(context).textTheme.labelSmall
+            ?.copyWith(color: Colors.white, fontWeight: FontWeight.w700) ??
         const TextStyle(
           fontSize: 11,
           color: Colors.white,

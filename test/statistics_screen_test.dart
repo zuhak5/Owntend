@@ -11,11 +11,7 @@ import 'test_theme.dart';
 const _multiSeriesSummary = StatisticsSummary(
   completionRate: 0.88,
   overdueRate: 0.05,
-  completedByMonth: {
-    '2026-06': 12,
-    '2026-07': 18,
-    '2026-08': 24,
-  },
+  completedByMonth: {'2026-06': 12, '2026-07': 18, '2026-08': 24},
   taskDistribution: {
     HealthGroup.safety: 6,
     HealthGroup.pets: 5,
@@ -195,10 +191,7 @@ void main() {
 
     final distributionChart = find.byType(TaskDistributionChart);
     expect(
-      find.descendant(
-        of: distributionChart,
-        matching: find.byType(FittedBox),
-      ),
+      find.descendant(of: distributionChart, matching: find.byType(FittedBox)),
       findsNothing,
     );
     expect(
@@ -214,9 +207,7 @@ void main() {
 
     final semanticsData = tester
         .getSemantics(
-          find.byKey(
-            const ValueKey('statistics-distribution-chart-semantics'),
-          ),
+          find.byKey(const ValueKey('statistics-distribution-chart-semantics')),
         )
         .getSemanticsData();
     expect(
