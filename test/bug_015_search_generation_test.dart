@@ -115,32 +115,25 @@ void main() {
       expect(await _hasResult(search, 'Copper', 'room', roomId), isTrue);
 
       final categoryId = _categoryId(categories, HealthGroup.appliances);
-      await (db.update(
-        db.categories,
-      )..where((row) => row.id.equals(categoryId))).write(
-        const CategoriesCompanion(name: Value('Machine Systems')),
-      );
+      await (db.update(db.categories)
+            ..where((row) => row.id.equals(categoryId)))
+          .write(const CategoriesCompanion(name: Value('Machine Systems')));
       expect(
         await _hasResult(search, 'Machine', 'category', categoryId),
         isTrue,
       );
 
-      await (db.update(
-        db.assets,
-      )..where((row) => row.id.equals(deviceId))).write(
-        const AssetsCompanion(name: Value('Heat Pump')),
-      );
+      await (db.update(db.assets)..where((row) => row.id.equals(deviceId)))
+          .write(const AssetsCompanion(name: Value('Heat Pump')));
       expect(await _hasResult(search, 'Heat', 'asset', deviceId), isTrue);
       expect(
         await _hasResult(search, 'Old Boiler', 'asset', deviceId),
         isFalse,
       );
 
-      await (db.update(
-        db.deviceDetailsTable,
-      )..where((row) => row.assetId.equals(deviceId))).write(
-        const DeviceDetailsTableCompanion(brand: Value('ThermoNova')),
-      );
+      await (db.update(db.deviceDetailsTable)
+            ..where((row) => row.assetId.equals(deviceId)))
+          .write(const DeviceDetailsTableCompanion(brand: Value('ThermoNova')));
       expect(await _hasResult(search, 'ThermoNova', 'asset', deviceId), isTrue);
 
       await (db.update(
@@ -170,11 +163,8 @@ void main() {
       final serviceTag = (await db.select(db.tags).get()).singleWhere(
         (row) => row.name == 'service-tag',
       );
-      await (db.update(
-        db.tags,
-      )..where((row) => row.id.equals(serviceTag.id))).write(
-        const TagsCompanion(name: Value('seasonalservice')),
-      );
+      await (db.update(db.tags)..where((row) => row.id.equals(serviceTag.id)))
+          .write(const TagsCompanion(name: Value('seasonalservice')));
       expect(
         await _hasResult(search, 'seasonalservice', 'asset', deviceId),
         isTrue,
@@ -194,11 +184,9 @@ void main() {
           );
       expect(await _hasResult(search, 'linkedonly', 'asset', deviceId), isTrue);
 
-      await (db.update(
-        db.assetPhotos,
-      )..where((row) => row.id.equals('photo-search'))).write(
-        const AssetPhotosCompanion(caption: Value('PortraitCaption')),
-      );
+      await (db.update(db.assetPhotos)
+            ..where((row) => row.id.equals('photo-search')))
+          .write(const AssetPhotosCompanion(caption: Value('PortraitCaption')));
       expect(
         await _hasResult(search, 'PortraitCaption', 'asset', deviceId),
         isTrue,
@@ -262,16 +250,11 @@ void main() {
       expect(before.source, before.indexed);
 
       await LocalSyncStore(db).withOutboxSuppressed(() async {
-        await (db.update(
-          db.areas,
-        )..where((row) => row.id.equals('area_search'))).write(
-          const AreasCompanion(name: Value('Bulk North')),
-        );
-        await (db.update(
-          db.rooms,
-        )..where((row) => row.id.equals(roomId))).write(
-          const RoomsCompanion(notes: Value('Bulk Copper')),
-        );
+        await (db.update(db.areas)
+              ..where((row) => row.id.equals('area_search')))
+            .write(const AreasCompanion(name: Value('Bulk North')));
+        await (db.update(db.rooms)..where((row) => row.id.equals(roomId)))
+            .write(const RoomsCompanion(notes: Value('Bulk Copper')));
       });
 
       final dirty = await _generation(db);
@@ -289,9 +272,7 @@ void main() {
         name: 'Failure Room',
       );
       await search.rebuildIndex();
-      await (db.update(
-        db.rooms,
-      )..where((row) => row.id.equals(roomId))).write(
+      await (db.update(db.rooms)..where((row) => row.id.equals(roomId))).write(
         const RoomsCompanion(notes: Value('RetryNeedle')),
       );
 
@@ -360,9 +341,7 @@ void main() {
       final search = DriftSearchRepository(db);
       await search.rebuildIndex();
 
-      await (db.update(
-        db.rooms,
-      )..where((row) => row.id.equals(roomId))).write(
+      await (db.update(db.rooms)..where((row) => row.id.equals(roomId))).write(
         const RoomsCompanion(notes: Value('RestartNeedle')),
       );
       final dirty = await _generation(db);
