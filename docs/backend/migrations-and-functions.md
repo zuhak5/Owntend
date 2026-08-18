@@ -123,11 +123,11 @@ The zero-user launch database is defined by the ordered baseline modules under `
 8. [`20260815000008_asset_device_contract.sql`](../../supabase/migrations/20260815000008_asset_device_contract.sql): final asset/device field and RPC contract.
 9. [`20260815000009_charged_operation_recovery.sql`](../../supabase/migrations/20260815000009_charged_operation_recovery.sql): hash-qualified charged-operation recovery and capability `1.2.0`.
 10. [`20260815000010_change_feed.sql`](../../supabase/migrations/20260815000010_change_feed.sql): canonical 17-entity change-feed identity, typed `key_data`, durable delete keys, triggers, paging, and parity foundation.
-11. [`20260815000011_change_feed_access.sql`](../../supabase/migrations/20260815000011_change_feed_access.sql): final feed protocol `1.0.0`, authenticated-only `SECURITY INVOKER` RPCs, `auth.uid()` account scope, explicit Data API ACL normalization, and trigger-only definer execution.
+11. [`20260815000011_change_feed_access.sql`](../../supabase/migrations/20260815000011_change_feed_access.sql): final feed protocol `1.0.1`, authenticated-only `SECURITY INVOKER` RPCs, `auth.uid()` account scope, explicit Data API ACL normalization, and trigger-only definer execution.
 
 The former duplicate baseline replays and remediation-era forward patch files are intentionally absent. They represented audit history for an environment that had not launched, not a compatibility contract that Owntend needs to preserve.
 
-The checked-in feed capability remains disabled. After the hosted database is rebuilt from this baseline, enablement still requires exact-main hosted verification: no pending migration drift, protocol `1.0.0`, zero malformed feed rows, effective feed RPC ACLs matching the baseline, no unresolved feed-related security Advisor findings, and parity success for every hosted account (or explicit evidence that the reset contains zero accounts).
+The checked-in feed capability remains disabled. After the hosted database is rebuilt from this baseline, enablement still requires exact-main hosted verification: no pending migration drift, protocol `1.0.1`, zero malformed feed rows, effective feed RPC ACLs matching the baseline, no unresolved feed-related security Advisor findings, and parity success for every hosted account (or explicit evidence that the reset contains zero accounts).
 
 ## Deployment evidence
 

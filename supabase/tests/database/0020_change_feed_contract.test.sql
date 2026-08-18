@@ -8,8 +8,8 @@ select extensions.plan(8);
 
 select extensions.is(
   (select capability_version from public.sync_feed_capabilities where id = 'global'),
-  '1.0.0'::text,
-  'change-feed capability advertises the initial hardened protocol'
+  '1.0.1'::text,
+  'change-feed capability advertises the launch protocol'
 );
 
 select extensions.is(
@@ -115,8 +115,8 @@ select extensions.is(
 
 select extensions.is(
   public.fetch_user_change_feed(0, 50)->>'capability_version',
-  '1.0.0'::text,
-  'feed page carries the same initial protocol version as capability discovery'
+  '1.0.1'::text,
+  'feed page carries the same launch protocol version as capability discovery'
 );
 
 rollback;

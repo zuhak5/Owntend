@@ -10,9 +10,9 @@
 BEGIN;
 
 -- This is the only shipped pre-launch feed contract. Earlier audit iterations
--- were never released, so the hardened contract starts at protocol 1.0.0.
+-- were never released, so the hardened contract starts at protocol 1.0.1.
 UPDATE public.sync_feed_capabilities
-SET capability_version = '1.0.0',
+SET capability_version = '1.0.1',
     enabled = false,
     updated_at = clock_timestamp()
 WHERE id = 'global';
@@ -126,7 +126,7 @@ BEGIN
     'next_seq', v_next_seq,
     'has_more', v_has_more,
     'resnapshot_required', v_resnapshot_required,
-    'capability_version', COALESCE(v_cap_version, '1.0.0'),
+    'capability_version', COALESCE(v_cap_version, '1.0.1'),
     'capability_enabled', COALESCE(v_cap_enabled, false)
   );
 END;

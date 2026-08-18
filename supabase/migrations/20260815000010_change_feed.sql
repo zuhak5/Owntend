@@ -233,10 +233,10 @@ INSERT INTO public.sync_feed_capabilities (
   min_retained_seq,
   updated_at
 )
-VALUES ('global', false, '1.0.0', 0, clock_timestamp())
+VALUES ('global', false, '1.0.1', 0, clock_timestamp())
 ON CONFLICT (id) DO UPDATE SET
   enabled = false,
-  capability_version = '1.0.0',
+  capability_version = '1.0.1',
   min_retained_seq = 0,
   updated_at = clock_timestamp();
 
