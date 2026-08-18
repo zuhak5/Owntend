@@ -512,14 +512,22 @@ class TaskDistributionChart extends StatelessWidget {
             const SizedBox(height: HkSpacing.xs),
             LayoutBuilder(
               builder: (context, constraints) {
-                final maxLegendWidth = math.min(240.0, constraints.maxWidth);
+                const legendSpacing = HkSpacing.space4;
+                final textScale = MediaQuery.textScalerOf(context).scale(1);
+                final threeColumnWidth =
+                    (constraints.maxWidth - (legendSpacing * 2)) / 3;
+                final maxLegendWidth = math.min(
+                  240.0,
+                  textScale < 1.6 ? threeColumnWidth : constraints.maxWidth,
+                );
                 return Align(
                   alignment: AlignmentDirectional.centerStart,
                   child: Wrap(
                     key: const ValueKey('statistics-distribution-legend'),
-                    spacing: HkSpacing.space4,
-                    runSpacing: HkSpacing.space4,
+                    spacing: legendSpacing,
+                    runSpacing: legendSpacing,
                     alignment: WrapAlignment.center,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       for (var index = 0; index < entries.length; index++)
                         ConstrainedBox(
@@ -575,6 +583,7 @@ class _StatisticsLegendItem extends StatelessWidget {
             Flexible(
               child: Text(
                 label,
+                textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                   color: scheme.onSurface,
                   fontWeight: FontWeight.w700,
