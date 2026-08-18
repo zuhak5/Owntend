@@ -97,8 +97,8 @@ jobs:
           retention-days: 14
 
   stale-actions-registry-cleanup:
-    name: Inspect and purge stale Actions registry
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.event.head_commit.message == 'Inspect and purge stale Actions registry'
+    name: Purge inactive Actions workflow records
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.event.head_commit.message == 'Purge inactive Actions workflow records'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -106,7 +106,7 @@ jobs:
       issues: write
       contents: read
     steps:
-      - name: Purge stale runs and publish registry snapshot
+      - name: Purge runs owned by non-active workflow records
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -133,11 +133,11 @@ jobs:
           get_stale_ids() {
             get_registry > /tmp/registry.json
             : > /tmp/stale-ids
-            while IFS=$'\t' read -r workflow_id workflow_path; do
-              if ! printf '%s\n' "$canonical_paths" | grep -Fxq "$workflow_path"; then
+            while IFS=$'\t' read -r workflow_id workflow_state workflow_path; do
+              if [ "$workflow_state" != "active" ] || ! printf '%s\n' "$canonical_paths" | grep -Fxq "$workflow_path"; then
                 echo "$workflow_id" >> /tmp/stale-ids
               fi
-            done < <(jq -r '.workflows[] | [.id, .path] | @tsv' /tmp/registry.json)
+            done < <(jq -r '.workflows[] | [.id, .state, .path] | @tsv' /tmp/registry.json)
             sort -u /tmp/stale-ids -o /tmp/stale-ids
           }
 
@@ -165,7 +165,7 @@ jobs:
           for pass in $(seq 1 10); do
             scan_stale_runs
             [ ! -s /tmp/stale-run-ids ] && break
-            echo "Pass $pass: deleting $(wc -l < /tmp/stale-run-ids) stale workflow runs"
+            echo "Pass $pass: deleting $(wc -l < /tmp/stale-run-ids) runs owned by inactive/stale workflows"
             while IFS= read -r run_id; do
               [ -z "$run_id" ] && continue
               code="$(curl --silent --show-error -o /tmp/delete-response -w '%{http_code}' -X DELETE "${auth[@]}" "$api/actions/runs/$run_id")"
@@ -187,11 +187,11 @@ jobs:
           remaining_runs="$(wc -l < /tmp/stale-run-ids | tr -d ' ')"
 
           {
-            echo '## Stale Actions registry snapshot'
+            echo '## Inactive Actions registry snapshot'
             echo
             echo "Cleanup commit: \`${GITHUB_SHA}\`"
             echo
-            echo "Remaining stale workflow runs found through the repository-wide run registry: **${remaining_runs}**"
+            echo "Remaining runs owned by inactive/stale workflow records: **${remaining_runs}**"
             echo
             echo '| ID | State | Path | Name |'
             echo '|---:|---|---|---|'
