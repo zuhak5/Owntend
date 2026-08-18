@@ -969,11 +969,7 @@ class SyncCoordinator implements CloudSyncRepository {
       forceFullSnapshot: true,
     );
     await _ensureActiveAccountScope(scope);
-    await _reconcileMissedRemoteDeletes(
-      userId,
-      deviceId,
-      scope: scope,
-    );
+    await _reconcileMissedRemoteDeletes(userId, deviceId, scope: scope);
     await _ensureActiveAccountScope(scope);
     await _localStore.completeFeedResnapshot(highWaterSeq);
     return outcome;

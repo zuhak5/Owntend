@@ -14,9 +14,7 @@ extension LocalSyncStoreChangeFeed on LocalSyncStore {
     return row?.read<int>('last_sync_seq');
   }
 
-  Future<void> resetFeedCursorForResnapshot({
-    required int highWaterSeq,
-  }) async {
+  Future<void> resetFeedCursorForResnapshot({required int highWaterSeq}) async {
     if (highWaterSeq < 0) {
       throw ArgumentError.value(highWaterSeq, 'highWaterSeq');
     }
@@ -49,7 +47,9 @@ ON CONFLICT(entity) DO UPDATE SET
     await db.transaction(() async {
       final pending = await feedResnapshotHighWater();
       if (pending != highWaterSeq) {
-        throw StateError('Feed resnapshot completion does not match its marker.');
+        throw StateError(
+          'Feed resnapshot completion does not match its marker.',
+        );
       }
       await db.customStatement(
         '''

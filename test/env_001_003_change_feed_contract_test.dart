@@ -9,29 +9,32 @@ import 'package:owntend/src/core/sync/sync_dtos.dart';
 
 void main() {
   group('ENV-001/002 change-feed wire contract', () {
-    test('every client sync entity has one strict feed identifier and key set', () {
-      final specs = [...syncEntitySpecs, profileSyncSpec];
-      expect(specs.map((spec) => spec.entity).toSet().length, specs.length);
+    test(
+      'every client sync entity has one strict feed identifier and key set',
+      () {
+        final specs = [...syncEntitySpecs, profileSyncSpec];
+        expect(specs.map((spec) => spec.entity).toSet().length, specs.length);
 
-      for (final spec in specs) {
-        final keyData = <String, dynamic>{
-          for (final column in spec.keyColumns) column: 'value-$column',
-        };
-        final recordKey = spec.keyColumns.isEmpty
-            ? spec.entity
-            : spec.keyColumns.map((column) => keyData[column]).join('|');
-        final parsed = parseSyncFeedChange({
-          'entity_type': spec.entity,
-          'record_id': recordKey,
-          'op_type': 'DELETE',
-          'key_data': keyData,
-        });
+        for (final spec in specs) {
+          final keyData = <String, dynamic>{
+            for (final column in spec.keyColumns) column: 'value-$column',
+          };
+          final recordKey = spec.keyColumns.isEmpty
+              ? spec.entity
+              : spec.keyColumns.map((column) => keyData[column]).join('|');
+          final parsed = parseSyncFeedChange({
+            'entity_type': spec.entity,
+            'record_id': recordKey,
+            'op_type': 'DELETE',
+            'key_data': keyData,
+          });
 
-        expect(parsed.spec, same(spec));
-        expect(parsed.recordKey, recordKey);
-        expect(parsed.keyValues, keyData);
-      }
-    });
+          expect(parsed.spec, same(spec));
+          expect(parsed.recordKey, recordKey);
+          expect(parsed.keyValues, keyData);
+        }
+      },
+    );
 
     test('composite key JSON order does not change canonical record key', () {
       final parsed = parseSyncFeedChange({
@@ -118,28 +121,34 @@ void main() {
       expect(await store.getFeedCursor(), 100);
     });
 
-    test('resnapshot reset can move 100 to zero and persists restart marker', () async {
-      await store.setFeedCursor(100);
-      await store.resetFeedCursorForResnapshot(highWaterSeq: 240);
+    test(
+      'resnapshot reset can move 100 to zero and persists restart marker',
+      () async {
+        await store.setFeedCursor(100);
+        await store.resetFeedCursorForResnapshot(highWaterSeq: 240);
 
-      expect(await store.getFeedCursor(), 0);
-      expect(await store.feedResnapshotHighWater(), 240);
+        expect(await store.getFeedCursor(), 0);
+        expect(await store.feedResnapshotHighWater(), 240);
 
-      final restarted = LocalSyncStore(db);
-      expect(await restarted.getFeedCursor(), 0);
-      expect(await restarted.feedResnapshotHighWater(), 240);
-    });
+        final restarted = LocalSyncStore(db);
+        expect(await restarted.getFeedCursor(), 0);
+        expect(await restarted.feedResnapshotHighWater(), 240);
+      },
+    );
 
-    test('successful resnapshot advances to captured high-water and clears marker', () async {
-      await store.setFeedCursor(100);
-      await store.resetFeedCursorForResnapshot(highWaterSeq: 240);
-      await store.completeFeedResnapshot(240);
+    test(
+      'successful resnapshot advances to captured high-water and clears marker',
+      () async {
+        await store.setFeedCursor(100);
+        await store.resetFeedCursorForResnapshot(highWaterSeq: 240);
+        await store.completeFeedResnapshot(240);
 
-      expect(await store.getFeedCursor(), 240);
-      expect(await store.feedResnapshotHighWater(), isNull);
-      await store.setFeedCursor(200);
-      expect(await store.getFeedCursor(), 240);
-    });
+        expect(await store.getFeedCursor(), 240);
+        expect(await store.feedResnapshotHighWater(), isNull);
+        await store.setFeedCursor(200);
+        expect(await store.getFeedCursor(), 240);
+      },
+    );
   });
 }
 
