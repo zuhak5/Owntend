@@ -11,8 +11,16 @@ on:
         description: Exact Supabase project ref confirmation
         required: true
         type: string
+      operation:
+        description: Database operation
+        required: true
+        default: apply-pending-migrations
+        type: choice
+        options:
+          - apply-pending-migrations
+          - reset-prelaunch-database
       confirmation:
-        description: Type apply-pending-migrations
+        description: Type the exact operation confirmation
         required: true
         type: string
 
@@ -39,6 +47,7 @@ jobs:
         id: source
         env:
           INPUT_SOURCE_SHA: ${{ inputs.source_sha }}
+          INPUT_OPERATION: ${{ inputs.operation }}
           INPUT_CONFIRMATION: ${{ inputs.confirmation }}
         run: |
           set -euo pipefail
@@ -49,15 +58,29 @@ jobs:
           test "$source_sha" = "$INPUT_SOURCE_SHA"
           test "$source_sha" = "$GITHUB_SHA"
           test "$source_sha" = "$remote_sha"
-          test "$INPUT_CONFIRMATION" = "apply-pending-migrations"
+
+          case "$INPUT_OPERATION" in
+            apply-pending-migrations)
+              test "$INPUT_CONFIRMATION" = "apply-pending-migrations"
+              ;;
+            reset-prelaunch-database)
+              test "$INPUT_CONFIRMATION" = "reset-prelaunch-zero-user"
+              grep -Fqx -- '- [ ] Project is published and has active users' AGENTS.md
+              ;;
+            *)
+              echo "Unsupported Supabase operation" >&2
+              exit 1
+              ;;
+          esac
+
           echo "sha=$source_sha" >> "$GITHUB_OUTPUT"
 
   deploy:
-    name: Apply pending production migrations
+    name: Apply protected Supabase database operation
     needs: validate-source
     runs-on: ubuntu-latest
     environment: production-supabase-migrations
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
@@ -96,21 +119,34 @@ jobs:
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_MIGRATION_DB_PASSWORD }}
           SUPABASE_PROJECT_REF: ${{ inputs.project_ref }}
         run: npx supabase link --project-ref "$SUPABASE_PROJECT_REF"
-      - name: Show remote migration history
+      - name: Show remote migration history before operation
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_MIGRATION_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_MIGRATION_DB_PASSWORD }}
         run: npx supabase migration list --linked
       - name: Dry-run pending migrations
+        if: inputs.operation == 'apply-pending-migrations'
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_MIGRATION_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_MIGRATION_DB_PASSWORD }}
         run: npx supabase db push --linked --dry-run
       - name: Apply pending migrations
+        if: inputs.operation == 'apply-pending-migrations'
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_MIGRATION_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_MIGRATION_DB_PASSWORD }}
         run: npx supabase db push --linked
+      - name: Destructively rebuild pre-launch database from baseline
+        if: inputs.operation == 'reset-prelaunch-database'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_MIGRATION_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_MIGRATION_DB_PASSWORD }}
+        run: npx supabase db reset --linked --no-seed
+      - name: Show remote migration history after operation
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_MIGRATION_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_MIGRATION_DB_PASSWORD }}
+        run: npx supabase migration list --linked
       - name: Verify no migration remains pending
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_MIGRATION_ACCESS_TOKEN }}
