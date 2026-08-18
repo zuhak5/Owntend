@@ -77,12 +77,12 @@ select extensions.is(
     where schemaname = 'public'
       and (
         (
-          coalesce(qual, '') ~ 'auth\\.uid\\(\\)'
-          and coalesce(qual, '') !~* 'select[[:space:]]+auth\\.uid\\(\\)'
+          position('AUTH.UID()' in upper(coalesce(qual, ''))) > 0
+          and position('SELECT AUTH.UID()' in upper(coalesce(qual, ''))) = 0
         )
         or (
-          coalesce(with_check, '') ~ 'auth\\.uid\\(\\)'
-          and coalesce(with_check, '') !~* 'select[[:space:]]+auth\\.uid\\(\\)'
+          position('AUTH.UID()' in upper(coalesce(with_check, ''))) > 0
+          and position('SELECT AUTH.UID()' in upper(coalesce(with_check, ''))) = 0
         )
       )
   ),
@@ -97,12 +97,12 @@ select extensions.is(
     where schemaname = 'public'
       and (
         (
-          coalesce(qual, '') ~ 'current_setting\\('
-          and coalesce(qual, '') !~* 'select[[:space:]]+current_setting\\('
+          position('CURRENT_SETTING(' in upper(coalesce(qual, ''))) > 0
+          and position('SELECT CURRENT_SETTING(' in upper(coalesce(qual, ''))) = 0
         )
         or (
-          coalesce(with_check, '') ~ 'current_setting\\('
-          and coalesce(with_check, '') !~* 'select[[:space:]]+current_setting\\('
+          position('CURRENT_SETTING(' in upper(coalesce(with_check, ''))) > 0
+          and position('SELECT CURRENT_SETTING(' in upper(coalesce(with_check, ''))) = 0
         )
       )
   ),
