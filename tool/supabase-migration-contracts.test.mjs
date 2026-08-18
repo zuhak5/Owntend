@@ -11,6 +11,12 @@ const profileRevisionMigration = path.join(
   'migrations',
   '20260815000006_profile_revision.sql',
 );
+const supabaseDeploymentWorkflow = path.join(
+  repositoryRoot,
+  '.github',
+  'workflows',
+  'deploy-supabase-migrations.yml',
+);
 
 test('profile revision baseline protects NULL initialization from metadata trigger', async () => {
   const sql = await fs.readFile(profileRevisionMigration, 'utf8');
@@ -71,5 +77,32 @@ test('profile revision baseline protects NULL initialization from metadata trigg
     sql,
     /UPDATE public\.profiles\s+SET revision = 1\s+WHERE revision IS NULL;/,
     'profiles must be initialized to revision 1',
+  );
+});
+
+test('prelaunch hosted reset is explicit, exact-main, project-bound, and lifecycle-gated', async () => {
+  const workflow = await fs.readFile(supabaseDeploymentWorkflow, 'utf8');
+
+  assert.match(workflow, /reset-prelaunch-database/);
+  assert.match(workflow, /reset-prelaunch-zero-user/);
+  assert.match(
+    workflow,
+    /grep -Fqx -- '- \[ \] Project is published and has active users' AGENTS\.md/,
+  );
+  assert.match(workflow, /test "\$source_sha" = "\$INPUT_SOURCE_SHA"/);
+  assert.match(workflow, /test "\$source_sha" = "\$GITHUB_SHA"/);
+  assert.match(workflow, /test "\$source_sha" = "\$remote_sha"/);
+  assert.match(workflow, /test "\$INPUT_PROJECT_REF" = "\$expected_ref"/);
+  assert.match(workflow, /environment: production-supabase-migrations/);
+  assert.match(workflow, /npx supabase db reset --linked --no-seed/);
+  assert.match(workflow, /npx supabase db push --linked --dry-run/);
+
+  const resetIndex = workflow.indexOf('npx supabase db reset --linked --no-seed');
+  const finalDryRunIndex = workflow.lastIndexOf(
+    'npx supabase db push --linked --dry-run',
+  );
+  assert.ok(
+    resetIndex >= 0 && finalDryRunIndex > resetIndex,
+    'the destructive reset must be followed by a no-pending-migrations verification',
   );
 });
