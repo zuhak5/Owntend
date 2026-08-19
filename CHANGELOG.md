@@ -8,6 +8,7 @@ The current application version is defined only in `pubspec.yaml`. Released vers
 
 ### Fixed
 
+- Removed Category as a duplicate item classification: Item Type is now the sole item classifier across UI/domain, Drift schema/search, asset sync payloads, current backups, and the pre-launch Supabase asset/RPC contract; safety checks use `asset_type`, while task Health Group behavior remains unchanged for separate Problem #5 work.
 - Unified the English/Arabic language selector across onboarding and Settings with anchor-width menus, directional RTL positioning, centered selected labels, and visible open-state accessibility feedback.
 - Standardized Settings row gutters, leading-icon columns, text starts, trailing controls, and RTL-aware dividers across Language, Weather, permissions, and notification preferences without changing their behavior.
 - Made Statistics content-driven and responsive so metric cards, charts, legends, inline empty states, text scaling, and RTL layouts remain readable without viewport-stretched chart panels or nested empty-state surfaces.
