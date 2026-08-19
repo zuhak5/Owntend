@@ -91,6 +91,62 @@ for path in list((ROOT / 'test').rglob('*.dart')) + list((ROOT / 'integration_te
     )
     path.write_text(text, encoding='utf-8')
 
+# Removed Category source/catalog imports and reset seeding.
+replace('lib/main.dart', "import 'src/core/domain/categories.dart';\n", '')
+p = 'lib/src/core/sync/local_sync_store.dart'
+replace(p, "import '../domain/categories.dart';\n", '')
+replace(p, "        'categories',\n", '')
+sub(
+    p,
+    r"\n    for \(final c in appCategories\) \{.*?\n    \}\n(?=    for \(final row in _seedValues\['user_setting'\]!)",
+    '\n',
+    flags=re.S,
+)
+
+# The shared item card now renders Item Type and placement only.
+replace(
+    'lib/src/features/assets/presentation/thing_detail_screen.dart',
+    '      if (category != null) category!.name,\n',
+    '',
+)
+
+# Remove Category-table setup from tests that only needed it to satisfy the old
+# asset foreign key. Their actual regression intent remains unchanged.
+p = 'test/bug_009_photo_cleanup_response_loss_test.dart'
+sub(
+    p,
+    r"\n    await db\n        \.into\(db\.categories\)\n        \.insert\(\n          CategoriesCompanion\.insert\(.*?\n        \);",
+    '',
+    flags=re.S,
+)
+
+p = 'test/free_asset_creation_test.dart'
+sub(
+    p,
+    r"\n      await db\n          \.into\(db\.categories\)\n          \.insertOnConflictUpdate\(\n            CategoriesCompanion\.insert\(.*?\n          \);",
+    '',
+    flags=re.S,
+)
+
+p = 'test/task_creation_sync_test.dart'
+sub(
+    p,
+    r"\n      await db\n          \.into\(db\.categories\)\n          \.insertOnConflictUpdate\(\n            CategoriesCompanion\.insert\(.*?\n          \);",
+    '',
+    flags=re.S,
+)
+
+# BUG-015 still proves database-generation invalidation for all remaining
+# searchable source families. The Category-source assertion itself is obsolete;
+# the immediately following asset update continues to exercise this invariant.
+p = 'test/bug_015_search_generation_test.dart'
+sub(
+    p,
+    r"\n      final categoryId = _categoryId\(categories, HealthGroup\.appliances\);\n      await \(db\.update\(db\.categories\).*?\n      \);\n",
+    '\n',
+    flags=re.S,
+)
+
 # Widget fixture/provider catalog is obsolete; Item Type remains in each Asset.
 p = 'test/widget_test.dart'
 replace(p, '    categoriesProvider.overrideWithValue(AsyncData(_categories(now))),\n', '')
@@ -113,17 +169,6 @@ sub(
     p,
     r'\s*categoriesProvider\.overrideWith\(\n\s*\(ref\) => Stream\.value\(<Category>\[\]\),\n\s*\),\n',
     '',
-)
-
-# BUG-015 keeps generation-bound invalidation for all remaining searchable
-# sources; Category itself is intentionally no longer a source family.
-p = 'test/bug_015_search_generation_test.dart'
-sub(
-    p,
-    r'\n\s*final categoryId = _categoryId\(categories, HealthGroup\.appliances\);\n'
-    r'\s*await \(db\.update\(db\.categories\).*?\n\s*\);\n',
-    '\n',
-    flags=re.S,
 )
 
 # Localization contract now verifies Item Type presentation and that Category
