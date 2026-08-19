@@ -2078,7 +2078,7 @@ Future<bool> completeTaskWithFeedback(
   );
   if (completesFinalDueToday) {
     try {
-      await _offerDailyCompletionReward(context, ref);
+      await offerDailyCompletionReward(context, ref);
     } catch (_) {}
   } else if (context.mounted) {
     final config =
@@ -2095,7 +2095,7 @@ Future<bool> completeTaskWithFeedback(
   return true;
 }
 
-Future<void> _offerDailyCompletionReward(
+Future<void> offerDailyCompletionReward(
   BuildContext context,
   WidgetRef ref,
 ) async {
@@ -2108,69 +2108,7 @@ Future<void> _offerDailyCompletionReward(
       (wallet?.balance ?? config.walletCap) + 2 > config.walletCap) {
     return;
   }
-  final accepted = await runWithNativeAdsSuspended(
-    context,
-    () => showModalBottomSheet<bool>(
-      context: context,
-      useRootNavigator: true,
-      useSafeArea: true,
-      showDragHandle: true,
-      builder: (context) => Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 520),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(
-              HkSpacing.gutter,
-              0,
-              HkSpacing.gutter,
-              HkSpacing.gutter,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Symbols.celebration_rounded, size: 44),
-                const SizedBox(height: HkSpacing.sm),
-                Text(
-                  context.l10n.todayCareComplete,
-                  style: Theme.of(context).textTheme.headlineSmall,
-                ),
-                const SizedBox(height: HkSpacing.xs),
-                Text(
-                  context.l10n.optionalDailyRewardDescription,
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: HkSpacing.md),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => Navigator.of(context).pop(false),
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Text(context.l10n.notNow),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: HkSpacing.sm),
-                    Expanded(
-                      child: FilledButton.icon(
-                        onPressed: () => Navigator.of(context).pop(true),
-                        icon: const Icon(Symbols.play_circle_rounded),
-                        label: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Text(context.l10n.earnTwoPoints),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    ),
-  );
+  final accepted = await showDailyCompletionRewardSheet(context);
   if (accepted != true || !context.mounted) return;
   final result = await ref
       .read(owntendAdsProvider)
@@ -2180,13 +2118,7 @@ Future<void> _offerDailyCompletionReward(
         entryPoint: 'today_complete_milestone',
       );
   if (!context.mounted) return;
-  final message = switch (result) {
-    RewardShowResult.shownAwaitingServerVerification =>
-      context.l10n.rewardWatchedVerifyingTwo,
-    RewardShowResult.unavailable => context.l10n.noRewardAvailable,
-    RewardShowResult.rejected => context.l10n.dailyRewardAlreadyClaimed,
-    RewardShowResult.dismissed => context.l10n.rewardAdClosedEarly,
-  };
+  final message = dailyCompletionRewardResultMessage(context, result);
   hk_ui.showToast(context, content: Text(message));
 }
 

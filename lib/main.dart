@@ -105,6 +105,7 @@ part 'src/features/assets/presentation/thing_detail_screen.dart';
 part 'src/features/assets/presentation/asset_dialogs.dart';
 part 'src/features/maintenance/presentation/maintenance_screen.dart';
 part 'src/features/maintenance/presentation/task_detail_screen.dart';
+part 'src/features/maintenance/presentation/daily_completion_reward_sheet.dart';
 part 'src/features/maintenance/presentation/calendar_screen.dart';
 part 'src/features/maintenance/presentation/maintenance_dialogs.dart';
 part 'src/features/more/presentation/more_screen.dart';

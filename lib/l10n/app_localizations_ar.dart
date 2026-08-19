@@ -3423,14 +3423,13 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get optionalDailyRewardDescription =>
-      'يمكنك اختياريًا مشاهدة إعلان بيني بمكافأة لكسب نقطتين. تُضاف مكافأتك بعد التحقق الآمن من الخادم فقط.';
+      'شاهد فيديو قصيرًا لتحصل على نقطتين إضافيتين.';
 
   @override
-  String get earnTwoPoints => 'اكسب نقطتين';
+  String get earnTwoPoints => 'احصل على نقطتين';
 
   @override
-  String get rewardWatchedVerifyingTwo =>
-      'تمت مشاهدة المكافأة. جارٍ التحقق الآمن من نقطتين…';
+  String get rewardWatchedVerifyingTwo => 'جارٍ التحقق من مكافأتك…';
 
   @override
   String get noRewardAvailable => 'لا توجد مكافأة متاحة الآن.';

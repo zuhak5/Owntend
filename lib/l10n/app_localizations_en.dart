@@ -3355,14 +3355,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get optionalDailyRewardDescription =>
-      'Optionally watch a rewarded interstitial to earn 2 points. Your reward is credited only after secure server verification.';
+      'Watch a short video to earn 2 bonus points.';
 
   @override
   String get earnTwoPoints => 'Earn 2 points';
 
   @override
-  String get rewardWatchedVerifyingTwo =>
-      'Reward watched. Verifying 2 points securely…';
+  String get rewardWatchedVerifyingTwo => 'Verifying your reward…';
 
   @override
   String get noRewardAvailable => 'No reward is available right now.';
