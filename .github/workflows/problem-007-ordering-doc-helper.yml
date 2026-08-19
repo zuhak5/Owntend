@@ -1,0 +1,115 @@
+name: Problem 007 ordering review helper
+
+on:
+  pull_request:
+    types: [synchronize]
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  harden-and-test:
+    if: github.event.pull_request.head.ref == 'fix/problem-7-points-counter-sync'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Harden ordering and documentation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new, label):
+              p = Path(path)
+              text = p.read_text()
+              if text.count(old) != 1:
+                  raise SystemExit(f'{label}: expected one anchor, found {text.count(old)}')
+              p.write_text(text.replace(old, new, 1))
+
+          replace_once(
+              'lib/src/features/monetization/monetization.dart',
+              '''      if (mutationGeneration != _mutationGeneration) return;
++      _acceptCanonical(wallet, clearMutationGate: true);'''.replace('+', ''),
+              '''      if (mutationGeneration != _mutationGeneration) return;
++      final pendingBalance = _pendingAuthoritativeBalance;
++      final lastUpdatedAt = _lastCanonicalUpdatedAt;
++      if (pendingBalance != null &&
++          wallet != null &&
++          wallet.balance != pendingBalance &&
++          (lastUpdatedAt == null ||
++              !wallet.updatedAt.isAfter(lastUpdatedAt))) {
++        return;
++      }
++      _acceptCanonical(wallet, clearMutationGate: true);'''.replace('+', ''),
+              'refresh stale-canonical gate',
+          )
+          replace_once(
+              'lib/src/features/monetization/monetization.dart',
+              '''    if (lastUpdatedAt != null &&
++        wallet.updatedAt.isAtSameMomentAs(lastUpdatedAt) &&
++        _pendingAuthoritativeBalance == null &&
++        current != null &&
++        current.balance != wallet.balance) {'''.replace('+', ''),
+              '''    if (lastUpdatedAt != null &&
++        wallet.updatedAt.isAtSameMomentAs(lastUpdatedAt) &&
++        current != null &&
++        current.balance != wallet.balance) {'''.replace('+', ''),
+              'same-version conflict gate',
+          )
+          replace_once(
+              'test/problem_007_wallet_sync_test.dart',
+              '''      repository.completeDelayedCanonical(_wallet(4, 2));
++      await _settle();
++      expect(container.read(pointWalletProvider).value?.balance, 4);
++
++      repository.emit(_wallet(6, 3));'''.replace('+', ''),
+              '''      repository.completeDelayedCanonical(_wallet(5, 1));
++      await _settle();
++      expect(container.read(pointWalletProvider).value?.balance, 4);
++
++      repository.emit(_wallet(4, 2));
++      await _settle();
++      expect(container.read(pointWalletProvider).value?.balance, 4);
++
++      repository.emit(_wallet(6, 3));'''.replace('+', ''),
+              'stale canonical test',
+          )
+          replace_once(
+              'docs/architecture/monetization.md',
+              '20260817180000_hash_qualified_charged_operation_recovery.sql',
+              '20260815000009_charged_operation_recovery.sql',
+              'canonical recovery migration link',
+          )
+          PY
+          rm -f .github/workflows/problem-007-ordering-doc-helper.yml
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: '3.47.0'
+          channel: stable
+          cache: true
+
+      - name: Validate hardening
+        run: |
+          flutter pub get --enforce-lockfile
+          dart format lib/src/features/monetization/monetization.dart test/problem_007_wallet_sync_test.dart
+          flutter analyze --no-pub
+          flutter test --no-pub --concurrency=1 test/problem_007_wallet_sync_test.dart
+
+      - name: Commit reviewed hardening
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'test: harden wallet snapshot ordering'
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
