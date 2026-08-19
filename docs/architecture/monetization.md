@@ -12,7 +12,7 @@ This document describes the behavior present in the repository as of 2026-08-17.
 - [`proguard-rules.pro`](../../android/app/proguard-rules.pro) for Google Mobile Ads and native ad factory release retention.
 - [`app-ads.txt`](../../download-site/app-ads.txt) for developer root-domain publisher authorization.
 - The [points and monetization baseline migration](../../supabase/migrations/20260815000003_points_monetization.sql) for backend authority.
-- The [hash-qualified charged-operation recovery migration](../../supabase/migrations/20260817180000_hash_qualified_charged_operation_recovery.sql) for immutable recovery identity.
+- The [hash-qualified charged-operation recovery migration](../../supabase/migrations/20260815000009_charged_operation_recovery.sql) for immutable recovery identity.
 - [`admob-ssv-handler`](../../supabase/functions/admob-ssv-handler/index.ts) for signed callback validation.
 
 The operational disclosure worksheet is [`google-play-data-safety-evidence.md`](../operations/google-play-data-safety-evidence.md). It separates repository facts from Play Console, AdMob, hosted-service, and device evidence.

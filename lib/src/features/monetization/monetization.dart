@@ -784,6 +784,14 @@ class PointWalletController extends Notifier<AsyncValue<PointWallet?>> {
       final wallet = await repository.watchWallet(userId).first;
       if (!_scopeIsCurrent(repository, userId, generation)) return;
       if (mutationGeneration != _mutationGeneration) return;
+      final pendingBalance = _pendingAuthoritativeBalance;
+      final lastUpdatedAt = _lastCanonicalUpdatedAt;
+      if (pendingBalance != null &&
+          wallet != null &&
+          wallet.balance != pendingBalance &&
+          (lastUpdatedAt == null || !wallet.updatedAt.isAfter(lastUpdatedAt))) {
+        return;
+      }
       _acceptCanonical(wallet, clearMutationGate: true);
     } on Object catch (error, stackTrace) {
       if (!_scopeIsCurrent(repository, userId, generation)) return;
@@ -871,7 +879,6 @@ class PointWalletController extends Notifier<AsyncValue<PointWallet?>> {
     final current = state.value;
     if (lastUpdatedAt != null &&
         wallet.updatedAt.isAtSameMomentAs(lastUpdatedAt) &&
-        _pendingAuthoritativeBalance == null &&
         current != null &&
         current.balance != wallet.balance) {
       return false;

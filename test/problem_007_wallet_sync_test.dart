@@ -133,7 +133,11 @@ void main() {
       await _settle();
       expect(container.read(pointWalletProvider).value?.balance, 4);
 
-      repository.completeDelayedCanonical(_wallet(4, 2));
+      repository.completeDelayedCanonical(_wallet(5, 1));
+      await _settle();
+      expect(container.read(pointWalletProvider).value?.balance, 4);
+
+      repository.emit(_wallet(4, 2));
       await _settle();
       expect(container.read(pointWalletProvider).value?.balance, 4);
 
