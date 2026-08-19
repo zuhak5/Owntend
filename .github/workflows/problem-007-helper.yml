@@ -56,8 +56,14 @@ jobs:
           python - <<'PY'
           from pathlib import Path
 
+          def replace_once(path, old, new, label):
+              text = path.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected 1, found {count}')
+              path.write_text(text.replace(old, new, 1))
+
           task_path = Path('lib/src/features/maintenance/application/task_creation_controller.dart')
-          task = task_path.read_text()
           task_anchor = '        // CTC-006 & CTC-007: Reconcile canonical creation composite before\n'
           task_insert = (
               '        ref.read(pointWalletProvider.notifier).adoptAuthoritativeMutationResult(\n'
@@ -65,80 +71,101 @@ jobs:
               '          userId: accountScope,\n'
               '        );\n\n' + task_anchor
           )
-          if task.count(task_anchor) != 1:
-              raise SystemExit('task authoritative balance anchor mismatch')
-          task = task.replace(task_anchor, task_insert, 1)
-          old_provider = '''  return ChargedOperationResolver(
-            monetizationRepo: monetizationRepo,
-            localSyncStore: localSyncStore,
-            operationStore: ref.watch(taskCreationOperationStoreProvider),
-          );'''
-          new_provider = '''  return ChargedOperationResolver(
-            monetizationRepo: monetizationRepo,
-            localSyncStore: localSyncStore,
-            operationStore: ref.watch(taskCreationOperationStoreProvider),
-            adoptAuthoritativeBalance: (userId, balance) {
-              ref
-                  .read(pointWalletProvider.notifier)
-                  .adoptAuthoritativeMutationResult(balance, userId: userId);
-            },
-          );'''
-          if task.count(old_provider) != 1:
-              raise SystemExit('charged resolver provider anchor mismatch')
-          task_path.write_text(task.replace(old_provider, new_provider, 1))
+          replace_once(task_path, task_anchor, task_insert, 'task balance adoption')
+
+          old_provider = (
+              '  return ChargedOperationResolver(\n'
+              '    monetizationRepo: monetizationRepo,\n'
+              '    localSyncStore: localSyncStore,\n'
+              '    operationStore: ref.watch(taskCreationOperationStoreProvider),\n'
+              '  );'
+          )
+          new_provider = (
+              '  return ChargedOperationResolver(\n'
+              '    monetizationRepo: monetizationRepo,\n'
+              '    localSyncStore: localSyncStore,\n'
+              '    operationStore: ref.watch(taskCreationOperationStoreProvider),\n'
+              '    adoptAuthoritativeBalance: (userId, balance) {\n'
+              '      ref\n'
+              '          .read(pointWalletProvider.notifier)\n'
+              '          .adoptAuthoritativeMutationResult(balance, userId: userId);\n'
+              '    },\n'
+              '  );'
+          )
+          replace_once(task_path, old_provider, new_provider, 'resolver provider callback')
 
           resolver_path = Path('lib/src/features/monetization/charged_operation_resolver.dart')
-          resolver = resolver_path.read_text()
-          old_ctor = '''  ChargedOperationResolver({
-            required this.monetizationRepo,
-            required this.localSyncStore,
-            required this.operationStore,
-          });'''
-          new_ctor = '''  ChargedOperationResolver({
-            required this.monetizationRepo,
-            required this.localSyncStore,
-            required this.operationStore,
-            required void Function(String userId, int balance) adoptAuthoritativeBalance,
-          }) : _adoptAuthoritativeBalance = adoptAuthoritativeBalance;'''
-          if resolver.count(old_ctor) != 1:
-              raise SystemExit('resolver constructor anchor mismatch')
-          resolver = resolver.replace(old_ctor, new_ctor, 1)
+          old_ctor = (
+              '  ChargedOperationResolver({\n'
+              '    required this.monetizationRepo,\n'
+              '    required this.localSyncStore,\n'
+              '    required this.operationStore,\n'
+              '  });'
+          )
+          new_ctor = (
+              '  ChargedOperationResolver({\n'
+              '    required this.monetizationRepo,\n'
+              '    required this.localSyncStore,\n'
+              '    required this.operationStore,\n'
+              '    required void Function(String userId, int balance) adoptAuthoritativeBalance,\n'
+              '  }) : _adoptAuthoritativeBalance = adoptAuthoritativeBalance;'
+          )
+          replace_once(resolver_path, old_ctor, new_ctor, 'resolver constructor')
           field_anchor = '  final TaskCreationOperationStore operationStore;\n'
           field_insert = field_anchor + '  final void Function(String userId, int balance) _adoptAuthoritativeBalance;\n'
-          if resolver.count(field_anchor) != 1:
-              raise SystemExit('resolver callback field anchor mismatch')
-          resolver = resolver.replace(field_anchor, field_insert, 1)
-          completed_anchor = '''            continue;
-          }
-          if (op.requestPayload.containsKey('plan') || status.plan != null) {'''
-          completed_insert = '''            continue;
-          }
-          if (status.balance case final balance?) {
-            _adoptAuthoritativeBalance(accountScope, balance);
-            if (!_accountIsCurrent(accountScope)) return;
-          }
-          if (op.requestPayload.containsKey('plan') || status.plan != null) {'''
-          if resolver.count(completed_anchor) != 1:
-              raise SystemExit('completed recovery balance anchor mismatch')
-          resolver = resolver.replace(completed_anchor, completed_insert, 1)
-          task_replay = '''                if (!_accountIsCurrent(accountScope)) return;
-                await localSyncStore.reconcileTaskCreationComposite('''
-          task_replay_insert = '''                if (!_accountIsCurrent(accountScope)) return;
-                _adoptAuthoritativeBalance(accountScope, result.balance);
-                if (!_accountIsCurrent(accountScope)) return;
-                await localSyncStore.reconcileTaskCreationComposite('''
-          if resolver.count(task_replay) != 1:
-              raise SystemExit('task replay balance anchor mismatch')
-          resolver = resolver.replace(task_replay, task_replay_insert, 1)
-          asset_replay = '''                if (!_accountIsCurrent(accountScope)) return;
-                await localSyncStore.reconcileAssetCreationComposite('''
-          asset_replay_insert = '''                if (!_accountIsCurrent(accountScope)) return;
-                _adoptAuthoritativeBalance(accountScope, result.balance);
-                if (!_accountIsCurrent(accountScope)) return;
-                await localSyncStore.reconcileAssetCreationComposite('''
-          if resolver.count(asset_replay) != 1:
-              raise SystemExit('asset replay balance anchor mismatch')
-          resolver_path.write_text(resolver.replace(asset_replay, asset_replay_insert, 1))
+          replace_once(resolver_path, field_anchor, field_insert, 'resolver callback field')
+
+          completed_anchor = (
+              '            continue;\n'
+              '          }\n'
+              "          if (op.requestPayload.containsKey('plan') || status.plan != null) {"
+          )
+          completed_insert = (
+              '            continue;\n'
+              '          }\n'
+              '          if (status.balance case final balance?) {\n'
+              '            _adoptAuthoritativeBalance(accountScope, balance);\n'
+              '            if (!_accountIsCurrent(accountScope)) return;\n'
+              '          }\n'
+              "          if (op.requestPayload.containsKey('plan') || status.plan != null) {"
+          )
+          replace_once(resolver_path, completed_anchor, completed_insert, 'completed recovery balance')
+
+          task_replay = (
+              '                final result = await monetizationRepo.createTask(\n'
+              '                  op.requestPayload,\n'
+              '                );\n'
+              '                if (!_accountIsCurrent(accountScope)) return;\n'
+              '                await localSyncStore.reconcileTaskCreationComposite('
+          )
+          task_replay_insert = (
+              '                final result = await monetizationRepo.createTask(\n'
+              '                  op.requestPayload,\n'
+              '                );\n'
+              '                if (!_accountIsCurrent(accountScope)) return;\n'
+              '                _adoptAuthoritativeBalance(accountScope, result.balance);\n'
+              '                if (!_accountIsCurrent(accountScope)) return;\n'
+              '                await localSyncStore.reconcileTaskCreationComposite('
+          )
+          replace_once(resolver_path, task_replay, task_replay_insert, 'task replay balance')
+
+          asset_replay = (
+              '                final result = await monetizationRepo.createAsset(\n'
+              '                  op.requestPayload,\n'
+              '                );\n'
+              '                if (!_accountIsCurrent(accountScope)) return;\n'
+              '                await localSyncStore.reconcileAssetCreationComposite('
+          )
+          asset_replay_insert = (
+              '                final result = await monetizationRepo.createAsset(\n'
+              '                  op.requestPayload,\n'
+              '                );\n'
+              '                if (!_accountIsCurrent(accountScope)) return;\n'
+              '                _adoptAuthoritativeBalance(accountScope, result.balance);\n'
+              '                if (!_accountIsCurrent(accountScope)) return;\n'
+              '                await localSyncStore.reconcileAssetCreationComposite('
+          )
+          replace_once(resolver_path, asset_replay, asset_replay_insert, 'asset replay balance')
           PY
           rm -f tool/.problem007_payload_* tool/.problem007_gz_* tool/.problem007_small_* tool/.problem007_trigger tool/problem_007_apply.py
           rm -f .github/workflows/problem-007-helper.yml
