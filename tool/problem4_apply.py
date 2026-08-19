@@ -4,6 +4,7 @@ from pathlib import Path
 import re
 import subprocess
 
+# This temporary helper is intentionally feature-branch-only.
 ROOT = Path(__file__).resolve().parents[1]
 
 
