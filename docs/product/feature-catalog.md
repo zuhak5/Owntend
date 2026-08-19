@@ -13,10 +13,12 @@ The current application exposes dashboard, assets, maintenance, calendar, search
 ## Organization model
 
 - Areas and rooms organize the home.
-- Categories classify assets.
+- Item Type is the sole item classification: device, pet, plant, safety, or general.
 - Assets represent maintained things and can carry tags, photos, notes, warranty information, and type-specific detail.
 - Specialized detail models support devices, pets, plants, and safety-related assets.
 - Trash and cleanup flows protect against accidental permanent deletion. Moving a task, asset, room, or area to Trash offers restoration through the protected Undo coordinator; permanent deletion remains separately confirmed.
+
+Category is not a second item classifier, search entity, persistence field, backup table, or synchronization/RPC alias. Activity words such as cleaning may still describe maintenance work, but they do not create an Item Type.
 
 ## Maintenance
 
@@ -79,7 +81,7 @@ The first-dashboard education flow considers weather-area and notification setup
 - Pre-restore safety backup.
 - Compatibility checks and rollback on failure.
 
-Backups exported outside the app are user-controlled sensitive files.
+Backups exported outside the app are user-controlled sensitive files. Current-schema backups do not contain a Category table; legacy backup compatibility is handled only where the accepted backup format requires it.
 
 ## Monetization
 
