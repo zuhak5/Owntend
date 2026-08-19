@@ -36,6 +36,14 @@ replace(p, r'\"', '"')
 # HealthGroup plan fixtures untouched for Problem #5.
 for path in list((ROOT / 'test').rglob('*.dart')) + list((ROOT / 'integration_test').rglob('*.dart')):
     text = path.read_text(encoding='utf-8')
+    # Remove multiline Category-derived switch arguments before the generic
+    # one-line categoryId cleanup so the switch body cannot be orphaned.
+    text = re.sub(
+        r'^\s*categoryId:\s*switch \([^\n]+\) \{.*?^\s*\},\n',
+        '',
+        text,
+        flags=re.M | re.S,
+    )
     text = re.sub(r'^\s*categoryId:\s*[^\n]+\n', '', text, flags=re.M)
     text = re.sub(
         r'^\s*final categories = await [^\n]*\.listCategories\(\);\n',
