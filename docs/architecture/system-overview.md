@@ -110,3 +110,13 @@ The project builds:
 1. signed Google Play bundles with release rules and non-debuggable enforcement;
 2. signed APK artifacts with SHA-256 generation; and
 3. VersionDeck static assets for release verification and public downloads.
+
+
+### Server-authoritative wallet live state
+
+Point balances are a separate server-authoritative live-state concern rather
+than local-first domain data. One auth-scoped Riverpod owner adopts balances
+returned by successful charged RPCs immediately, then converges through the
+owner-filtered `point_wallets` Realtime stream and canonical refetches on
+mutation, resume, and reconnect. Server `updated_at` orders canonical
+snapshots, and auth changes clear the previous account before loading the next.

@@ -245,3 +245,18 @@ Test the first Flutter owner, fixed splash lifetime across startup/failure branc
 - Do not change expected values simply to match an unexplained failure.
 - Keep security-denial tests alongside success tests.
 - State explicitly when a device, hosted service, or protected workflow remains untested.
+
+
+### Problem #7 wallet synchronization
+
+`test/problem_007_wallet_sync_test.dart` covers the auth-scoped wallet owner,
+authoritative mutation adoption, stale-snapshot ordering, external updates,
+last-good refresh behavior, account isolation, reconnect, points-pill updates,
+and the boundary that keeps wallets outside the generic change feed.
+`test/charged_operation_journal_test.dart` additionally verifies authoritative
+balances recovered from completed status and exact replay.
+
+`supabase/tests/database/0023_problem_007_wallet_realtime.test.sql` proves the
+wallet Realtime publication/replica identity and its read-only authenticated
+RLS/grant contract. Existing monetization, SSV-hardening, charged-operation,
+17-table Realtime, BUG-005, and BUG-011 suites remain required regressions.

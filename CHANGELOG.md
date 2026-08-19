@@ -7,6 +7,9 @@ The current application version is defined only in `pubspec.yaml`. Released vers
 
 ## Unreleased
 
+
+- Fixed points counter synchronization with one auth-scoped, server-authoritative wallet owner that immediately adopts charged RPC/recovery balances, converges external/SSV changes through Realtime plus canonical resume/reconnect refetches, and prevents stale snapshots or cross-account balances from regressing the UI.
+
 ### Fixed
 
 - Made the “Today’s care is complete” reward prompt content-sized and accessible, with concise English/Arabic copy, responsive non-truncated actions, reduced-motion handling, and verification-pending messaging that never implies device-side reward credit.

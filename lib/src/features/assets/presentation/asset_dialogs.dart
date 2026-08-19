@@ -164,6 +164,7 @@ class _MoveCopyItemDialogState extends ConsumerState<MoveCopyItemDialog> {
               .isOnline();
           if (online) {
             try {
+              final walletUserId = monetization.currentUserId;
               final debit = await monetization.createAsset({
                 'operation_id': copyOperationId,
                 'asset': {
@@ -197,6 +198,14 @@ class _MoveCopyItemDialogState extends ConsumerState<MoveCopyItemDialog> {
                     },
                 ],
               });
+              if (walletUserId != null) {
+                ref
+                    .read(pointWalletControllerProvider.notifier)
+                    .adoptAuthoritativeMutationResult(
+                      debit.balance,
+                      userId: walletUserId,
+                    );
+              }
               if (debit.charged == 1) {
                 unawaited(
                   monetization.recordEvent('points_debited', {
@@ -1263,7 +1272,8 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
         if (monetization == null) {
           throw StateError('Cloud points service is unavailable.');
         }
-        debitResult = await monetization.createAsset({
+        final walletUserId = monetization.currentUserId;
+        final debit = await monetization.createAsset({
           'operation_id': _creationOperationId ??= _uuid.v7(),
           'asset': {
             'id': assetId,
@@ -1277,6 +1287,15 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
           'details': _pointAssetDetailsPayload(),
           'initial_plans': const <Map<String, dynamic>>[],
         });
+        debitResult = debit;
+        if (walletUserId != null) {
+          ref
+              .read(pointWalletControllerProvider.notifier)
+              .adoptAuthoritativeMutationResult(
+                debit.balance,
+                userId: walletUserId,
+              );
+        }
       }
       await ref
           .read(assetRepositoryProvider)
