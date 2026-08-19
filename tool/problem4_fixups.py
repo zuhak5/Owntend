@@ -142,7 +142,7 @@ sub(
 p = 'test/bug_015_search_generation_test.dart'
 sub(
     p,
-    r"\n      final categoryId = _categoryId\(categories, HealthGroup\.appliances\);\n      await \(db\.update\(db\.categories\).*?\n      \);\n",
+    r"\n      await \(db\.update\(db\.categories\).*?await _hasResult\(search, 'Machine', 'category', categoryId\),\n        isTrue,\n      \);\n",
     '\n',
     flags=re.S,
 )
