@@ -98,6 +98,8 @@ An interstitial acquires the shared fullscreen gate before taking a fresh cached
 
 A rewarded flow is stricter:
 
+After the final due-today task is completed, the optional daily reward decision is presented as a compact, content-sized bottom sheet. It uses user-facing video/reward wording, keeps both actions close to the explanation, stacks them when width or text scaling requires it, preserves bottom safe-area/keyboard reachability, and removes the sheet transition when reduced motion is requested. After the device reward callback, the client reports only that the reward is being verified; it does not present the points as credited or mutate the wallet.
+
 1. Confirm the selected format is eligible and already has a fresh cached ad.
 2. Acquire the shared fullscreen gate.
 3. Resolve the reward time zone and call the authenticated `create_reward_claim_request` RPC.

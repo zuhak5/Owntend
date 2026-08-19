@@ -5695,7 +5695,7 @@ abstract class AppLocalizations {
   /// No description provided for @optionalDailyRewardDescription.
   ///
   /// In en, this message translates to:
-  /// **'Optionally watch a rewarded interstitial to earn 2 points. Your reward is credited only after secure server verification.'**
+  /// **'Watch a short video to earn 2 bonus points.'**
   String get optionalDailyRewardDescription;
 
   /// No description provided for @earnTwoPoints.
@@ -5707,7 +5707,7 @@ abstract class AppLocalizations {
   /// No description provided for @rewardWatchedVerifyingTwo.
   ///
   /// In en, this message translates to:
-  /// **'Reward watched. Verifying 2 points securely…'**
+  /// **'Verifying your reward…'**
   String get rewardWatchedVerifyingTwo;
 
   /// No description provided for @noRewardAvailable.
