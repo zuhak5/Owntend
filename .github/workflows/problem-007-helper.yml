@@ -24,10 +24,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat tool/.problem007_gz_00 tool/.problem007_gz_01 tool/.problem007_gz_02 \
-            | base64 -d | gzip -d > tool/problem_007_apply.py
+          cat tool/.problem007_small_* | base64 -d > /tmp/problem_007_apply.py.gz
+          echo 'ef35bd0f65f21875d69e13bf552c8a32109e41f1d5be0b28e17ea81facd3a435  /tmp/problem_007_apply.py.gz' | sha256sum -c -
+          gzip -d -c /tmp/problem_007_apply.py.gz > tool/problem_007_apply.py
+          echo '97cf57a95f62716068f16b230a20b06c9bc0b89073a2ff7009e23d5fed3f1e1e  tool/problem_007_apply.py' | sha256sum -c -
           python tool/problem_007_apply.py
-          rm -f tool/.problem007_payload_* tool/.problem007_gz_* tool/.problem007_trigger tool/problem_007_apply.py
+          rm -f tool/.problem007_payload_* tool/.problem007_gz_* tool/.problem007_small_* tool/.problem007_trigger tool/problem_007_apply.py
           rm -f .github/workflows/problem-007-helper.yml
 
       - name: Set up Flutter
