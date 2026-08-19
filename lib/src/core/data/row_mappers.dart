@@ -22,15 +22,6 @@ domain.Room _roomFromRow(RoomRow row) => domain.Room(
   archivedAt: row.archivedAt,
 );
 
-domain.Category _categoryFromRow(CategoryRow row) => domain.Category(
-  id: row.id,
-  name: row.name,
-  healthGroup: _healthGroup(row.healthGroup),
-  iconName: row.iconName,
-  createdAt: row.createdAt,
-  updatedAt: row.updatedAt,
-);
-
 domain.Asset _assetFromRow(
   AssetRow row, {
   domain.DeviceDetails? deviceDetails,
@@ -41,7 +32,6 @@ domain.Asset _assetFromRow(
   id: row.id,
   name: row.name,
   assetType: _assetType(row.assetType),
-  categoryId: row.categoryId,
   roomId: row.roomId,
   placement: row.placement,
   notes: row.notes,
