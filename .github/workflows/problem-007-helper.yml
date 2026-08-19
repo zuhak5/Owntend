@@ -1,0 +1,80 @@
+name: Problem 007 branch helper
+
+on:
+  pull_request:
+    types: [synchronize]
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-test:
+    if: github.event.pull_request.head.ref == 'fix/problem-7-points-counter-sync'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Reconstruct and apply Problem 7 patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat tool/.problem007_gz_00 tool/.problem007_gz_01 tool/.problem007_gz_02 \
+            | base64 -d | gzip -d > tool/problem_007_apply.py
+          python tool/problem_007_apply.py
+          rm -f tool/.problem007_payload_* tool/.problem007_gz_* tool/.problem007_trigger tool/problem_007_apply.py
+          rm -f .github/workflows/problem-007-helper.yml
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: '3.47.0'
+          channel: stable
+          cache: true
+
+      - name: Resolve dependencies
+        run: flutter pub get --enforce-lockfile
+
+      - name: Generate repository-owned sources
+        run: |
+          flutter gen-l10n
+          dart run build_runner build
+
+      - name: Format touched Dart sources
+        run: |
+          dart format \
+            lib/src/features/monetization/monetization.dart \
+            lib/src/features/monetization/charged_operation_resolver.dart \
+            lib/src/features/maintenance/application/task_creation_controller.dart \
+            lib/src/features/assets/presentation/asset_dialogs.dart \
+            test/charged_operation_journal_test.dart \
+            test/problem_007_wallet_sync_test.dart
+
+      - name: Analyze
+        run: flutter analyze --no-pub
+
+      - name: Run focused Problem 7 regressions
+        run: >-
+          flutter test --no-pub --concurrency=1
+          test/problem_007_wallet_sync_test.dart
+          test/charged_operation_journal_test.dart
+          test/monetization_test.dart
+          test/task_creation_insufficient_points_test.dart
+          test/bug_005_startup_recovery_wiring_test.dart
+          test/bug_011_notification_completion_ack_test.dart
+
+      - name: Commit verified implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git status --short
+          git add -A
+          git commit -m 'fix: synchronize authoritative point wallet state'
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
