@@ -6,28 +6,34 @@ import '../utils/date_utils.dart';
 class WeightedHealthScoreCalculator implements HealthScoreCalculator {
   const WeightedHealthScoreCalculator();
 
-  static const weights = <HealthGroup, double>{
-    HealthGroup.safety: 30,
-    HealthGroup.pets: 25,
-    HealthGroup.appliances: 20,
-    HealthGroup.plants: 15,
-    HealthGroup.cleaning: 10,
+  /// Weighted health classification is derived from the linked item's Item Type.
+  ///
+  /// AssetType.general is intentionally excluded: before the Problem #5 cutover,
+  /// HealthGroup.other was outside the weighted map. This preserves that
+  /// normalization behavior. Cleaning remains task/activity semantics and does
+  /// not receive its former standalone classifier weight.
+  static const weights = <AssetType, double>{
+    AssetType.safety: 30,
+    AssetType.pet: 25,
+    AssetType.device: 20,
+    AssetType.plant: 15,
   };
 
   @override
   HealthScoreBreakdown calculate(List<TaskItem> tasks, DateTime now) {
-    final activeGroups = <HealthGroup, List<TaskItem>>{};
+    final activeTypes = <AssetType, List<TaskItem>>{};
     for (final task in tasks) {
       if (!isTaskActionable(task)) {
         continue;
       }
-      if (!weights.containsKey(task.plan.healthGroup)) {
+      final assetType = task.asset.assetType;
+      if (!weights.containsKey(assetType)) {
         continue;
       }
-      activeGroups.putIfAbsent(task.plan.healthGroup, () => []).add(task);
+      activeTypes.putIfAbsent(assetType, () => []).add(task);
     }
 
-    if (activeGroups.isEmpty) {
+    if (activeTypes.isEmpty) {
       return const HealthScoreBreakdown(
         score: 100,
         groupScores: {},
@@ -35,18 +41,18 @@ class WeightedHealthScoreCalculator implements HealthScoreCalculator {
       );
     }
 
-    final activeWeightTotal = activeGroups.keys.fold<double>(
+    final activeWeightTotal = activeTypes.keys.fold<double>(
       0,
-      (sum, group) => sum + weights[group]!,
+      (sum, type) => sum + weights[type]!,
     );
-    final activeWeights = <HealthGroup, double>{};
-    final groupScores = <HealthGroup, double>{};
+    final activeWeights = <AssetType, double>{};
+    final typeScores = <AssetType, double>{};
     var weightedScore = 0.0;
 
-    for (final entry in activeGroups.entries) {
-      final group = entry.key;
-      final groupTasks = entry.value;
-      final overduePenalty = groupTasks.fold<double>(0, (sum, task) {
+    for (final entry in activeTypes.entries) {
+      final type = entry.key;
+      final typeTasks = entry.value;
+      final overduePenalty = typeTasks.fold<double>(0, (sum, task) {
         final overdueDays = daysBetweenDates(task.plan.nextDueDate, now);
         if (overdueDays <= 0) {
           return sum;
@@ -59,18 +65,18 @@ class WeightedHealthScoreCalculator implements HealthScoreCalculator {
         };
         return sum + (overdueDays.clamp(1, 30) / 30) * priorityMultiplier;
       });
-      final rawScore = (100 - ((overduePenalty / groupTasks.length) * 100))
+      final rawScore = (100 - ((overduePenalty / typeTasks.length) * 100))
           .clamp(0, 100)
           .toDouble();
-      final normalizedWeight = weights[group]! / activeWeightTotal;
-      activeWeights[group] = normalizedWeight;
-      groupScores[group] = rawScore;
+      final normalizedWeight = weights[type]! / activeWeightTotal;
+      activeWeights[type] = normalizedWeight;
+      typeScores[type] = rawScore;
       weightedScore += rawScore * normalizedWeight;
     }
 
     return HealthScoreBreakdown(
       score: weightedScore.round().clamp(0, 100),
-      groupScores: groupScores,
+      groupScores: typeScores,
       activeWeights: activeWeights,
     );
   }

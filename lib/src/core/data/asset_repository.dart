@@ -36,12 +36,17 @@ Future<void> _syncPlantWateringPlansForInterval({
       previousIntervalDays == nextIntervalDays) {
     return;
   }
+  final asset = await (db.select(
+    db.assets,
+  )..where((row) => row.id.equals(assetId))).getSingleOrNull();
+  if (asset == null || asset.assetType != domain.AssetType.plant.name) {
+    return;
+  }
   final plans =
       await (db.select(db.maintenancePlans)..where(
             (plan) =>
                 plan.assetId.equals(assetId) &
                 plan.archivedAt.isNull() &
-                plan.healthGroup.equals(domain.HealthGroup.plants.name) &
                 plan.recurrenceUnit.equals(domain.RecurrenceUnit.days.name),
           ))
           .get();
@@ -852,7 +857,6 @@ class DriftAssetRepository implements AssetRepository {
           recurrence: task.plan.recurrence,
           priority: task.plan.priority,
           nextDueDate: task.plan.nextDueDate,
-          healthGroup: task.plan.healthGroup,
           reminderDaysBefore: task.plan.reminderDaysBefore,
           metadata: task.plan.metadata,
         );

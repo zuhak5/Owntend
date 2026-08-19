@@ -104,7 +104,6 @@ void main() {
       ),
       priority: PriorityLevel.medium,
       nextDueDate: DateTime.utc(2026, 9, 1),
-      healthGroup: HealthGroup.other,
       accountScope: 'account-1',
       existingOperation: TaskCreationOperation(
         operationId: 'op-reserved-next',
@@ -162,7 +161,6 @@ void main() {
         ),
         priority: PriorityLevel.medium,
         nextDueDate: DateTime.utc(2026, 9, 1),
-        healthGroup: HealthGroup.other,
         accountScope: 'account-1',
         existingOperation: TaskCreationOperation(
           operationId: 'op-reserved-new',

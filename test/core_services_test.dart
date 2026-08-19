@@ -179,12 +179,12 @@ void main() {
         final now = DateTime(2026, 6, 13);
         final tasks = [
           _task(
-            group: HealthGroup.safety,
+            assetType: AssetType.safety,
             priority: PriorityLevel.critical,
             dueDate: DateTime(2026, 6, 8),
           ),
           _task(
-            group: HealthGroup.appliances,
+            assetType: AssetType.device,
             priority: PriorityLevel.medium,
             dueDate: DateTime(2026, 6, 20),
           ),
@@ -194,7 +194,7 @@ void main() {
 
         expect(
           result.activeWeights.keys,
-          containsAll([HealthGroup.safety, HealthGroup.appliances]),
+          containsAll([AssetType.safety, AssetType.device]),
         );
         expect(
           result.activeWeights.values.reduce((a, b) => a + b),
@@ -202,8 +202,8 @@ void main() {
         );
         expect(result.score, lessThan(100));
         expect(
-          result.groupScores[HealthGroup.safety],
-          lessThan(result.groupScores[HealthGroup.appliances]!),
+          result.groupScores[AssetType.safety],
+          lessThan(result.groupScores[AssetType.device]!),
         );
       },
     );
@@ -213,7 +213,7 @@ void main() {
     test('keeps deterministic task messages concise', () {
       const generator = NotificationMessageGenerator();
       final task = _task(
-        group: HealthGroup.appliances,
+        assetType: AssetType.device,
         priority: PriorityLevel.medium,
         dueDate: DateTime(2026, 6, 13, 8),
       );
@@ -259,7 +259,7 @@ void main() {
     test('task text includes overdue urgency without emoji', () {
       const generator = NotificationMessageGenerator();
       final task = _task(
-        group: HealthGroup.cleaning,
+        assetType: AssetType.general,
         priority: PriorityLevel.critical,
         dueDate: DateTime(2026, 6, 10, 8),
       );
@@ -282,7 +282,7 @@ void main() {
     test('uses simple task text for regular reminders', () {
       const generator = NotificationMessageGenerator();
       final task = _task(
-        group: HealthGroup.plants,
+        assetType: AssetType.plant,
         priority: PriorityLevel.low,
         dueDate: DateTime(2026, 6, 14, 8),
       );
@@ -327,14 +327,15 @@ void main() {
 }
 
 TaskItem _task({
-  required HealthGroup group,
+  required AssetType assetType,
   required PriorityLevel priority,
   required DateTime dueDate,
 }) {
   final now = DateTime(2026, 1, 1);
   final asset = Asset(
-    id: 'asset_$group',
+    id: 'asset_$assetType',
     name: 'Asset',
+    assetType: assetType,
     roomId: 'room',
     createdAt: now,
     updatedAt: now,
@@ -347,7 +348,7 @@ TaskItem _task({
   );
   return TaskItem(
     plan: MaintenancePlan(
-      id: 'plan_$group',
+      id: 'plan_$assetType',
       assetId: asset.id,
       title: 'Task',
       recurrence: const RecurrenceRule(
@@ -356,7 +357,6 @@ TaskItem _task({
       ),
       priority: priority,
       nextDueDate: dueDate,
-      healthGroup: group,
       createdAt: now,
       updatedAt: now,
     ),

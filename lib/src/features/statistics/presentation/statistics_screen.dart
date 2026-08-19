@@ -428,7 +428,7 @@ String _statisticsMonthLabel(BuildContext context, String value) {
 class TaskDistributionChart extends StatelessWidget {
   const TaskDistributionChart({required this.data, super.key});
 
-  final Map<HealthGroup, int> data;
+  final Map<AssetType, int> data;
 
   @override
   Widget build(BuildContext context) {
@@ -452,9 +452,7 @@ class TaskDistributionChart extends StatelessWidget {
       ..sort((a, b) => b.value.compareTo(a.value));
     final total = entries.fold<int>(0, (sum, entry) => sum + entry.value);
     final semanticValue = entries
-        .map(
-          (entry) => '${_healthGroupLabel(context, entry.key)} ${entry.value}',
-        )
+        .map((entry) => '${_assetTypeLabel(context, entry.key)} ${entry.value}')
         .join(', ');
     final sectionTitleStyle =
         Theme.of(context).textTheme.labelSmall
@@ -478,7 +476,7 @@ class TaskDistributionChart extends StatelessWidget {
               builder: (context, constraints) {
                 final chartHeight = math.min(
                   230.0,
-                  math.max(180.0, constraints.maxWidth * 0.52),
+                  math.max(168.0, constraints.maxWidth * 0.52),
                 );
                 final radius = math.min(
                   68.0,
@@ -537,7 +535,7 @@ class TaskDistributionChart extends StatelessWidget {
                               'statistics-legend-${entries[index].key.name}',
                             ),
                             label:
-                                '${_healthGroupLabel(context, entries[index].key)} ${entries[index].value}',
+                                '${_assetTypeLabel(context, entries[index].key)} ${entries[index].value}',
                             color: colors[index % colors.length],
                           ),
                         ),

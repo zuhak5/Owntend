@@ -236,8 +236,7 @@ BEGIN
     metadata_json := COALESCE(plan_json->'metadata', '{}'::jsonb);
     INSERT INTO public.maintenance_plans (
       user_id, id, asset_id, title, description, interval_count,
-      interval_unit, priority, next_due_date, reminder_days_before,
-      health_group, created_at, updated_at, archived_at, revision, is_enabled
+      interval_unit, priority, next_due_date, reminder_days_before, created_at, updated_at, archived_at, revision, is_enabled
     ) VALUES (
       caller_id, plan_json->>'id', asset_id, BTRIM(plan_json->>'title'),
       COALESCE(
@@ -249,7 +248,6 @@ BEGIN
       COALESCE(plan_json->>'priority', 'medium'),
       (plan_json->>'next_due_date')::timestamptz,
       COALESCE((plan_json->>'reminder_days_before')::integer, 0),
-      CASE WHEN asset_kind = 'safety' THEN 'safety' ELSE plan_json->>'health_group' END,
       NOW(), NOW(), NULL, 1, COALESCE((plan_json->>'is_enabled')::boolean, true)
     );
     IF metadata_json <> '{}'::jsonb THEN

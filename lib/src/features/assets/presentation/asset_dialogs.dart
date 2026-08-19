@@ -192,7 +192,6 @@ class _MoveCopyItemDialogState extends ConsumerState<MoveCopyItemDialog> {
                           .toUtc()
                           .toIso8601String(),
                       'reminder_days_before': task.plan.reminderDaysBefore,
-                      'health_group': task.plan.healthGroup.name,
                       'is_enabled': true,
                       'metadata': _taskMetadataPayload(task.plan.metadata),
                     },

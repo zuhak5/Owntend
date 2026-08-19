@@ -50,7 +50,6 @@ void main() {
         ),
         priority: PriorityLevel.medium,
         nextDueDate: originalDue,
-        healthGroup: HealthGroup.appliances,
       );
 
       // Sub-second completion timestamp with non-zero milliseconds and microseconds
@@ -179,7 +178,6 @@ void main() {
         ),
         priority: PriorityLevel.medium,
         nextDueDate: due,
-        healthGroup: HealthGroup.appliances,
       );
       final completedAt = DateTime(2026, 8, 13, 14, 30);
       final result = await maintenance.completePlanResult(
@@ -228,7 +226,6 @@ void main() {
       recurrence: const RecurrenceRule(interval: 1, unit: RecurrenceUnit.days),
       priority: PriorityLevel.medium,
       nextDueDate: due,
-      healthGroup: HealthGroup.other,
     );
     final firstAt = DateTime(2026, 8, 16, 14, 30, 10);
     final first = await guardedMaintenance.completePlanResult(
@@ -306,7 +303,6 @@ void main() {
         ),
         priority: PriorityLevel.medium,
         nextDueDate: due,
-        healthGroup: HealthGroup.other,
       );
       final first = await guardedMaintenance.completePlanResult(
         planId,
@@ -389,7 +385,6 @@ void main() {
           recurrence: rule,
           priority: PriorityLevel.medium,
           nextDueDate: due,
-          healthGroup: HealthGroup.other,
         );
         final result = await maintenance.completePlanResult(
           planId,
@@ -433,7 +428,6 @@ void main() {
       recurrence: const RecurrenceRule(interval: 1, unit: RecurrenceUnit.days),
       priority: PriorityLevel.medium,
       nextDueDate: exactDue,
-      healthGroup: HealthGroup.other,
     );
     await maintenance.completePlanResult(
       exactPlan,
@@ -457,7 +451,6 @@ void main() {
       ),
       priority: PriorityLevel.medium,
       nextDueDate: lateDue,
-      healthGroup: HealthGroup.other,
     );
     await maintenance.completePlanResult(
       latePlan,
@@ -501,7 +494,6 @@ void main() {
           recurrence: rule,
           priority: PriorityLevel.medium,
           nextDueDate: completedAt,
-          healthGroup: HealthGroup.other,
         );
         await maintenance.completePlanResult(
           planId,

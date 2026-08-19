@@ -247,7 +247,6 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
   String? _assetId;
   late RecurrenceUnit _unit;
   late PriorityLevel _priority;
-  late HealthGroup _healthGroup;
   late DateTime _dueDate;
   bool _saving = false;
   String? _creationOperationId;
@@ -288,7 +287,6 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
     _assetId = plan?.assetId ?? widget.assetId;
     _unit = plan?.recurrence.unit ?? RecurrenceUnit.months;
     _priority = plan?.priority ?? PriorityLevel.medium;
-    _healthGroup = plan?.healthGroup ?? HealthGroup.appliances;
     _dueDate = plan?.nextDueDate ?? _nextDefaultPlanDueDate();
     if (plan == null) scheduleMicrotask(_restoreOfflineDraft);
   }
@@ -335,7 +333,6 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
       'interval': _intervalController.text,
       'unit': _unit.name,
       'priority': _priority.name,
-      'health_group': _healthGroup.name,
       'due_date': _dueDate.toUtc().toIso8601String(),
       'task_type': _taskTypeController.text,
       'location': _locationController.text,
@@ -379,11 +376,6 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
               .where((value) => value.name == text('priority'))
               .firstOrNull ??
           PriorityLevel.medium;
-      _healthGroup =
-          HealthGroup.values
-              .where((value) => value.name == text('health_group'))
-              .firstOrNull ??
-          HealthGroup.appliances;
       _dueDate =
           DateTime.tryParse(text('due_date'))?.toLocal() ??
           _nextDefaultPlanDueDate();
@@ -535,22 +527,6 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
                 ],
                 onChanged: (value) =>
                     setState(() => _priority = value ?? _priority),
-              ),
-              const SizedBox(height: HkSpacing.xs),
-              DropdownButtonFormField<HealthGroup>(
-                initialValue: _healthGroup,
-                decoration: InputDecoration(
-                  labelText: context.l10n.healthGroup,
-                ),
-                items: [
-                  for (final item in HealthGroup.values)
-                    DropdownMenuItem(
-                      value: item,
-                      child: Text(_healthGroupLabel(context, item)),
-                    ),
-                ],
-                onChanged: (value) =>
-                    setState(() => _healthGroup = value ?? _healthGroup),
               ),
               const SizedBox(height: HkSpacing.xs),
               TextField(
@@ -765,7 +741,6 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
           recurrence: RecurrenceRule(interval: interval, unit: _unit),
           priority: _priority,
           nextDueDate: _dueDate,
-          healthGroup: _healthGroup,
           reminderDaysBefore: reminderDaysBefore,
           metadata: metadata,
           accountScope: accountScope,
@@ -809,7 +784,6 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
             recurrence: RecurrenceRule(interval: interval, unit: _unit),
             priority: _priority,
             nextDueDate: _dueDate,
-            healthGroup: _healthGroup,
             reminderDaysBefore: reminderDaysBefore,
             metadata: metadata,
           );

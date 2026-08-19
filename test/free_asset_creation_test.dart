@@ -139,7 +139,6 @@ void main() {
         ),
         priority: PriorityLevel.medium,
         nextDueDate: DateTime.utc(2026, 11, 1),
-        healthGroup: HealthGroup.other,
         accountScope: 'user-zero',
       );
 

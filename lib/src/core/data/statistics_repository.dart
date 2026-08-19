@@ -79,10 +79,10 @@ class DriftStatisticsRepository implements StatisticsRepository {
         ifAbsent: () => 1,
       );
     }
-    final distribution = <domain.HealthGroup, int>{};
+    final distribution = <domain.AssetType, int>{};
     for (final task in tasks) {
       distribution.update(
-        task.plan.healthGroup,
+        task.asset.assetType,
         (value) => value + 1,
         ifAbsent: () => 1,
       );

@@ -1479,12 +1479,6 @@ abstract class AppLocalizations {
   /// **'Priority'**
   String get priority;
 
-  /// No description provided for @healthGroup.
-  ///
-  /// In en, this message translates to:
-  /// **'Health group'**
-  String get healthGroup;
-
   /// No description provided for @createAndAddAnother.
   ///
   /// In en, this message translates to:

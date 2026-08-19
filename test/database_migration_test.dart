@@ -6,13 +6,13 @@ import 'package:owntend/src/core/database/app_database.dart';
 import 'package:owntend/src/core/sync/local_sync_store.dart';
 
 void main() {
-  group('AppDatabase schema v3 and lifecycle', () {
+  group('AppDatabase schema v4 and lifecycle', () {
     late File dbFile;
     late AppDatabase db;
 
     setUp(() async {
       dbFile = File(
-        '${Directory.systemTemp.path}/owntend_schema_v3_'
+        '${Directory.systemTemp.path}/owntend_schema_v4_'
         '${DateTime.now().microsecondsSinceEpoch}.sqlite',
       );
       db = AppDatabase(executor: NativeDatabase(dbFile));
@@ -27,14 +27,14 @@ void main() {
       }
     });
 
-    test('initializes with schema version 3', () async {
-      expect(AppDatabase.currentSchemaVersion, 3);
-      expect(db.schemaVersion, 3);
+    test('initializes with schema version 4', () async {
+      expect(AppDatabase.currentSchemaVersion, 4);
+      expect(db.schemaVersion, 4);
 
       final userVersionRow = await db
           .customSelect('PRAGMA user_version')
           .getSingle();
-      expect(userVersionRow.read<int>('user_version'), 3);
+      expect(userVersionRow.read<int>('user_version'), 4);
     });
 
     test('creates canonical tables including search state', () async {
@@ -191,6 +191,14 @@ void main() {
         isNot(contains('category_id')),
       );
 
+      final planColumns = await db
+          .customSelect('PRAGMA table_info(maintenance_plans)')
+          .get();
+      expect(
+        planColumns.map((row) => row.read<String>('name')),
+        isNot(contains('health_group')),
+      );
+
       final seededSettings = await db.select(db.settings).get();
       final settingKeys = seededSettings.map((s) => s.key).toSet();
       expect(
@@ -226,9 +234,9 @@ void main() {
     });
   });
 
-  test('migrates schema v2 assets and removes Category state', () async {
+  test('migrates schema v2 through v4 and removes Category state', () async {
     final dbFile = File(
-      '${Directory.systemTemp.path}/owntend_v2_to_v3_'
+      '${Directory.systemTemp.path}/owntend_v2_to_v4_'
       '${DateTime.now().microsecondsSinceEpoch}.sqlite',
     );
     AppDatabase? db;
@@ -268,7 +276,7 @@ void main() {
       final userVersionRow = await db
           .customSelect('PRAGMA user_version')
           .getSingle();
-      expect(userVersionRow.read<int>('user_version'), 3);
+      expect(userVersionRow.read<int>('user_version'), 4);
       final categoryTables = await db
           .customSelect(
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'categories'",
@@ -295,6 +303,76 @@ void main() {
           )
           .get();
       expect(triggerRows, hasLength(33));
+    } finally {
+      await db?.close();
+      if (await dbFile.exists()) {
+        await dbFile.delete();
+      }
+    }
+  });
+
+  test('migrates schema v3 maintenance plans without Health Group', () async {
+    final dbFile = File(
+      '${Directory.systemTemp.path}/owntend_v3_to_v4_'
+      '${DateTime.now().microsecondsSinceEpoch}.sqlite',
+    );
+    AppDatabase? db;
+    try {
+      db = AppDatabase(executor: NativeDatabase(dbFile));
+      await db.customSelect('SELECT 1').get();
+      await db.customStatement(
+        'ALTER TABLE maintenance_plans ADD COLUMN health_group TEXT NOT NULL DEFAULT \'other\'',
+      );
+      await db.customStatement(
+        "INSERT INTO areas(id, name, kind) VALUES ('v3-area', 'Home', 'indoor')",
+      );
+      await db.customStatement(
+        "INSERT INTO rooms(id, area_id, name, room_type) "
+        "VALUES ('v3-room', 'v3-area', 'Utility', 'utility')",
+      );
+      await db.customStatement(
+        "INSERT INTO assets(id, name, asset_type, room_id) "
+        "VALUES ('v3-asset', 'Boiler', 'device', 'v3-room')",
+      );
+      await db.customStatement(
+        "INSERT INTO maintenance_plans("
+        "id, asset_id, title, recurrence_interval, recurrence_unit, priority, "
+        "next_due_date, health_group) VALUES ("
+        "'v3-plan', 'v3-asset', 'Inspect boiler', 1, 'months', 'medium', "
+        "CAST(strftime('%s', '2026-09-19') AS INTEGER), 'appliances')",
+      );
+      await db.customStatement('PRAGMA user_version = 3');
+      await db.close();
+      db = null;
+
+      db = AppDatabase(executor: NativeDatabase(dbFile));
+      await db.customSelect('SELECT 1').get();
+
+      final userVersionRow = await db
+          .customSelect('PRAGMA user_version')
+          .getSingle();
+      expect(userVersionRow.read<int>('user_version'), 4);
+      final columns = await db
+          .customSelect('PRAGMA table_info(maintenance_plans)')
+          .get();
+      expect(
+        columns.map((row) => row.read<String>('name')),
+        isNot(contains('health_group')),
+      );
+      final plan = await db
+          .customSelect(
+            "SELECT id, asset_id, title FROM maintenance_plans WHERE id = 'v3-plan'",
+          )
+          .getSingle();
+      expect(plan.read<String>('asset_id'), 'v3-asset');
+      expect(plan.read<String>('title'), 'Inspect boiler');
+      final searchTriggers = await db
+          .customSelect(
+            "SELECT name FROM sqlite_master WHERE type = 'trigger' "
+            "AND name LIKE 'search_maintenance_plans_%'",
+          )
+          .get();
+      expect(searchTriggers, hasLength(3));
     } finally {
       await db?.close();
       if (await dbFile.exists()) {

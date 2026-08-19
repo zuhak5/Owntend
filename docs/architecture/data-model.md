@@ -116,3 +116,9 @@ Distinguish:
 - External backup files that remain outside application control.
 
 A deletion change is incomplete until all relevant local, cloud, media, sync, backup, notification, and diagnostic state is considered.
+
+### Task classification and health scoring
+
+Maintenance plans do not persist an independent health/category classifier. Every plan is linked to an item, and task classification is derived from that item's `AssetType` (`device`, `pet`, `plant`, `safety`, or `general`). Cleaning is task/activity semantics (for example, task type/title/instructions); it is never an Item Type.
+
+Weighted health-score normalization uses the linked Item Type with the preserved weights Safety 30, Pet 25, Device 20, and Plant 15. `AssetType.general` is intentionally excluded from both the weighted numerator and denominator because the former `other` Health Group was unweighted. There is no approved General weight, and Cleaning's former weight is not reused for General.

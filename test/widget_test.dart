@@ -3855,12 +3855,11 @@ void main() {
             height: 260,
             child: TaskDistributionChart(
               data: {
-                HealthGroup.appliances: 6,
-                HealthGroup.plants: 5,
-                HealthGroup.pets: 4,
-                HealthGroup.safety: 3,
-                HealthGroup.cleaning: 2,
-                HealthGroup.other: 1,
+                AssetType.device: 6,
+                AssetType.plant: 5,
+                AssetType.pet: 4,
+                AssetType.safety: 3,
+                AssetType.general: 3,
               },
             ),
           ),
@@ -3870,12 +3869,11 @@ void main() {
     await tester.pumpAndSettle();
 
     final labels = [
-      'Appliances 6',
-      'Plants 5',
-      'Pets 4',
-      'Safety 3',
-      'Cleaning 2',
-      'General 1',
+      'Device or appliance 6',
+      'Plant 5',
+      'Pet 4',
+      'Safety item 3',
+      'General item 3',
     ];
     final firstRowY = tester.getCenter(find.text(labels[0])).dy;
     final secondRowY = tester.getCenter(find.text(labels[3])).dy;
@@ -6220,7 +6218,6 @@ TaskItem _taskItem(
       priority: PriorityLevel.medium,
       nextDueDate: preserveDueTime ? dueDate : DateUtils.dateOnly(dueDate),
       isEnabled: isEnabled,
-      healthGroup: HealthGroup.pets,
       createdAt: now,
       updatedAt: now,
     ),
@@ -6972,7 +6969,6 @@ class FakeMaintenanceRepository implements MaintenanceRepository {
     required RecurrenceRule recurrence,
     required PriorityLevel priority,
     required DateTime nextDueDate,
-    required HealthGroup healthGroup,
     int reminderDaysBefore = 0,
     TaskMetadata? metadata,
   }) async {

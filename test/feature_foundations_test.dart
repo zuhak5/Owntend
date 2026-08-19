@@ -156,7 +156,11 @@ void main() {
 
   group('feature selectors', () {
     test('item health falls when tasks are overdue', () {
-      final asset = _asset(id: 'asset', name: 'Smoke detector');
+      final asset = _asset(
+        id: 'asset',
+        name: 'Smoke detector',
+        type: AssetType.safety,
+      );
       final score = itemHealthScore(
         asset: asset,
         tasks: [
@@ -165,7 +169,6 @@ void main() {
             DateTime(2026, 6, 10),
             asset: asset,
             priority: PriorityLevel.critical,
-            group: HealthGroup.safety,
           ),
         ],
         now: DateTime(2026, 6, 18),
@@ -402,7 +405,6 @@ TaskItem _task(
   Asset? asset,
   String title = 'Task',
   PriorityLevel priority = PriorityLevel.medium,
-  HealthGroup group = HealthGroup.appliances,
   bool isEnabled = true,
   TaskStatus? status,
   DateTime? archivedAt,
@@ -421,7 +423,6 @@ TaskItem _task(
       priority: priority,
       nextDueDate: dueDate,
       isEnabled: isEnabled,
-      healthGroup: group,
       createdAt: DateTime(2026),
       updatedAt: DateTime(2026),
       archivedAt: archivedAt,

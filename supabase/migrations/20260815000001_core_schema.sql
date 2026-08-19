@@ -210,7 +210,6 @@ CREATE TABLE IF NOT EXISTS public.maintenance_plans (
   season_flags INTEGER NOT NULL DEFAULT 0,
   priority TEXT NOT NULL DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high', 'critical')),
   next_due_date TIMESTAMPTZ,
-  health_group TEXT CHECK (health_group IS NULL OR health_group IN ('safety', 'pets', 'appliances', 'plants', 'cleaning', 'other')),
   is_enabled BOOLEAN NOT NULL DEFAULT true,
   reminder_days_before INTEGER CHECK (reminder_days_before IS NULL OR reminder_days_before >= 0),
   revision BIGINT NOT NULL DEFAULT 1 CHECK (revision > 0),

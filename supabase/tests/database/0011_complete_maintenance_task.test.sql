@@ -233,7 +233,6 @@ insert into public.maintenance_plans (
   priority,
   next_due_date,
   reminder_days_before,
-  health_group,
   is_enabled,
   revision,
   created_at,
@@ -249,7 +248,6 @@ values (
   'medium',
   '2026-08-18 09:00:00+00',
   0,
-  'other',
   true,
   1,
   '2026-08-01 00:00:00+00',
@@ -277,7 +275,6 @@ select is(
           'next_due_date', '2026-08-14T14:30:00.000Z',
           'reminder_days_before', 0,
           'is_enabled', true,
-          'health_group', 'other',
           'created_at', '2026-08-01T00:00:00.000Z',
           'updated_at', '2026-08-13T14:30:00.000Z'
         ),
@@ -329,7 +326,6 @@ select lives_ok(
           "next_due_date": "2026-08-01T00:00:00.000Z",
           "reminder_days_before": 3,
           "is_enabled": true,
-          "health_group": "other",
           "created_at": "2026-06-01T00:00:00.000Z",
           "updated_at": "2026-07-01T10:00:00.000Z",
           "archived_at": null
@@ -411,7 +407,6 @@ select is(
           "next_due_date": "2026-08-01T00:00:00.000Z",
           "reminder_days_before": 3,
           "is_enabled": true,
-          "health_group": "other",
           "created_at": "2026-06-01T00:00:00.000Z",
           "updated_at": "2026-07-01T10:00:00.000Z",
           "archived_at": null
@@ -449,7 +444,6 @@ select is(
           'next_due_date', '2026-08-01T00:00:00.000Z',
           'reminder_days_before', 3,
           'is_enabled', true,
-          'health_group', 'other',
           'created_at', '2026-06-01T00:00:00.000Z',
           'updated_at', '2026-07-01T10:00:00.000Z'
         ),
@@ -485,7 +479,6 @@ select is(
           'next_due_date', '2026-08-01T00:00:00.000Z',
           'reminder_days_before', 3,
           'is_enabled', true,
-          'health_group', 'other',
           'created_at', '2026-06-01T00:00:00.000Z',
           'updated_at', '2026-07-01T10:00:00.000Z'
         ),
@@ -523,7 +516,6 @@ select is(
           "next_due_date": "2026-08-01T00:00:00.000Z",
           "reminder_days_before": 3,
           "is_enabled": true,
-          "health_group": "other",
           "created_at": "2026-06-01T00:00:00.000Z",
           "updated_at": "2026-07-01T10:00:00.000Z",
           "archived_at": null
@@ -562,7 +554,6 @@ select is(
           "next_due_date": "2026-08-01T00:00:00.000Z",
           "reminder_days_before": 3,
           "is_enabled": true,
-          "health_group": "other",
           "created_at": "2026-06-01T00:00:00.000Z",
           "updated_at": "2026-07-01T10:00:00.000Z"
         },
@@ -643,7 +634,6 @@ select lives_ok(
           "next_due_date": "2026-09-01T00:00:00.000Z",
           "reminder_days_before": 3,
           "is_enabled": true,
-          "health_group": "other",
           "created_at": "2026-06-01T00:00:00.000Z",
           "updated_at": "2026-07-27T10:00:00.000Z",
           "archived_at": null
@@ -719,7 +709,6 @@ select is(
           "next_due_date": "2026-10-01T00:00:00.000Z",
           "reminder_days_before": 3,
           "is_enabled": true,
-          "health_group": "other",
           "created_at": "2026-06-01T00:00:00.000Z",
           "updated_at": "2026-07-27T12:00:00.000Z",
           "archived_at": null
@@ -758,7 +747,6 @@ select is(
           "next_due_date": "2026-10-01T00:00:00.000Z",
           "reminder_days_before": 3,
           "is_enabled": true,
-          "health_group": "other",
           "created_at": "2026-06-01T00:00:00.000Z",
           "updated_at": "2026-07-27T12:00:00.000Z"
         },
@@ -837,7 +825,6 @@ select is(
           'next_due_date', '2026-10-01T00:00:00.000Z',
           'reminder_days_before', 3,
           'is_enabled', true,
-          'health_group', 'other',
           'created_at', '2026-06-01T00:00:00.000Z',
           'updated_at', '2026-07-27T13:00:00.000Z'
         ),
@@ -873,7 +860,6 @@ select is(
           'next_due_date', '2026-10-01T00:00:00.000Z',
           'reminder_days_before', 3,
           'is_enabled', true,
-          'health_group', 'other',
           'created_at', '2026-06-01T00:00:00.000Z',
           'updated_at', '2026-07-27T13:00:00.000Z'
         ),
@@ -909,7 +895,6 @@ select is(
           'next_due_date', '2026-10-01T00:00:00.000Z',
           'reminder_days_before', 3,
           'is_enabled', true,
-          'health_group', 'other',
           'created_at', '2026-06-01T00:00:00.000Z',
           'updated_at', '2026-07-27T13:00:00.000Z'
         ),
@@ -950,7 +935,6 @@ select is(
           'next_due_date', '2026-10-01T00:00:00.000Z',
           'reminder_days_before', 3,
           'is_enabled', true,
-          'health_group', 'other',
           'created_at', '2026-06-01T00:00:00.000Z',
           'updated_at', '2026-07-27T13:00:00.000Z'
         ),
@@ -996,7 +980,6 @@ select is(
           'next_due_date', '2026-11-01T00:00:00.000Z',
           'reminder_days_before', 3,
           'is_enabled', true,
-          'health_group', 'other',
           'created_at', '2026-06-01T00:00:00.000Z',
           'updated_at', '2026-07-27T14:00:00.000Z'
         ),
@@ -1030,7 +1013,6 @@ select public.complete_maintenance_task(
       'next_due_date', '2026-11-01T00:00:00.000Z',
       'reminder_days_before', 3,
       'is_enabled', true,
-      'health_group', 'other',
       'created_at', '2026-06-01T00:00:00.000Z',
       'updated_at', '2026-07-27T14:00:00.000Z'
     ),
@@ -1095,7 +1077,6 @@ insert into public.maintenance_plans (
   priority,
   next_due_date,
   reminder_days_before,
-  health_group,
   created_at,
   updated_at,
   revision,
@@ -1110,7 +1091,6 @@ insert into public.maintenance_plans (
   'high',
   '2026-08-08T18:13:27.842731Z'::timestamptz,
   0,
-  'appliances',
   '2026-06-01T00:00:00Z'::timestamptz,
   '2026-06-01T00:00:00Z'::timestamptz,
   1,
@@ -1134,7 +1114,6 @@ select public.complete_maintenance_task(
       'priority', 'high',
       'next_due_date', '2026-09-08T18:13:27.000Z',
       'reminder_days_before', 0,
-      'health_group', 'appliances',
       'is_enabled', true,
       'created_at', '2026-06-01T00:00:00.000Z'
     ),
@@ -1183,7 +1162,6 @@ select public.complete_maintenance_task(
       'priority', 'high',
       'next_due_date', '2026-10-08T18:13:27.000Z',
       'reminder_days_before', 0,
-      'health_group', 'appliances',
       'is_enabled', true,
       'created_at', '2026-06-01T00:00:00.000Z'
     ),
@@ -1221,7 +1199,6 @@ select public.complete_maintenance_task(
       'priority', 'high',
       'next_due_date', '2026-10-08T18:13:27.000Z',
       'reminder_days_before', 0,
-      'health_group', 'appliances',
       'is_enabled', true,
       'created_at', '2026-06-01T00:00:00.000Z'
     ),

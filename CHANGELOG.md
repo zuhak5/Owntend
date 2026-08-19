@@ -1,4 +1,5 @@
 # Changelog
+- Removed editable/persisted task Health Group; task scoring, statistics, and icons now derive from the linked item's Item Type. General remains explicitly excluded from weighted health-score normalization, while Cleaning remains task semantics.
 
 Owntend uses Git history as the authoritative record of shipped changes. This file records notable project-level changes that affect users, operators, contributors, architecture, security, or compatibility.
 

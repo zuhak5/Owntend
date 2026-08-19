@@ -1197,7 +1197,7 @@ class NotificationMessageGenerator {
       progressText == null
           ? 'Task ready: ${task.plan.title}.'
           : '$progressText complete. Next up: ${task.plan.title}.',
-      '${task.asset.name} has a ${_groupLabel(task.plan.healthGroup)} task due.',
+      '${task.asset.name} has a ${_assetTypeCareLabel(task.asset.assetType)} task due.',
     ];
     final seed = [
       task.plan.id,
@@ -1228,14 +1228,13 @@ class NotificationMessageGenerator {
     return 'evening';
   }
 
-  String _groupLabel(HealthGroup group) {
-    return switch (group) {
-      HealthGroup.safety => 'safety',
-      HealthGroup.pets => 'pet care',
-      HealthGroup.appliances => 'appliance',
-      HealthGroup.plants => 'plant',
-      HealthGroup.cleaning => 'cleaning',
-      HealthGroup.other => 'home',
+  String _assetTypeCareLabel(AssetType type) {
+    return switch (type) {
+      AssetType.safety => 'safety',
+      AssetType.pet => 'pet care',
+      AssetType.device => 'appliance',
+      AssetType.plant => 'plant',
+      AssetType.general => 'home',
     };
   }
 

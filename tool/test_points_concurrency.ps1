@@ -98,7 +98,6 @@ select public.create_task_with_point_debit(
       'priority', 'medium',
       'next_due_date', now() + interval '1 day',
       'reminder_days_before', 0,
-      'health_group', 'other'
     )
   )
 ) as result

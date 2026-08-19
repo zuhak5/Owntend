@@ -23,7 +23,6 @@ void main() {
           ),
           priority: PriorityLevel.medium,
           nextDueDate: now.add(const Duration(days: 2)),
-          healthGroup: HealthGroup.cleaning,
           createdAt: now,
           updatedAt: now,
         ),

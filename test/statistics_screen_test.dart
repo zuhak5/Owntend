@@ -13,12 +13,11 @@ const _multiSeriesSummary = StatisticsSummary(
   overdueRate: 0.05,
   completedByMonth: {'2026-06': 12, '2026-07': 18, '2026-08': 24},
   taskDistribution: {
-    HealthGroup.safety: 6,
-    HealthGroup.pets: 5,
-    HealthGroup.appliances: 4,
-    HealthGroup.plants: 3,
-    HealthGroup.cleaning: 2,
-    HealthGroup.other: 1,
+    AssetType.safety: 6,
+    AssetType.pet: 5,
+    AssetType.device: 4,
+    AssetType.plant: 3,
+    AssetType.general: 2,
   },
 );
 
@@ -26,7 +25,7 @@ const _oneSeriesSummary = StatisticsSummary(
   completionRate: 1,
   overdueRate: 0,
   completedByMonth: {'2026-08': 5},
-  taskDistribution: {HealthGroup.other: 5},
+  taskDistribution: {AssetType.general: 5},
 );
 
 const _emptySummary = StatisticsSummary(
@@ -195,7 +194,7 @@ void main() {
     );
     expect(
       tester
-          .getTopLeft(find.byKey(const ValueKey('statistics-legend-other')))
+          .getTopLeft(find.byKey(const ValueKey('statistics-legend-general')))
           .dy,
       greaterThan(
         tester
@@ -214,7 +213,7 @@ void main() {
       lookupAppLocalizations(const Locale('en')).taskDistribution,
     );
     expect(semanticsData.value, contains('6'));
-    expect(semanticsData.value, contains('1'));
+    expect(semanticsData.value, contains('2'));
     semantics.dispose();
     expect(tester.takeException(), isNull);
   });

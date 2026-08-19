@@ -78,7 +78,6 @@ class TaskCreationController extends ValueNotifier<TaskCreationState> {
     required RecurrenceRule recurrence,
     required PriorityLevel priority,
     required DateTime nextDueDate,
-    required HealthGroup healthGroup,
     int reminderDaysBefore = 0,
     TaskMetadata? metadata,
     required String accountScope,
@@ -128,7 +127,6 @@ class TaskCreationController extends ValueNotifier<TaskCreationState> {
         'priority': priority.name,
         'next_due_date': nextDueDate.toUtc().toIso8601String(),
         'reminder_days_before': reminderDaysBefore,
-        'health_group': healthGroup.name,
         'is_enabled': true,
       };
 

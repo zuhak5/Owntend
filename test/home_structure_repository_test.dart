@@ -86,7 +86,6 @@ void main() {
           ),
           priority: PriorityLevel.medium,
           nextDueDate: DateTime(2026, 7, 1),
-          healthGroup: HealthGroup.other,
         );
         final initial = Completer<void>();
         final changed = Completer<void>();
@@ -119,7 +118,6 @@ void main() {
           ),
           priority: PriorityLevel.medium,
           nextDueDate: DateTime(2026, 7, 1),
-          healthGroup: HealthGroup.other,
         );
         await changed.future.timeout(const Duration(seconds: 2));
 
@@ -199,7 +197,6 @@ void main() {
           ),
           priority: PriorityLevel.medium,
           nextDueDate: DateTime(2026, 6, 1),
-          healthGroup: HealthGroup.other,
         );
         final initial = Completer<void>();
         final changed = Completer<void>();
@@ -379,7 +376,6 @@ void main() {
           ),
           priority: PriorityLevel.medium,
           nextDueDate: DateTime(2026, 7, 20),
-          healthGroup: HealthGroup.plants,
         );
         final fertilizingPlanId = await maintenance.savePlan(
           assetId: assetId,
@@ -390,7 +386,6 @@ void main() {
           ),
           priority: PriorityLevel.medium,
           nextDueDate: DateTime(2026, 7, 25),
-          healthGroup: HealthGroup.plants,
         );
         final inspectionPlanId = await maintenance.savePlan(
           assetId: assetId,
@@ -401,7 +396,6 @@ void main() {
           ),
           priority: PriorityLevel.medium,
           nextDueDate: DateTime(2026, 7, 26),
-          healthGroup: HealthGroup.plants,
         );
         await db.customStatement('DELETE FROM offline_mutation_queue');
 
@@ -456,7 +450,6 @@ void main() {
           ),
           priority: PriorityLevel.medium,
           nextDueDate: DateTime(2026, 7, 1, 9),
-          healthGroup: HealthGroup.plants,
         );
         await maintenance.completePlan(
           planId,
@@ -534,7 +527,6 @@ void main() {
         ),
         priority: PriorityLevel.high,
         nextDueDate: DateTime(2026, 2),
-        healthGroup: HealthGroup.appliances,
         metadata: const TaskMetadata(
           estimatedDurationMinutes: 20,
           requiredMaterials: ['Filter cartridge'],
@@ -588,7 +580,6 @@ void main() {
         ),
         priority: PriorityLevel.medium,
         nextDueDate: DateTime(2026, 3),
-        healthGroup: HealthGroup.appliances,
       );
 
       await repo.trashRoom(roomId);
@@ -653,7 +644,6 @@ void main() {
         ),
         priority: PriorityLevel.medium,
         nextDueDate: originalDue,
-        healthGroup: HealthGroup.appliances,
       );
       await db
           .into(db.maintenanceRecords)
@@ -706,7 +696,6 @@ void main() {
         ),
         priority: PriorityLevel.low,
         nextDueDate: DateTime(2026, 1, 1, 9),
-        healthGroup: HealthGroup.cleaning,
       );
 
       await maintenance.skipPlanOccurrence(
@@ -750,7 +739,6 @@ void main() {
         ),
         priority: PriorityLevel.medium,
         nextDueDate: DateTime(2026),
-        healthGroup: HealthGroup.appliances,
       );
       await maintenance.completePlan(planId, completedAt: DateTime(2026, 1, 2));
       await db
@@ -793,7 +781,6 @@ void main() {
         ),
         priority: PriorityLevel.high,
         nextDueDate: originalDue,
-        healthGroup: HealthGroup.pets,
       );
 
       final first = await maintenance.completePlan(
@@ -841,7 +828,6 @@ void main() {
         ),
         priority: PriorityLevel.medium,
         nextDueDate: dueToday,
-        healthGroup: HealthGroup.plants,
       );
 
       await maintenance.completePlan(
@@ -877,7 +863,6 @@ void main() {
             ),
             priority: PriorityLevel.low,
             nextDueDate: DateTime(2026, 6, 21),
-            healthGroup: HealthGroup.plants,
           ),
           throwsA(
             isA<MaintenancePlanValidationException>().having(
@@ -914,7 +899,6 @@ void main() {
           ),
           priority: PriorityLevel.low,
           nextDueDate: DateTime(2026, 6, 21),
-          healthGroup: HealthGroup.plants,
         ),
         throwsA(isA<MaintenancePlanValidationException>()),
       );
@@ -943,7 +927,6 @@ void main() {
         ),
         priority: PriorityLevel.high,
         nextDueDate: DateTime(2026),
-        healthGroup: HealthGroup.appliances,
       );
       await maintenance.completePlan(planId, completedAt: DateTime(2026, 1, 2));
       await db
@@ -1308,7 +1291,6 @@ void main() {
         ),
         priority: PriorityLevel.high,
         nextDueDate: DateTime(2026),
-        healthGroup: HealthGroup.appliances,
       );
 
       await repo.deleteRoom(roomId);
@@ -1494,7 +1476,6 @@ void main() {
           ),
           priority: PriorityLevel.medium,
           nextDueDate: DateTime(2026, 8, 16, 9),
-          healthGroup: HealthGroup.other,
           metadata: const TaskMetadata(
             taskType: 'Inspect',
             locationLabel: 'Garage',
@@ -1521,7 +1502,6 @@ void main() {
           ),
           priority: PriorityLevel.medium,
           nextDueDate: DateTime(2026, 8, 16, 9),
-          healthGroup: HealthGroup.other,
           metadata: null,
         );
 
@@ -1553,7 +1533,6 @@ void main() {
           ),
           priority: PriorityLevel.medium,
           nextDueDate: due,
-          healthGroup: HealthGroup.other,
         );
         await expectLater(
           maintenance.postponePlan(planId, DateTime(2026, 8, 15, 9)),
@@ -1591,7 +1570,6 @@ void main() {
         ),
         priority: PriorityLevel.medium,
         nextDueDate: due,
-        healthGroup: HealthGroup.other,
       );
       final completion = await maintenance.completePlanResult(
         planId,
@@ -1634,7 +1612,6 @@ void main() {
           ),
           priority: PriorityLevel.medium,
           nextDueDate: DateTime(2026, 8, 17, 9),
-          healthGroup: HealthGroup.other,
         );
         final inbox = DriftNotificationInboxRepository(db);
         await inbox.createNotification(
@@ -1700,7 +1677,6 @@ void main() {
           priority: PriorityLevel.medium,
           nextDueDate: DateTime(2026, 8, 17, 9),
           reminderDaysBefore: 2,
-          healthGroup: HealthGroup.other,
         ),
         throwsA(isA<MaintenancePlanValidationException>()),
       );
@@ -1714,7 +1690,6 @@ void main() {
         priority: PriorityLevel.medium,
         nextDueDate: DateTime(2026, 8, 23, 9),
         reminderDaysBefore: 2,
-        healthGroup: HealthGroup.other,
       );
       expect(valid, isNotEmpty);
     });

@@ -716,9 +716,6 @@ class AppLocalizationsAr extends AppLocalizations {
   String get priority => 'الأولوية';
 
   @override
-  String get healthGroup => 'مجموعة الصحة';
-
-  @override
   String get createAndAddAnother => 'إنشاء وإضافة أخرى';
 
   @override
