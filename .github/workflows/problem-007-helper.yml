@@ -50,7 +50,12 @@ jobs:
           )
           if text.count(regex_needle) != 1:
               raise SystemExit('regex_once guard anchor mismatch')
-          path.write_text(text.replace(regex_needle, regex_guard, 1))
+          text = text.replace(regex_needle, regex_guard, 1)
+          asset_start = text.index('text = read("lib/src/features/assets/presentation/asset_dialogs.dart")')
+          asset_end_anchor = 'write("lib/src/features/assets/presentation/asset_dialogs.dart", text)'
+          asset_end = text.index(asset_end_anchor, asset_start) + len(asset_end_anchor)
+          text = text[:asset_start] + '# asset dialogs patched against current main by helper\n' + text[asset_end:]
+          path.write_text(text)
           PY
           python tool/problem_007_apply.py
           python - <<'PY'
@@ -63,10 +68,35 @@ jobs:
                   raise SystemExit(f'{label}: expected 1, found {count}')
               path.write_text(text.replace(old, new, 1))
 
+          monetization_path = Path('lib/src/features/monetization/monetization.dart')
+          owner_decl = (
+              'final pointWalletProvider =\n'
+              '    NotifierProvider<PointWalletController, AsyncValue<PointWallet?>>(\n'
+              '      PointWalletController.new,\n'
+              '    );'
+          )
+          owner_and_view = (
+              'final pointWalletControllerProvider =\n'
+              '    NotifierProvider<PointWalletController, AsyncValue<PointWallet?>>(\n'
+              '      PointWalletController.new,\n'
+              '    );\n\n'
+              '/// Read-only wallet view kept as the stable presentation/test seam.\n'
+              '/// State is owned only by [pointWalletControllerProvider].\n'
+              'final pointWalletProvider = Provider<AsyncValue<PointWallet?>>((ref) {\n'
+              '  return ref.watch(pointWalletControllerProvider);\n'
+              '});'
+          )
+          replace_once(monetization_path, owner_decl, owner_and_view, 'wallet owner/view provider split')
+          text = monetization_path.read_text().replace(
+              'pointWalletProvider.notifier',
+              'pointWalletControllerProvider.notifier',
+          )
+          monetization_path.write_text(text)
+
           task_path = Path('lib/src/features/maintenance/application/task_creation_controller.dart')
           task_anchor = '        // CTC-006 & CTC-007: Reconcile canonical creation composite before\n'
           task_insert = (
-              '        ref.read(pointWalletProvider.notifier).adoptAuthoritativeMutationResult(\n'
+              '        ref.read(pointWalletControllerProvider.notifier).adoptAuthoritativeMutationResult(\n'
               '          result.balance,\n'
               '          userId: accountScope,\n'
               '        );\n\n' + task_anchor
@@ -87,7 +117,7 @@ jobs:
               '    operationStore: ref.watch(taskCreationOperationStoreProvider),\n'
               '    adoptAuthoritativeBalance: (userId, balance) {\n'
               '      ref\n'
-              '          .read(pointWalletProvider.notifier)\n'
+              '          .read(pointWalletControllerProvider.notifier)\n'
               '          .adoptAuthoritativeMutationResult(balance, userId: userId);\n'
               '    },\n'
               '  );'
@@ -108,7 +138,8 @@ jobs:
               '    required this.localSyncStore,\n'
               '    required this.operationStore,\n'
               '    required void Function(String userId, int balance) adoptAuthoritativeBalance,\n'
-              '  }) : _adoptAuthoritativeBalance = adoptAuthoritativeBalance;'
+              '  }) : _adoptAuthoritativeBalance =\n'
+              '           ((userId, balance) => adoptAuthoritativeBalance(userId, balance));'
           )
           replace_once(resolver_path, old_ctor, new_ctor, 'resolver constructor')
           field_anchor = '  final TaskCreationOperationStore operationStore;\n'
@@ -166,6 +197,66 @@ jobs:
               '                await localSyncStore.reconcileAssetCreationComposite('
           )
           replace_once(resolver_path, asset_replay, asset_replay_insert, 'asset replay balance')
+
+          asset_path = Path('lib/src/features/assets/presentation/asset_dialogs.dart')
+          copy_rpc = '              final debit = await monetization.createAsset({\n'
+          copy_rpc_new = (
+              '              final walletUserId = monetization.currentUserId;\n'
+              '              final debit = await monetization.createAsset({\n'
+          )
+          replace_once(asset_path, copy_rpc, copy_rpc_new, 'copy wallet identity capture')
+          copy_after = (
+              '              });\n'
+              '              if (debit.charged == 1) {'
+          )
+          copy_after_new = (
+              '              });\n'
+              '              if (walletUserId != null) {\n'
+              '                ref\n'
+              '                    .read(pointWalletControllerProvider.notifier)\n'
+              '                    .adoptAuthoritativeMutationResult(\n'
+              '                      debit.balance,\n'
+              '                      userId: walletUserId,\n'
+              '                    );\n'
+              '              }\n'
+              '              if (debit.charged == 1) {'
+          )
+          replace_once(asset_path, copy_after, copy_after_new, 'copy balance adoption')
+          create_rpc = '        debitResult = await monetization.createAsset({\n'
+          create_rpc_new = (
+              '        final walletUserId = monetization.currentUserId;\n'
+              '        final debit = await monetization.createAsset({\n'
+          )
+          replace_once(asset_path, create_rpc, create_rpc_new, 'create wallet identity capture')
+          create_after = (
+              '          \'initial_plans\': const <Map<String, dynamic>>[],\n'
+              '        });\n'
+              '      }'
+          )
+          create_after_new = (
+              '          \'initial_plans\': const <Map<String, dynamic>>[],\n'
+              '        });\n'
+              '        debitResult = debit;\n'
+              '        if (walletUserId != null) {\n'
+              '          ref\n'
+              '              .read(pointWalletControllerProvider.notifier)\n'
+              '              .adoptAuthoritativeMutationResult(\n'
+              '                debit.balance,\n'
+              '                userId: walletUserId,\n'
+              '              );\n'
+              '        }\n'
+              '      }'
+          )
+          replace_once(asset_path, create_after, create_after_new, 'create balance adoption')
+
+          wallet_test = Path('test/problem_007_wallet_sync_test.dart')
+          test_text = wallet_test.read_text().replace(
+              'pointWalletProvider.notifier',
+              'pointWalletControllerProvider.notifier',
+          )
+          test_text = test_text.replace("    this.userId = 'user-a',\n", '')
+          test_text = test_text.replace('  String? userId;\n', "  String? userId = 'user-a';\n", 1)
+          wallet_test.write_text(test_text)
           PY
           rm -f tool/.problem007_payload_* tool/.problem007_gz_* tool/.problem007_small_* tool/.problem007_trigger tool/problem_007_apply.py
           rm -f .github/workflows/problem-007-helper.yml
