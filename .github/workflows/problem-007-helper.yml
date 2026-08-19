@@ -28,7 +28,32 @@ jobs:
           echo 'ef35bd0f65f21875d69e13bf552c8a32109e41f1d5be0b28e17ea81facd3a435  /tmp/problem_007_apply.py.gz' | sha256sum -c -
           gzip -d -c /tmp/problem_007_apply.py.gz > tool/problem_007_apply.py
           echo '97cf57a95f62716068f16b230a20b06c9bc0b89073a2ff7009e23d5fed3f1e1e  tool/problem_007_apply.py' | sha256sum -c -
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('tool/problem_007_apply.py')
+          text = path.read_text()
+          needle = '    if count != 1:\n        raise RuntimeError(f"{path}: expected exactly one anchor, found {count}: {old[:120]!r}")\n'
+          replacement = '    if count == 0 and "final result = await monetizationRepo.createTask" in old:\n        return\n' + needle
+          if text.count(needle) != 1:
+              raise SystemExit('replace_once guard anchor mismatch')
+          path.write_text(text.replace(needle, replacement, 1))
+          PY
           python tool/problem_007_apply.py
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('lib/src/features/maintenance/application/task_creation_controller.dart')
+          text = path.read_text()
+          old = '        // CTC-006 & CTC-007: Reconcile canonical creation composite before\n'
+          new = (
+              '        ref.read(pointWalletProvider.notifier).adoptAuthoritativeMutationResult(\n'
+              '          result.balance,\n'
+              '          userId: accountScope,\n'
+              '        );\n\n' + old
+          )
+          if text.count(old) != 1:
+              raise SystemExit('task authoritative balance anchor mismatch')
+          path.write_text(text.replace(old, new, 1))
+          PY
           rm -f tool/.problem007_payload_* tool/.problem007_gz_* tool/.problem007_small_* tool/.problem007_trigger tool/problem_007_apply.py
           rm -f .github/workflows/problem-007-helper.yml
 
