@@ -37,7 +37,6 @@ DECLARE
   metadata_json JSONB;
   asset_id TEXT;
   asset_kind TEXT;
-  category_health_group TEXT;
   current_balance INTEGER;
   existing_operation public.creation_point_operations%ROWTYPE;
   v_request_hash TEXT;
@@ -120,18 +119,6 @@ BEGIN
     RAISE EXCEPTION USING errcode = '23503', message = 'ROOM_NOT_FOUND';
   END IF;
 
-  category_health_group := CASE asset_json->>'category_id'
-    WHEN 'category_safety' THEN 'safety'
-    WHEN 'category_pets' THEN 'pets'
-    WHEN 'category_appliances' THEN 'appliances'
-    WHEN 'category_plants' THEN 'plants'
-    WHEN 'category_cleaning' THEN 'cleaning'
-    WHEN 'category_general' THEN 'other'
-    ELSE NULL
-  END;
-  IF category_health_group IS NULL AND asset_json->>'category_id' IS NOT NULL THEN
-    RAISE EXCEPTION USING errcode = '23503', message = 'CATEGORY_NOT_FOUND';
-  END IF;
 
   -- Read current balance (if wallet exists, otherwise default 0).
   -- Note: In the V1 economy, asset creation is always free (0 points),
@@ -169,11 +156,11 @@ BEGIN
 
   -- Insert asset
   INSERT INTO public.assets (
-    user_id, id, room_id, category_id, name,
+    user_id, id, room_id, name,
     placement, purchase_date, notes, created_at, updated_at,
     archived_at, revision, asset_type
   ) VALUES (
-    caller_id, asset_id, asset_json->>'room_id', asset_json->>'category_id',
+    caller_id, asset_id, asset_json->>'room_id',
     BTRIM(asset_json->>'name'),
     NULLIF(BTRIM(asset_json->>'placement'), ''),
     (asset_json->>'purchase_date')::date,
@@ -262,7 +249,7 @@ BEGIN
       COALESCE(plan_json->>'priority', 'medium'),
       (plan_json->>'next_due_date')::timestamptz,
       COALESCE((plan_json->>'reminder_days_before')::integer, 0),
-      CASE WHEN category_health_group = 'safety' THEN 'safety' ELSE plan_json->>'health_group' END,
+      CASE WHEN asset_kind = 'safety' THEN 'safety' ELSE plan_json->>'health_group' END,
       NOW(), NOW(), NULL, 1, COALESCE((plan_json->>'is_enabled')::boolean, true)
     );
     IF metadata_json <> '{}'::jsonb THEN

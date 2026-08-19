@@ -31,13 +31,6 @@ const _localizedSearchAliases = <String, String>{
   'pets': 'pets pet حيوانات حيوان حيوانات أليفة',
   'plants': 'plants plant نباتات نبات',
   'cleaning': 'cleaning clean تنظيف التنظيف نظافة',
-  'category_appliances':
-      'appliances appliance أجهزة جهاز كهربائي أجهزة كهربائية',
-  'category_safety': 'safety أمان سلامة',
-  'category_plants': 'plants plant نباتات نبات',
-  'category_pets': 'pets pet حيوانات حيوان حيوانات أليفة',
-  'category_cleaning': 'cleaning clean تنظيف التنظيف نظافة',
-  'category_general': 'general عام عامة',
   'mains': 'mains electricity كهرباء تيار كهربائي',
   'battery': 'battery batteries بطارية بطاريات',
   'solar': 'solar شمسي شمسية طاقة شمسية',
@@ -176,20 +169,6 @@ class DriftSearchRepository implements SearchRepository {
           _joinSearchParts([
             room.roomType,
             _localizedSearchAlias(room.roomType),
-          ]),
-        );
-      }
-      for (final category in await db.select(db.categories).get()) {
-        await _insert(
-          'category',
-          category.id,
-          category.name,
-          '',
-          _joinSearchParts([
-            category.name,
-            category.healthGroup,
-            _localizedSearchAlias(category.id),
-            _localizedSearchAlias(category.healthGroup),
           ]),
         );
       }

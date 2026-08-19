@@ -94,7 +94,6 @@ void main() {
             'id': 'asset-free-001',
             'name': 'Living Room Sofa',
             'asset_type': 'general',
-            'category_id': 'category_general',
             'room_id': 'room-living',
           },
           'initial_plans': [
@@ -194,17 +193,6 @@ void main() {
       const assetId = 'asset-reconcile-001';
 
       await db
-          .into(db.categories)
-          .insertOnConflictUpdate(
-            CategoriesCompanion.insert(
-              id: 'cat-reconcile-1',
-              name: 'Appliance',
-              healthGroup: 'appliances',
-              createdAt: Value(now),
-              updatedAt: Value(now),
-            ),
-          );
-      await db
           .into(db.areas)
           .insert(
             AreasCompanion.insert(
@@ -235,7 +223,6 @@ void main() {
               id: assetId,
               name: 'Refrigerator',
               assetType: const Value('device'),
-              categoryId: 'category_appliances',
               roomId: 'room-reconcile-1',
               createdAt: Value(now),
               updatedAt: Value(now),
@@ -259,7 +246,6 @@ void main() {
           'user_id': 'user-zero',
           'name': 'Refrigerator',
           'asset_type': 'device',
-          'category_id': 'category_appliances',
           'room_id': 'room-reconcile-1',
           'created_at': now.toIso8601String(),
           'updated_at': now.toIso8601String(),

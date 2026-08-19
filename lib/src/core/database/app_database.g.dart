@@ -1009,414 +1009,6 @@ class RoomsCompanion extends UpdateCompanion<RoomRow> {
   }
 }
 
-class $CategoriesTable extends Categories
-    with TableInfo<$CategoriesTable, CategoryRow> {
-  @override
-  final GeneratedDatabase attachedDatabase;
-  final String? _alias;
-  $CategoriesTable(this.attachedDatabase, [this._alias]);
-  static const VerificationMeta _idMeta = const VerificationMeta('id');
-  @override
-  late final GeneratedColumn<String> id = GeneratedColumn<String>(
-    'id',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _nameMeta = const VerificationMeta('name');
-  @override
-  late final GeneratedColumn<String> name = GeneratedColumn<String>(
-    'name',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
-  );
-  static const VerificationMeta _healthGroupMeta = const VerificationMeta(
-    'healthGroup',
-  );
-  @override
-  late final GeneratedColumn<String> healthGroup = GeneratedColumn<String>(
-    'health_group',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _iconNameMeta = const VerificationMeta(
-    'iconName',
-  );
-  @override
-  late final GeneratedColumn<String> iconName = GeneratedColumn<String>(
-    'icon_name',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-    defaultValue: const Constant('home'),
-  );
-  static const VerificationMeta _createdAtMeta = const VerificationMeta(
-    'createdAt',
-  );
-  @override
-  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
-    'created_at',
-    aliasedName,
-    false,
-    type: DriftSqlType.dateTime,
-    requiredDuringInsert: false,
-    defaultValue: currentDateAndTime,
-  );
-  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
-    'updatedAt',
-  );
-  @override
-  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
-    'updated_at',
-    aliasedName,
-    false,
-    type: DriftSqlType.dateTime,
-    requiredDuringInsert: false,
-    defaultValue: currentDateAndTime,
-  );
-  @override
-  List<GeneratedColumn> get $columns => [
-    id,
-    name,
-    healthGroup,
-    iconName,
-    createdAt,
-    updatedAt,
-  ];
-  @override
-  String get aliasedName => _alias ?? actualTableName;
-  @override
-  String get actualTableName => $name;
-  static const String $name = 'categories';
-  @override
-  VerificationContext validateIntegrity(
-    Insertable<CategoryRow> instance, {
-    bool isInserting = false,
-  }) {
-    final context = VerificationContext();
-    final data = instance.toColumns(true);
-    if (data.containsKey('id')) {
-      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
-    } else if (isInserting) {
-      context.missing(_idMeta);
-    }
-    if (data.containsKey('name')) {
-      context.handle(
-        _nameMeta,
-        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_nameMeta);
-    }
-    if (data.containsKey('health_group')) {
-      context.handle(
-        _healthGroupMeta,
-        healthGroup.isAcceptableOrUnknown(
-          data['health_group']!,
-          _healthGroupMeta,
-        ),
-      );
-    } else if (isInserting) {
-      context.missing(_healthGroupMeta);
-    }
-    if (data.containsKey('icon_name')) {
-      context.handle(
-        _iconNameMeta,
-        iconName.isAcceptableOrUnknown(data['icon_name']!, _iconNameMeta),
-      );
-    }
-    if (data.containsKey('created_at')) {
-      context.handle(
-        _createdAtMeta,
-        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
-      );
-    }
-    if (data.containsKey('updated_at')) {
-      context.handle(
-        _updatedAtMeta,
-        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
-      );
-    }
-    return context;
-  }
-
-  @override
-  Set<GeneratedColumn> get $primaryKey => {id};
-  @override
-  CategoryRow map(Map<String, dynamic> data, {String? tablePrefix}) {
-    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return CategoryRow(
-      id: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}id'],
-      )!,
-      name: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}name'],
-      )!,
-      healthGroup: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}health_group'],
-      )!,
-      iconName: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}icon_name'],
-      )!,
-      createdAt: attachedDatabase.typeMapping.read(
-        DriftSqlType.dateTime,
-        data['${effectivePrefix}created_at'],
-      )!,
-      updatedAt: attachedDatabase.typeMapping.read(
-        DriftSqlType.dateTime,
-        data['${effectivePrefix}updated_at'],
-      )!,
-    );
-  }
-
-  @override
-  $CategoriesTable createAlias(String alias) {
-    return $CategoriesTable(attachedDatabase, alias);
-  }
-}
-
-class CategoryRow extends DataClass implements Insertable<CategoryRow> {
-  final String id;
-  final String name;
-  final String healthGroup;
-  final String iconName;
-  final DateTime createdAt;
-  final DateTime updatedAt;
-  const CategoryRow({
-    required this.id,
-    required this.name,
-    required this.healthGroup,
-    required this.iconName,
-    required this.createdAt,
-    required this.updatedAt,
-  });
-  @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{};
-    map['id'] = Variable<String>(id);
-    map['name'] = Variable<String>(name);
-    map['health_group'] = Variable<String>(healthGroup);
-    map['icon_name'] = Variable<String>(iconName);
-    map['created_at'] = Variable<DateTime>(createdAt);
-    map['updated_at'] = Variable<DateTime>(updatedAt);
-    return map;
-  }
-
-  CategoriesCompanion toCompanion(bool nullToAbsent) {
-    return CategoriesCompanion(
-      id: Value(id),
-      name: Value(name),
-      healthGroup: Value(healthGroup),
-      iconName: Value(iconName),
-      createdAt: Value(createdAt),
-      updatedAt: Value(updatedAt),
-    );
-  }
-
-  factory CategoryRow.fromJson(
-    Map<String, dynamic> json, {
-    ValueSerializer? serializer,
-  }) {
-    serializer ??= driftRuntimeOptions.defaultSerializer;
-    return CategoryRow(
-      id: serializer.fromJson<String>(json['id']),
-      name: serializer.fromJson<String>(json['name']),
-      healthGroup: serializer.fromJson<String>(json['healthGroup']),
-      iconName: serializer.fromJson<String>(json['iconName']),
-      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
-      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
-    );
-  }
-  @override
-  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
-    serializer ??= driftRuntimeOptions.defaultSerializer;
-    return <String, dynamic>{
-      'id': serializer.toJson<String>(id),
-      'name': serializer.toJson<String>(name),
-      'healthGroup': serializer.toJson<String>(healthGroup),
-      'iconName': serializer.toJson<String>(iconName),
-      'createdAt': serializer.toJson<DateTime>(createdAt),
-      'updatedAt': serializer.toJson<DateTime>(updatedAt),
-    };
-  }
-
-  CategoryRow copyWith({
-    String? id,
-    String? name,
-    String? healthGroup,
-    String? iconName,
-    DateTime? createdAt,
-    DateTime? updatedAt,
-  }) => CategoryRow(
-    id: id ?? this.id,
-    name: name ?? this.name,
-    healthGroup: healthGroup ?? this.healthGroup,
-    iconName: iconName ?? this.iconName,
-    createdAt: createdAt ?? this.createdAt,
-    updatedAt: updatedAt ?? this.updatedAt,
-  );
-  CategoryRow copyWithCompanion(CategoriesCompanion data) {
-    return CategoryRow(
-      id: data.id.present ? data.id.value : this.id,
-      name: data.name.present ? data.name.value : this.name,
-      healthGroup: data.healthGroup.present
-          ? data.healthGroup.value
-          : this.healthGroup,
-      iconName: data.iconName.present ? data.iconName.value : this.iconName,
-      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
-      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
-    );
-  }
-
-  @override
-  String toString() {
-    return (StringBuffer('CategoryRow(')
-          ..write('id: $id, ')
-          ..write('name: $name, ')
-          ..write('healthGroup: $healthGroup, ')
-          ..write('iconName: $iconName, ')
-          ..write('createdAt: $createdAt, ')
-          ..write('updatedAt: $updatedAt')
-          ..write(')'))
-        .toString();
-  }
-
-  @override
-  int get hashCode =>
-      Object.hash(id, name, healthGroup, iconName, createdAt, updatedAt);
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      (other is CategoryRow &&
-          other.id == this.id &&
-          other.name == this.name &&
-          other.healthGroup == this.healthGroup &&
-          other.iconName == this.iconName &&
-          other.createdAt == this.createdAt &&
-          other.updatedAt == this.updatedAt);
-}
-
-class CategoriesCompanion extends UpdateCompanion<CategoryRow> {
-  final Value<String> id;
-  final Value<String> name;
-  final Value<String> healthGroup;
-  final Value<String> iconName;
-  final Value<DateTime> createdAt;
-  final Value<DateTime> updatedAt;
-  final Value<int> rowid;
-  const CategoriesCompanion({
-    this.id = const Value.absent(),
-    this.name = const Value.absent(),
-    this.healthGroup = const Value.absent(),
-    this.iconName = const Value.absent(),
-    this.createdAt = const Value.absent(),
-    this.updatedAt = const Value.absent(),
-    this.rowid = const Value.absent(),
-  });
-  CategoriesCompanion.insert({
-    required String id,
-    required String name,
-    required String healthGroup,
-    this.iconName = const Value.absent(),
-    this.createdAt = const Value.absent(),
-    this.updatedAt = const Value.absent(),
-    this.rowid = const Value.absent(),
-  }) : id = Value(id),
-       name = Value(name),
-       healthGroup = Value(healthGroup);
-  static Insertable<CategoryRow> custom({
-    Expression<String>? id,
-    Expression<String>? name,
-    Expression<String>? healthGroup,
-    Expression<String>? iconName,
-    Expression<DateTime>? createdAt,
-    Expression<DateTime>? updatedAt,
-    Expression<int>? rowid,
-  }) {
-    return RawValuesInsertable({
-      if (id != null) 'id': id,
-      if (name != null) 'name': name,
-      if (healthGroup != null) 'health_group': healthGroup,
-      if (iconName != null) 'icon_name': iconName,
-      if (createdAt != null) 'created_at': createdAt,
-      if (updatedAt != null) 'updated_at': updatedAt,
-      if (rowid != null) 'rowid': rowid,
-    });
-  }
-
-  CategoriesCompanion copyWith({
-    Value<String>? id,
-    Value<String>? name,
-    Value<String>? healthGroup,
-    Value<String>? iconName,
-    Value<DateTime>? createdAt,
-    Value<DateTime>? updatedAt,
-    Value<int>? rowid,
-  }) {
-    return CategoriesCompanion(
-      id: id ?? this.id,
-      name: name ?? this.name,
-      healthGroup: healthGroup ?? this.healthGroup,
-      iconName: iconName ?? this.iconName,
-      createdAt: createdAt ?? this.createdAt,
-      updatedAt: updatedAt ?? this.updatedAt,
-      rowid: rowid ?? this.rowid,
-    );
-  }
-
-  @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{};
-    if (id.present) {
-      map['id'] = Variable<String>(id.value);
-    }
-    if (name.present) {
-      map['name'] = Variable<String>(name.value);
-    }
-    if (healthGroup.present) {
-      map['health_group'] = Variable<String>(healthGroup.value);
-    }
-    if (iconName.present) {
-      map['icon_name'] = Variable<String>(iconName.value);
-    }
-    if (createdAt.present) {
-      map['created_at'] = Variable<DateTime>(createdAt.value);
-    }
-    if (updatedAt.present) {
-      map['updated_at'] = Variable<DateTime>(updatedAt.value);
-    }
-    if (rowid.present) {
-      map['rowid'] = Variable<int>(rowid.value);
-    }
-    return map;
-  }
-
-  @override
-  String toString() {
-    return (StringBuffer('CategoriesCompanion(')
-          ..write('id: $id, ')
-          ..write('name: $name, ')
-          ..write('healthGroup: $healthGroup, ')
-          ..write('iconName: $iconName, ')
-          ..write('createdAt: $createdAt, ')
-          ..write('updatedAt: $updatedAt, ')
-          ..write('rowid: $rowid')
-          ..write(')'))
-        .toString();
-  }
-}
-
 class $AssetsTable extends Assets with TableInfo<$AssetsTable, AssetRow> {
   @override
   final GeneratedDatabase attachedDatabase;
@@ -1451,20 +1043,6 @@ class $AssetsTable extends Assets with TableInfo<$AssetsTable, AssetRow> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
     defaultValue: const Constant('general'),
-  );
-  static const VerificationMeta _categoryIdMeta = const VerificationMeta(
-    'categoryId',
-  );
-  @override
-  late final GeneratedColumn<String> categoryId = GeneratedColumn<String>(
-    'category_id',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'REFERENCES categories (id)',
-    ),
   );
   static const VerificationMeta _roomIdMeta = const VerificationMeta('roomId');
   @override
@@ -1549,7 +1127,6 @@ class $AssetsTable extends Assets with TableInfo<$AssetsTable, AssetRow> {
     id,
     name,
     assetType,
-    categoryId,
     roomId,
     placement,
     notes,
@@ -1588,14 +1165,6 @@ class $AssetsTable extends Assets with TableInfo<$AssetsTable, AssetRow> {
         _assetTypeMeta,
         assetType.isAcceptableOrUnknown(data['asset_type']!, _assetTypeMeta),
       );
-    }
-    if (data.containsKey('category_id')) {
-      context.handle(
-        _categoryIdMeta,
-        categoryId.isAcceptableOrUnknown(data['category_id']!, _categoryIdMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_categoryIdMeta);
     }
     if (data.containsKey('room_id')) {
       context.handle(
@@ -1665,10 +1234,6 @@ class $AssetsTable extends Assets with TableInfo<$AssetsTable, AssetRow> {
         DriftSqlType.string,
         data['${effectivePrefix}asset_type'],
       )!,
-      categoryId: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}category_id'],
-      )!,
       roomId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}room_id'],
@@ -1710,7 +1275,6 @@ class AssetRow extends DataClass implements Insertable<AssetRow> {
   final String id;
   final String name;
   final String assetType;
-  final String categoryId;
   final String roomId;
   final String? placement;
   final String? notes;
@@ -1722,7 +1286,6 @@ class AssetRow extends DataClass implements Insertable<AssetRow> {
     required this.id,
     required this.name,
     required this.assetType,
-    required this.categoryId,
     required this.roomId,
     this.placement,
     this.notes,
@@ -1737,7 +1300,6 @@ class AssetRow extends DataClass implements Insertable<AssetRow> {
     map['id'] = Variable<String>(id);
     map['name'] = Variable<String>(name);
     map['asset_type'] = Variable<String>(assetType);
-    map['category_id'] = Variable<String>(categoryId);
     map['room_id'] = Variable<String>(roomId);
     if (!nullToAbsent || placement != null) {
       map['placement'] = Variable<String>(placement);
@@ -1761,7 +1323,6 @@ class AssetRow extends DataClass implements Insertable<AssetRow> {
       id: Value(id),
       name: Value(name),
       assetType: Value(assetType),
-      categoryId: Value(categoryId),
       roomId: Value(roomId),
       placement: placement == null && nullToAbsent
           ? const Value.absent()
@@ -1789,7 +1350,6 @@ class AssetRow extends DataClass implements Insertable<AssetRow> {
       id: serializer.fromJson<String>(json['id']),
       name: serializer.fromJson<String>(json['name']),
       assetType: serializer.fromJson<String>(json['assetType']),
-      categoryId: serializer.fromJson<String>(json['categoryId']),
       roomId: serializer.fromJson<String>(json['roomId']),
       placement: serializer.fromJson<String?>(json['placement']),
       notes: serializer.fromJson<String?>(json['notes']),
@@ -1806,7 +1366,6 @@ class AssetRow extends DataClass implements Insertable<AssetRow> {
       'id': serializer.toJson<String>(id),
       'name': serializer.toJson<String>(name),
       'assetType': serializer.toJson<String>(assetType),
-      'categoryId': serializer.toJson<String>(categoryId),
       'roomId': serializer.toJson<String>(roomId),
       'placement': serializer.toJson<String?>(placement),
       'notes': serializer.toJson<String?>(notes),
@@ -1821,7 +1380,6 @@ class AssetRow extends DataClass implements Insertable<AssetRow> {
     String? id,
     String? name,
     String? assetType,
-    String? categoryId,
     String? roomId,
     Value<String?> placement = const Value.absent(),
     Value<String?> notes = const Value.absent(),
@@ -1833,7 +1391,6 @@ class AssetRow extends DataClass implements Insertable<AssetRow> {
     id: id ?? this.id,
     name: name ?? this.name,
     assetType: assetType ?? this.assetType,
-    categoryId: categoryId ?? this.categoryId,
     roomId: roomId ?? this.roomId,
     placement: placement.present ? placement.value : this.placement,
     notes: notes.present ? notes.value : this.notes,
@@ -1847,9 +1404,6 @@ class AssetRow extends DataClass implements Insertable<AssetRow> {
       id: data.id.present ? data.id.value : this.id,
       name: data.name.present ? data.name.value : this.name,
       assetType: data.assetType.present ? data.assetType.value : this.assetType,
-      categoryId: data.categoryId.present
-          ? data.categoryId.value
-          : this.categoryId,
       roomId: data.roomId.present ? data.roomId.value : this.roomId,
       placement: data.placement.present ? data.placement.value : this.placement,
       notes: data.notes.present ? data.notes.value : this.notes,
@@ -1870,7 +1424,6 @@ class AssetRow extends DataClass implements Insertable<AssetRow> {
           ..write('id: $id, ')
           ..write('name: $name, ')
           ..write('assetType: $assetType, ')
-          ..write('categoryId: $categoryId, ')
           ..write('roomId: $roomId, ')
           ..write('placement: $placement, ')
           ..write('notes: $notes, ')
@@ -1887,7 +1440,6 @@ class AssetRow extends DataClass implements Insertable<AssetRow> {
     id,
     name,
     assetType,
-    categoryId,
     roomId,
     placement,
     notes,
@@ -1903,7 +1455,6 @@ class AssetRow extends DataClass implements Insertable<AssetRow> {
           other.id == this.id &&
           other.name == this.name &&
           other.assetType == this.assetType &&
-          other.categoryId == this.categoryId &&
           other.roomId == this.roomId &&
           other.placement == this.placement &&
           other.notes == this.notes &&
@@ -1917,7 +1468,6 @@ class AssetsCompanion extends UpdateCompanion<AssetRow> {
   final Value<String> id;
   final Value<String> name;
   final Value<String> assetType;
-  final Value<String> categoryId;
   final Value<String> roomId;
   final Value<String?> placement;
   final Value<String?> notes;
@@ -1930,7 +1480,6 @@ class AssetsCompanion extends UpdateCompanion<AssetRow> {
     this.id = const Value.absent(),
     this.name = const Value.absent(),
     this.assetType = const Value.absent(),
-    this.categoryId = const Value.absent(),
     this.roomId = const Value.absent(),
     this.placement = const Value.absent(),
     this.notes = const Value.absent(),
@@ -1944,7 +1493,6 @@ class AssetsCompanion extends UpdateCompanion<AssetRow> {
     required String id,
     required String name,
     this.assetType = const Value.absent(),
-    required String categoryId,
     required String roomId,
     this.placement = const Value.absent(),
     this.notes = const Value.absent(),
@@ -1955,13 +1503,11 @@ class AssetsCompanion extends UpdateCompanion<AssetRow> {
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        name = Value(name),
-       categoryId = Value(categoryId),
        roomId = Value(roomId);
   static Insertable<AssetRow> custom({
     Expression<String>? id,
     Expression<String>? name,
     Expression<String>? assetType,
-    Expression<String>? categoryId,
     Expression<String>? roomId,
     Expression<String>? placement,
     Expression<String>? notes,
@@ -1975,7 +1521,6 @@ class AssetsCompanion extends UpdateCompanion<AssetRow> {
       if (id != null) 'id': id,
       if (name != null) 'name': name,
       if (assetType != null) 'asset_type': assetType,
-      if (categoryId != null) 'category_id': categoryId,
       if (roomId != null) 'room_id': roomId,
       if (placement != null) 'placement': placement,
       if (notes != null) 'notes': notes,
@@ -1991,7 +1536,6 @@ class AssetsCompanion extends UpdateCompanion<AssetRow> {
     Value<String>? id,
     Value<String>? name,
     Value<String>? assetType,
-    Value<String>? categoryId,
     Value<String>? roomId,
     Value<String?>? placement,
     Value<String?>? notes,
@@ -2005,7 +1549,6 @@ class AssetsCompanion extends UpdateCompanion<AssetRow> {
       id: id ?? this.id,
       name: name ?? this.name,
       assetType: assetType ?? this.assetType,
-      categoryId: categoryId ?? this.categoryId,
       roomId: roomId ?? this.roomId,
       placement: placement ?? this.placement,
       notes: notes ?? this.notes,
@@ -2028,9 +1571,6 @@ class AssetsCompanion extends UpdateCompanion<AssetRow> {
     }
     if (assetType.present) {
       map['asset_type'] = Variable<String>(assetType.value);
-    }
-    if (categoryId.present) {
-      map['category_id'] = Variable<String>(categoryId.value);
     }
     if (roomId.present) {
       map['room_id'] = Variable<String>(roomId.value);
@@ -2065,7 +1605,6 @@ class AssetsCompanion extends UpdateCompanion<AssetRow> {
           ..write('id: $id, ')
           ..write('name: $name, ')
           ..write('assetType: $assetType, ')
-          ..write('categoryId: $categoryId, ')
           ..write('roomId: $roomId, ')
           ..write('placement: $placement, ')
           ..write('notes: $notes, ')
@@ -13702,7 +13241,6 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $AreasTable areas = $AreasTable(this);
   late final $RoomsTable rooms = $RoomsTable(this);
-  late final $CategoriesTable categories = $CategoriesTable(this);
   late final $AssetsTable assets = $AssetsTable(this);
   late final $DeviceDetailsTableTable deviceDetailsTable =
       $DeviceDetailsTableTable(this);
@@ -13751,7 +13289,6 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   List<DatabaseSchemaEntity> get allSchemaEntities => [
     areas,
     rooms,
-    categories,
     assets,
     deviceDetailsTable,
     petDetailsTable,
@@ -14579,328 +14116,10 @@ typedef $$RoomsTableProcessedTableManager =
       RoomRow,
       PrefetchHooks Function({bool areaId, bool assetsRefs})
     >;
-typedef $$CategoriesTableCreateCompanionBuilder = CategoriesCompanion Function({
-  required String id,
-  required String name,
-  required String healthGroup,
-  Value<String> iconName,
-  Value<DateTime> createdAt,
-  Value<DateTime> updatedAt,
-  Value<int> rowid,
-});
-typedef $$CategoriesTableUpdateCompanionBuilder = CategoriesCompanion Function({
-  Value<String> id,
-  Value<String> name,
-  Value<String> healthGroup,
-  Value<String> iconName,
-  Value<DateTime> createdAt,
-  Value<DateTime> updatedAt,
-  Value<int> rowid,
-});
-
-final class $$CategoriesTableReferences
-    extends BaseReferences<_$AppDatabase, $CategoriesTable, CategoryRow> {
-  $$CategoriesTableReferences(super.$_db, super.$_table, super.$_typedResult);
-
-  static MultiTypedResultKey<$AssetsTable, List<AssetRow>> _assetsRefsTable(
-    _$AppDatabase db,
-  ) => MultiTypedResultKey.fromTable(
-    db.assets,
-    aliasName: 'categories__id__assets__category_id',
-  );
-
-  $$AssetsTableProcessedTableManager get assetsRefs {
-    final manager = $$AssetsTableTableManager(
-      $_db,
-      $_db.assets,
-    ).filter((f) => f.categoryId.id.sqlEquals($_itemColumn<String>('id')!));
-
-    final cache = $_typedResult.readTableOrNull(_assetsRefsTable($_db));
-    return ProcessedTableManager(
-      manager.$state.copyWith(prefetchedData: cache),
-    );
-  }
-}
-
-class $$CategoriesTableFilterComposer
-    extends Composer<_$AppDatabase, $CategoriesTable> {
-  $$CategoriesTableFilterComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  ColumnFilters<String> get id => $composableBuilder(
-    column: $table.id,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get name => $composableBuilder(
-    column: $table.name,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get healthGroup => $composableBuilder(
-    column: $table.healthGroup,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get iconName => $composableBuilder(
-    column: $table.iconName,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<DateTime> get createdAt => $composableBuilder(
-    column: $table.createdAt,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
-    column: $table.updatedAt,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  Expression<bool> assetsRefs(
-    Expression<bool> Function($$AssetsTableFilterComposer f) f,
-  ) {
-    final $$AssetsTableFilterComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.id,
-      referencedTable: $db.assets,
-      getReferencedColumn: (t) => t.categoryId,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$AssetsTableFilterComposer(
-            $db: $db,
-            $table: $db.assets,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return f(composer);
-  }
-}
-
-class $$CategoriesTableOrderingComposer
-    extends Composer<_$AppDatabase, $CategoriesTable> {
-  $$CategoriesTableOrderingComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  ColumnOrderings<String> get id => $composableBuilder(
-    column: $table.id,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get name => $composableBuilder(
-    column: $table.name,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get healthGroup => $composableBuilder(
-    column: $table.healthGroup,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get iconName => $composableBuilder(
-    column: $table.iconName,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
-    column: $table.createdAt,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
-    column: $table.updatedAt,
-    builder: (column) => ColumnOrderings(column),
-  );
-}
-
-class $$CategoriesTableAnnotationComposer
-    extends Composer<_$AppDatabase, $CategoriesTable> {
-  $$CategoriesTableAnnotationComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  GeneratedColumn<String> get id =>
-      $composableBuilder(column: $table.id, builder: (column) => column);
-
-  GeneratedColumn<String> get name =>
-      $composableBuilder(column: $table.name, builder: (column) => column);
-
-  GeneratedColumn<String> get healthGroup => $composableBuilder(
-    column: $table.healthGroup,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get iconName =>
-      $composableBuilder(column: $table.iconName, builder: (column) => column);
-
-  GeneratedColumn<DateTime> get createdAt =>
-      $composableBuilder(column: $table.createdAt, builder: (column) => column);
-
-  GeneratedColumn<DateTime> get updatedAt =>
-      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
-
-  Expression<T> assetsRefs<T extends Object>(
-    Expression<T> Function($$AssetsTableAnnotationComposer a) f,
-  ) {
-    final $$AssetsTableAnnotationComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.id,
-      referencedTable: $db.assets,
-      getReferencedColumn: (t) => t.categoryId,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$AssetsTableAnnotationComposer(
-            $db: $db,
-            $table: $db.assets,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return f(composer);
-  }
-}
-
-class $$CategoriesTableTableManager
-    extends
-        RootTableManager<
-          _$AppDatabase,
-          $CategoriesTable,
-          CategoryRow,
-          $$CategoriesTableFilterComposer,
-          $$CategoriesTableOrderingComposer,
-          $$CategoriesTableAnnotationComposer,
-          $$CategoriesTableCreateCompanionBuilder,
-          $$CategoriesTableUpdateCompanionBuilder,
-          (CategoryRow, $$CategoriesTableReferences),
-          CategoryRow,
-          PrefetchHooks Function({bool assetsRefs})
-        > {
-  $$CategoriesTableTableManager(_$AppDatabase db, $CategoriesTable table)
-    : super(
-        TableManagerState(
-          db: db,
-          table: table,
-          createFilteringComposer: () =>
-              $$CategoriesTableFilterComposer($db: db, $table: table),
-          createOrderingComposer: () =>
-              $$CategoriesTableOrderingComposer($db: db, $table: table),
-          createComputedFieldComposer: () =>
-              $$CategoriesTableAnnotationComposer($db: db, $table: table),
-          updateCompanionCallback:
-              ({
-                Value<String> id = const Value.absent(),
-                Value<String> name = const Value.absent(),
-                Value<String> healthGroup = const Value.absent(),
-                Value<String> iconName = const Value.absent(),
-                Value<DateTime> createdAt = const Value.absent(),
-                Value<DateTime> updatedAt = const Value.absent(),
-                Value<int> rowid = const Value.absent(),
-              }) => CategoriesCompanion(
-                id: id,
-                name: name,
-                healthGroup: healthGroup,
-                iconName: iconName,
-                createdAt: createdAt,
-                updatedAt: updatedAt,
-                rowid: rowid,
-              ),
-          createCompanionCallback:
-              ({
-                required String id,
-                required String name,
-                required String healthGroup,
-                Value<String> iconName = const Value.absent(),
-                Value<DateTime> createdAt = const Value.absent(),
-                Value<DateTime> updatedAt = const Value.absent(),
-                Value<int> rowid = const Value.absent(),
-              }) => CategoriesCompanion.insert(
-                id: id,
-                name: name,
-                healthGroup: healthGroup,
-                iconName: iconName,
-                createdAt: createdAt,
-                updatedAt: updatedAt,
-                rowid: rowid,
-              ),
-          withReferenceMapper: (p0) => p0
-              .map(
-                (e) => (
-                  e.readTable(table),
-                  $$CategoriesTableReferences(db, table, e),
-                ),
-              )
-              .toList(),
-          prefetchHooksCallback: ({assetsRefs = false}) {
-            return PrefetchHooks(
-              db: db,
-              explicitlyWatchedTables: [if (assetsRefs) db.assets],
-              addJoins: null,
-              getPrefetchedDataCallback: (items) async {
-                return [
-                  if (assetsRefs)
-                    await $_getPrefetchedData<
-                      CategoryRow,
-                      $CategoriesTable,
-                      AssetRow
-                    >(
-                      currentTable: table,
-                      referencedTable: $$CategoriesTableReferences
-                          ._assetsRefsTable(db),
-                      managerFromTypedResult: (p0) =>
-                          $$CategoriesTableReferences(db, table, p0).assetsRefs,
-                      referencedItemsForCurrentItem: (item, referencedItems) =>
-                          referencedItems.where((e) => e.categoryId == item.id),
-                      typedResults: items,
-                    ),
-                ];
-              },
-            );
-          },
-        ),
-      );
-}
-
-typedef $$CategoriesTableProcessedTableManager =
-    ProcessedTableManager<
-      _$AppDatabase,
-      $CategoriesTable,
-      CategoryRow,
-      $$CategoriesTableFilterComposer,
-      $$CategoriesTableOrderingComposer,
-      $$CategoriesTableAnnotationComposer,
-      $$CategoriesTableCreateCompanionBuilder,
-      $$CategoriesTableUpdateCompanionBuilder,
-      (CategoryRow, $$CategoriesTableReferences),
-      CategoryRow,
-      PrefetchHooks Function({bool assetsRefs})
-    >;
 typedef $$AssetsTableCreateCompanionBuilder = AssetsCompanion Function({
   required String id,
   required String name,
   Value<String> assetType,
-  required String categoryId,
   required String roomId,
   Value<String?> placement,
   Value<String?> notes,
@@ -14914,7 +14133,6 @@ typedef $$AssetsTableUpdateCompanionBuilder = AssetsCompanion Function({
   Value<String> id,
   Value<String> name,
   Value<String> assetType,
-  Value<String> categoryId,
   Value<String> roomId,
   Value<String?> placement,
   Value<String?> notes,
@@ -14928,23 +14146,6 @@ typedef $$AssetsTableUpdateCompanionBuilder = AssetsCompanion Function({
 final class $$AssetsTableReferences
     extends BaseReferences<_$AppDatabase, $AssetsTable, AssetRow> {
   $$AssetsTableReferences(super.$_db, super.$_table, super.$_typedResult);
-
-  static $CategoriesTable _categoryIdTable(_$AppDatabase db) =>
-      db.categories.createAlias('assets__category_id__categories__id');
-
-  $$CategoriesTableProcessedTableManager get categoryId {
-    final $_column = $_itemColumn<String>('category_id')!;
-
-    final manager = $$CategoriesTableTableManager(
-      $_db,
-      $_db.categories,
-    ).filter((f) => f.id.sqlEquals($_column));
-    final item = $_typedResult.readTableOrNull(_categoryIdTable($_db));
-    if (item == null) return manager;
-    return ProcessedTableManager(
-      manager.$state.copyWith(prefetchedData: [item]),
-    );
-  }
 
   static $RoomsTable _roomIdTable(_$AppDatabase db) =>
       db.rooms.createAlias('assets__room_id__rooms__id');
@@ -15156,29 +14357,6 @@ class $$AssetsTableFilterComposer
     column: $table.archivedAt,
     builder: (column) => ColumnFilters(column),
   );
-
-  $$CategoriesTableFilterComposer get categoryId {
-    final $$CategoriesTableFilterComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.categoryId,
-      referencedTable: $db.categories,
-      getReferencedColumn: (t) => t.id,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$CategoriesTableFilterComposer(
-            $db: $db,
-            $table: $db.categories,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return composer;
-  }
 
   $$RoomsTableFilterComposer get roomId {
     final $$RoomsTableFilterComposer composer = $composerBuilder(
@@ -15433,29 +14611,6 @@ class $$AssetsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  $$CategoriesTableOrderingComposer get categoryId {
-    final $$CategoriesTableOrderingComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.categoryId,
-      referencedTable: $db.categories,
-      getReferencedColumn: (t) => t.id,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$CategoriesTableOrderingComposer(
-            $db: $db,
-            $table: $db.categories,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return composer;
-  }
-
   $$RoomsTableOrderingComposer get roomId {
     final $$RoomsTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -15519,29 +14674,6 @@ class $$AssetsTableAnnotationComposer
     column: $table.archivedAt,
     builder: (column) => column,
   );
-
-  $$CategoriesTableAnnotationComposer get categoryId {
-    final $$CategoriesTableAnnotationComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.categoryId,
-      referencedTable: $db.categories,
-      getReferencedColumn: (t) => t.id,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$CategoriesTableAnnotationComposer(
-            $db: $db,
-            $table: $db.categories,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return composer;
-  }
 
   $$RoomsTableAnnotationComposer get roomId {
     final $$RoomsTableAnnotationComposer composer = $composerBuilder(
@@ -15759,7 +14891,6 @@ class $$AssetsTableTableManager
           (AssetRow, $$AssetsTableReferences),
           AssetRow,
           PrefetchHooks Function({
-            bool categoryId,
             bool roomId,
             bool deviceDetailsTableRefs,
             bool petDetailsTableRefs,
@@ -15786,7 +14917,6 @@ class $$AssetsTableTableManager
                 Value<String> id = const Value.absent(),
                 Value<String> name = const Value.absent(),
                 Value<String> assetType = const Value.absent(),
-                Value<String> categoryId = const Value.absent(),
                 Value<String> roomId = const Value.absent(),
                 Value<String?> placement = const Value.absent(),
                 Value<String?> notes = const Value.absent(),
@@ -15799,7 +14929,6 @@ class $$AssetsTableTableManager
                 id: id,
                 name: name,
                 assetType: assetType,
-                categoryId: categoryId,
                 roomId: roomId,
                 placement: placement,
                 notes: notes,
@@ -15814,7 +14943,6 @@ class $$AssetsTableTableManager
                 required String id,
                 required String name,
                 Value<String> assetType = const Value.absent(),
-                required String categoryId,
                 required String roomId,
                 Value<String?> placement = const Value.absent(),
                 Value<String?> notes = const Value.absent(),
@@ -15827,7 +14955,6 @@ class $$AssetsTableTableManager
                 id: id,
                 name: name,
                 assetType: assetType,
-                categoryId: categoryId,
                 roomId: roomId,
                 placement: placement,
                 notes: notes,
@@ -15845,7 +14972,6 @@ class $$AssetsTableTableManager
               .toList(),
           prefetchHooksCallback:
               ({
-                categoryId = false,
                 roomId = false,
                 deviceDetailsTableRefs = false,
                 petDetailsTableRefs = false,
@@ -15882,17 +15008,6 @@ class $$AssetsTableTableManager
                           dynamic
                         >
                       >(state) {
-                        if (categoryId) {
-                          state = state.withJoin(
-                            currentTable: table,
-                            currentColumn: table.categoryId,
-                            referencedTable: $$AssetsTableReferences
-                                ._categoryIdTable(db),
-                            referencedColumn: $$AssetsTableReferences
-                                ._categoryIdTable(db)
-                                .id,
-                          ) as T;
-                        }
                         if (roomId) {
                           state = state.withJoin(
                             currentTable: table,
@@ -16077,7 +15192,6 @@ typedef $$AssetsTableProcessedTableManager =
       (AssetRow, $$AssetsTableReferences),
       AssetRow,
       PrefetchHooks Function({
-        bool categoryId,
         bool roomId,
         bool deviceDetailsTableRefs,
         bool petDetailsTableRefs,
@@ -23833,8 +22947,6 @@ class $AppDatabaseManager {
       $$AreasTableTableManager(_db, _db.areas);
   $$RoomsTableTableManager get rooms =>
       $$RoomsTableTableManager(_db, _db.rooms);
-  $$CategoriesTableTableManager get categories =>
-      $$CategoriesTableTableManager(_db, _db.categories);
   $$AssetsTableTableManager get assets =>
       $$AssetsTableTableManager(_db, _db.assets);
   $$DeviceDetailsTableTableTableManager get deviceDetailsTable =>

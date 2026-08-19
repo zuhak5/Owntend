@@ -15,21 +15,12 @@ void main() {
 
   tearDown(() => db.close());
 
-  test(
-    'Arabic category aliases find canonical categories without leaking aliases',
-    () async {
-      await repository.rebuildIndex();
+  test('Category is not a search entity or item class', () async {
+    await repository.rebuildIndex();
 
-      final results = await repository.search('تنظيف');
-      final cleaning = results.singleWhere(
-        (result) => result.entityId == 'category_cleaning',
-      );
-
-      expect(cleaning.entityType, 'category');
-      expect(cleaning.title, 'Cleaning');
-      expect(cleaning.snippet, isEmpty);
-    },
-  );
+    final results = await repository.search('تنظيف');
+    expect(results.where((result) => result.entityType == 'category'), isEmpty);
+  });
 
   test('Arabic controlled type aliases find assets while display snippets stay user-authored', () async {
     await db.customStatement(
@@ -40,9 +31,9 @@ void main() {
       "VALUES ('search-room', 'search-area', 'Kitchen', 'kitchen')",
     );
     await db.customStatement(
-      "INSERT INTO assets(id, name, asset_type, category_id, room_id, notes) "
+      "INSERT INTO assets(id, name, asset_type, room_id, notes) "
       "VALUES ('search-device', 'Purifier', 'device', "
-      "'category_appliances', 'search-room', 'Quiet bedroom unit')",
+      "'search-room', 'Quiet bedroom unit')",
     );
 
     await repository.rebuildIndex();

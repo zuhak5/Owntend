@@ -997,8 +997,6 @@ class DriftMaintenanceRepository
     )..where((metadata) => metadata.planId.isIn(planIds))).get();
     final metadataMap = {for (final row in metadataRows) row.planId: row};
     final assetMap = {for (final row in assetRows) row.id: row};
-    final categoryRows = await db.select(db.categories).get();
-    final categoryMap = {for (final row in categoryRows) row.id: row};
     final roomRows = await db.select(db.rooms).get();
     final roomMap = {for (final row in roomRows) row.id: row};
     final now = DateTime.now();
@@ -1008,16 +1006,14 @@ class DriftMaintenanceRepository
       if (asset == null) {
         continue;
       }
-      final category = categoryMap[asset.categoryId];
       final room = roomMap[asset.roomId];
-      if (category == null || room == null) {
+      if (room == null) {
         continue;
       }
       items.add(
         domain.TaskItem(
           plan: _planFromRow(plan, metadataMap[plan.id]),
           asset: _assetFromRow(asset),
-          category: _categoryFromRow(category),
           room: _roomFromRow(room),
           status: _statusFor(plan.nextDueDate, now),
         ),
@@ -1036,7 +1032,6 @@ class DriftMaintenanceRepository
         db.select(db.maintenancePlans).watch(),
         db.select(db.maintenancePlanMetadata).watch(),
         db.select(db.assets).watch(),
-        db.select(db.categories).watch(),
         db.select(db.rooms).watch(),
       ],
       load: loader,

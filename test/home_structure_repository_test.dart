@@ -69,14 +69,12 @@ void main() {
       'task detail stream ignores unrelated writes and emits real changes',
       () async {
         final maintenance = DriftMaintenanceRepository(db);
-        final categories = await repo.listCategories();
         final roomId = await repo.saveRoom(
           areaId: 'area_first_floor',
           name: 'Utility',
         );
         final assetId = await repo.saveAsset(
           name: 'Water heater',
-          categoryId: _categoryId(categories, HealthGroup.other),
           roomId: roomId,
         );
         final planId = await maintenance.savePlan(
@@ -132,7 +130,6 @@ void main() {
     test(
       'item detail stream tracks detail rows without duplicate emissions',
       () async {
-        final categories = await repo.listCategories();
         final roomId = await repo.saveRoom(
           areaId: 'area_first_floor',
           name: 'Laundry',
@@ -140,7 +137,6 @@ void main() {
         final assetId = await repo.saveAsset(
           name: 'Washer',
           assetType: AssetType.device,
-          categoryId: _categoryId(categories, HealthGroup.appliances),
           roomId: roomId,
           deviceDetails: const DeviceDetails(brand: 'LG'),
         );
@@ -168,7 +164,6 @@ void main() {
           id: assetId,
           name: 'Washer',
           assetType: AssetType.device,
-          categoryId: _categoryId(categories, HealthGroup.appliances),
           roomId: roomId,
           deviceDetails: const DeviceDetails(brand: 'LG', model: 'ThinQ'),
         );
@@ -187,14 +182,12 @@ void main() {
           maintenance,
           DatabaseStreakService(db),
         );
-        final categories = await repo.listCategories();
         final roomId = await repo.saveRoom(
           areaId: 'area_first_floor',
           name: 'Office',
         );
         final assetId = await repo.saveAsset(
           name: 'Air purifier',
-          categoryId: _categoryId(categories, HealthGroup.other),
           roomId: roomId,
         );
         final planId = await maintenance.savePlan(
@@ -296,7 +289,6 @@ void main() {
     });
 
     test('creates things with each detail type', () async {
-      final categories = await repo.listCategories();
       final roomId = await repo.saveRoom(
         areaId: 'area_first_floor',
         name: 'Kitchen',
@@ -306,7 +298,6 @@ void main() {
       await repo.saveAsset(
         name: 'Washer',
         assetType: AssetType.device,
-        categoryId: _categoryId(categories, HealthGroup.appliances),
         roomId: roomId,
         placement: 'Laundry wall',
         deviceDetails: const DeviceDetails(
@@ -320,7 +311,6 @@ void main() {
       await repo.saveAsset(
         name: 'Milo',
         assetType: AssetType.pet,
-        categoryId: _categoryId(categories, HealthGroup.pets),
         roomId: roomId,
         petDetails: const PetDetails(
           species: 'Cat',
@@ -331,7 +321,6 @@ void main() {
       await repo.saveAsset(
         name: 'Aloe',
         assetType: AssetType.plant,
-        categoryId: _categoryId(categories, HealthGroup.plants),
         roomId: roomId,
         plantDetails: const PlantDetails(
           species: 'Aloe vera',
@@ -342,7 +331,6 @@ void main() {
       await repo.saveAsset(
         name: 'Smoke detector',
         assetType: AssetType.safety,
-        categoryId: _categoryId(categories, HealthGroup.safety),
         roomId: roomId,
         safetyDetails: const SafetyDetails(
           safetyType: 'Smoke detector',
@@ -353,7 +341,6 @@ void main() {
       await repo.saveAsset(
         name: 'Storage bin',
         assetType: AssetType.general,
-        categoryId: _categoryId(categories, HealthGroup.other),
         roomId: roomId,
       );
 
@@ -373,7 +360,6 @@ void main() {
       'plant watering interval updates only matching watering plans',
       () async {
         final maintenance = DriftMaintenanceRepository(db);
-        final categories = await repo.listCategories();
         final roomId = await repo.saveRoom(
           areaId: 'area_first_floor',
           name: 'Plant shelf',
@@ -381,7 +367,6 @@ void main() {
         final assetId = await repo.saveAsset(
           name: 'Dieffenbachia',
           assetType: AssetType.plant,
-          categoryId: _categoryId(categories, HealthGroup.plants),
           roomId: roomId,
           plantDetails: const PlantDetails(wateringIntervalDays: 7),
         );
@@ -424,7 +409,6 @@ void main() {
           id: assetId,
           name: 'Dieffenbachia',
           assetType: AssetType.plant,
-          categoryId: _categoryId(categories, HealthGroup.plants),
           roomId: roomId,
           plantDetails: const PlantDetails(wateringIntervalDays: 5),
         );
@@ -453,7 +437,6 @@ void main() {
       'plant watering interval recalculates next due from last completion',
       () async {
         final maintenance = DriftMaintenanceRepository(db);
-        final categories = await repo.listCategories();
         final roomId = await repo.saveRoom(
           areaId: 'area_first_floor',
           name: 'Sun room',
@@ -461,7 +444,6 @@ void main() {
         final assetId = await repo.saveAsset(
           name: 'Dieffenbachia',
           assetType: AssetType.plant,
-          categoryId: _categoryId(categories, HealthGroup.plants),
           roomId: roomId,
           plantDetails: const PlantDetails(wateringIntervalDays: 7),
         );
@@ -485,7 +467,6 @@ void main() {
           id: assetId,
           name: 'Dieffenbachia',
           assetType: AssetType.plant,
-          categoryId: _categoryId(categories, HealthGroup.plants),
           roomId: roomId,
           plantDetails: const PlantDetails(wateringIntervalDays: 5),
         );
@@ -499,7 +480,6 @@ void main() {
     );
 
     test('archives things and empty rooms from active lists', () async {
-      final categories = await repo.listCategories();
       final roomId = await repo.saveRoom(
         areaId: 'area_second_floor',
         name: 'Spare Room',
@@ -507,7 +487,6 @@ void main() {
       final assetId = await repo.saveAsset(
         name: 'Spare lamp',
         assetType: AssetType.device,
-        categoryId: _categoryId(categories, HealthGroup.appliances),
         roomId: roomId,
       );
 
@@ -526,7 +505,6 @@ void main() {
 
     test('moves and copies items with active tasks', () async {
       final maintenance = DriftMaintenanceRepository(db);
-      final categories = await repo.listCategories();
       final sourceRoomId = await repo.saveRoom(
         areaId: 'area_first_floor',
         name: 'Kitchen',
@@ -538,7 +516,6 @@ void main() {
       final assetId = await repo.saveAsset(
         name: 'Water filter',
         assetType: AssetType.device,
-        categoryId: _categoryId(categories, HealthGroup.appliances),
         roomId: sourceRoomId,
         placement: 'Under sink',
         tagNames: ['filter', 'kitchen'],
@@ -593,7 +570,6 @@ void main() {
 
     test('trashes and restores rooms with nested items and tasks', () async {
       final maintenance = DriftMaintenanceRepository(db);
-      final categories = await repo.listCategories();
       final roomId = await repo.saveRoom(
         areaId: 'area_first_floor',
         name: 'Workshop',
@@ -601,7 +577,6 @@ void main() {
       final assetId = await repo.saveAsset(
         name: 'Air compressor',
         assetType: AssetType.device,
-        categoryId: _categoryId(categories, HealthGroup.appliances),
         roomId: roomId,
       );
       final planId = await maintenance.savePlan(
@@ -659,7 +634,6 @@ void main() {
     test('disables and re-enables tasks without losing history', () async {
       final clock = DateTime(2026, 6, 18, 12);
       final maintenance = DriftMaintenanceRepository(db, now: () => clock);
-      final categories = await repo.listCategories();
       final roomId = await repo.saveRoom(
         areaId: 'area_first_floor',
         name: 'Laundry',
@@ -667,7 +641,6 @@ void main() {
       final assetId = await repo.saveAsset(
         name: 'Washer',
         assetType: AssetType.device,
-        categoryId: _categoryId(categories, HealthGroup.appliances),
         roomId: roomId,
       );
       final originalDue = DateTime(2026, 1, 1, 9);
@@ -715,7 +688,6 @@ void main() {
         db,
         now: () => DateTime(2026, 1, 1, 8),
       );
-      final categories = await repo.listCategories();
       final roomId = await repo.saveRoom(
         areaId: 'area_first_floor',
         name: 'Bathroom',
@@ -723,7 +695,6 @@ void main() {
       final assetId = await repo.saveAsset(
         name: 'Exhaust fan',
         assetType: AssetType.device,
-        categoryId: _categoryId(categories, HealthGroup.appliances),
         roomId: roomId,
       );
       final planId = await maintenance.savePlan(
@@ -761,7 +732,6 @@ void main() {
 
     test('permanently deletes plans with records and notifications', () async {
       final maintenance = DriftMaintenanceRepository(db);
-      final categories = await repo.listCategories();
       final roomId = await repo.saveRoom(
         areaId: 'area_first_floor',
         name: 'Laundry',
@@ -769,7 +739,6 @@ void main() {
       final assetId = await repo.saveAsset(
         name: 'Washer',
         assetType: AssetType.device,
-        categoryId: _categoryId(categories, HealthGroup.appliances),
         roomId: roomId,
       );
       final planId = await maintenance.savePlan(
@@ -804,7 +773,6 @@ void main() {
 
     test('completes a plan once and preserves completion time', () async {
       final maintenance = DriftMaintenanceRepository(db);
-      final categories = await repo.listCategories();
       final roomId = await repo.saveRoom(
         areaId: 'area_first_floor',
         name: 'Aquarium',
@@ -812,7 +780,6 @@ void main() {
       final assetId = await repo.saveAsset(
         name: 'Goldfish tank',
         assetType: AssetType.pet,
-        categoryId: _categoryId(categories, HealthGroup.pets),
         roomId: roomId,
       );
       final originalDue = DateTime(2026, 6, 15, 8, 30);
@@ -855,7 +822,6 @@ void main() {
     test('streak refresh counts completions due today with a time', () async {
       final maintenance = DriftMaintenanceRepository(db);
       final streaks = DatabaseStreakService(db);
-      final categories = await repo.listCategories();
       final roomId = await repo.saveRoom(
         areaId: 'area_first_floor',
         name: 'Plants',
@@ -863,7 +829,6 @@ void main() {
       final assetId = await repo.saveAsset(
         name: 'Fern',
         assetType: AssetType.plant,
-        categoryId: _categoryId(categories, HealthGroup.plants),
         roomId: roomId,
       );
       final dueToday = DateTime(2026, 6, 15, 8, 30);
@@ -928,7 +893,6 @@ void main() {
 
     test('rejects maintenance plans for archived assets', () async {
       final maintenance = DriftMaintenanceRepository(db);
-      final categories = await repo.listCategories();
       final roomId = await repo.saveRoom(
         areaId: 'area_first_floor',
         name: 'Plant room',
@@ -936,7 +900,6 @@ void main() {
       final assetId = await repo.saveAsset(
         name: 'Dieffenbachia',
         assetType: AssetType.plant,
-        categoryId: _categoryId(categories, HealthGroup.plants),
         roomId: roomId,
       );
       await repo.archiveAsset(assetId);
@@ -960,7 +923,6 @@ void main() {
 
     test('permanently deletes things with dependent rows', () async {
       final maintenance = DriftMaintenanceRepository(db);
-      final categories = await repo.listCategories();
       final roomId = await repo.saveRoom(
         areaId: 'area_first_floor',
         name: 'Utility',
@@ -968,7 +930,6 @@ void main() {
       final assetId = await repo.saveAsset(
         name: 'Dryer',
         assetType: AssetType.device,
-        categoryId: _categoryId(categories, HealthGroup.appliances),
         roomId: roomId,
         tagNames: ['lint'],
         deviceDetails: const DeviceDetails(brand: 'LG'),
@@ -1009,16 +970,11 @@ void main() {
     test(
       'keeps current primary photo when requested primary is missing',
       () async {
-        final categories = await repo.listCategories();
         final roomId = await repo.saveRoom(
           areaId: 'area_first_floor',
           name: 'Office',
         );
-        final assetId = await repo.saveAsset(
-          name: 'Desk lamp',
-          categoryId: _categoryId(categories, HealthGroup.other),
-          roomId: roomId,
-        );
+        final assetId = await repo.saveAsset(name: 'Desk lamp', roomId: roomId);
         await db
             .into(db.assetPhotos)
             .insert(
@@ -1334,7 +1290,6 @@ void main() {
 
     test('permanently deletes rooms and nested things', () async {
       final maintenance = DriftMaintenanceRepository(db);
-      final categories = await repo.listCategories();
       final roomId = await repo.saveRoom(
         areaId: 'area_first_floor',
         name: 'Basement',
@@ -1342,7 +1297,6 @@ void main() {
       final assetId = await repo.saveAsset(
         name: 'Pump',
         assetType: AssetType.device,
-        categoryId: _categoryId(categories, HealthGroup.appliances),
         roomId: roomId,
       );
       await maintenance.savePlan(
@@ -1365,7 +1319,6 @@ void main() {
     });
 
     test('permanently deletes areas and nested rooms', () async {
-      final categories = await repo.listCategories();
       final roomId = await repo.saveRoom(
         areaId: 'area_first_floor',
         name: 'Office',
@@ -1373,7 +1326,6 @@ void main() {
       await repo.saveAsset(
         name: 'Router',
         assetType: AssetType.device,
-        categoryId: _categoryId(categories, HealthGroup.appliances),
         roomId: roomId,
       );
 
@@ -1388,7 +1340,6 @@ void main() {
     });
 
     test('indexes areas, rooms, thing details, and tags', () async {
-      final categories = await repo.listCategories();
       final roomId = await repo.saveRoom(
         areaId: 'area_first_floor',
         name: 'Kitchen',
@@ -1397,7 +1348,6 @@ void main() {
       await repo.saveAsset(
         name: 'Care kit',
         assetType: AssetType.pet,
-        categoryId: _categoryId(categories, HealthGroup.pets),
         roomId: roomId,
         placement: 'Mudroom shelf',
         tagNames: ['wellness'],
@@ -1406,7 +1356,6 @@ void main() {
       await repo.saveAsset(
         name: 'مكيف الصالة',
         assetType: AssetType.device,
-        categoryId: _categoryId(categories, HealthGroup.appliances),
         roomId: roomId,
         placement: 'الجدار الرئيسي',
         tagNames: ['تبريد'],
@@ -1532,10 +1481,8 @@ void main() {
           areaId: 'area_first_floor',
           name: 'Metadata room',
         );
-        final categoryId = (await repo.listCategories()).first.id;
         final assetId = await repo.saveAsset(
           name: 'Metadata asset',
-          categoryId: categoryId,
           roomId: roomId,
         );
         final planId = await maintenance.savePlan(
@@ -1592,10 +1539,8 @@ void main() {
           areaId: 'area_first_floor',
           name: 'Postpone room',
         );
-        final categoryId = (await repo.listCategories()).first.id;
         final assetId = await repo.saveAsset(
           name: 'Postpone asset',
-          categoryId: categoryId,
           roomId: roomId,
         );
         final due = DateTime(2026, 8, 17, 9);
@@ -1632,10 +1577,8 @@ void main() {
         areaId: 'area_first_floor',
         name: 'Streak room',
       );
-      final categoryId = (await repo.listCategories()).first.id;
       final assetId = await repo.saveAsset(
         name: 'Streak asset',
-        categoryId: categoryId,
         roomId: roomId,
       );
       final due = DateTime(2026, 8, 16, 9);
@@ -1677,10 +1620,8 @@ void main() {
           areaId: 'area_first_floor',
           name: 'Dedupe room',
         );
-        final categoryId = (await repo.listCategories()).first.id;
         final assetId = await repo.saveAsset(
           name: 'Dedupe asset',
-          categoryId: categoryId,
           roomId: roomId,
         );
         final planId = await DriftMaintenanceRepository(db).savePlan(
@@ -1744,10 +1685,8 @@ void main() {
         areaId: 'area_first_floor',
         name: 'Reminder cadence room',
       );
-      final categoryId = (await repo.listCategories()).first.id;
       final assetId = await repo.saveAsset(
         name: 'Reminder cadence asset',
-        categoryId: categoryId,
         roomId: roomId,
       );
       await expectLater(
@@ -1802,10 +1741,6 @@ void main() {
       },
     );
   });
-}
-
-String _categoryId(List<Category> categories, HealthGroup group) {
-  return categories.singleWhere((category) => category.healthGroup == group).id;
 }
 
 Future<void> _seedTestAreas(AssetRepository repo) async {

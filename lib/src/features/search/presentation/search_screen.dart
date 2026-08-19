@@ -159,20 +159,12 @@ IconData _searchResultIcon(String type) {
     'asset' => Symbols.inventory_2_rounded,
     'plan' => Symbols.task_alt_rounded,
     'tag' => Symbols.sell_rounded,
-    'category' => Symbols.category_rounded,
     _ => Symbols.search_rounded,
   };
 }
 
-String _searchResultTitle(BuildContext context, SearchResult result) {
-  if (result.entityType == 'category') {
-    final category = appCategoryById[result.entityId];
-    if (category != null) {
-      return _categoryLabel(context, category);
-    }
-  }
-  return result.title;
-}
+String _searchResultTitle(BuildContext context, SearchResult result) =>
+    result.title;
 
 String _searchResultSubtitle(BuildContext context, SearchResult result) {
   final type = switch (result.entityType) {
@@ -181,10 +173,9 @@ String _searchResultSubtitle(BuildContext context, SearchResult result) {
     'asset' => context.l10n.item,
     'plan' => context.l10n.task,
     'tag' => context.l10n.tag,
-    'category' => context.l10n.category,
     _ => context.l10n.result,
   };
-  final snippet = result.entityType == 'category' ? '' : result.snippet.trim();
+  final snippet = result.snippet.trim();
   return snippet.isEmpty
       ? type
       : context.l10n.searchResultWithSnippet(type, snippet);

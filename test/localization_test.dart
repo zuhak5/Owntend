@@ -95,7 +95,7 @@ void main() {
       final taskDetail = File(
         'lib/src/features/maintenance/presentation/task_detail_screen.dart',
       ).readAsStringSync();
-      expect(taskDetail, contains('_categoryLabel(context, task.category)'));
+      expect(taskDetail, isNot(contains('_categoryLabel')));
       expect(taskDetail, contains('reminderDaysBeforeDue'));
       expect(taskDetail, isNot(contains("'day' : 'days'")));
       expect(taskDetail, isNot(contains(' before due')));
@@ -103,7 +103,7 @@ void main() {
       final thingDetail = File(
         'lib/src/features/assets/presentation/thing_detail_screen.dart',
       ).readAsStringSync();
-      expect(thingDetail, contains('_categoryLabel(context, category)'));
+      expect(thingDetail, isNot(contains('_categoryLabel')));
       expect(thingDetail, contains('durationMinutes'));
       expect(thingDetail, contains('_petSpeciesLabel(context, pet!.species!)'));
       expect(thingDetail, isNot(contains("'minute' : 'minutes'")));
@@ -111,11 +111,11 @@ void main() {
       final assetDialogs = File(
         'lib/src/features/assets/presentation/asset_dialogs.dart',
       ).readAsStringSync();
-      expect(assetDialogs, contains('_categoryLabel(context, item)'));
+      expect(assetDialogs, contains('_assetTypeLabel(context, type)'));
 
       final domainLocalization = File('lib/src/ui/domain_localization.dart')
           .readAsStringSync();
-      expect(domainLocalization, contains("'category_cleaning'"));
+      expect(domainLocalization, contains('localizedAssetTypeLabel'));
       expect(domainLocalization, contains('recurrenceDays(rule.interval)'));
       expect(domainLocalization, contains('recurrenceWeeks(rule.interval)'));
       expect(domainLocalization, contains('recurrenceMonths(rule.interval)'));
@@ -125,15 +125,15 @@ void main() {
       expect(components, isNot(contains(" in \${task.room.name}")));
       expect(
         components,
-        contains('localizedCategoryLabel(context, task.category)'),
+        contains('localizedAssetTypeLabel(context, task.asset.assetType)'),
       );
       expect(components, contains('localizedRecurrenceLabel(context, rule)'));
-      expect(components, isNot(contains('_localizedCategoryName')));
+      expect(components, isNot(contains('localizedCategoryLabel')));
       expect(components, isNot(contains('recurrenceEveryMany(rule.interval')));
 
       final search = File('lib/src/core/data/search_repository.dart')
           .readAsStringSync();
-      expect(search, contains('category_cleaning'));
+      expect(search, isNot(contains("'category'")));
       expect(search, contains('تنظيف'));
       expect(search, contains('حيوانات أليفة'));
     },

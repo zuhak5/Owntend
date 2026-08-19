@@ -9,7 +9,6 @@ class RoomDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final rooms = ref.watch(roomsProvider).value ?? [];
     final areas = ref.watch(areasProvider).value ?? [];
-    final categories = ref.watch(categoriesProvider).value ?? [];
     final assets = ref.watch(roomAssetsProvider(roomId));
     final tasks = ref.watch(tasksProvider).value ?? [];
     final room = rooms.where((item) => item.id == roomId).firstOrNull;
@@ -29,9 +28,6 @@ class RoomDetailScreen extends ConsumerWidget {
         .where((area) => area.id == room.areaId)
         .firstOrNull
         ?.name;
-    final categoryById = {
-      for (final category in categories) category.id: category,
-    };
     return Scaffold(
       appBar: AppBar(
         title: DynamicText(room.name, contentType: 'room.name'),
@@ -143,7 +139,6 @@ class RoomDetailScreen extends ConsumerWidget {
                           ),
                           child: ThingCard(
                             asset: asset,
-                            category: categoryById[asset.categoryId],
                             dueStatus: itemTaskStatusFor(asset, tasks, now),
                             margin: EdgeInsets.zero,
                             onTap: () =>

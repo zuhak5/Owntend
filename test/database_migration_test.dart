@@ -6,13 +6,13 @@ import 'package:owntend/src/core/database/app_database.dart';
 import 'package:owntend/src/core/sync/local_sync_store.dart';
 
 void main() {
-  group('AppDatabase schema v2 and lifecycle', () {
+  group('AppDatabase schema v3 and lifecycle', () {
     late File dbFile;
     late AppDatabase db;
 
     setUp(() async {
       dbFile = File(
-        '${Directory.systemTemp.path}/owntend_schema_v2_'
+        '${Directory.systemTemp.path}/owntend_schema_v3_'
         '${DateTime.now().microsecondsSinceEpoch}.sqlite',
       );
       db = AppDatabase(executor: NativeDatabase(dbFile));
@@ -27,14 +27,14 @@ void main() {
       }
     });
 
-    test('initializes with schema version 2', () async {
-      expect(AppDatabase.currentSchemaVersion, 2);
-      expect(db.schemaVersion, 2);
+    test('initializes with schema version 3', () async {
+      expect(AppDatabase.currentSchemaVersion, 3);
+      expect(db.schemaVersion, 3);
 
       final userVersionRow = await db
           .customSelect('PRAGMA user_version')
           .getSingle();
-      expect(userVersionRow.read<int>('user_version'), 2);
+      expect(userVersionRow.read<int>('user_version'), 3);
     });
 
     test('creates canonical tables including search state', () async {
@@ -48,7 +48,6 @@ void main() {
       const expectedTables = {
         'areas',
         'rooms',
-        'categories',
         'assets',
         'device_details',
         'pet_details',
@@ -114,10 +113,10 @@ void main() {
       final triggerNames = triggerRows
           .map((row) => row.read<String>('name'))
           .toSet();
-      expect(triggerNames, hasLength(36));
+      expect(triggerNames, hasLength(33));
       expect(triggerNames, contains('search_areas_insert'));
       expect(triggerNames, contains('search_rooms_update'));
-      expect(triggerNames, contains('search_categories_delete'));
+      expect(triggerNames, isNot(contains('search_categories_delete')));
       expect(triggerNames, contains('search_device_details_update'));
       expect(triggerNames, contains('search_pet_details_update'));
       expect(triggerNames, contains('search_plant_details_update'));
@@ -141,7 +140,7 @@ void main() {
 
       expect(indexNames, contains('idx_areas_sort'));
       expect(indexNames, contains('idx_rooms_area'));
-      expect(indexNames, contains('idx_assets_category'));
+      expect(indexNames, isNot(contains('idx_assets_category')));
       expect(indexNames, contains('idx_tags_name_nocase'));
       expect(indexNames, contains('idx_plans_enabled_due'));
       expect(indexNames, contains('idx_inbox_unread'));
@@ -176,18 +175,20 @@ void main() {
       expect(triggerNames, contains('sync_settings_device_setting_insert'));
     });
 
-    test('seeds default categories, settings, and streak', () async {
-      final seededCategories = await db.select(db.categories).get();
+    test('seeds settings and streak without Category tables', () async {
+      final categoryTables = await db
+          .customSelect(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'categories'",
+          )
+          .get();
+      expect(categoryTables, isEmpty);
+
+      final assetColumns = await db
+          .customSelect('PRAGMA table_info(assets)')
+          .get();
       expect(
-        seededCategories.map((c) => c.id),
-        containsAll([
-          'category_safety',
-          'category_pets',
-          'category_appliances',
-          'category_plants',
-          'category_cleaning',
-          'category_general',
-        ]),
+        assetColumns.map((row) => row.read<String>('name')),
+        isNot(contains('category_id')),
       );
 
       final seededSettings = await db.select(db.settings).get();
@@ -225,17 +226,39 @@ void main() {
     });
   });
 
-  test('migrates schema v1 to search generation v2', () async {
+  test('migrates schema v2 assets and removes Category state', () async {
     final dbFile = File(
-      '${Directory.systemTemp.path}/owntend_v1_to_v2_'
+      '${Directory.systemTemp.path}/owntend_v2_to_v3_'
       '${DateTime.now().microsecondsSinceEpoch}.sqlite',
     );
     AppDatabase? db;
     try {
       db = AppDatabase(executor: NativeDatabase(dbFile));
       await db.customSelect('SELECT 1').get();
-      await db.customStatement('DROP TABLE search_index_state');
-      await db.customStatement('PRAGMA user_version = 1');
+      await db.customStatement(
+        'CREATE TABLE categories ('
+        'id TEXT PRIMARY KEY, name TEXT NOT NULL, health_group TEXT NOT NULL, '
+        'icon_name TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)',
+      );
+      await db.customStatement(
+        "INSERT INTO categories(id, name, health_group, icon_name, created_at, updated_at) "
+        "VALUES ('category_appliances', 'Appliances', 'appliances', 'kitchen', 0, 0)",
+      );
+      await db.customStatement(
+        'ALTER TABLE assets ADD COLUMN category_id TEXT',
+      );
+      await db.customStatement(
+        "INSERT INTO areas(id, name, kind) VALUES ('legacy-area', 'Home', 'indoor')",
+      );
+      await db.customStatement(
+        "INSERT INTO rooms(id, area_id, name, room_type) "
+        "VALUES ('legacy-room', 'legacy-area', 'Kitchen', 'kitchen')",
+      );
+      await db.customStatement(
+        "INSERT INTO assets(id, name, asset_type, room_id, category_id) "
+        "VALUES ('legacy-asset', 'Purifier', 'device', 'legacy-room', 'category_appliances')",
+      );
+      await db.customStatement('PRAGMA user_version = 2');
       await db.close();
       db = null;
 
@@ -245,23 +268,33 @@ void main() {
       final userVersionRow = await db
           .customSelect('PRAGMA user_version')
           .getSingle();
-      expect(userVersionRow.read<int>('user_version'), 2);
-
-      final state = await db
+      expect(userVersionRow.read<int>('user_version'), 3);
+      final categoryTables = await db
           .customSelect(
-            'SELECT source_generation, indexed_generation '
-            'FROM search_index_state WHERE id = 1',
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'categories'",
+          )
+          .get();
+      expect(categoryTables, isEmpty);
+      final assetColumns = await db
+          .customSelect('PRAGMA table_info(assets)')
+          .get();
+      expect(
+        assetColumns.map((row) => row.read<String>('name')),
+        isNot(contains('category_id')),
+      );
+      final migrated = await db
+          .customSelect(
+            "SELECT id, name, asset_type FROM assets WHERE id = 'legacy-asset'",
           )
           .getSingle();
-      expect(state.read<int>('source_generation'), greaterThan(0));
-      expect(state.read<int>('indexed_generation'), 0);
-
+      expect(migrated.read<String>('name'), 'Purifier');
+      expect(migrated.read<String>('asset_type'), 'device');
       final triggerRows = await db
           .customSelect(
             "SELECT name FROM sqlite_master WHERE type = 'trigger' AND name LIKE 'search_%'",
           )
           .get();
-      expect(triggerRows, hasLength(36));
+      expect(triggerRows, hasLength(33));
     } finally {
       await db?.close();
       if (await dbFile.exists()) {

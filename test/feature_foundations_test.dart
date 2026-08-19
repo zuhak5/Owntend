@@ -407,14 +407,6 @@ TaskItem _task(
 }) {
   final resolvedAsset = asset ?? _asset(id: 'asset_$id', name: 'Asset');
   final room = _room();
-  final category = Category(
-    id: 'category_$id',
-    name: group.name,
-    healthGroup: group,
-    iconName: 'home',
-    createdAt: DateTime(2026),
-    updatedAt: DateTime(2026),
-  );
   return TaskItem(
     plan: MaintenancePlan(
       id: id,
@@ -433,7 +425,6 @@ TaskItem _task(
       archivedAt: archivedAt,
     ),
     asset: resolvedAsset,
-    category: category,
     room: room,
     status:
         status ??
@@ -451,7 +442,6 @@ Asset _asset({
     id: id,
     name: name,
     assetType: type,
-    categoryId: 'category_general',
     roomId: 'room',
     createdAt: DateTime(2026),
     updatedAt: DateTime(2026),

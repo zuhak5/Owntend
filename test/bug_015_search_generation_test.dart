@@ -28,7 +28,6 @@ void main() {
     });
 
     test('source families invalidate without manual rebuild', () async {
-      final categories = await assets.listCategories();
       final roomId = await assets.saveRoom(
         areaId: 'area_search',
         name: 'Utility Room',
@@ -37,7 +36,6 @@ void main() {
       final deviceId = await assets.saveAsset(
         name: 'Old Boiler',
         assetType: AssetType.device,
-        categoryId: _categoryId(categories, HealthGroup.appliances),
         roomId: roomId,
         tagNames: const ['service-tag'],
         deviceDetails: const DeviceDetails(brand: 'OldBrand', model: 'Alpha'),
@@ -45,7 +43,6 @@ void main() {
       final petId = await assets.saveAsset(
         name: 'Milo',
         assetType: AssetType.pet,
-        categoryId: _categoryId(categories, HealthGroup.pets),
         roomId: roomId,
         petDetails: const PetDetails(
           species: 'Cat',
@@ -56,7 +53,6 @@ void main() {
       final plantId = await assets.saveAsset(
         name: 'Fern',
         assetType: AssetType.plant,
-        categoryId: _categoryId(categories, HealthGroup.plants),
         roomId: roomId,
         plantDetails: const PlantDetails(
           species: 'Boston fern',
@@ -67,7 +63,6 @@ void main() {
       final safetyId = await assets.saveAsset(
         name: 'Detector',
         assetType: AssetType.safety,
-        categoryId: _categoryId(categories, HealthGroup.safety),
         roomId: roomId,
         safetyDetails: const SafetyDetails(
           safetyType: 'Smoke detector',
@@ -113,15 +108,6 @@ void main() {
         notes: 'Copper Closet',
       );
       expect(await _hasResult(search, 'Copper', 'room', roomId), isTrue);
-
-      final categoryId = _categoryId(categories, HealthGroup.appliances);
-      await (db.update(db.categories)
-            ..where((row) => row.id.equals(categoryId)))
-          .write(const CategoriesCompanion(name: Value('Machine Systems')));
-      expect(
-        await _hasResult(search, 'Machine', 'category', categoryId),
-        isTrue,
-      );
 
       await (db.update(db.assets)..where((row) => row.id.equals(deviceId)))
           .write(const AssetsCompanion(name: Value('Heat Pump')));
@@ -205,14 +191,12 @@ void main() {
     });
 
     test('archive, restore, and delete stay mutation-consistent', () async {
-      final categories = await assets.listCategories();
       final roomId = await assets.saveRoom(
         areaId: 'area_search',
         name: 'Archive Room',
       );
       final assetId = await assets.saveAsset(
         name: 'ArchiveTarget',
-        categoryId: _categoryId(categories, HealthGroup.other),
         roomId: roomId,
       );
       await search.rebuildIndex();
@@ -372,10 +356,6 @@ Future<void> _seedSearchArea(DriftAssetRepository assets) async {
     name: 'Search Area',
     kind: AreaKind.indoor,
   );
-}
-
-String _categoryId(List<Category> categories, HealthGroup group) {
-  return categories.singleWhere((category) => category.healthGroup == group).id;
 }
 
 Future<bool> _hasResult(

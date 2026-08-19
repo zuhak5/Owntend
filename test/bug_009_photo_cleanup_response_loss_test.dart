@@ -142,21 +142,11 @@ Future<void> _seedPhoto(AppDatabase db, LocalSyncStore store) async {
           ),
         );
     await db
-        .into(db.categories)
-        .insert(
-          CategoriesCompanion.insert(
-            id: 'category-bug-009',
-            name: 'BUG-009 category',
-            healthGroup: 'other',
-          ),
-        );
-    await db
         .into(db.assets)
         .insert(
           AssetsCompanion.insert(
             id: _assetId,
             name: 'BUG-009 asset',
-            categoryId: 'category-bug-009',
             roomId: 'room-bug-009',
           ),
         );

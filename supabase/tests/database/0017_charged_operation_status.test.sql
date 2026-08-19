@@ -88,7 +88,6 @@ select extensions.is(
       'asset', jsonb_build_object(
         'id', 'asset-a1',
         'room_id', 'room-main',
-        'category_id', 'category_general',
         'name', 'Test Asset A',
         'asset_type', 'general'
       )
@@ -121,7 +120,6 @@ select extensions.is(
       'asset', jsonb_build_object(
         'id', 'asset-a1',
         'room_id', 'room-main',
-        'category_id', 'category_general',
         'name', 'Test Asset A',
         'asset_type', 'general'
       )
@@ -145,7 +143,6 @@ select extensions.throws_ok(
       'asset', jsonb_build_object(
         'id', 'asset-a1-altered',
         'room_id', 'room-main',
-        'category_id', 'category_general',
         'name', 'Altered Asset Name',
         'asset_type', 'general'
       )

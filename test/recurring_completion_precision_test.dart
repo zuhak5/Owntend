@@ -34,12 +34,9 @@ void main() {
         areaId: 'area_kitchen',
         name: 'Kitchen',
       );
-      final categories = await assetRepo.listCategories();
-      final categoryId = categories.first.id;
       final assetId = await assetRepo.saveAsset(
         name: 'Water Filter',
         assetType: AssetType.device,
-        categoryId: categoryId,
         roomId: roomId,
       );
 
@@ -167,11 +164,9 @@ void main() {
         areaId: 'area_early',
         name: 'Early',
       );
-      final categoryId = (await assetRepo.listCategories()).first.id;
       final assetId = await assetRepo.saveAsset(
         name: 'Monthly filter',
         assetType: AssetType.device,
-        categoryId: categoryId,
         roomId: roomId,
       );
       final due = DateTime(2026, 8, 18, 9);
@@ -222,10 +217,8 @@ void main() {
       areaId: 'area_repeat',
       name: 'Repeat',
     );
-    final categoryId = (await assetRepo.listCategories()).first.id;
     final assetId = await assetRepo.saveAsset(
       name: 'Rapid task',
-      categoryId: categoryId,
       roomId: roomId,
     );
     final due = DateTime(2026, 8, 17, 9);
@@ -300,7 +293,6 @@ void main() {
       );
       final assetId = await assetRepo.saveAsset(
         name: 'Undo guard asset',
-        categoryId: (await assetRepo.listCategories()).first.id,
         roomId: roomId,
       );
       final due = DateTime(2026, 8, 18, 9);
@@ -355,10 +347,8 @@ void main() {
         areaId: 'area_matrix',
         name: 'Matrix',
       );
-      final categoryId = (await assetRepo.listCategories()).first.id;
       final assetId = await assetRepo.saveAsset(
         name: 'Matrix asset',
-        categoryId: categoryId,
         roomId: roomId,
       );
       final due = DateTime(2026, 8, 18, 9);
@@ -430,10 +420,8 @@ void main() {
       areaId: 'area_timing',
       name: 'Timing',
     );
-    final categoryId = (await assetRepo.listCategories()).first.id;
     final assetId = await assetRepo.saveAsset(
       name: 'Timing asset',
-      categoryId: categoryId,
       roomId: roomId,
     );
 
@@ -495,10 +483,8 @@ void main() {
         areaId: 'area_calendar_edges',
         name: 'Calendar edges',
       );
-      final categoryId = (await assetRepo.listCategories()).first.id;
       final assetId = await assetRepo.saveAsset(
         name: 'Calendar asset',
-        categoryId: categoryId,
         roomId: roomId,
       );
 

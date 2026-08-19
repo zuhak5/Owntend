@@ -30,16 +30,7 @@ void main() {
         asset: Asset(
           id: 'asset-vacuum',
           name: 'HEPA Purifier',
-          categoryId: 'category_cleaning',
           roomId: 'room-kitchen',
-          createdAt: now,
-          updatedAt: now,
-        ),
-        category: Category(
-          id: 'category_cleaning',
-          name: 'Legacy category display name',
-          healthGroup: HealthGroup.cleaning,
-          iconName: 'cleaning_services',
           createdAt: now,
           updatedAt: now,
         ),
