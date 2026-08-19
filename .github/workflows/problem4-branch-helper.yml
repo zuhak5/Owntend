@@ -1,0 +1,67 @@
+name: Problem 4 branch helper
+
+on:
+  push:
+    branches:
+      - agent/problem-4-remove-category
+    paths:
+      - tool/problem4_apply.py
+      - .github/workflows/problem4-branch-helper.yml
+
+permissions:
+  contents: write
+
+jobs:
+  transform-generate-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: agent/problem-4-remove-category
+          fetch-depth: 0
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: "3.47.0"
+          channel: stable
+          cache: true
+
+      - name: Resolve dependencies
+        run: flutter pub get --enforce-lockfile
+
+      - name: Apply scoped Problem 4 transforms
+        run: python tool/problem4_apply.py
+
+      - name: Generate owned sources
+        run: |
+          flutter gen-l10n
+          dart run build_runner build --delete-conflicting-outputs
+          dart format lib test integration_test
+
+      - name: Commit transformed and generated files to feature branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No generated/transform changes to commit."
+          else
+            git commit -m "Problem #4 helper: apply Category removal core changes"
+            git push origin HEAD:agent/problem-4-remove-category
+          fi
+
+      - name: Analyze current feature work
+        run: flutter analyze --no-pub
+
+      - name: Run focused core tests
+        run: >-
+          flutter test --no-pub --concurrency=1 --timeout 3m
+          test/database_migration_test.dart
+          test/bug_015_search_generation_test.dart
+          test/sync_store_test.dart
+          test/backup_service_test.dart
