@@ -29,56 +29,27 @@ jobs:
           def replace_once(path, old, new, label):
               p = Path(path)
               text = p.read_text()
-              if text.count(old) != 1:
-                  raise SystemExit(f'{label}: expected one anchor, found {text.count(old)}')
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected one anchor, found {count}')
               p.write_text(text.replace(old, new, 1))
 
           replace_once(
               'lib/src/features/monetization/monetization.dart',
-              '''      if (mutationGeneration != _mutationGeneration) return;
-+      _acceptCanonical(wallet, clearMutationGate: true);'''.replace('+', ''),
-              '''      if (mutationGeneration != _mutationGeneration) return;
-+      final pendingBalance = _pendingAuthoritativeBalance;
-+      final lastUpdatedAt = _lastCanonicalUpdatedAt;
-+      if (pendingBalance != null &&
-+          wallet != null &&
-+          wallet.balance != pendingBalance &&
-+          (lastUpdatedAt == null ||
-+              !wallet.updatedAt.isAfter(lastUpdatedAt))) {
-+        return;
-+      }
-+      _acceptCanonical(wallet, clearMutationGate: true);'''.replace('+', ''),
+              '      if (mutationGeneration != _mutationGeneration) return;\n      _acceptCanonical(wallet, clearMutationGate: true);',
+              '      if (mutationGeneration != _mutationGeneration) return;\n      final pendingBalance = _pendingAuthoritativeBalance;\n      final lastUpdatedAt = _lastCanonicalUpdatedAt;\n      if (pendingBalance != null &&\n          wallet != null &&\n          wallet.balance != pendingBalance &&\n          (lastUpdatedAt == null ||\n              !wallet.updatedAt.isAfter(lastUpdatedAt))) {\n        return;\n      }\n      _acceptCanonical(wallet, clearMutationGate: true);',
               'refresh stale-canonical gate',
           )
           replace_once(
               'lib/src/features/monetization/monetization.dart',
-              '''    if (lastUpdatedAt != null &&
-+        wallet.updatedAt.isAtSameMomentAs(lastUpdatedAt) &&
-+        _pendingAuthoritativeBalance == null &&
-+        current != null &&
-+        current.balance != wallet.balance) {'''.replace('+', ''),
-              '''    if (lastUpdatedAt != null &&
-+        wallet.updatedAt.isAtSameMomentAs(lastUpdatedAt) &&
-+        current != null &&
-+        current.balance != wallet.balance) {'''.replace('+', ''),
+              '    if (lastUpdatedAt != null &&\n        wallet.updatedAt.isAtSameMomentAs(lastUpdatedAt) &&\n        _pendingAuthoritativeBalance == null &&\n        current != null &&\n        current.balance != wallet.balance) {',
+              '    if (lastUpdatedAt != null &&\n        wallet.updatedAt.isAtSameMomentAs(lastUpdatedAt) &&\n        current != null &&\n        current.balance != wallet.balance) {',
               'same-version conflict gate',
           )
           replace_once(
               'test/problem_007_wallet_sync_test.dart',
-              '''      repository.completeDelayedCanonical(_wallet(4, 2));
-+      await _settle();
-+      expect(container.read(pointWalletProvider).value?.balance, 4);
-+
-+      repository.emit(_wallet(6, 3));'''.replace('+', ''),
-              '''      repository.completeDelayedCanonical(_wallet(5, 1));
-+      await _settle();
-+      expect(container.read(pointWalletProvider).value?.balance, 4);
-+
-+      repository.emit(_wallet(4, 2));
-+      await _settle();
-+      expect(container.read(pointWalletProvider).value?.balance, 4);
-+
-+      repository.emit(_wallet(6, 3));'''.replace('+', ''),
+              '      repository.completeDelayedCanonical(_wallet(4, 2));\n      await _settle();\n      expect(container.read(pointWalletProvider).value?.balance, 4);\n\n      repository.emit(_wallet(6, 3));',
+              '      repository.completeDelayedCanonical(_wallet(5, 1));\n      await _settle();\n      expect(container.read(pointWalletProvider).value?.balance, 4);\n\n      repository.emit(_wallet(4, 2));\n      await _settle();\n      expect(container.read(pointWalletProvider).value?.balance, 4);\n\n      repository.emit(_wallet(6, 3));',
               'stale canonical test',
           )
           replace_once(
@@ -88,7 +59,7 @@ jobs:
               'canonical recovery migration link',
           )
           PY
-          rm -f .github/workflows/problem-007-ordering-doc-helper.yml
+          rm -f .github/workflows/problem-007-ordering-doc-helper.yml tool/.problem007_ordering_trigger
 
       - name: Set up Flutter
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
