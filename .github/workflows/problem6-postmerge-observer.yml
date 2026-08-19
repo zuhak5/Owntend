@@ -1,0 +1,59 @@
+name: Problem 6 temporary post-merge observer
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize]
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  observe-required-main-push-runs:
+    if: github.event.pull_request.head.ref == 'fix/problem-6-completion-reward-sheet'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Observe exact merged-main automatic runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          MERGE_SHA: d51c8f8b8f5bc6e52823ef8f0abd1ccc5f0baa34
+        run: |
+          set -euo pipefail
+          api="https://api.github.com/repos/${REPOSITORY}/actions/runs?event=push&branch=main&head_sha=${MERGE_SHA}&per_page=100"
+          for attempt in $(seq 1 60); do
+            response="$(curl --fail --silent --show-error \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "${api}")"
+
+            flutter="$(jq -c --arg sha "${MERGE_SHA}" '[.workflow_runs[] | select(.head_sha == $sha and .event == "push" and .head_branch == "main" and .name == "Validate Flutter")] | sort_by(.created_at) | last // empty' <<<"${response}")"
+            backend="$(jq -c --arg sha "${MERGE_SHA}" '[.workflow_runs[] | select(.head_sha == $sha and .event == "push" and .head_branch == "main" and .name == "Validate Google Backend and Release Contracts")] | sort_by(.created_at) | last // empty' <<<"${response}")"
+
+            if [[ -n "${flutter}" && -n "${backend}" ]]; then
+              echo "Validate Flutter: ${flutter}"
+              echo "Validate Google Backend and Release Contracts: ${backend}"
+
+              flutter_status="$(jq -r '.status' <<<"${flutter}")"
+              flutter_conclusion="$(jq -r '.conclusion // ""' <<<"${flutter}")"
+              backend_status="$(jq -r '.status' <<<"${backend}")"
+              backend_conclusion="$(jq -r '.conclusion // ""' <<<"${backend}")"
+
+              if [[ "${flutter_status}" == "completed" && "${backend_status}" == "completed" ]]; then
+                if [[ "${flutter_conclusion}" == "success" && "${backend_conclusion}" == "success" ]]; then
+                  echo "Both automatic push-to-main workflows are terminal green on ${MERGE_SHA}."
+                  exit 0
+                fi
+                echo "A required automatic push-to-main workflow completed non-successfully." >&2
+                exit 1
+              fi
+            fi
+
+            sleep 15
+          done
+
+          echo "Timed out observing both exact merged-main workflow runs." >&2
+          exit 1
