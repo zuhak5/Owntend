@@ -64,7 +64,6 @@ int taskFingerprint(TaskItem task) => Object.hashAll([
   task.plan.nextDueDate,
   task.plan.reminderDaysBefore,
   task.plan.isEnabled,
-  task.plan.healthGroup,
   task.plan.archivedAt,
   _taskMetadataFingerprint(task.plan.metadata),
   assetFingerprint(task.asset),
@@ -115,12 +114,10 @@ int statisticsSummaryFingerprint(StatisticsSummary summary) => Object.hash(
   ),
 );
 
-int _enumDoubleMapFingerprint(Map<HealthGroup, double> values) =>
-    Object.hashAll(
-      (values.entries.toList()
-            ..sort((a, b) => a.key.index.compareTo(b.key.index)))
-          .map((entry) => Object.hash(entry.key, entry.value)),
-    );
+int _enumDoubleMapFingerprint(Map<AssetType, double> values) => Object.hashAll(
+  (values.entries.toList()..sort((a, b) => a.key.index.compareTo(b.key.index)))
+      .map((entry) => Object.hash(entry.key, entry.value)),
+);
 
 int _deviceDetailsFingerprint(DeviceDetails? details) => details == null
     ? 0

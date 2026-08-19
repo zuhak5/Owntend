@@ -1479,7 +1479,6 @@ void main() {
             recurrenceUnit: 'days',
             priority: 'medium',
             nextDueDate: today.add(const Duration(days: 1)),
-            healthGroup: 'other',
           ),
         );
     await db.delete(db.syncOutbox).go();
@@ -1658,7 +1657,6 @@ void main() {
               recurrenceUnit: 'months',
               priority: 'medium',
               nextDueDate: DateTime.utc(2026, 7),
-              healthGroup: 'other',
             ),
           );
     });
@@ -1912,7 +1910,6 @@ void main() {
                 recurrenceUnit: 'months',
                 priority: 'medium',
                 nextDueDate: DateTime.utc(2026, 7),
-                healthGroup: 'other',
               ),
             );
       });
@@ -2006,7 +2003,6 @@ void main() {
                 recurrenceUnit: 'months',
                 priority: 'medium',
                 nextDueDate: DateTime.utc(2026, 7),
-                healthGroup: 'other',
               ),
             );
       });
@@ -2118,7 +2114,6 @@ void main() {
                 recurrenceUnit: 'months',
                 priority: 'medium',
                 nextDueDate: DateTime.utc(2026, 7),
-                healthGroup: 'other',
               ),
             );
       });
@@ -2224,7 +2219,6 @@ void main() {
                 recurrenceUnit: 'months',
                 priority: 'medium',
                 nextDueDate: DateTime.utc(2026, 7, 1),
-                healthGroup: 'other',
               ),
             );
       });
@@ -3148,7 +3142,6 @@ Future<void> _seedMaintenancePlanForSync(
             recurrenceUnit: 'months',
             priority: 'medium',
             nextDueDate: DateTime.utc(2026, 8, 18, 9),
-            healthGroup: 'other',
           ),
         );
   });

@@ -2441,9 +2441,6 @@ ON CONFLICT(key) DO UPDATE SET
         isEnabled: Value(
           _boolValue(planValues, 'is_enabled', current.isEnabled),
         ),
-        healthGroup: Value(
-          _stringValue(planValues, 'health_group', current.healthGroup),
-        ),
         createdAt: Value(
           _dateValue(planValues, 'created_at', current.createdAt),
         ),

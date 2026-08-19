@@ -89,7 +89,6 @@ void main() {
         ),
         priority: PriorityLevel.medium,
         nextDueDate: DateTime(2026, 9, 1),
-        healthGroup: HealthGroup.appliances,
       );
 
       await search.rebuildIndex();

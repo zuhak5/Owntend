@@ -1,10 +1,55 @@
+import 'dart:io';
+
 import 'package:drift/drift.dart' hide isNull, isNotNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:owntend/src/core/database/app_database.dart';
 import 'package:owntend/src/core/sync/local_sync_store.dart';
+import 'package:owntend/src/core/sync/sync_dtos.dart';
 
 void main() {
+  test('task editor drafts and RPC payload omit Health Group', () {
+    final editor = File(
+      'lib/src/features/maintenance/presentation/maintenance_dialogs.dart',
+    ).readAsStringSync();
+    final controller = File(
+      'lib/src/features/maintenance/application/task_creation_controller.dart',
+    ).readAsStringSync();
+
+    expect(editor, isNot(contains('HealthGroup')));
+    expect(editor, isNot(contains('_healthGroup')));
+    expect(editor, isNot(contains('health_group')));
+    expect(editor, isNot(contains('l10n.healthGroup')));
+    expect(controller, isNot(contains('health_group')));
+  });
+
+  test('task presentation and statistics derive linked Item Type', () {
+    final taskDetail = File(
+      'lib/src/features/maintenance/presentation/task_detail_screen.dart',
+    ).readAsStringSync();
+    final sharedWidgets = File('lib/src/ui/shared_widgets.dart')
+        .readAsStringSync();
+    final components = File('lib/src/ui/components.dart').readAsStringSync();
+    final statistics = File('lib/src/core/data/statistics_repository.dart')
+        .readAsStringSync();
+    final assetRepository = File('lib/src/core/data/asset_repository.dart')
+        .readAsStringSync();
+
+    expect(taskDetail, contains('_iconForAssetType(task.asset.assetType)'));
+    expect(sharedWidgets, contains('_iconForAssetType(task.asset.assetType)'));
+    expect(components, contains('iconForAssetType(task.asset.assetType)'));
+    expect(statistics, contains('task.asset.assetType'));
+    expect(assetRepository, contains('domain.AssetType.plant.name'));
+    expect(assetRepository, contains('_isClearPlantWateringPlan'));
+  });
+
+  test('maintenance sync spec omits health_group', () {
+    final spec = syncEntitySpecs.firstWhere(
+      (value) => value.entity == 'maintenance_plan',
+    );
+    expect(spec.localColumns, isNot(contains('health_group')));
+  });
+
   group('Task Creation Composite Acknowledgment Tests (P1-A)', () {
     late AppDatabase db;
     late LocalSyncStore store;
@@ -112,7 +157,6 @@ void main() {
         'priority': 'medium',
         'next_due_date': now.toIso8601String(),
         'reminder_days_before': 1,
-        'health_group': 'general',
         'created_at': now.toIso8601String(),
         'updated_at': now.toIso8601String(),
         'revision': 1,

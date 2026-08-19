@@ -139,9 +139,9 @@ void main() {
         final testSummary = StatisticsSummary(
           completedByMonth: {'2026-06': 12, '2026-07': 18, '2026-08': 24},
           taskDistribution: {
-            HealthGroup.appliances: 8,
-            HealthGroup.safety: 4,
-            HealthGroup.plants: 6,
+            AssetType.device: 8,
+            AssetType.safety: 4,
+            AssetType.plant: 6,
           },
           completionRate: 0.88,
           overdueRate: 0.05,
@@ -177,7 +177,7 @@ void main() {
 
         final testSummary = StatisticsSummary(
           completedByMonth: {'2026-06': 10, '2026-07': 15},
-          taskDistribution: {HealthGroup.appliances: 5, HealthGroup.safety: 3},
+          taskDistribution: {AssetType.device: 5, AssetType.safety: 3},
           completionRate: 0.92,
           overdueRate: 0.02,
         );
@@ -211,7 +211,7 @@ void main() {
 
         final testSummary = StatisticsSummary(
           completedByMonth: {'2026-08': 5},
-          taskDistribution: {HealthGroup.other: 5},
+          taskDistribution: {AssetType.general: 5},
           completionRate: 1.0,
           overdueRate: 0.0,
         );

@@ -340,7 +340,6 @@ const syncEntitySpecs = <SyncEntitySpec>[
       'next_due_date',
       'reminder_days_before',
       'is_enabled',
-      'health_group',
       'created_at',
       'updated_at',
       'archived_at',

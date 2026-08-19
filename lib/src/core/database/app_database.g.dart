@@ -4704,17 +4704,6 @@ class $MaintenancePlansTable extends MaintenancePlans
     ),
     defaultValue: const Constant(true),
   );
-  static const VerificationMeta _healthGroupMeta = const VerificationMeta(
-    'healthGroup',
-  );
-  @override
-  late final GeneratedColumn<String> healthGroup = GeneratedColumn<String>(
-    'health_group',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -4762,7 +4751,6 @@ class $MaintenancePlansTable extends MaintenancePlans
     nextDueDate,
     reminderDaysBefore,
     isEnabled,
-    healthGroup,
     createdAt,
     updatedAt,
     archivedAt,
@@ -4865,17 +4853,6 @@ class $MaintenancePlansTable extends MaintenancePlans
         isEnabled.isAcceptableOrUnknown(data['is_enabled']!, _isEnabledMeta),
       );
     }
-    if (data.containsKey('health_group')) {
-      context.handle(
-        _healthGroupMeta,
-        healthGroup.isAcceptableOrUnknown(
-          data['health_group']!,
-          _healthGroupMeta,
-        ),
-      );
-    } else if (isInserting) {
-      context.missing(_healthGroupMeta);
-    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -4943,10 +4920,6 @@ class $MaintenancePlansTable extends MaintenancePlans
         DriftSqlType.bool,
         data['${effectivePrefix}is_enabled'],
       )!,
-      healthGroup: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}health_group'],
-      )!,
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -4980,7 +4953,6 @@ class MaintenancePlanRow extends DataClass
   final DateTime nextDueDate;
   final int reminderDaysBefore;
   final bool isEnabled;
-  final String healthGroup;
   final DateTime createdAt;
   final DateTime updatedAt;
   final DateTime? archivedAt;
@@ -4995,7 +4967,6 @@ class MaintenancePlanRow extends DataClass
     required this.nextDueDate,
     required this.reminderDaysBefore,
     required this.isEnabled,
-    required this.healthGroup,
     required this.createdAt,
     required this.updatedAt,
     this.archivedAt,
@@ -5015,7 +4986,6 @@ class MaintenancePlanRow extends DataClass
     map['next_due_date'] = Variable<DateTime>(nextDueDate);
     map['reminder_days_before'] = Variable<int>(reminderDaysBefore);
     map['is_enabled'] = Variable<bool>(isEnabled);
-    map['health_group'] = Variable<String>(healthGroup);
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
     if (!nullToAbsent || archivedAt != null) {
@@ -5038,7 +5008,6 @@ class MaintenancePlanRow extends DataClass
       nextDueDate: Value(nextDueDate),
       reminderDaysBefore: Value(reminderDaysBefore),
       isEnabled: Value(isEnabled),
-      healthGroup: Value(healthGroup),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
       archivedAt: archivedAt == null && nullToAbsent
@@ -5063,7 +5032,6 @@ class MaintenancePlanRow extends DataClass
       nextDueDate: serializer.fromJson<DateTime>(json['nextDueDate']),
       reminderDaysBefore: serializer.fromJson<int>(json['reminderDaysBefore']),
       isEnabled: serializer.fromJson<bool>(json['isEnabled']),
-      healthGroup: serializer.fromJson<String>(json['healthGroup']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
       archivedAt: serializer.fromJson<DateTime?>(json['archivedAt']),
@@ -5083,7 +5051,6 @@ class MaintenancePlanRow extends DataClass
       'nextDueDate': serializer.toJson<DateTime>(nextDueDate),
       'reminderDaysBefore': serializer.toJson<int>(reminderDaysBefore),
       'isEnabled': serializer.toJson<bool>(isEnabled),
-      'healthGroup': serializer.toJson<String>(healthGroup),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
       'archivedAt': serializer.toJson<DateTime?>(archivedAt),
@@ -5101,7 +5068,6 @@ class MaintenancePlanRow extends DataClass
     DateTime? nextDueDate,
     int? reminderDaysBefore,
     bool? isEnabled,
-    String? healthGroup,
     DateTime? createdAt,
     DateTime? updatedAt,
     Value<DateTime?> archivedAt = const Value.absent(),
@@ -5116,7 +5082,6 @@ class MaintenancePlanRow extends DataClass
     nextDueDate: nextDueDate ?? this.nextDueDate,
     reminderDaysBefore: reminderDaysBefore ?? this.reminderDaysBefore,
     isEnabled: isEnabled ?? this.isEnabled,
-    healthGroup: healthGroup ?? this.healthGroup,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
     archivedAt: archivedAt.present ? archivedAt.value : this.archivedAt,
@@ -5143,9 +5108,6 @@ class MaintenancePlanRow extends DataClass
           ? data.reminderDaysBefore.value
           : this.reminderDaysBefore,
       isEnabled: data.isEnabled.present ? data.isEnabled.value : this.isEnabled,
-      healthGroup: data.healthGroup.present
-          ? data.healthGroup.value
-          : this.healthGroup,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       archivedAt: data.archivedAt.present
@@ -5167,7 +5129,6 @@ class MaintenancePlanRow extends DataClass
           ..write('nextDueDate: $nextDueDate, ')
           ..write('reminderDaysBefore: $reminderDaysBefore, ')
           ..write('isEnabled: $isEnabled, ')
-          ..write('healthGroup: $healthGroup, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('archivedAt: $archivedAt')
@@ -5187,7 +5148,6 @@ class MaintenancePlanRow extends DataClass
     nextDueDate,
     reminderDaysBefore,
     isEnabled,
-    healthGroup,
     createdAt,
     updatedAt,
     archivedAt,
@@ -5206,7 +5166,6 @@ class MaintenancePlanRow extends DataClass
           other.nextDueDate == this.nextDueDate &&
           other.reminderDaysBefore == this.reminderDaysBefore &&
           other.isEnabled == this.isEnabled &&
-          other.healthGroup == this.healthGroup &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt &&
           other.archivedAt == this.archivedAt);
@@ -5223,7 +5182,6 @@ class MaintenancePlansCompanion extends UpdateCompanion<MaintenancePlanRow> {
   final Value<DateTime> nextDueDate;
   final Value<int> reminderDaysBefore;
   final Value<bool> isEnabled;
-  final Value<String> healthGroup;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   final Value<DateTime?> archivedAt;
@@ -5239,7 +5197,6 @@ class MaintenancePlansCompanion extends UpdateCompanion<MaintenancePlanRow> {
     this.nextDueDate = const Value.absent(),
     this.reminderDaysBefore = const Value.absent(),
     this.isEnabled = const Value.absent(),
-    this.healthGroup = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.archivedAt = const Value.absent(),
@@ -5256,7 +5213,6 @@ class MaintenancePlansCompanion extends UpdateCompanion<MaintenancePlanRow> {
     required DateTime nextDueDate,
     this.reminderDaysBefore = const Value.absent(),
     this.isEnabled = const Value.absent(),
-    required String healthGroup,
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.archivedAt = const Value.absent(),
@@ -5267,8 +5223,7 @@ class MaintenancePlansCompanion extends UpdateCompanion<MaintenancePlanRow> {
        recurrenceInterval = Value(recurrenceInterval),
        recurrenceUnit = Value(recurrenceUnit),
        priority = Value(priority),
-       nextDueDate = Value(nextDueDate),
-       healthGroup = Value(healthGroup);
+       nextDueDate = Value(nextDueDate);
   static Insertable<MaintenancePlanRow> custom({
     Expression<String>? id,
     Expression<String>? assetId,
@@ -5280,7 +5235,6 @@ class MaintenancePlansCompanion extends UpdateCompanion<MaintenancePlanRow> {
     Expression<DateTime>? nextDueDate,
     Expression<int>? reminderDaysBefore,
     Expression<bool>? isEnabled,
-    Expression<String>? healthGroup,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
     Expression<DateTime>? archivedAt,
@@ -5298,7 +5252,6 @@ class MaintenancePlansCompanion extends UpdateCompanion<MaintenancePlanRow> {
       if (reminderDaysBefore != null)
         'reminder_days_before': reminderDaysBefore,
       if (isEnabled != null) 'is_enabled': isEnabled,
-      if (healthGroup != null) 'health_group': healthGroup,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (archivedAt != null) 'archived_at': archivedAt,
@@ -5317,7 +5270,6 @@ class MaintenancePlansCompanion extends UpdateCompanion<MaintenancePlanRow> {
     Value<DateTime>? nextDueDate,
     Value<int>? reminderDaysBefore,
     Value<bool>? isEnabled,
-    Value<String>? healthGroup,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
     Value<DateTime?>? archivedAt,
@@ -5334,7 +5286,6 @@ class MaintenancePlansCompanion extends UpdateCompanion<MaintenancePlanRow> {
       nextDueDate: nextDueDate ?? this.nextDueDate,
       reminderDaysBefore: reminderDaysBefore ?? this.reminderDaysBefore,
       isEnabled: isEnabled ?? this.isEnabled,
-      healthGroup: healthGroup ?? this.healthGroup,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       archivedAt: archivedAt ?? this.archivedAt,
@@ -5375,9 +5326,6 @@ class MaintenancePlansCompanion extends UpdateCompanion<MaintenancePlanRow> {
     if (isEnabled.present) {
       map['is_enabled'] = Variable<bool>(isEnabled.value);
     }
-    if (healthGroup.present) {
-      map['health_group'] = Variable<String>(healthGroup.value);
-    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -5406,7 +5354,6 @@ class MaintenancePlansCompanion extends UpdateCompanion<MaintenancePlanRow> {
           ..write('nextDueDate: $nextDueDate, ')
           ..write('reminderDaysBefore: $reminderDaysBefore, ')
           ..write('isEnabled: $isEnabled, ')
-          ..write('healthGroup: $healthGroup, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('archivedAt: $archivedAt, ')
@@ -17662,7 +17609,6 @@ typedef $$MaintenancePlansTableCreateCompanionBuilder =
       required DateTime nextDueDate,
       Value<int> reminderDaysBefore,
       Value<bool> isEnabled,
-      required String healthGroup,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<DateTime?> archivedAt,
@@ -17680,7 +17626,6 @@ typedef $$MaintenancePlansTableUpdateCompanionBuilder =
       Value<DateTime> nextDueDate,
       Value<int> reminderDaysBefore,
       Value<bool> isEnabled,
-      Value<String> healthGroup,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<DateTime?> archivedAt,
@@ -17862,11 +17807,6 @@ class $$MaintenancePlansTableFilterComposer
 
   ColumnFilters<bool> get isEnabled => $composableBuilder(
     column: $table.isEnabled,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get healthGroup => $composableBuilder(
-    column: $table.healthGroup,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -18064,11 +18004,6 @@ class $$MaintenancePlansTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get healthGroup => $composableBuilder(
-    column: $table.healthGroup,
-    builder: (column) => ColumnOrderings(column),
-  );
-
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -18153,11 +18088,6 @@ class $$MaintenancePlansTableAnnotationComposer
 
   GeneratedColumn<bool> get isEnabled =>
       $composableBuilder(column: $table.isEnabled, builder: (column) => column);
-
-  GeneratedColumn<String> get healthGroup => $composableBuilder(
-    column: $table.healthGroup,
-    builder: (column) => column,
-  );
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -18344,7 +18274,6 @@ class $$MaintenancePlansTableTableManager
                 Value<DateTime> nextDueDate = const Value.absent(),
                 Value<int> reminderDaysBefore = const Value.absent(),
                 Value<bool> isEnabled = const Value.absent(),
-                Value<String> healthGroup = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime?> archivedAt = const Value.absent(),
@@ -18360,7 +18289,6 @@ class $$MaintenancePlansTableTableManager
                 nextDueDate: nextDueDate,
                 reminderDaysBefore: reminderDaysBefore,
                 isEnabled: isEnabled,
-                healthGroup: healthGroup,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 archivedAt: archivedAt,
@@ -18378,7 +18306,6 @@ class $$MaintenancePlansTableTableManager
                 required DateTime nextDueDate,
                 Value<int> reminderDaysBefore = const Value.absent(),
                 Value<bool> isEnabled = const Value.absent(),
-                required String healthGroup,
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime?> archivedAt = const Value.absent(),
@@ -18394,7 +18321,6 @@ class $$MaintenancePlansTableTableManager
                 nextDueDate: nextDueDate,
                 reminderDaysBefore: reminderDaysBefore,
                 isEnabled: isEnabled,
-                healthGroup: healthGroup,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 archivedAt: archivedAt,

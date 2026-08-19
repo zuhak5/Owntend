@@ -183,7 +183,6 @@ class MaintenancePlans extends Table {
   IntColumn get reminderDaysBefore =>
       integer().withDefault(const Constant(0))();
   BoolColumn get isEnabled => boolean().withDefault(const Constant(true))();
-  TextColumn get healthGroup => text()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get archivedAt => dateTime().nullable()();
@@ -477,7 +476,7 @@ class AppDatabase extends _$AppDatabase {
 
   static const databaseName = 'owntend';
   static const databaseFileName = '$databaseName.sqlite';
-  static const currentSchemaVersion = 3;
+  static const currentSchemaVersion = 4;
   static const _sqliteBusyTimeoutMs = 8000;
   static const _startupRecoveryAttempts = 5;
   static const _searchIndexSourceTables = <String>[
@@ -565,6 +564,9 @@ class AppDatabase extends _$AppDatabase {
         );
         await m.alterTable(TableMigration(assets));
         await customStatement('DROP TABLE IF EXISTS categories');
+      }
+      if (from < 4 && to >= 4) {
+        await m.alterTable(TableMigration(maintenancePlans));
       }
     },
     beforeOpen: (details) async {
@@ -848,7 +850,6 @@ END
       'CREATE INDEX IF NOT EXISTS idx_plans_enabled_due '
           'ON maintenance_plans(is_enabled, next_due_date)',
       'CREATE INDEX IF NOT EXISTS idx_plans_due ON maintenance_plans(next_due_date)',
-      'CREATE INDEX IF NOT EXISTS idx_plans_group ON maintenance_plans(health_group)',
       'CREATE INDEX IF NOT EXISTS idx_plan_metadata_sort '
           'ON maintenance_plan_metadata(sort_order)',
       'CREATE INDEX IF NOT EXISTS idx_records_plan ON maintenance_records(plan_id)',

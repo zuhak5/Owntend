@@ -3157,14 +3157,13 @@ class _BottomNavItem extends StatelessWidget {
   }
 }
 
-IconData iconForHealthGroup(HealthGroup group) {
-  return switch (group) {
-    HealthGroup.safety => Symbols.health_and_safety_rounded,
-    HealthGroup.pets => Symbols.pets_rounded,
-    HealthGroup.appliances => Symbols.kitchen_rounded,
-    HealthGroup.plants => Symbols.local_florist_rounded,
-    HealthGroup.cleaning => Symbols.cleaning_services_rounded,
-    HealthGroup.other => Symbols.home_repair_service_rounded,
+IconData iconForAssetType(AssetType type) {
+  return switch (type) {
+    AssetType.device => Symbols.memory_rounded,
+    AssetType.pet => Symbols.pets_rounded,
+    AssetType.plant => Symbols.yard_rounded,
+    AssetType.safety => Symbols.health_and_safety_rounded,
+    AssetType.general => Symbols.inventory_2_rounded,
   };
 }
 
@@ -3175,12 +3174,7 @@ IconData _taskIcon(TaskItem task) {
   if (task.status == TaskStatus.completed) {
     return Symbols.check_circle_rounded;
   }
-  if (task.status == TaskStatus.overdue) {
-    return task.plan.healthGroup == HealthGroup.appliances
-        ? Symbols.water_drop_rounded
-        : Symbols.warning_rounded;
-  }
-  return iconForHealthGroup(task.plan.healthGroup);
+  return iconForAssetType(task.asset.assetType);
 }
 
 String _statusText(BuildContext context, TaskItem task) {

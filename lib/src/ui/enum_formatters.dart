@@ -105,17 +105,6 @@ class OwntendBootstrap extends StatefulWidget {
   State<OwntendBootstrap> createState() => _OwntendBootstrapState();
 }
 
-IconData _iconForGroup(HealthGroup group) {
-  return switch (group) {
-    HealthGroup.safety => Icons.health_and_safety,
-    HealthGroup.pets => Icons.pets,
-    HealthGroup.appliances => Icons.kitchen,
-    HealthGroup.plants => Icons.local_florist,
-    HealthGroup.cleaning => Icons.cleaning_services,
-    HealthGroup.other => Icons.home_repair_service,
-  };
-}
-
 IconData _iconForArea(Area area) {
   return switch (area.kind) {
     AreaKind.indoor => Symbols.home_work_rounded,
@@ -267,17 +256,6 @@ String _priorityLabel(BuildContext context, PriorityLevel priority) {
     PriorityLevel.medium => context.l10n.medium,
     PriorityLevel.high => context.l10n.high,
     PriorityLevel.critical => context.l10n.critical,
-  };
-}
-
-String _healthGroupLabel(BuildContext context, HealthGroup group) {
-  return switch (group) {
-    HealthGroup.safety => context.l10n.safety,
-    HealthGroup.pets => context.l10n.pets,
-    HealthGroup.appliances => context.l10n.appliances,
-    HealthGroup.plants => context.l10n.plants,
-    HealthGroup.cleaning => context.l10n.cleaning,
-    HealthGroup.other => context.l10n.general,
   };
 }
 

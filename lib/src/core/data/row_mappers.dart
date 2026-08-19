@@ -155,7 +155,6 @@ domain.MaintenancePlan _planFromRow(
           reminderRecommendation: metadata.reminderRecommendation,
           sortOrder: metadata.sortOrder,
         ),
-  healthGroup: _healthGroup(row.healthGroup),
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
   archivedAt: row.archivedAt,
@@ -196,13 +195,6 @@ domain.StreakState _streakFromRow(StreakRow row) => domain.StreakState(
 
 domain.TaskStatus _statusFor(DateTime dueDate, DateTime now) =>
     activeTaskStatusForDueDate(dueDate, now);
-
-domain.HealthGroup _healthGroup(String value) {
-  return domain.HealthGroup.values
-          .where((group) => group.name == value)
-          .firstOrNull ??
-      domain.HealthGroup.other;
-}
 
 domain.AreaKind _areaKind(String value) {
   return domain.AreaKind.values

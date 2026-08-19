@@ -96,7 +96,7 @@ class TaskTile extends ConsumerWidget {
           backgroundColor: overdue
               ? Theme.of(context).colorScheme.errorContainer
               : null,
-          child: Icon(_iconForGroup(task.plan.healthGroup)),
+          child: Icon(_iconForAssetType(task.asset.assetType)),
         ),
         title: DynamicText(
           task.plan.title,

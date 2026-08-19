@@ -4,7 +4,7 @@ create extension if not exists pgtap with schema extensions;
 set local role postgres;
 set search_path = public, extensions, pg_catalog;
 
-select extensions.plan(80);
+select extensions.plan(82);
 
 select extensions.has_table('public', 'point_wallets', 'point wallet table exists');
 select extensions.has_table('public', 'point_transactions', 'point ledger table exists');
@@ -259,8 +259,7 @@ select extensions.is(
             'recurrence_unit', 'months',
             'priority', 'medium',
             'next_due_date', '2026-09-01T00:00:00Z',
-            'reminder_days_before', 0,
-            'health_group', 'other'
+            'reminder_days_before', 0
           ),
           jsonb_build_object(
             'id', 'points-bundled-task-two',
@@ -270,8 +269,7 @@ select extensions.is(
             'recurrence_unit', 'months',
             'priority', 'low',
             'next_due_date', '2026-09-02T00:00:00Z',
-            'reminder_days_before', 0,
-            'health_group', 'other'
+            'reminder_days_before', 0
           )
         )
       )
@@ -320,8 +318,7 @@ select extensions.is(
             'recurrence_unit', 'months',
             'priority', 'medium',
             'next_due_date', '2026-09-01T00:00:00Z',
-            'reminder_days_before', 0,
-            'health_group', 'other'
+            'reminder_days_before', 0
           ),
           jsonb_build_object(
             'id', 'points-bundled-task-two',
@@ -331,8 +328,7 @@ select extensions.is(
             'recurrence_unit', 'months',
             'priority', 'low',
             'next_due_date', '2026-09-02T00:00:00Z',
-            'reminder_days_before', 0,
-            'health_group', 'other'
+            'reminder_days_before', 0
           )
         )
       )
@@ -419,8 +415,7 @@ select extensions.is(
           'recurrence_unit', 'months',
           'priority', 'medium',
           'next_due_date', now() + interval '1 day',
-          'reminder_days_before', 0,
-          'health_group', 'other'
+          'reminder_days_before', 0
         )
       )
     )->>'charged'
@@ -496,8 +491,7 @@ select extensions.is(
           'recurrence_unit', 'months',
           'priority', 'critical',
           'next_due_date', now() + interval '1 day',
-          'reminder_days_before', 0,
-          'health_group', 'other'
+          'reminder_days_before', 0
         )
       )
     )->>'charged'
@@ -778,8 +772,7 @@ select extensions.is(
           'recurrence_interval', 1,
           'recurrence_unit', 'days',
           'priority', 'low',
-          'next_due_date', now() + interval '1 day',
-          'health_group', 'other'
+          'next_due_date', now() + interval '1 day'
         )
       )
     )->>'status'
@@ -837,8 +830,7 @@ select extensions.is(
           'recurrence_interval', 1,
           'recurrence_unit', 'days',
           'priority', 'low',
-          'next_due_date', now() + interval '1 day',
-          'health_group', 'other'
+          'next_due_date', now() + interval '1 day'
         )
       )
     )->>'charged'
@@ -877,8 +869,7 @@ select extensions.is(
           'recurrence_interval', 1,
           'recurrence_unit', 'days',
           'priority', 'low',
-          'next_due_date', now() + interval '1 day',
-          'health_group', 'other'
+          'next_due_date', now() + interval '1 day'
         )
       )
     )->>'charged'
@@ -947,8 +938,7 @@ select extensions.is(
           'recurrence_interval', 1,
           'recurrence_unit', 'days',
           'priority', 'medium',
-          'next_due_date', now() + interval '1 day',
-          'health_group', 'other'
+          'next_due_date', now() + interval '1 day'
         ),
         'metadata', jsonb_build_object(
           'task_type', 'inspection',
@@ -992,8 +982,7 @@ select extensions.throws_ok(
           'recurrence_interval', 1,
           'recurrence_unit', 'days',
           'priority', 'medium',
-          'next_due_date', now() + interval '1 day',
-          'health_group', 'other'
+          'next_due_date', now() + interval '1 day'
         )
       )
     )
@@ -1020,8 +1009,7 @@ select extensions.throws_ok(
           'recurrence_interval', 1,
           'recurrence_unit', 'days',
           'priority', 'medium',
-          'next_due_date', now() + interval '1 day',
-          'health_group', 'other'
+          'next_due_date', now() + interval '1 day'
         ),
         'metadata', jsonb_build_object(
           'required_materials', 'not-an-array'
@@ -1033,6 +1021,26 @@ select extensions.throws_ok(
   '22023',
   'INVALID_TASK_PAYLOAD',
   'invalid non-array metadata fields are rejected (CTR-003)'
+);
+
+select extensions.is(
+  (
+    select count(*)::integer
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'maintenance_plans'
+      and column_name = 'health_group'
+  ),
+  0,
+  'maintenance_plans no longer persists health_group'
+);
+
+select extensions.ok(
+  position(
+    'plan_json ? ''health_group''' in
+    pg_get_functiondef('owntend_monetization_private.create_task_with_point_debit_impl(jsonb)'::regprocedure)
+  ) > 0,
+  'task creation rejects the obsolete client health_group classifier'
 );
 
 select * from extensions.finish();

@@ -87,7 +87,6 @@ void main() {
         ),
         priority: PriorityLevel.high,
         nextDueDate: planDueDate,
-        healthGroup: HealthGroup.appliances,
       );
       await maintenanceRepo.completePlan(
         planId,
@@ -190,7 +189,6 @@ void main() {
           ),
           priority: PriorityLevel.medium,
           nextDueDate: scheduledDueDate,
-          healthGroup: HealthGroup.appliances,
         );
 
         // Complete 10 days early on Aug 20
@@ -241,7 +239,6 @@ void main() {
           ),
           priority: PriorityLevel.medium,
           nextDueDate: initialDue,
-          healthGroup: HealthGroup.appliances,
         );
 
         final completion = await maintenanceRepo.completePlanResult(
@@ -300,7 +297,6 @@ void main() {
         ),
         priority: PriorityLevel.low,
         nextDueDate: initialDue,
-        healthGroup: HealthGroup.other,
       );
 
       final completion = await maintenanceRepo.completePlanResult(
@@ -369,7 +365,6 @@ void main() {
         ),
         priority: PriorityLevel.medium,
         nextDueDate: DateTime(2026, 9, 1, 9),
-        healthGroup: HealthGroup.other,
       );
 
       await maintenanceRepo.archivePlan(planId);
@@ -411,7 +406,6 @@ void main() {
         ),
         priority: PriorityLevel.high,
         nextDueDate: DateTime.utc(2026, 9, 1),
-        healthGroup: HealthGroup.appliances,
       );
 
       // Insert a notification reconciliation request
@@ -466,7 +460,6 @@ void main() {
           ),
           priority: PriorityLevel.medium,
           nextDueDate: DateTime(2026, 8, 20, 9),
-          healthGroup: HealthGroup.other,
         );
         await maintenanceRepo.archivePlan(planId);
         await Future<void>.delayed(const Duration(milliseconds: 2));

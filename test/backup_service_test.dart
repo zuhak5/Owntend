@@ -383,7 +383,6 @@ Future<void> _seedRealisticData(AppDatabase db, Directory root) async {
     recurrence: const RecurrenceRule(interval: 1, unit: RecurrenceUnit.years),
     priority: PriorityLevel.high,
     nextDueDate: DateTime(2026, 6, 18),
-    healthGroup: HealthGroup.appliances,
     reminderDaysBefore: 7,
   );
   await maintenance.completePlan(

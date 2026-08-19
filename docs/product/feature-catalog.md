@@ -121,3 +121,7 @@ Release validation covers Edge Functions, browser deletion/static contracts, and
 ## Product change checklist
 
 A new feature is complete only when its local data, cloud data, synchronization, localization, permissions, privacy, backup, deletion, tests, documentation, and release implications have been reviewed.
+
+### Item-Type-derived task classification
+
+Tasks are always linked to items and derive their classification/icon/statistics bucket from the linked item's Item Type. Health Group is not editable or stored on tasks. Cleaning remains an activity/task concept and inherits the linked item's Item Type for scoring (plant cleaning is Plant, device cleaning is Device, safety-item cleaning is Safety, and general-household cleaning is General). General currently remains outside weighted health-score normalization to preserve the previous unweighted `other` behavior.

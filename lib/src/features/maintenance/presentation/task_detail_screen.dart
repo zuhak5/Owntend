@@ -146,7 +146,7 @@ class TaskDetailScreen extends ConsumerWidget {
                                     .colorScheme
                                     .secondaryContainer,
                                 child: Icon(
-                                  _iconForGroup(task.plan.healthGroup),
+                                  _iconForAssetType(task.asset.assetType),
                                 ),
                               ),
                               const SizedBox(width: HkSpacing.sm),

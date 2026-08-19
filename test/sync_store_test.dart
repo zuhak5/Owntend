@@ -165,7 +165,6 @@ void main() {
                 priority: 'medium',
                 nextDueDate: initialDueDate,
                 reminderDaysBefore: const Value(1),
-                healthGroup: 'other',
                 updatedAt: Value(initialUpdatedAt),
               ),
             );

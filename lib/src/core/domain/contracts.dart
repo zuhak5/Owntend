@@ -135,7 +135,6 @@ abstract interface class MaintenanceRepository {
     required RecurrenceRule recurrence,
     required PriorityLevel priority,
     required DateTime nextDueDate,
-    required HealthGroup healthGroup,
     int reminderDaysBefore,
     TaskMetadata? metadata,
   });

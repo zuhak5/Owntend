@@ -2,8 +2,6 @@ enum RecurrenceUnit { hours, days, weeks, months, years }
 
 enum PriorityLevel { low, medium, high, critical }
 
-enum HealthGroup { safety, pets, appliances, plants, cleaning, other }
-
 enum AreaKind { indoor, outdoor }
 
 enum RoomType {
@@ -496,7 +494,6 @@ class MaintenancePlan {
     required this.recurrence,
     required this.priority,
     required this.nextDueDate,
-    required this.healthGroup,
     required this.createdAt,
     required this.updatedAt,
     this.instructions,
@@ -516,7 +513,6 @@ class MaintenancePlan {
   final int reminderDaysBefore;
   final bool isEnabled;
   final TaskMetadata? metadata;
-  final HealthGroup healthGroup;
   final DateTime createdAt;
   final DateTime updatedAt;
   final DateTime? archivedAt;
@@ -560,8 +556,8 @@ class HealthScoreBreakdown {
   });
 
   final int score;
-  final Map<HealthGroup, double> groupScores;
-  final Map<HealthGroup, double> activeWeights;
+  final Map<AssetType, double> groupScores;
+  final Map<AssetType, double> activeWeights;
 }
 
 class StreakState {
@@ -623,5 +619,5 @@ class StatisticsSummary {
   final double completionRate;
   final double overdueRate;
   final Map<String, int> completedByMonth;
-  final Map<HealthGroup, int> taskDistribution;
+  final Map<AssetType, int> taskDistribution;
 }

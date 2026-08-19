@@ -232,13 +232,12 @@ String smartPriorityLabel(TaskItem task) {
     PriorityLevel.medium => 'Medium',
     PriorityLevel.low => 'Routine',
   };
-  final context = switch (task.plan.healthGroup) {
-    HealthGroup.safety => 'Safety',
-    HealthGroup.pets => 'Pet health',
-    HealthGroup.appliances => 'Appliance care',
-    HealthGroup.plants => 'Plant care',
-    HealthGroup.cleaning => 'Cleaning',
-    HealthGroup.other => 'Home care',
+  final context = switch (task.asset.assetType) {
+    AssetType.safety => 'Safety',
+    AssetType.pet => 'Pet health',
+    AssetType.device => 'Appliance care',
+    AssetType.plant => 'Plant care',
+    AssetType.general => 'Home care',
   };
   return '$severity - $context';
 }

@@ -716,9 +716,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get priority => 'Priority';
 
   @override
-  String get healthGroup => 'Health group';
-
-  @override
   String get createAndAddAnother => 'Create & add another';
 
   @override
