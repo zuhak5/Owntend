@@ -8,8 +8,8 @@ Owntend maintains both user-domain data and operational metadata. The Drift sche
 
 - Areas represent major parts of a home.
 - Rooms belong to areas or the broader home organization.
-- Categories classify maintained things.
-- Assets belong to rooms/categories and may have tags, notes, photos, warranty data, and specialized details.
+- Item Type (`AssetType`) is the single classification for maintained things: device, pet, plant, safety, or general.
+- Assets belong to rooms and may have tags, notes, photos, warranty data, and specialized details.
 - Specialized records support device, pet, plant, and safety use cases.
 
 Ownership must remain tied to the authenticated account in cloud storage. Local records must not be rebound silently between accounts.
@@ -39,12 +39,12 @@ Sensitive session data belongs in secure storage rather than ordinary settings r
 
 ## Search derived state
 
-Drift schema 2 adds durable local generation metadata for the FTS5 search cache. The singleton `search_index_state` row stores:
+Drift schema 2 introduced durable local generation metadata for the FTS5 search cache. The singleton `search_index_state` row stores:
 
 - `source_generation`: the generation of committed searchable authoritative data; and
 - `indexed_generation`: the generation represented by the current `search_index` snapshot.
 
-SQLite triggers increment `source_generation` after INSERT, UPDATE, or DELETE on every authoritative table whose values contribute to search: areas, rooms, categories, assets, specialized asset-detail tables, tags and asset-tag links, asset-photo captions, and maintenance plans. The FTS5 table and generation row are derived local state, not synchronized user-domain authority.
+SQLite triggers increment `source_generation` after INSERT, UPDATE, or DELETE on every authoritative table whose values contribute to search: areas, rooms, assets, specialized asset-detail tables, tags and asset-tag links, asset-photo captions, and maintenance plans. The FTS5 table and generation row are derived local state, not synchronized user-domain authority.
 
 `DriftSearchRepository` owns freshness. A query may use the existing FTS snapshot only when the generation state is structurally valid and both generations match. Otherwise the repository serializes a transactional full rebuild and advances `indexed_generation` only after the rebuilt snapshot succeeds. A failed rebuild therefore leaves a detectable generation mismatch; a later query, including after process restart, retries instead of knowingly returning stale results. Search UI routes do not own or preserve index correctness.
 
@@ -96,7 +96,7 @@ For every new or changed field:
 9. Update deletion and privacy inventories.
 10. Add focused repository, backend, synchronization, and UI tests.
 
-The current Drift schema version is 2. Schema 2 adds only the local derived search-generation state and its invalidation triggers; no Supabase schema or synchronized wire contract changes with that version bump.
+The current Drift schema version is 3. Schema 2 introduced local derived search-generation state and its invalidation triggers. Schema 3 removes the obsolete local Category table and `assets.category_id`, drops the Category search-generation triggers, and preserves generation-bound invalidation for the remaining searchable sources. The synchronized `asset` entity keeps the same identity/key contract; `category_id` is removed from its field shape rather than becoming a separate sync entity.
 
 ## Indexing and constraints
 
