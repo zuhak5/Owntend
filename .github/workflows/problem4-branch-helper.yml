@@ -34,7 +34,10 @@ jobs:
         run: flutter pub get --enforce-lockfile
 
       - name: Apply scoped Problem 4 transforms
-        run: python tool/problem4_apply.py
+        run: |
+          python tool/problem4_apply.py
+          python tool/problem4_fixups.py
+          rg -n "Category|categoryId|category_id|categoriesProvider|categoryForAssetType|_categoryId" lib test integration_test supabase docs tool || true
 
       - name: Generate repository-owned sources
         run: |
@@ -61,7 +64,7 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          rm -f .github/workflows/problem4-branch-helper.yml tool/problem4_apply.py tool/sitecustomize.py .problem4-focused-validation
+          rm -f .github/workflows/problem4-branch-helper.yml tool/problem4_apply.py tool/problem4_fixups.py tool/sitecustomize.py .problem4-focused-validation
           git add -A
           if git diff --cached --quiet; then
             echo "No changes to commit."
