@@ -33,7 +33,10 @@ jobs:
           path = Path('tool/problem_007_apply.py')
           text = path.read_text()
           needle = '    if count != 1:\n        raise RuntimeError(f"{path}: expected exactly one anchor, found {count}: {old[:120]!r}")\n'
-          replacement = '    if count == 0 and "final result = await monetizationRepo.createTask" in old:\n        return\n' + needle
+          replacement = (
+              '    if count == 0 and path == "lib/src/features/maintenance/application/task_creation_controller.dart":\n'
+              '        return\n' + needle
+          )
           if text.count(needle) != 1:
               raise SystemExit('replace_once guard anchor mismatch')
           path.write_text(text.replace(needle, replacement, 1))
@@ -52,7 +55,25 @@ jobs:
           )
           if text.count(old) != 1:
               raise SystemExit('task authoritative balance anchor mismatch')
-          path.write_text(text.replace(old, new, 1))
+          text = text.replace(old, new, 1)
+          old_resolver = '''  return ChargedOperationResolver(
+            monetizationRepo: monetizationRepo,
+            localSyncStore: localSyncStore,
+            operationStore: ref.watch(taskCreationOperationStoreProvider),
+          );'''
+          new_resolver = '''  return ChargedOperationResolver(
+            monetizationRepo: monetizationRepo,
+            localSyncStore: localSyncStore,
+            operationStore: ref.watch(taskCreationOperationStoreProvider),
+            adoptAuthoritativeBalance: (userId, balance) {
+              ref
+                  .read(pointWalletProvider.notifier)
+                  .adoptAuthoritativeMutationResult(balance, userId: userId);
+            },
+          );'''
+          if text.count(old_resolver) != 1:
+              raise SystemExit('charged resolver provider anchor mismatch')
+          path.write_text(text.replace(old_resolver, new_resolver, 1))
           PY
           rm -f tool/.problem007_payload_* tool/.problem007_gz_* tool/.problem007_small_* tool/.problem007_trigger tool/problem_007_apply.py
           rm -f .github/workflows/problem-007-helper.yml
