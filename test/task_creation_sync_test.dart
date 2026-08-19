@@ -24,17 +24,6 @@ void main() {
       const assetId = 'asset-uuid-202';
 
       await db
-          .into(db.categories)
-          .insertOnConflictUpdate(
-            CategoriesCompanion.insert(
-              id: 'cat-1',
-              name: 'Task Test Category',
-              healthGroup: 'general',
-              createdAt: Value(now),
-              updatedAt: Value(now),
-            ),
-          );
-      await db
           .into(db.areas)
           .insert(
             AreasCompanion.insert(
@@ -66,7 +55,6 @@ void main() {
               id: assetId,
               name: 'Test Appliance',
               assetType: const Value('device'),
-              categoryId: 'cat-1',
               roomId: 'room-1',
               createdAt: Value(now),
               updatedAt: Value(now),

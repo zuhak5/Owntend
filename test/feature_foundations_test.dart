@@ -369,7 +369,7 @@ void main() {
   });
 
   group('fresh install schema', () {
-    test('new databases start empty with seeded categories', () async {
+    test('new databases start empty without category catalog', () async {
       final file = await File(
         '${Directory.systemTemp.path}/owntend_schema_${DateTime.now().microsecondsSinceEpoch}.sqlite',
       ).create();
@@ -377,13 +377,15 @@ void main() {
       try {
         await db.customSelect('SELECT 1').get();
         final areas = await db.customSelect('SELECT id FROM areas').get();
-        final categories = await db
-            .customSelect('SELECT id FROM categories')
+        final categoryTables = await db
+            .customSelect(
+              "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'categories'",
+            )
             .get();
 
         expect(db.schemaVersion, AppDatabase.currentSchemaVersion);
         expect(areas, isEmpty);
-        expect(categories, isNotEmpty);
+        expect(categoryTables, isEmpty);
       } finally {
         await db.close();
         if (await file.exists()) {
@@ -407,14 +409,6 @@ TaskItem _task(
 }) {
   final resolvedAsset = asset ?? _asset(id: 'asset_$id', name: 'Asset');
   final room = _room();
-  final category = Category(
-    id: 'category_$id',
-    name: group.name,
-    healthGroup: group,
-    iconName: 'home',
-    createdAt: DateTime(2026),
-    updatedAt: DateTime(2026),
-  );
   return TaskItem(
     plan: MaintenancePlan(
       id: id,
@@ -433,7 +427,6 @@ TaskItem _task(
       archivedAt: archivedAt,
     ),
     asset: resolvedAsset,
-    category: category,
     room: room,
     status:
         status ??
@@ -451,7 +444,6 @@ Asset _asset({
     id: id,
     name: name,
     assetType: type,
-    categoryId: 'category_general',
     roomId: 'room',
     createdAt: DateTime(2026),
     updatedAt: DateTime(2026),

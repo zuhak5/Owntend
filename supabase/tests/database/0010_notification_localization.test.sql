@@ -199,7 +199,6 @@ select ok(
     from unnest(array[
       'asset_photos_user_id_asset_id_idx',
       'asset_tags_user_id_tag_id_idx',
-      'assets_user_id_category_id_idx',
       'assets_user_id_room_id_idx',
       'maintenance_plans_user_id_asset_id_idx',
       'maintenance_records_user_id_plan_id_idx',
@@ -207,7 +206,7 @@ select ok(
       'rooms_user_id_area_id_idx'
     ]) as index_name
   ),
-  'all eight relationship indexes are represented by migrations'
+  'all seven relationship indexes are represented by migrations'
 );
 select ok(
   (

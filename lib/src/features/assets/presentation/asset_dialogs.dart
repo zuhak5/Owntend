@@ -170,7 +170,6 @@ class _MoveCopyItemDialogState extends ConsumerState<MoveCopyItemDialog> {
                   'id': copiedAssetId,
                   'name': widget.asset.name,
                   'asset_type': widget.asset.assetType.name,
-                  'category_id': widget.asset.categoryId,
                   'room_id': roomId,
                   'placement': widget.asset.placement,
                   'notes': widget.asset.notes,
@@ -435,7 +434,6 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
   DateTime? _installedAt;
   DateTime? _expiresAt;
   String? _areaId;
-  String? _categoryId;
   String? _roomId;
   bool _saving = false;
   String? _creationOperationId;
@@ -504,7 +502,6 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
     _lastRepottedAt = plant?.lastRepottedAt;
     _installedAt = safety?.installedAt;
     _expiresAt = safety?.expiresAt;
-    _categoryId = asset?.categoryId;
     _roomId = asset?.roomId ?? widget.roomId;
     if (asset != null) {
       scheduleMicrotask(_loadInitialTags);
@@ -582,7 +579,6 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
       'installed_at': date(_installedAt),
       'expires_at': date(_expiresAt),
       'area_id': _areaId,
-      'category_id': _categoryId,
       'room_id': _roomId,
       'brand': _brandController.text,
       'model': _modelController.text,
@@ -663,7 +659,6 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
       _installedAt = date('installed_at');
       _expiresAt = date('expires_at');
       _areaId = draft['area_id'] as String?;
-      _categoryId = draft['category_id'] as String?;
       _roomId = draft['room_id'] as String? ?? widget.roomId;
     });
   }
@@ -671,7 +666,6 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
   @override
   Widget build(BuildContext context) {
     final areas = ref.watch(areasProvider).value ?? [];
-    final categories = ref.watch(categoriesProvider);
     final rooms = ref.watch(roomsProvider);
     final roomItems = rooms.value ?? [];
     final selectedRoom = _roomId == null
@@ -682,16 +676,10 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
     final visibleRooms = selectedAreaId == null
         ? roomItems
         : roomItems.where((room) => room.areaId == selectedAreaId).toList();
-    final categoryItems = categories.value ?? const <Category>[];
-    final selectedCategoryId =
-        _categoryId ??
-        _categoryForType(_assetType, categoryItems)?.id ??
-        categoryItems.firstOrNull?.id;
     final selectedRoomId = _roomId ?? visibleRooms.firstOrNull?.id;
     final saveEnabled =
         !_saving &&
         _nameController.text.trim().isNotEmpty &&
-        selectedCategoryId != null &&
         selectedRoomId != null;
     return _EditorSheetFrame(
       title: widget.asset == null
@@ -739,25 +727,22 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
             decoration: InputDecoration(labelText: context.l10n.itemName),
           ),
           const SizedBox(height: 12),
-          categories.when(
-            data: (items) => DropdownButtonFormField<AssetType>(
-              initialValue: _assetType,
-              decoration: InputDecoration(labelText: context.l10n.itemType),
-              items: [
-                for (final type in AssetType.values)
-                  DropdownMenuItem(
-                    value: type,
-                    child: Text(_assetTypeLabel(context, type)),
-                  ),
-              ],
-              onChanged: (value) {
-                if (value != null) {
-                  _changeType(value, items);
-                }
-              },
-            ),
-            error: (error, _) => Text(_failureMessage(context, error)),
-            loading: () => const LinearProgressIndicator(),
+          DropdownButtonFormField<AssetType>(
+            key: const ValueKey('asset-item-type-picker'),
+            initialValue: _assetType,
+            decoration: InputDecoration(labelText: context.l10n.itemType),
+            items: [
+              for (final type in AssetType.values)
+                DropdownMenuItem(
+                  value: type,
+                  child: Text(_assetTypeLabel(context, type)),
+                ),
+            ],
+            onChanged: (value) {
+              if (value != null) {
+                _changeType(value);
+              }
+            },
           ),
           const SizedBox(height: 12),
           _SubsectionTitle(
@@ -814,30 +799,6 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
             title: context.l10n.details,
             icon: Symbols.category_rounded,
           ),
-          categories.when(
-            data: (items) {
-              final selected =
-                  _categoryId != null &&
-                      items.any((item) => item.id == _categoryId)
-                  ? _categoryId
-                  : items.firstOrNull?.id;
-              return DropdownButtonFormField<String>(
-                initialValue: selected,
-                decoration: InputDecoration(labelText: context.l10n.category),
-                items: [
-                  for (final item in items)
-                    DropdownMenuItem(
-                      value: item.id,
-                      child: Text(_categoryLabel(context, item)),
-                    ),
-                ],
-                onChanged: (value) => setState(() => _categoryId = value),
-              );
-            },
-            error: (error, _) => Text(_failureMessage(context, error)),
-            loading: () => const LinearProgressIndicator(),
-          ),
-          const SizedBox(height: 12),
           TextField(
             controller: _placementController,
             textInputAction: TextInputAction.next,
@@ -1187,7 +1148,7 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
     );
   }
 
-  Future<void> _changeType(AssetType value, List<Category> categories) async {
+  Future<void> _changeType(AssetType value) async {
     if (value == _assetType) {
       return;
     }
@@ -1216,10 +1177,7 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
     if (!mounted) {
       return;
     }
-    setState(() {
-      _assetType = value;
-      _categoryId = _categoryForType(value, categories)?.id ?? _categoryId;
-    });
+    setState(() => _assetType = value);
   }
 
   bool _hasTypedDetailInput() {
@@ -1265,12 +1223,6 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
     if (_saving) {
       return;
     }
-    final categoryItems =
-        ref.read(categoriesProvider).value ?? const <Category>[];
-    final categoryId =
-        _categoryId ??
-        _categoryForType(_assetType, categoryItems)?.id ??
-        categoryItems.firstOrNull?.id;
     final roomItems = ref.read(roomsProvider).value ?? const <Room>[];
     final selectedRoom = _roomId == null
         ? null
@@ -1286,9 +1238,7 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
         _roomId != null && visibleRooms.any((room) => room.id == _roomId)
         ? _roomId
         : visibleRooms.firstOrNull?.id;
-    if (_nameController.text.trim().isEmpty ||
-        categoryId == null ||
-        roomId == null) {
+    if (_nameController.text.trim().isEmpty || roomId == null) {
       return;
     }
     setState(() => _saving = true);
@@ -1320,7 +1270,6 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
             'id': assetId,
             'name': _nameController.text.trim(),
             'asset_type': _assetType.name,
-            'category_id': categoryId,
             'room_id': roomId,
             'placement': _placementController.text.trim(),
             'notes': _notesController.text.trim(),
@@ -1336,7 +1285,6 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
             id: assetId,
             name: _nameController.text,
             assetType: _assetType,
-            categoryId: categoryId,
             roomId: roomId,
             placement: _placementController.text,
             notes: _notesController.text,

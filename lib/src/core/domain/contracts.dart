@@ -49,7 +49,6 @@ abstract interface class AssetRepository {
     String? id,
     required String name,
     AssetType assetType = AssetType.general,
-    required String categoryId,
     required String roomId,
     String? placement,
     String? notes,
@@ -86,8 +85,6 @@ abstract interface class AssetRepository {
   Future<void> deletePhoto(String photoId);
   Stream<List<AssetPhoto>> watchPhotosForAsset(String assetId);
   Future<List<AssetPhoto>> listPhotosForAsset(String assetId);
-  Stream<List<Category>> watchCategories();
-  Future<List<Category>> listCategories();
   Stream<List<Tag>> watchTagsForAsset(String assetId);
   Future<List<Tag>> listTagsForAsset(String assetId);
 }

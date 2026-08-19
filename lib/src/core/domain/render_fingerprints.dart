@@ -19,16 +19,6 @@ int roomFingerprint(Room room) => Object.hash(
 int roomListFingerprint(Iterable<Room> rooms) =>
     Object.hashAll(rooms.map(roomFingerprint));
 
-int categoryFingerprint(Category category) => Object.hash(
-  category.id,
-  category.name,
-  category.healthGroup,
-  category.iconName,
-);
-
-int categoryListFingerprint(Iterable<Category> categories) =>
-    Object.hashAll(categories.map(categoryFingerprint));
-
 int tagFingerprint(Tag tag) => Object.hash(tag.id, tag.name);
 
 int tagListFingerprint(Iterable<Tag> tags) =>
@@ -49,7 +39,6 @@ int assetFingerprint(Asset asset) => Object.hashAll([
   asset.id,
   asset.name,
   asset.assetType,
-  asset.categoryId,
   asset.roomId,
   asset.placement,
   asset.notes,
@@ -79,7 +68,6 @@ int taskFingerprint(TaskItem task) => Object.hashAll([
   task.plan.archivedAt,
   _taskMetadataFingerprint(task.plan.metadata),
   assetFingerprint(task.asset),
-  categoryFingerprint(task.category),
   roomFingerprint(task.room),
   task.status,
 ]);

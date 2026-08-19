@@ -69,8 +69,7 @@ CREATE TABLE IF NOT EXISTS public.assets (
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   id TEXT NOT NULL,
   name TEXT NOT NULL CHECK (CHAR_LENGTH(name) BETWEEN 1 AND 200),
-  asset_type TEXT NOT NULL DEFAULT 'general',
-  category_id TEXT,
+  asset_type TEXT NOT NULL DEFAULT 'general' CHECK (asset_type IN ('device', 'pet', 'plant', 'safety', 'general')),
   room_id TEXT,
   placement TEXT CHECK (placement IS NULL OR CHAR_LENGTH(placement) <= 300),
   notes TEXT CHECK (notes IS NULL OR CHAR_LENGTH(notes) <= 10000),
@@ -80,12 +79,6 @@ CREATE TABLE IF NOT EXISTS public.assets (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
   archived_at TIMESTAMPTZ,
   PRIMARY KEY (user_id, id),
-  CONSTRAINT assets_category_id_check CHECK (
-    category_id IS NULL OR category_id IN (
-      'category_safety', 'category_pets', 'category_appliances',
-      'category_plants', 'category_cleaning', 'category_general'
-    )
-  ),
   FOREIGN KEY (user_id, room_id) REFERENCES public.rooms(user_id, id) ON DELETE SET NULL
 );
 
@@ -386,9 +379,6 @@ CREATE INDEX IF NOT EXISTS asset_photos_user_id_asset_id_idx
 
 CREATE INDEX IF NOT EXISTS asset_tags_user_id_tag_id_idx
   ON public.asset_tags (user_id, tag_id);
-
-CREATE INDEX IF NOT EXISTS assets_user_id_category_id_idx
-  ON public.assets (user_id, category_id);
 
 CREATE INDEX IF NOT EXISTS assets_user_id_room_id_idx
   ON public.assets (user_id, room_id);

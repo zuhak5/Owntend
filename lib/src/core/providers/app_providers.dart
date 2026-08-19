@@ -185,13 +185,6 @@ final roomsProvider = StreamProvider<List<Room>>(
       .distinctByFingerprint(roomListFingerprint),
 );
 
-final categoriesProvider = StreamProvider<List<Category>>(
-  (ref) => ref
-      .watch(assetRepositoryProvider)
-      .watchCategories()
-      .distinctByFingerprint(categoryListFingerprint),
-);
-
 final tasksProvider = StreamProvider<List<TaskItem>>(
   (ref) => ref
       .watch(maintenanceRepositoryProvider)

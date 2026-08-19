@@ -202,7 +202,6 @@ const syncEntitySpecs = <SyncEntitySpec>[
       'id',
       'name',
       'asset_type',
-      'category_id',
       'room_id',
       'placement',
       'notes',

@@ -3,20 +3,13 @@ import 'package:owntend/l10n/app_localizations_ext.dart';
 
 import '../core/domain/models.dart';
 
-/// Localizes the built-in category catalog by stable domain identity.
-///
-/// Category names remain locale-neutral persistence data. Unknown categories
-/// fall back to their stored/user-facing name so future or user-defined values
-/// are never silently discarded.
-String localizedCategoryLabel(BuildContext context, Category category) {
-  return switch (category.id) {
-    'category_appliances' => context.l10n.appliances,
-    'category_safety' => context.l10n.safety,
-    'category_plants' => context.l10n.plants,
-    'category_pets' => context.l10n.pets,
-    'category_cleaning' => context.l10n.cleaning,
-    'category_general' => context.l10n.general,
-    _ => category.name,
+String localizedAssetTypeLabel(BuildContext context, AssetType type) {
+  return switch (type) {
+    AssetType.device => context.l10n.deviceOrAppliance,
+    AssetType.pet => context.l10n.pet,
+    AssetType.plant => context.l10n.plant,
+    AssetType.safety => context.l10n.safetyItem,
+    AssetType.general => context.l10n.generalItem,
   };
 }
 

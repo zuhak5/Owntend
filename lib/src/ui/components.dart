@@ -2571,7 +2571,7 @@ class _TaskCardState extends State<TaskCard>
     final visuallyCompleted = completed || completionProgress > 0.52;
     final locationText = '${task.asset.name} · ${task.room.name}';
     final primaryMeta =
-        '${localizedCategoryLabel(context, task.category)} · ${_localizedPriorityLabel(context, task.plan.priority)}';
+        '${localizedAssetTypeLabel(context, task.asset.assetType)} · ${_localizedPriorityLabel(context, task.plan.priority)}';
     final statusText = _statusText(context, task);
     final card = PremiumCard(
       margin:

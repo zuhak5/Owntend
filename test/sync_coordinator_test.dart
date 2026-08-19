@@ -955,7 +955,6 @@ void main() {
           'id': 'cloud-asset',
           'name': 'Existing cloud asset',
           'asset_type': 'general',
-          'category_id': 'category_general',
           'room_id': 'cloud-room',
           'placement': null,
           'notes': null,
@@ -1466,7 +1465,6 @@ void main() {
           AssetsCompanion.insert(
             id: 'late-asset',
             name: 'Late asset',
-            categoryId: 'category_general',
             roomId: 'late-room',
           ),
         );
@@ -1646,7 +1644,6 @@ void main() {
             AssetsCompanion.insert(
               id: 'maintenance-asset',
               name: 'Maintenance asset',
-              categoryId: 'category_general',
               roomId: 'maintenance-room',
             ),
           );
@@ -1901,7 +1898,6 @@ void main() {
               AssetsCompanion.insert(
                 id: 'canonical-conflict-maintenance-asset',
                 name: 'Canonical conflict maintenance asset',
-                categoryId: 'category_general',
                 roomId: 'canonical-conflict-maintenance-room',
               ),
             );
@@ -1996,7 +1992,6 @@ void main() {
               AssetsCompanion.insert(
                 id: 'accepted-maintenance-asset',
                 name: 'Accepted maintenance asset',
-                categoryId: 'category_general',
                 roomId: 'accepted-maintenance-room',
               ),
             );
@@ -2109,7 +2104,6 @@ void main() {
               AssetsCompanion.insert(
                 id: 'already-applied-maintenance-asset',
                 name: 'Already applied maintenance asset',
-                categoryId: 'category_general',
                 roomId: 'already-applied-maintenance-room',
               ),
             );
@@ -2215,7 +2209,6 @@ void main() {
               AssetsCompanion.insert(
                 id: 'multiple-maintenance-asset',
                 name: 'Multiple maintenance asset',
-                categoryId: 'category_general',
                 roomId: 'multiple-maintenance-room',
               ),
             );
@@ -3141,7 +3134,6 @@ Future<void> _seedMaintenancePlanForSync(
           AssetsCompanion.insert(
             id: 'maintenance-asset-$suffix',
             name: 'Maintenance asset $suffix',
-            categoryId: 'category_general',
             roomId: 'maintenance-room-$suffix',
           ),
         );

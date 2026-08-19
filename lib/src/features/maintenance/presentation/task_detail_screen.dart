@@ -226,11 +226,6 @@ class TaskDetailScreen extends ConsumerWidget {
                               task.plan.nextDueDate,
                             ),
                           ),
-                          _DetailRow(
-                            icon: Symbols.category_rounded,
-                            label: context.l10n.category,
-                            value: _categoryLabel(context, task.category),
-                          ),
                           if (task.plan.reminderDaysBefore > 0)
                             _DetailRow(
                               icon: Symbols.notifications_active_rounded,

@@ -61,10 +61,8 @@ void main() {
         areaId: areaId,
         name: 'Storage Room',
       );
-      final categories = await assetRepo.listCategories();
       final assetId = await assetRepo.saveAsset(
         name: 'Dehumidifier',
-        categoryId: categories.first.id,
         roomId: roomId,
         assetType: AssetType.device,
         deviceDetails: const DeviceDetails(
@@ -177,10 +175,8 @@ void main() {
           areaId: areaId,
           name: 'Main Garage',
         );
-        final categories = await assetRepo.listCategories();
         final assetId = await assetRepo.saveAsset(
           name: 'Lawn Mower',
-          categoryId: categories.first.id,
           roomId: roomId,
         );
 
@@ -230,10 +226,8 @@ void main() {
           areaId: areaId,
           name: 'Living Room',
         );
-        final categories = await assetRepo.listCategories();
         final assetId = await assetRepo.saveAsset(
           name: 'AC Unit',
-          categoryId: categories.first.id,
           roomId: roomId,
         );
 
@@ -291,10 +285,8 @@ void main() {
         kind: AreaKind.indoor,
       );
       final roomId = await assetRepo.saveRoom(areaId: areaId, name: 'Office');
-      final categories = await assetRepo.listCategories();
       final assetId = await assetRepo.saveAsset(
         name: 'Desk Lamp',
-        categoryId: categories.first.id,
         roomId: roomId,
       );
 
@@ -366,7 +358,6 @@ void main() {
       );
       final assetId = await assetRepo.saveAsset(
         name: 'Restore hierarchy asset',
-        categoryId: (await assetRepo.listCategories()).first.id,
         roomId: roomId,
       );
       final planId = await maintenanceRepo.savePlan(
@@ -406,10 +397,8 @@ void main() {
         kind: AreaKind.indoor,
       );
       final roomId = await assetRepo.saveRoom(areaId: areaId, name: 'Kitchen');
-      final categories = await assetRepo.listCategories();
       final assetId = await assetRepo.saveAsset(
         name: 'Refrigerator',
-        categoryId: categories.first.id,
         roomId: roomId,
       );
 
@@ -464,10 +453,8 @@ void main() {
           kind: AreaKind.indoor,
         );
         final roomId = await assetRepo.saveRoom(areaId: areaId, name: 'Room');
-        final categoryId = (await assetRepo.listCategories()).first.id;
         final assetId = await assetRepo.saveAsset(
           name: 'Independent asset',
-          categoryId: categoryId,
           roomId: roomId,
         );
         final planId = await maintenanceRepo.savePlan(
@@ -525,10 +512,8 @@ void main() {
           kind: AreaKind.indoor,
         );
         final roomId = await assetRepo.saveRoom(areaId: areaId, name: 'Photos');
-        final categoryId = (await assetRepo.listCategories()).first.id;
         final assetId = await assetRepo.saveAsset(
           name: 'Photo asset',
-          categoryId: categoryId,
           roomId: roomId,
         );
         final sourceA = File(p.join(tempDir.path, 'a.jpg'))

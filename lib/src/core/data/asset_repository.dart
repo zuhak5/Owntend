@@ -693,7 +693,6 @@ class DriftAssetRepository implements AssetRepository {
     String? id,
     required String name,
     domain.AssetType assetType = domain.AssetType.general,
-    required String categoryId,
     required String roomId,
     String? placement,
     String? notes,
@@ -723,7 +722,6 @@ class DriftAssetRepository implements AssetRepository {
                 id: assetId,
                 name: name.trim(),
                 assetType: Value(assetType.name),
-                categoryId: categoryId,
                 roomId: roomId,
                 placement: Value(_blankToNull(placement)),
                 notes: Value(_blankToNull(notes)),
@@ -739,7 +737,6 @@ class DriftAssetRepository implements AssetRepository {
           AssetsCompanion(
             name: Value(name.trim()),
             assetType: Value(assetType.name),
-            categoryId: Value(categoryId),
             roomId: Value(roomId),
             placement: Value(_blankToNull(placement)),
             notes: Value(_blankToNull(notes)),
@@ -802,7 +799,6 @@ class DriftAssetRepository implements AssetRepository {
       id: asset.id,
       name: asset.name,
       assetType: asset.assetType,
-      categoryId: asset.categoryId,
       roomId: roomId,
       placement: asset.placement,
       notes: asset.notes,
@@ -834,7 +830,6 @@ class DriftAssetRepository implements AssetRepository {
       id: newAssetId,
       name: source.name,
       assetType: source.assetType,
-      categoryId: source.categoryId,
       roomId: roomId,
       placement: source.placement,
       notes: source.notes,
@@ -1206,23 +1201,6 @@ class DriftAssetRepository implements AssetRepository {
               ]))
             .get();
     return rows.map(_photoFromRow).toList();
-  }
-
-  @override
-  Stream<List<domain.Category>> watchCategories() {
-    return (db.select(db.categories)
-          ..orderBy([(category) => OrderingTerm.asc(category.name)]))
-        .watch()
-        .map((rows) => rows.map(_categoryFromRow).toList())
-        .distinctByFingerprint(categoryListFingerprint);
-  }
-
-  @override
-  Future<List<domain.Category>> listCategories() async {
-    final rows = await (db.select(
-      db.categories,
-    )..orderBy([(category) => OrderingTerm.asc(category.name)])).get();
-    return rows.map(_categoryFromRow).toList();
   }
 
   @override

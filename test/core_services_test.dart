@@ -335,16 +335,7 @@ TaskItem _task({
   final asset = Asset(
     id: 'asset_$group',
     name: 'Asset',
-    categoryId: 'category_$group',
     roomId: 'room',
-    createdAt: now,
-    updatedAt: now,
-  );
-  final category = Category(
-    id: 'category_$group',
-    name: group.name,
-    healthGroup: group,
-    iconName: 'home',
     createdAt: now,
     updatedAt: now,
   );
@@ -370,7 +361,6 @@ TaskItem _task({
       updatedAt: now,
     ),
     asset: asset,
-    category: category,
     room: room,
     status: TaskStatus.upcoming,
   );

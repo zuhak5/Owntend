@@ -33,7 +33,6 @@ function Invoke-LocalQuery {
 $setup = @"
 do language plpgsql `$fixture`$
 declare
-  category_id text;
 begin
   insert into auth.users (
     instance_id, id, aud, role, email, encrypted_password,
@@ -43,11 +42,6 @@ begin
     'authenticated', 'authenticated', '$email', '', now(), now(), now()
   );
 
-  select id into category_id
-  from public.categories
-  where user_id = '$userId' and health_group = 'other'
-  order by id
-  limit 1;
 
   insert into public.areas (
     user_id, id, name, kind, sort_order, created_at, updated_at
@@ -61,11 +55,10 @@ begin
     now(), now()
   );
   insert into public.assets (
-    user_id, id, name, asset_type, category_id, room_id,
+    user_id, id, name, asset_type, room_id,
     created_at, updated_at
   ) values (
-    '$userId', '$assetId', 'Concurrency item', 'general', category_id,
-    '$roomId', now(), now()
+    '$userId', '$assetId', 'Concurrency item', 'general', '$roomId', now(), now()
   );
   insert into public.point_transactions (
     user_id, amount, balance_before, balance_after, transaction_type,

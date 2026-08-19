@@ -29,7 +29,6 @@ import 'src/core/config/app_config.dart';
 import 'src/core/data/repositories.dart';
 import 'src/core/data/reactive_stream.dart';
 import 'src/core/database/app_database.dart';
-import 'src/core/domain/categories.dart';
 import 'src/core/domain/contracts.dart';
 import 'src/core/domain/feature_models.dart' as features;
 import 'src/core/domain/models.dart';

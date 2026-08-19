@@ -248,7 +248,6 @@ select extensions.is(
           'id', 'points-general-asset',
           'name', 'General item',
           'asset_type', 'general',
-          'category_id', 'category_general',
           'room_id', 'points-room'
         ),
         'initial_plans', jsonb_build_array(
@@ -310,7 +309,6 @@ select extensions.is(
           'id', 'points-general-asset',
           'name', 'General item',
           'asset_type', 'general',
-          'category_id', 'category_general',
           'room_id', 'points-room'
         ),
         'initial_plans', jsonb_build_array(
@@ -381,7 +379,6 @@ select extensions.is(
           'id', 'points-device-asset',
           'name', 'Air purifier',
           'asset_type', 'device',
-          'category_id', 'category_appliances',
           'room_id', 'points-room',
           'placement', 'Utility shelf'
         ),
@@ -452,7 +449,6 @@ select extensions.is(
           'id', 'points-safety-asset',
           'name', 'Smoke alarm',
           'asset_type', 'safety',
-          'category_id', 'category_safety',
           'room_id', 'points-room'
         ),
         'details', jsonb_build_object(
@@ -807,7 +803,6 @@ select extensions.is(
           'id', 'points-zero-wallet-asset',
           'name', 'Created with zero points',
           'asset_type', 'general',
-          'category_id', 'category_general',
           'room_id', 'points-room'
         )
       )

@@ -208,11 +208,7 @@ class _ThingDetailScreenState extends ConsumerState<ThingDetailScreen> {
             body: Center(child: Text(context.l10n.itemNotFound)),
           );
         }
-        final categories = ref.watch(categoriesProvider).value ?? [];
         final rooms = ref.watch(roomsProvider).value ?? [];
-        final category = categories
-            .where((item) => item.id == asset.categoryId)
-            .firstOrNull;
         final room = rooms.where((item) => item.id == asset.roomId).firstOrNull;
         final tasks = ref.watch(assetSavedTasksProvider(asset.id));
         final tags = ref.watch(assetTagsProvider(asset.id)).value ?? [];
@@ -326,8 +322,6 @@ class _ThingDetailScreenState extends ConsumerState<ThingDetailScreen> {
                                           context,
                                           asset.assetType,
                                         ),
-                                        if (category != null)
-                                          _categoryLabel(context, category),
                                         if (room != null) room.name,
                                         if (asset.placement != null)
                                           asset.placement!,
@@ -1080,7 +1074,6 @@ class _ThingPhotoTile extends StatelessWidget {
 class ThingCard extends ConsumerWidget {
   const ThingCard({
     required this.asset,
-    required this.category,
     required this.onTap,
     required this.onEdit,
     required this.onPhoto,
@@ -1091,7 +1084,6 @@ class ThingCard extends ConsumerWidget {
   });
 
   final Asset asset;
-  final Category? category;
   final ItemTaskStatusSummary? dueStatus;
   final VoidCallback onTap;
   final VoidCallback onEdit;
@@ -1108,7 +1100,6 @@ class ThingCard extends ConsumerWidget {
         : hk_ui.itemDueAccentColor(context, status.status);
     final subtitle = [
       _assetTypeLabel(context, asset.assetType),
-      if (category != null) category!.name,
       if (asset.placement != null) asset.placement!,
     ].join(' · ');
     final card = hk_ui.PremiumCard(

@@ -628,7 +628,6 @@ void main() {
         id: 'orphan-asset-1',
         name: 'Orphaned Asset',
         assetType: AssetType.general,
-        categoryId: 'category_general',
         roomId: 'missing-room-id',
         createdAt: DateTime.utc(2026, 8, 14),
         updatedAt: DateTime.utc(2026, 8, 14),
@@ -6014,7 +6013,6 @@ List<Override> _testOverrides(
         : roomsProvider.overrideWith(
             (ref) => _seededStream(homeRooms, roomStream),
           ),
-    categoriesProvider.overrideWithValue(AsyncData(_categories(now))),
     assetStream == null
         ? assetsProvider.overrideWithValue(AsyncData(things))
         : assetsProvider.overrideWith(
@@ -6197,19 +6195,10 @@ TaskItem _taskItem(
   bool isEnabled = true,
 }) {
   final now = DateTime(2026);
-  final category = Category(
-    id: 'category_pets',
-    name: 'Pets',
-    healthGroup: HealthGroup.pets,
-    iconName: 'pets',
-    createdAt: now,
-    updatedAt: now,
-  );
   final asset = Asset(
     id: 'asset_fish',
     name: 'Fish',
     assetType: AssetType.pet,
-    categoryId: category.id,
     roomId: 'room_kitchen',
     createdAt: now,
     updatedAt: now,
@@ -6236,55 +6225,9 @@ TaskItem _taskItem(
       updatedAt: now,
     ),
     asset: asset,
-    category: category,
     room: room,
     status: status,
   );
-}
-
-List<Category> _categories(DateTime now) {
-  return [
-    Category(
-      id: 'category_appliances',
-      name: 'Appliances',
-      healthGroup: HealthGroup.appliances,
-      iconName: 'kitchen',
-      createdAt: now,
-      updatedAt: now,
-    ),
-    Category(
-      id: 'category_plants',
-      name: 'Plants',
-      healthGroup: HealthGroup.plants,
-      iconName: 'yard',
-      createdAt: now,
-      updatedAt: now,
-    ),
-    Category(
-      id: 'category_pets',
-      name: 'Pets',
-      healthGroup: HealthGroup.pets,
-      iconName: 'pets',
-      createdAt: now,
-      updatedAt: now,
-    ),
-    Category(
-      id: 'category_safety',
-      name: 'Safety',
-      healthGroup: HealthGroup.safety,
-      iconName: 'shield',
-      createdAt: now,
-      updatedAt: now,
-    ),
-    Category(
-      id: 'category_general',
-      name: 'General',
-      healthGroup: HealthGroup.other,
-      iconName: 'home',
-      createdAt: now,
-      updatedAt: now,
-    ),
-  ];
 }
 
 List<Asset> _things(DateTime now) {
@@ -6300,13 +6243,6 @@ Asset _thing(String id, String name, AssetType type, {DateTime? now}) {
     id: id,
     name: name,
     assetType: type,
-    categoryId: switch (type) {
-      AssetType.device => 'category_appliances',
-      AssetType.pet => 'category_pets',
-      AssetType.plant => 'category_plants',
-      AssetType.safety => 'category_safety',
-      AssetType.general => 'category_general',
-    },
     roomId: 'room_kitchen',
     placement: 'North wall',
     createdAt: timestamp,

@@ -38,7 +38,7 @@ const _allowedRootDirectories = {'photos', 'profile', 'cloud_media'};
 
 const _includedData = [
   'Tasks and due dates',
-  'Items, rooms, areas, categories, tags, and photos',
+  'Items, rooms, areas, tags, and photos',
   'Task history, timeline, streaks, and statistics source data',
   'Notification preferences, inbox history, and snooze defaults',
   'Theme, profile, weather location, and app settings',
@@ -51,7 +51,6 @@ const _excludedData = [
 const _currentSchemaTables = [
   'areas',
   'rooms',
-  'categories',
   'assets',
   'device_details',
   'pet_details',

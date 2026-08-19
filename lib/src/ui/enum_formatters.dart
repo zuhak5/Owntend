@@ -220,15 +220,8 @@ List<RoomType> _roomTypesFor(AreaKind kind) {
   };
 }
 
-String _assetTypeLabel(BuildContext context, AssetType type) {
-  return switch (type) {
-    AssetType.device => context.l10n.deviceOrAppliance,
-    AssetType.pet => context.l10n.pet,
-    AssetType.plant => context.l10n.plant,
-    AssetType.safety => context.l10n.safetyItem,
-    AssetType.general => context.l10n.generalItem,
-  };
-}
+String _assetTypeLabel(BuildContext context, AssetType type) =>
+    localizedAssetTypeLabel(context, type);
 
 String _assetTypePluralLabel(BuildContext context, AssetType type) {
   return switch (type) {
@@ -288,9 +281,6 @@ String _healthGroupLabel(BuildContext context, HealthGroup group) {
   };
 }
 
-String _categoryLabel(BuildContext context, Category category) =>
-    localizedCategoryLabel(context, category);
-
 String _recurrenceUnitLabel(BuildContext context, RecurrenceUnit unit) {
   return switch (unit) {
     RecurrenceUnit.hours => context.l10n.hours2,
@@ -311,8 +301,4 @@ Color _taskStatusColor(BuildContext context, TaskStatus status) {
     TaskStatus.upcoming => Theme.of(context).colorScheme.primary,
     TaskStatus.completed => HkColors.primary,
   };
-}
-
-Category? _categoryForType(AssetType type, List<Category> categories) {
-  return categoryForAssetType(type, categories);
 }

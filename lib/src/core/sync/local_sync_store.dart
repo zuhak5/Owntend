@@ -8,7 +8,6 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
-import '../domain/categories.dart';
 import '../data/repositories.dart';
 import '../database/app_database.dart';
 import 'sync_contracts.dart';
@@ -665,7 +664,6 @@ ORDER BY created_at DESC, id DESC
         'areas',
         'settings',
         'streaks',
-        'categories',
       ]) {
         await db.customStatement('DELETE FROM $table');
       }
@@ -706,7 +704,6 @@ ORDER BY created_at DESC, id DESC
         'areas',
         'settings',
         'streaks',
-        'categories',
       ]) {
         await db.customStatement('DELETE FROM $table');
       }
@@ -729,23 +726,6 @@ ORDER BY created_at DESC, id DESC
 
   Future<void> _seedPristineDefaults() async {
     final now = DateTime.now();
-    for (final c in appCategories) {
-      await db.customInsert(
-        '''
-INSERT OR IGNORE INTO categories(id, name, health_group, icon_name, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?)
-''',
-        variables: [
-          Variable<String>(c.id),
-          Variable<String>(c.name),
-          Variable<String>(c.healthGroup.name),
-          Variable<String>(c.iconName),
-          Variable<DateTime>(now),
-          Variable<DateTime>(now),
-        ],
-        updates: {db.categories},
-      );
-    }
     for (final row in _seedValues['user_setting']!.values) {
       await db.customInsert(
         '''

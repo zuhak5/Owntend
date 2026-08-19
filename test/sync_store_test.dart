@@ -147,7 +147,6 @@ void main() {
       );
       final assetId = await repository.saveAsset(
         name: 'Maintenance rollback asset',
-        categoryId: 'category_general',
         roomId: roomId,
       );
 
@@ -468,7 +467,6 @@ void main() {
     );
     await repository.saveAsset(
       name: 'Tagged cloud asset',
-      categoryId: 'category_general',
       roomId: roomId,
       tagNames: const ['Cloud'],
     );
@@ -496,13 +494,11 @@ void main() {
     );
     await repository.saveAsset(
       name: 'First tagged asset',
-      categoryId: 'category_general',
       roomId: roomId,
       tagNames: const ['Home'],
     );
     await repository.saveAsset(
       name: 'Second tagged asset',
-      categoryId: 'category_general',
       roomId: roomId,
       tagNames: const ['home'],
     );

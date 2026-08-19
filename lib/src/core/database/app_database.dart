@@ -6,7 +6,6 @@ import 'package:sqlite3/common.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../domain/categories.dart';
 import '../domain/models.dart';
 
 part 'app_database.g.dart';
@@ -52,25 +51,11 @@ class Rooms extends Table {
   ];
 }
 
-@DataClassName('CategoryRow')
-class Categories extends Table {
-  TextColumn get id => text()();
-  TextColumn get name => text().unique()();
-  TextColumn get healthGroup => text()();
-  TextColumn get iconName => text().withDefault(const Constant('home'))();
-  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
-  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
-
-  @override
-  Set<Column<Object>> get primaryKey => {id};
-}
-
 @DataClassName('AssetRow')
 class Assets extends Table {
   TextColumn get id => text()();
   TextColumn get name => text()();
   TextColumn get assetType => text().withDefault(const Constant('general'))();
-  TextColumn get categoryId => text().references(Categories, #id)();
   TextColumn get roomId => text().references(Rooms, #id)();
   TextColumn get placement => text().nullable()();
   TextColumn get notes => text().nullable()();
@@ -461,7 +446,6 @@ class SyncAccount extends Table {
   tables: [
     Areas,
     Rooms,
-    Categories,
     Assets,
     DeviceDetailsTable,
     PetDetailsTable,
@@ -493,13 +477,12 @@ class AppDatabase extends _$AppDatabase {
 
   static const databaseName = 'owntend';
   static const databaseFileName = '$databaseName.sqlite';
-  static const currentSchemaVersion = 2;
+  static const currentSchemaVersion = 3;
   static const _sqliteBusyTimeoutMs = 8000;
   static const _startupRecoveryAttempts = 5;
   static const _searchIndexSourceTables = <String>[
     'areas',
     'rooms',
-    'categories',
     'assets',
     'device_details',
     'pet_details',
@@ -567,6 +550,21 @@ class AppDatabase extends _$AppDatabase {
     onUpgrade: (m, from, to) async {
       if (from < 2 && to >= 2) {
         await _createSearchIndexGenerationInfrastructure();
+      }
+      if (from < 3 && to >= 3) {
+        await customStatement('DROP INDEX IF EXISTS idx_assets_category');
+        await customStatement('DROP INDEX IF EXISTS idx_categories_group');
+        await customStatement(
+          'DROP TRIGGER IF EXISTS search_categories_insert',
+        );
+        await customStatement(
+          'DROP TRIGGER IF EXISTS search_categories_update',
+        );
+        await customStatement(
+          'DROP TRIGGER IF EXISTS search_categories_delete',
+        );
+        await m.alterTable(TableMigration(assets));
+        await customStatement('DROP TABLE IF EXISTS categories');
       }
     },
     beforeOpen: (details) async {
@@ -836,8 +834,6 @@ END
       'CREATE INDEX IF NOT EXISTS idx_rooms_area ON rooms(area_id)',
       'CREATE INDEX IF NOT EXISTS idx_rooms_name ON rooms(name)',
       'CREATE INDEX IF NOT EXISTS idx_rooms_archived ON rooms(archived_at)',
-      'CREATE INDEX IF NOT EXISTS idx_categories_group ON categories(health_group)',
-      'CREATE INDEX IF NOT EXISTS idx_assets_category ON assets(category_id)',
       'CREATE INDEX IF NOT EXISTS idx_assets_room ON assets(room_id)',
       'CREATE INDEX IF NOT EXISTS idx_assets_type ON assets(asset_type)',
       'CREATE INDEX IF NOT EXISTS idx_assets_archived ON assets(archived_at)',
@@ -929,13 +925,6 @@ END
   Future<void> _seedDefaults() async {
     final now = DateTime.now();
     await batch((batch) {
-      batch.insertAll(
-        categories,
-        appCategories.map(
-          (c) => _categorySeed(c.id, c.name, c.healthGroup, c.iconName, now),
-        ),
-        mode: InsertMode.insertOrIgnore,
-      );
       batch.insertAll(settings, [
         SettingsCompanion.insert(
           key: 'theme',
@@ -982,22 +971,5 @@ END
         StreaksCompanion.insert(id: 'default', updatedAt: Value(now)),
       ], mode: InsertMode.insertOrIgnore);
     });
-  }
-
-  CategoriesCompanion _categorySeed(
-    String id,
-    String name,
-    HealthGroup group,
-    String iconName,
-    DateTime now,
-  ) {
-    return CategoriesCompanion.insert(
-      id: id,
-      name: name,
-      healthGroup: group.name,
-      iconName: Value(iconName),
-      createdAt: Value(now),
-      updatedAt: Value(now),
-    );
   }
 }

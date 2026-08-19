@@ -215,24 +215,6 @@ class Room {
   final DateTime? archivedAt;
 }
 
-class Category {
-  const Category({
-    required this.id,
-    required this.name,
-    required this.healthGroup,
-    required this.iconName,
-    required this.createdAt,
-    required this.updatedAt,
-  });
-
-  final String id;
-  final String name;
-  final HealthGroup healthGroup;
-  final String iconName;
-  final DateTime createdAt;
-  final DateTime updatedAt;
-}
-
 class Tag {
   const Tag({required this.id, required this.name, required this.createdAt});
 
@@ -361,7 +343,6 @@ class Asset {
   const Asset({
     required this.id,
     required this.name,
-    required this.categoryId,
     required this.roomId,
     required this.createdAt,
     required this.updatedAt,
@@ -379,7 +360,6 @@ class Asset {
   final String id;
   final String name;
   final AssetType assetType;
-  final String categoryId;
   final String roomId;
   final String? placement;
   final String? notes;
@@ -562,14 +542,12 @@ class TaskItem {
   const TaskItem({
     required this.plan,
     required this.asset,
-    required this.category,
     required this.room,
     required this.status,
   });
 
   final MaintenancePlan plan;
   final Asset asset;
-  final Category category;
   final Room room;
   final TaskStatus status;
 }

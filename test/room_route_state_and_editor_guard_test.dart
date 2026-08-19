@@ -32,7 +32,6 @@ void main() {
   final testAsset = Asset(
     id: 'asset-1',
     roomId: 'room-1',
-    categoryId: 'cat-1',
     assetType: AssetType.general,
     name: 'Sofa',
     createdAt: DateTime.utc(2026, 1, 1),
@@ -51,9 +50,6 @@ void main() {
             roomAssetsProvider('room-1')
                 .overrideWith((ref) => Stream.value(<Asset>[testAsset])),
             tasksProvider.overrideWith((ref) => Stream.value(<TaskItem>[])),
-            categoriesProvider.overrideWith(
-              (ref) => Stream.value(<Category>[]),
-            ),
           ],
           child: const MaterialApp(
             localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -82,9 +78,6 @@ void main() {
                 .overrideWith((ref) => Stream.value(<Asset>[])),
             tasksProvider.overrideWith((ref) => Stream.value(<TaskItem>[])),
             areasProvider.overrideWith((ref) => Stream.value(<Area>[])),
-            categoriesProvider.overrideWith(
-              (ref) => Stream.value(<Category>[]),
-            ),
           ],
           child: const MaterialApp(
             localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -111,9 +104,6 @@ void main() {
                 .overrideWith((ref) => Stream.value(<Asset>[])),
             tasksProvider.overrideWith((ref) => Stream.value(<TaskItem>[])),
             areasProvider.overrideWith((ref) => Stream.value(<Area>[])),
-            categoriesProvider.overrideWith(
-              (ref) => Stream.value(<Category>[]),
-            ),
           ],
           child: const MaterialApp(
             localizationsDelegates: AppLocalizations.localizationsDelegates,

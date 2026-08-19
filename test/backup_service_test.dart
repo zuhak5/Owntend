@@ -134,16 +134,11 @@ void main() {
       final backupPath = await service.exportBackup();
 
       final repo = DriftAssetRepository(db);
-      final categories = await repo.listCategories();
       final extraRoom = await repo.saveRoom(
         areaId: 'area_first_floor',
         name: 'Temporary room',
       );
-      await repo.saveAsset(
-        name: 'Temporary thing',
-        categoryId: _categoryId(categories, HealthGroup.other),
-        roomId: extraRoom,
-      );
+      await repo.saveAsset(name: 'Temporary thing', roomId: extraRoom);
       await DriftSettingsRepository(db)
           .setThemePreference(ThemePreference.light);
 
@@ -363,7 +358,6 @@ Future<void> _seedRealisticData(AppDatabase db, Directory root) async {
   final repo = DriftAssetRepository(db);
   final maintenance = DriftMaintenanceRepository(db);
   final settings = DriftSettingsRepository(db);
-  final categories = await repo.listCategories();
   await repo.saveArea(
     id: 'area_first_floor',
     name: 'First Floor',
@@ -378,7 +372,6 @@ Future<void> _seedRealisticData(AppDatabase db, Directory root) async {
   final assetId = await repo.saveAsset(
     name: 'Water heater',
     assetType: AssetType.device,
-    categoryId: _categoryId(categories, HealthGroup.appliances),
     roomId: roomId,
     placement: 'North wall',
     tagNames: ['annual'],
@@ -447,10 +440,6 @@ Future<void> _deleteDirectoryWithRetries(Directory directory) async {
       await Future<void>.delayed(const Duration(milliseconds: 150));
     }
   }
-}
-
-String _categoryId(List<Category> categories, HealthGroup group) {
-  return categories.singleWhere((category) => category.healthGroup == group).id;
 }
 
 Future<File> _tamperBackup(
