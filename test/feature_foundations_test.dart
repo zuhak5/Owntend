@@ -377,9 +377,11 @@ void main() {
       try {
         await db.customSelect('SELECT 1').get();
         final areas = await db.customSelect('SELECT id FROM areas').get();
-        final categoryTables = await db.customSelect(
-          "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'categories'",
-        ).get();
+        final categoryTables = await db
+            .customSelect(
+              "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'categories'",
+            )
+            .get();
 
         expect(db.schemaVersion, AppDatabase.currentSchemaVersion);
         expect(areas, isEmpty);
