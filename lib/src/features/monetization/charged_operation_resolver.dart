@@ -8,11 +8,15 @@ class ChargedOperationResolver {
     required this.monetizationRepo,
     required this.localSyncStore,
     required this.operationStore,
-  });
+    required void Function(String userId, int balance)
+    adoptAuthoritativeBalance,
+  }) : _adoptAuthoritativeBalance = ((userId, balance) =>
+           adoptAuthoritativeBalance(userId, balance));
 
   final MonetizationRepository monetizationRepo;
   final LocalSyncStore localSyncStore;
   final TaskCreationOperationStore operationStore;
+  final void Function(String userId, int balance) _adoptAuthoritativeBalance;
 
   Future<void> resolvePendingOperations(String accountScope) async {
     if (!_accountIsCurrent(accountScope)) return;
@@ -63,6 +67,10 @@ class ChargedOperationResolver {
             );
             continue;
           }
+          if (status.balance case final balance?) {
+            _adoptAuthoritativeBalance(accountScope, balance);
+            if (!_accountIsCurrent(accountScope)) return;
+          }
           if (op.requestPayload.containsKey('plan') || status.plan != null) {
             await localSyncStore.reconcileTaskCreationComposite(
               planId: op.planId,
@@ -93,6 +101,8 @@ class ChargedOperationResolver {
                   op.requestPayload,
                 );
                 if (!_accountIsCurrent(accountScope)) return;
+                _adoptAuthoritativeBalance(accountScope, result.balance);
+                if (!_accountIsCurrent(accountScope)) return;
                 await localSyncStore.reconcileTaskCreationComposite(
                   planId: op.planId,
                   planJson: result.plan,
@@ -102,6 +112,8 @@ class ChargedOperationResolver {
                 final result = await monetizationRepo.createAsset(
                   op.requestPayload,
                 );
+                if (!_accountIsCurrent(accountScope)) return;
+                _adoptAuthoritativeBalance(accountScope, result.balance);
                 if (!_accountIsCurrent(accountScope)) return;
                 await localSyncStore.reconcileAssetCreationComposite(
                   assetId: op.planId,

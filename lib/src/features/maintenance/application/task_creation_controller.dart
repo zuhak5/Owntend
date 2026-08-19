@@ -57,6 +57,11 @@ final chargedOperationResolverProvider = Provider<ChargedOperationResolver?>((
     monetizationRepo: monetizationRepo,
     localSyncStore: localSyncStore,
     operationStore: ref.watch(taskCreationOperationStoreProvider),
+    adoptAuthoritativeBalance: (userId, balance) {
+      ref
+          .read(pointWalletControllerProvider.notifier)
+          .adoptAuthoritativeMutationResult(balance, userId: userId);
+    },
   );
 });
 
@@ -234,6 +239,13 @@ class TaskCreationController extends ValueNotifier<TaskCreationState> {
             code: TaskCreationFailureCode.networkTimeout,
           );
         }
+
+        ref
+            .read(pointWalletControllerProvider.notifier)
+            .adoptAuthoritativeMutationResult(
+              result.balance,
+              userId: accountScope,
+            );
 
         // CTC-006 & CTC-007: Reconcile canonical creation composite before
         // the durable operation journal is made terminal.

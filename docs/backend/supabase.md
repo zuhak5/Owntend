@@ -146,3 +146,17 @@ Native Flutter HTTP requests normally have no `Origin` header. They continue thr
 - The endpoint is capability-authorized and intentionally does not require a caller JWT. Authorization derives from the hashed recovery key plus the expected user binding so recovery still works after the Auth user has been deleted.
 - Responses specify status (`pending`, `deleted`, `acknowledged`, `recovery_not_found`, or `unauthorized`), target user ID, timestamps, and GC window.
 - Recovery records enter a 7-day retention window after acknowledgment before garbage collection.
+
+
+### Wallet Realtime channel
+
+`public.point_wallets` is included in `supabase_realtime` with full replica
+identity so server-side monetization changes, including SSV settlement, notify
+a running client. This is a monetization state channel, separate from the
+17-table local-first sync/change-feed contract.
+
+Authenticated clients may select only their own wallet row and retain no
+direct INSERT/UPDATE/DELETE privilege. Charges, rewards, refunds, and
+adjustments stay behind server-authoritative RPC/service-role paths.
+`0023_problem_007_wallet_realtime.test.sql` locks the publication,
+replica-identity, owner-read, and no-client-write contract.

@@ -179,3 +179,28 @@ These checks do not prove:
 - the accuracy or submission state of the Play Console Data safety, Ads, target-audience, or account-deletion declarations.
 
 Capture those items against the exact release artifact without recording tokens, direct user identifiers, full callback URLs, or provider payloads.
+
+
+## Live wallet state
+
+`point_wallets` is server-authoritative monetization state. It is **not** an
+18th local-first sync/change-feed entity and is never written through the
+generic outbox.
+
+The client has one auth-scoped Riverpod wallet owner. It keeps the last-good
+same-account wallet, subscribes to the owner-filtered Supabase wallet stream,
+and performs canonical reads after resume/reconnect and after authoritative
+mutation results. Charged task/item RPCs and hash-qualified charged-operation
+recovery/replay publish their returned server balance to that owner
+immediately; the client never computes wallet deltas.
+
+Canonical wallet snapshots are ordered by server `updated_at`. When a charged
+RPC returns only an authoritative balance, that balance is displayed
+immediately and is protected from older initial/Realtime snapshots until the
+post-mutation canonical read completes. A newer canonical server snapshot is
+then accepted normally.
+
+Rewarded-ad device callbacks remain `shownAwaitingServerVerification`. SSV
+settlement changes `point_wallets` on the server; Realtime plus canonical
+refetch/resume/reconnect convergence updates the same wallet owner. No device
+callback fabricates a credit.

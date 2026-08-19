@@ -261,6 +261,7 @@ void main() {
             capabilityVersion: '1.2.0',
             entityType: 'task',
             entityId: 'plan-lost',
+            balance: 8,
             plan: {'id': 'plan-lost', 'title': 'Reconciled Task'},
           ),
         );
@@ -273,10 +274,15 @@ void main() {
           ),
         );
 
+        final adoptedBalances = <int>[];
         final resolver = ChargedOperationResolver(
           monetizationRepo: fakeMonetization,
           localSyncStore: fakeSyncStore,
           operationStore: store,
+          adoptAuthoritativeBalance: (userId, balance) {
+            expect(userId, 'user-a');
+            adoptedBalances.add(balance);
+          },
         );
 
         await resolver.resolvePendingOperations('user-a');
@@ -291,6 +297,7 @@ void main() {
           }),
         );
         expect(fakeSyncStore.reconciledTaskPlanIds, ['plan-lost']);
+        expect(adoptedBalances, [8]);
 
         final resolvedOp = await store.getOperation('op-lost-response');
         expect(resolvedOp, isNotNull);
@@ -307,12 +314,19 @@ void main() {
       () async {
         final store = TaskCreationOperationStore();
         final fakeSyncStore = _FakeLocalSyncStore();
-        final fakeMonetization = _FakeMonetizationRepository(
-          statusToReturn: const ChargedOperationStatusResult(
-            status: 'not_found',
-            capabilityVersion: '1.2.0',
-          ),
-        );
+        final fakeMonetization =
+            _FakeMonetizationRepository(
+                statusToReturn: const ChargedOperationStatusResult(
+                  status: 'not_found',
+                  capabilityVersion: '1.2.0',
+                ),
+              )
+              ..createTaskResult = const PointDebitResult(
+                balance: 7,
+                charged: 1,
+                alreadyProcessed: false,
+                plan: {'id': 'plan-unsubmitted', 'title': 'Unsubmitted Task'},
+              );
 
         final payload = {
           'operation_id': 'op-unsubmitted',
@@ -333,10 +347,15 @@ void main() {
           ),
         );
 
+        final adoptedBalances = <int>[];
         final resolver = ChargedOperationResolver(
           monetizationRepo: fakeMonetization,
           localSyncStore: fakeSyncStore,
           operationStore: store,
+          adoptAuthoritativeBalance: (userId, balance) {
+            expect(userId, 'user-a');
+            adoptedBalances.add(balance);
+          },
         );
 
         await resolver.resolvePendingOperations('user-a');
@@ -349,6 +368,7 @@ void main() {
         ]);
         expect(fakeMonetization.createTaskCalls, [payload]);
         expect(fakeSyncStore.reconciledTaskPlanIds, ['plan-unsubmitted']);
+        expect(adoptedBalances, [7]);
 
         final resolvedOp = await store.getOperation('op-unsubmitted');
         expect(resolvedOp, isNotNull);
@@ -378,6 +398,7 @@ void main() {
           monetizationRepo: fakeMonetization,
           localSyncStore: fakeSyncStore,
           operationStore: store,
+          adoptAuthoritativeBalance: (_, _) {},
         );
         await resolver.resolvePendingOperations('user-a');
 
@@ -408,6 +429,7 @@ void main() {
         monetizationRepo: fakeMonetization,
         localSyncStore: fakeSyncStore,
         operationStore: store,
+        adoptAuthoritativeBalance: (_, _) {},
       );
       await resolver.resolvePendingOperations('user-a');
 
@@ -440,6 +462,7 @@ void main() {
           monetizationRepo: fakeMonetization,
           localSyncStore: fakeSyncStore,
           operationStore: store,
+          adoptAuthoritativeBalance: (_, _) {},
         );
         await resolver.resolvePendingOperations('user-a');
 
@@ -477,6 +500,7 @@ void main() {
           monetizationRepo: fakeMonetization,
           localSyncStore: fakeSyncStore,
           operationStore: store,
+          adoptAuthoritativeBalance: (_, _) {},
         );
         await resolver.resolvePendingOperations('user-a');
 

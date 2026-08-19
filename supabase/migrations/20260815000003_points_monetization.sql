@@ -54,6 +54,23 @@ CREATE TABLE IF NOT EXISTS public.point_wallets (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Wallet Realtime is a monetization notification/state channel, not part
+-- of the 17-entity local-first change-feed protocol defined in core_schema.
+ALTER TABLE public.point_wallets REPLICA IDENTITY FULL;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime'
+      AND schemaname = 'public'
+      AND tablename = 'point_wallets'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.point_wallets;
+  END IF;
+END
+$$;
+
 CREATE TABLE IF NOT EXISTS public.point_transactions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
