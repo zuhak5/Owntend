@@ -16,6 +16,9 @@ class _RecoveryMonetizationRepository implements MonetizationRepository {
   String? get currentUserId => 'account-1';
 
   @override
+  Stream<PointWallet?> watchWallet(String userId) => Stream.value(null);
+
+  @override
   Future<ChargedOperationStatusResult> getChargedOperationStatus(
     String operationId, {
     required String requestHash,
