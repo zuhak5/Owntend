@@ -8,93 +8,35 @@ class RoomsScreen extends ConsumerStatefulWidget {
 }
 
 class _RoomsScreenState extends ConsumerState<RoomsScreen> {
-  static const _roomsDataSettleDuration = Duration(milliseconds: 180);
-
   String? _selectedAreaId;
   String _roomQuery = '';
-  late _RoomsRenderData _roomsData;
-  Timer? _roomsDataTimer;
-
-  @override
-  void initState() {
-    super.initState();
-    _roomsData = _readRoomsData();
-    ref.listenManual(areasProvider, (_, _) => _scheduleRoomsDataCommit());
-    ref.listenManual(roomsProvider, (_, _) => _scheduleRoomsDataCommit());
-    ref.listenManual(assetsProvider, (_, _) => _scheduleRoomsDataCommit());
-    ref.listenManual(tasksProvider, (_, _) => _scheduleRoomsDataCommit());
-  }
-
-  @override
-  void dispose() {
-    _roomsDataTimer?.cancel();
-    super.dispose();
-  }
-
-  _RoomsRenderData _readRoomsData() {
-    final areas = ref.read(areasProvider);
-    return _RoomsRenderData(
-      areas: areas.value ?? const [],
-      rooms: ref.read(roomsProvider).value ?? const [],
-      assets: ref.read(assetsProvider).value ?? const [],
-      tasks: ref.read(tasksProvider).value ?? const [],
-      ready: areas.value != null,
-      error: areas.error,
-    );
-  }
-
-  void _scheduleRoomsDataCommit() {
-    _roomsDataTimer?.cancel();
-    _roomsDataTimer = Timer(_roomsDataSettleDuration, () {
-      if (!mounted) {
-        return;
-      }
-      final areaState = ref.read(areasProvider);
-      final next = _RoomsRenderData(
-        areas: areaState.value ?? _roomsData.areas,
-        rooms: ref.read(roomsProvider).value ?? _roomsData.rooms,
-        assets: ref.read(assetsProvider).value ?? _roomsData.assets,
-        tasks: ref.read(tasksProvider).value ?? _roomsData.tasks,
-        ready: areaState.value != null || _roomsData.ready,
-        error: areaState.error,
-      );
-      if (next.fingerprint == _roomsData.fingerprint) {
-        return;
-      }
-      AppLogger.info(
-        'rooms_render_data_committed',
-        fields: {
-          'area_count': next.areas.length,
-          'room_count': next.rooms.length,
-          'asset_count': next.assets.length,
-          'task_count': next.tasks.length,
-        },
-      );
-      setState(() => _roomsData = next);
-    });
-  }
 
   @override
   Widget build(BuildContext context) {
-    final areas = _roomsData.ready
-        ? AsyncValue<List<Area>>.data(_roomsData.areas)
-        : _roomsData.error != null
-        ? AsyncValue<List<Area>>.error(_roomsData.error!, StackTrace.empty)
+    final areaState = ref.watch(areasProvider);
+    final areaItems = areaState.value;
+    final areas = areaItems != null
+        ? AsyncValue<List<Area>>.data(areaItems)
+        : areaState.hasError
+        ? AsyncValue<List<Area>>.error(
+            areaState.error!,
+            areaState.stackTrace ?? StackTrace.empty,
+          )
         : const AsyncValue<List<Area>>.loading();
-    final rooms = _roomsData.rooms;
-    final assets = _roomsData.assets;
-    final tasks = _roomsData.tasks;
-    final areaItems = _roomsData.areas;
+    final rooms = ref.watch(roomsProvider).value ?? const <Room>[];
+    final assets = ref.watch(assetsProvider).value ?? const <Asset>[];
+    final tasks = ref.watch(tasksProvider).value ?? const <TaskItem>[];
+    final currentAreaItems = areaItems ?? const <Area>[];
     final selectedAreaForAction =
-        areaItems.any((area) => area.id == _selectedAreaId)
+        currentAreaItems.any((area) => area.id == _selectedAreaId)
         ? _selectedAreaId
-        : areaItems.firstOrNull?.id;
+        : currentAreaItems.firstOrNull?.id;
     final selectedAreaRooms = selectedAreaForAction == null
         ? <Room>[]
         : rooms.where((room) => room.areaId == selectedAreaForAction).toList();
     final selectedActionArea = selectedAreaForAction == null
         ? null
-        : areaItems
+        : currentAreaItems
               .where((area) => area.id == selectedAreaForAction)
               .firstOrNull;
     final actionAreaIsOutdoor = selectedActionArea?.kind == AreaKind.outdoor;
@@ -444,32 +386,6 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen> {
       sortOrder: room.sortOrder,
     );
   }
-}
-
-class _RoomsRenderData {
-  _RoomsRenderData({
-    required this.areas,
-    required this.rooms,
-    required this.assets,
-    required this.tasks,
-    required this.ready,
-    required this.error,
-  }) : fingerprint = Object.hash(
-         areaListFingerprint(areas),
-         roomListFingerprint(rooms),
-         assetListFingerprint(assets),
-         taskListFingerprint(tasks),
-         ready,
-         error?.toString(),
-       );
-
-  final List<Area> areas;
-  final List<Room> rooms;
-  final List<Asset> assets;
-  final List<TaskItem> tasks;
-  final bool ready;
-  final Object? error;
-  final int fingerprint;
 }
 
 class AreaSelector extends StatelessWidget {
