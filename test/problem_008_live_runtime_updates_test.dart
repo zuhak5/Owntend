@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:owntend/main.dart';
 import 'package:owntend/src/core/data/reactive_stream.dart';
-import 'package:owntend/src/core/data/repositories.dart';
 import 'package:owntend/src/core/database/app_database.dart';
 import 'package:owntend/src/core/domain/models.dart';
 import 'package:owntend/src/core/sync/local_sync_store.dart';
@@ -70,7 +69,7 @@ void main() {
     );
     final recordSubscription = container.listen(
       taskRecordsProvider(planId),
-      (_, __) {},
+      (_, _) {},
       fireImmediately: true,
     );
     addTearDown(roomSubscription.close);
