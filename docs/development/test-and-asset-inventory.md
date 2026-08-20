@@ -41,6 +41,23 @@ Every runtime asset required for VersionDeck and the web account-deletion flow i
 - **Manifests and Metadata**: `manifest.webmanifest`, `releases.json`, `asset-manifest.json`, `build-info.json`, `.nojekyll`
 - **Branding Assets**: `assets/versiondeck-mark.svg`, `assets/versiondeck-192.png`, `assets/versiondeck-512.png`
 
+## Android Native Splash Generation
+
+The Android native splash resources are generated from [`flutter_native_splash.yaml`](../../flutter_native_splash.yaml). Regenerate them through the repository wrapper, not by invoking `flutter_native_splash:create` directly:
+
+```powershell
+dart run tool/generate_native_splash.dart
+```
+
+Owntend intentionally uses the same Android 12 splash artwork in light and dark mode. The upstream generator emits byte-identical `drawable-night-*` copies even when no distinct `android_12.image_dark` is configured. Those copies survive Android resource shrinking and add duplicate APK payload. The wrapper runs the upstream generator and then removes only night assets that are byte-for-byte identical to the matching light-density asset. It refuses to prune a night asset if the bytes differ, so adding a real dark splash remains safe.
+
+The generated-output contract is enforced by [`test/android_splash_resource_test.dart`](../../test/android_splash_resource_test.dart). To check the committed resources without regenerating them:
+
+```powershell
+dart run tool/generate_native_splash.dart --check
+flutter test test/android_splash_resource_test.dart
+```
+
 ## Flutter and Dart Formatting
 
 All Dart code under `lib/`, `test/`, and `integration_test/` is formatted and verified:
