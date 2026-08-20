@@ -22,6 +22,7 @@ export const CANONICAL_NODE_TESTS = [
   'tool/supabase-advisors.test.mjs',
   'tool/supabase-migration-contracts.test.mjs',
   'tool/toolchain.test.mjs',
+  'tool/versiondeck-abi.test.mjs',
   'tool/versiondeck.test.mjs',
 ];
 
