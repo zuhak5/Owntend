@@ -260,3 +260,9 @@ balances recovered from completed status and exact replay.
 wallet Realtime publication/replica identity and its read-only authenticated
 RLS/grant contract. Existing monetization, SSV-hardening, charged-operation,
 17-table Realtime, BUG-005, and BUG-011 suites remain required regressions.
+
+### Problem #8 live runtime updates
+
+`test/problem_008_live_runtime_updates_test.dart` covers local repository mutations reaching the existing Drift-backed Riverpod streams without a post-population loading/empty gap, room/item/task completion convergence, preservation of the repository aggregate settle boundary, removal of the redundant Dashboard/Rooms render caches, live-first Home startup-snapshot precedence, and the recent-sync resume regression where a missed remote change must trigger a broad pull and repair local Drift state.
+
+Keep the existing coordinator, Realtime, hydration, notification-completion, backup, search-generation, and wallet suites in the same validation run. In particular, `test/sync_coordinator_test.dart` retains active broad-pull coalescing and canonical Realtime convergence coverage, while BUG-004/005/008/011/012/015 and Problem #7 tests protect the authority, account-scope, startup, completion, backup, search, and monetization boundaries that Problem #8 must not bypass.

@@ -110,6 +110,14 @@ Realtime events (insert, update, delete) are strictly non-authoritative invalida
 - Deletes are applied authoritatively ONLY through the ordered change feed pull protocol (`_pullServerChangeFeed` -> `applyRemoteFeedDelete`). If a local pending mutation exists, local domain data is preserved and the shadow is updated so the next push can reconcile cleanly.
 - The system tolerates dropped, duplicated, delayed, reordered, and burst Realtime events without permanent state divergence.
 
+## Resume and reconnect convergence
+
+Foreground resume and network restoration are correctness boundaries, not freshness optimizations. When cloud sync is enabled for the currently authenticated bound account, the coordinator first ensures Realtime and then requires a pull-capable broad convergence pass even when `lastSyncedAt` is only minutes old. That pass also pushes eligible local mutations.
+
+A broad convergence request has precedence over queued targeted or push-only work. If a targeted or push-only operation is already active, one broad follow-up remains pending. If a broad pull is already active, the resume/reconnect request coalesces into that operation rather than scheduling a duplicate. The broad pull uses change-feed protocol `1.0.1` only when the server capability is enabled; otherwise it uses the existing legacy pull fallback. Problem #8 does not enable the checked-in disabled feed capability.
+
+This recovery path is what repairs a remote change whose Realtime notification was missed while the app was suspended or disconnected. Realtime payloads remain hints: canonical app-domain state still enters Drift through targeted fetch, capability-gated feed, or legacy pull before Riverpod exposes it to widgets.
+
 ## Conflict handling
 
 A conflict exists when local and cloud changes cannot be safely merged under the entity contract.
@@ -183,6 +191,8 @@ Every protocol change should cover relevant combinations of:
 - Newer cloud revision.
 - Concurrent changes from two devices.
 - Realtime event missing or duplicated.
+- Recent-sync resume after a missed Realtime event.
+- Connectivity restoration requiring broad pull convergence.
 - Cursor-page failure and retry.
 - Account switch with pending work.
 - Revoked session.

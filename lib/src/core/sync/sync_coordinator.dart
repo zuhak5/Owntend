@@ -104,6 +104,7 @@ class SyncCoordinator implements CloudSyncRepository {
   bool _isInitializing = true;
   final Set<String> _pendingTargetTables = {};
   bool _pushOnlyRequested = false;
+  bool _broadPullRequested = false;
   var _realtimeReconnectAttempts = 0;
   bool _syncRequestedWhileActive = false;
   bool _fullSyncRequestedWhileActive = false;
@@ -454,7 +455,14 @@ class SyncCoordinator implements CloudSyncRepository {
     _pendingTargetTables.clear();
     final pushOnlyRequested = _pushOnlyRequested;
     _pushOnlyRequested = false;
-    final work = _workFor(mode, targetTables, pushOnlyRequested);
+    final broadPullRequested = _broadPullRequested;
+    _broadPullRequested = false;
+    final work = _workFor(
+      mode,
+      targetTables,
+      pushOnlyRequested,
+      broadPullRequested,
+    );
     _activeWork = work;
     final attempt = ++_syncAttemptSerial;
     AppLogger.info(
@@ -473,6 +481,7 @@ class SyncCoordinator implements CloudSyncRepository {
         _fullSyncRequestedWhileActive = false;
         _pendingTargetTables.clear();
         _pushOnlyRequested = false;
+        _broadPullRequested = false;
         return;
       }
       if (_syncRequestedWhileActive) {
@@ -493,6 +502,7 @@ class SyncCoordinator implements CloudSyncRepository {
     SyncMode requestedMode,
     Set<String> targetTables,
     bool pushOnlyRequested,
+    bool broadPullRequested,
   ) {
     return switch (requestedMode) {
       SyncMode.fullReconcile => const SyncWork(
@@ -517,7 +527,9 @@ class SyncCoordinator implements CloudSyncRepository {
         pullTables: {},
       ),
       SyncMode.incrementalPull =>
-        targetTables.isNotEmpty
+        broadPullRequested
+            ? const SyncWork(mode: SyncMode.incrementalPull, pullTables: null)
+            : targetTables.isNotEmpty
             ? SyncWork(
                 mode: SyncMode.targetedPull,
                 pullTables: Set.unmodifiable(targetTables),
@@ -2289,18 +2301,7 @@ class SyncCoordinator implements CloudSyncRepository {
     if (account == null) return;
     if (account.enabled && _authRepository.currentSession != null) {
       await _ensureRealtime();
-      final lastSyncedAt = account.lastSyncedAt;
-      final elapsed = lastSyncedAt == null
-          ? null
-          : DateTime.now().difference(lastSyncedAt);
-      final recentlyReconciled =
-          elapsed != null &&
-          !elapsed.isNegative &&
-          elapsed <= const Duration(minutes: 15);
-      _scheduleAutomaticSync(
-        delay: Duration.zero,
-        pushOnly: recentlyReconciled,
-      );
+      _scheduleAutomaticSync(delay: Duration.zero, requireBroadPull: true);
     }
   }
 
@@ -2436,7 +2437,7 @@ class SyncCoordinator implements CloudSyncRepository {
     }
     await _ensureRealtime();
     if (restored) {
-      _scheduleAutomaticSync(delay: Duration.zero, forceAfterActive: true);
+      _scheduleAutomaticSync(delay: Duration.zero, requireBroadPull: true);
     }
     await _emit();
   }
@@ -2445,22 +2446,39 @@ class SyncCoordinator implements CloudSyncRepository {
     Duration delay = const Duration(milliseconds: 350),
     Set<String>? targetTables,
     bool pushOnly = false,
-    bool forceAfterActive = false,
+    bool requireBroadPull = false,
   }) {
     if (_accountDeletionInProgress) return;
-    if (targetTables != null) {
-      _pendingTargetTables.addAll(targetTables);
+    if (requireBroadPull) {
+      _broadPullRequested = true;
+      _pendingTargetTables.clear();
+      _pushOnlyRequested = false;
+    } else if (!_broadPullRequested) {
+      if (targetTables != null) {
+        _pendingTargetTables.addAll(targetTables);
+      }
+      _pushOnlyRequested = _pushOnlyRequested || pushOnly;
     }
-    _pushOnlyRequested = _pushOnlyRequested || pushOnly;
     if (!_automaticSyncEnabled || _isInitializing) return;
     if (_activeSync != null) {
       final activeCoversBroadPull = _activeWork?.pullTables == null;
 
-      // Preserve follow-up work when data changed during the active sync, when
-      // connectivity was restored, or when the active operation is targeted
-      // or push-only and therefore does not cover a broad automatic pull.
+      if (_broadPullRequested && activeCoversBroadPull) {
+        _broadPullRequested = false;
+        _pendingTargetTables.clear();
+        _pushOnlyRequested = false;
+        AppLogger.info(
+          'sync_automatic_reused_active_broad_pull',
+          fields: {'attempt': _syncAttemptSerial},
+        );
+        return;
+      }
+
+      // Preserve follow-up work when data changed during the active sync or
+      // when a requested broad convergence is not covered by targeted or
+      // push-only active work.
       final hasNewWork =
-          forceAfterActive ||
+          _broadPullRequested ||
           _pendingTargetTables.isNotEmpty ||
           _pushOnlyRequested ||
           !activeCoversBroadPull;
@@ -2537,6 +2555,7 @@ class SyncCoordinator implements CloudSyncRepository {
     _realtimeDeleteFollowUpTimer?.cancel();
     _pendingTargetTables.clear();
     _pushOnlyRequested = false;
+    _broadPullRequested = false;
     _syncRequestedWhileActive = false;
     _fullSyncRequestedWhileActive = false;
   }
