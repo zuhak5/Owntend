@@ -17,7 +17,8 @@ test('ABI evidence builder preserves exact release identity and all supported AB
     script,
     /\$expectedAbis = @\('arm64-v8a', 'armeabi-v7a', 'x86_64'\)/,
   );
-  assert.match(script, /Unexpected versionCode for \$abi/);
+  assert.match(script, /Unexpected versionCode for \$\{abi\}/);
+  assert.doesNotMatch(script, /\$abi:/);
   assert.match(script, /\$actualBuild -ne \$ExpectedBuild/);
   assert.match(script, /\^lib\/\(\[\^\/\]\+\)\//);
   assert.match(script, /\$libAbis\.Count -ne 1/);
