@@ -1,0 +1,167 @@
+name: TEMP staging APK splash evidence
+
+on:
+  push:
+    branches:
+      - apk-size-p2-splash-package-evidence
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  measure:
+    name: Build non-secret arm64 staging APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Set up Java 21
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: "3.47.0"
+          channel: stable
+          cache: true
+
+      - name: Resolve and generate sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter pub get --enforce-lockfile
+          flutter gen-l10n
+          dart run build_runner build
+
+      - name: Create ephemeral non-production signing key
+        shell: bash
+        run: |
+          set -euo pipefail
+          keytool -genkeypair \
+            -keystore android/app/tmp-size-evidence.jks \
+            -storepass changeit \
+            -keypass changeit \
+            -alias tmp-size-evidence \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 1 \
+            -dname "CN=Temporary Size Evidence, OU=CI, O=Owntend"
+          cat > android/key.properties <<'EOF'
+          storePassword=changeit
+          keyPassword=changeit
+          keyAlias=tmp-size-evidence
+          storeFile=tmp-size-evidence.jks
+          EOF
+
+      - name: Build arm64 staging release APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter build apk \
+            --flavor staging \
+            --release \
+            --target-platform android-arm64 \
+            --dart-define-from-file=config/staging.example.json \
+            --no-pub
+
+      - name: Measure packaged splash and duplicate PNG payloads
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p tmp-splash-package-evidence
+          apk="$(find build/app/outputs/flutter-apk -maxdepth 1 -type f -name '*staging*release*.apk' | head -n 1)"
+          test -n "$apk"
+          cp "$apk" tmp-splash-package-evidence/staging-arm64-release.apk
+
+          version_value="$(sed -n 's/^version:[[:space:]]*//p' pubspec.yaml | head -n 1)"
+          version_name="${version_value%%+*}-staging"
+          version_code="${version_value##*+}"
+          node tool/android_apk_size_report.mjs \
+            --apk "$apk" \
+            --output tmp-splash-package-evidence/apk-size-report.json \
+            --source-sha "$GITHUB_SHA" \
+            --version-name "$version_name" \
+            --version-code "$version_code" \
+            --abi arm64-v8a
+
+          APK_PATH="$apk" python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          import pathlib
+          import zipfile
+
+          apk_path = pathlib.Path(os.environ['APK_PATH'])
+          with zipfile.ZipFile(apk_path, 'r') as archive:
+              png_entries = []
+              for info in archive.infolist():
+                  name = info.filename
+                  if not name.startswith('res/') or not name.lower().endswith('.png'):
+                      continue
+                  payload = archive.read(info)
+                  png_entries.append({
+                      'path': name,
+                      'compressedBytes': info.compress_size,
+                      'uncompressedBytes': info.file_size,
+                      'sha256': hashlib.sha256(payload).hexdigest(),
+                  })
+
+          by_sha = {}
+          for entry in png_entries:
+              by_sha.setdefault(entry['sha256'], []).append(entry)
+
+          duplicate_groups = []
+          for digest, entries in by_sha.items():
+              if len(entries) < 2:
+                  continue
+              ordered = sorted(entries, key=lambda item: item['path'])
+              compressed = sorted(entry['compressedBytes'] for entry in entries)
+              redundant = sum(compressed) - max(compressed)
+              duplicate_groups.append({
+                  'sha256': digest,
+                  'count': len(entries),
+                  'redundantCompressedBytesUpperBound': redundant,
+                  'entries': ordered,
+              })
+          duplicate_groups.sort(
+              key=lambda group: (-group['redundantCompressedBytesUpperBound'], group['sha256'])
+          )
+
+          splash_entries = [
+              entry for entry in png_entries
+              if 'splash' in entry['path'].lower()
+          ]
+          report = {
+              'schemaVersion': 1,
+              'scope': 'non-secret staging release; advisory only',
+              'apk': apk_path.name,
+              'apkBytes': apk_path.stat().st_size,
+              'apkSha256': hashlib.sha256(apk_path.read_bytes()).hexdigest(),
+              'pngEntryCount': len(png_entries),
+              'pngCompressedBytes': sum(entry['compressedBytes'] for entry in png_entries),
+              'splashEntries': sorted(splash_entries, key=lambda item: item['path']),
+              'duplicatePngGroups': duplicate_groups,
+          }
+          pathlib.Path('tmp-splash-package-evidence/splash-package-report.json').write_text(
+              json.dumps(report, indent=2) + '\n', encoding='utf-8'
+          )
+          print(json.dumps(report, indent=2))
+          PY
+
+      - name: Upload staging package evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: splash-package-evidence
+          path: tmp-splash-package-evidence/
+          if-no-files-found: error
+          retention-days: 2
