@@ -406,7 +406,7 @@ test('VersionDeck exposes only reviewed disabled and verified publication modes'
   assert.match(workflow, /--publication-mode/);
   assert.match(workflow, /steps\.source\.outputs\.publication_mode/);
   assert.doesNotMatch(workflow, /test "\$run_name" = "Build Production APK"/);
-  assert.match(workflow, /manifest\.schemaVersion !== 4/);
+  assert.match(workflow, /manifest\.schemaVersion !== 5/);
 });
 test('Gradle distribution checksum is present and correctly formatted', async () => {
   const props = await read(
