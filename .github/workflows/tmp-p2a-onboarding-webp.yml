@@ -1,0 +1,157 @@
+name: P2A Generate Onboarding WebP
+
+on:
+  push:
+    branches:
+      - apk-size-p2a-onboarding-webp
+    paths:
+      - ".github/workflows/tmp-p2a-onboarding-webp.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  transcode:
+    name: Losslessly transcode onboarding illustration
+    if: github.ref == 'refs/heads/apk-size-p2a-onboarding-webp'
+    runs-on: windows-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out exact branch
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: apk-size-p2a-onboarding-webp
+          fetch-depth: 0
+
+      - name: Generate exact lossless WebP replacement
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          python --version
+          python -m pip install --disable-pip-version-check --no-input "Pillow==12.3.0"
+          @'
+          from pathlib import Path
+          import hashlib
+          import json
+          import subprocess
+          from PIL import Image, __version__ as pillow_version
+
+          old_path = Path("assets/illustrations/owntend-onboarding-hero-target.png")
+          new_path = Path("assets/illustrations/owntend-onboarding-hero-target.webp")
+          old_asset = old_path.as_posix()
+          new_asset = new_path.as_posix()
+          expected_old_sha = "ed3dc4d2cb54ebe7025cd7d06be865a84a5e4e543fa17c0b0b98e59dc2292ec5"
+          expected_old_size = 1545709
+          expected_rgba_sha = "7ae4e1b31a148a54221060fc89d582d8e119bca4660c87195884188a45e2b0f7"
+
+          source = old_path.read_bytes()
+          source_sha = hashlib.sha256(source).hexdigest()
+          if source_sha != expected_old_sha or len(source) != expected_old_size:
+              raise SystemExit(
+                  f"Unexpected onboarding source identity: {source_sha} / {len(source)} bytes"
+              )
+
+          original = Image.open(old_path).convert("RGBA")
+          original_rgba = original.tobytes()
+          rgba_sha = hashlib.sha256(original_rgba).hexdigest()
+          if original.size != (1024, 1536) or rgba_sha != expected_rgba_sha:
+              raise SystemExit(
+                  f"Unexpected decoded onboarding pixels: {original.size} / {rgba_sha}"
+              )
+
+          original.save(
+              new_path,
+              format="WEBP",
+              lossless=True,
+              quality=100,
+              method=6,
+              exact=True,
+          )
+          candidate = Image.open(new_path).convert("RGBA")
+          candidate_rgba = candidate.tobytes()
+          if candidate.size != original.size or candidate_rgba != original_rgba:
+              raise SystemExit("Lossless WebP decoded RGBA does not exactly match the PNG source")
+
+          candidate_bytes = new_path.read_bytes()
+          candidate_sha = hashlib.sha256(candidate_bytes).hexdigest()
+          candidate_size = len(candidate_bytes)
+          if candidate_size >= len(source):
+              raise SystemExit("Lossless WebP did not reduce encoded asset bytes")
+
+          replacements = [
+              Path("lib/src/features/auth/presentation/authentication_gate.dart"),
+              Path("test/hero_asset_blending_test.dart"),
+              Path("test/full_bleed_illustration_background_test.dart"),
+              Path("test/authentication_gate_test.dart"),
+          ]
+          for path in replacements:
+              text = path.read_text(encoding="utf-8")
+              if old_asset not in text:
+                  raise SystemExit(f"Expected onboarding path is missing from {path}")
+              updated = text.replace(old_asset, new_asset)
+              with path.open("w", encoding="utf-8", newline="\n") as handle:
+                  handle.write(updated)
+
+          provenance_path = Path("config/asset_provenance.json")
+          provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
+          matching = [entry for entry in provenance.get("assets", []) if entry.get("path") == old_asset]
+          if len(matching) != 1:
+              raise SystemExit(f"Expected exactly one onboarding provenance record, found {len(matching)}")
+          entry = matching[0]
+          if entry.get("sha256") != expected_old_sha or entry.get("sizeBytes") != expected_old_size:
+              raise SystemExit("Onboarding provenance source identity is stale")
+          entry["path"] = new_asset
+          entry["sha256"] = candidate_sha
+          entry["sizeBytes"] = candidate_size
+          entry["modification"] = "lossless WebP transcode (Pillow 12.3.0, method 6, exact)"
+          entry["notes"] = (
+              "Onboarding hero target graphic. Losslessly transcoded from PNG; "
+              "decoded 1024x1536 RGBA bytes are identical to the source."
+          )
+          provenance["lastReviewed"] = "2026-08-20T00:00:00Z"
+          with provenance_path.open("w", encoding="utf-8", newline="\n") as handle:
+              json.dump(provenance, handle, indent=2, ensure_ascii=False)
+              handle.write("\n")
+
+          old_path.unlink()
+          Path(".github/workflows/tmp-p2a-onboarding-webp.yml").unlink()
+
+          search = subprocess.run(
+              ["git", "grep", "-n", old_asset, "--", ".", ":(exclude).github/workflows/tmp-p2a-onboarding-webp.yml"],
+              text=True,
+              capture_output=True,
+          )
+          if search.returncode == 0:
+              raise SystemExit(f"Stale onboarding PNG references remain:\n{search.stdout}")
+          if search.returncode not in (0, 1):
+              raise SystemExit(search.stderr)
+
+          print(f"Pillow: {pillow_version}")
+          print(f"Source: {len(source)} bytes / {source_sha}")
+          print(f"Candidate: {candidate_size} bytes / {candidate_sha}")
+          print(f"Saved: {len(source) - candidate_size} bytes")
+          print(f"Decoded RGBA SHA-256: {rgba_sha}")
+          '@ | Set-Content -Encoding utf8 .p2a_transcode.py
+          python .p2a_transcode.py
+          Remove-Item .p2a_transcode.py
+
+      - name: Commit validated P2-A change
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- `
+            .github/workflows/tmp-p2a-onboarding-webp.yml `
+            assets/illustrations/owntend-onboarding-hero-target.png `
+            assets/illustrations/owntend-onboarding-hero-target.webp `
+            config/asset_provenance.json `
+            lib/src/features/auth/presentation/authentication_gate.dart `
+            test/hero_asset_blending_test.dart `
+            test/full_bleed_illustration_background_test.dart `
+            test/authentication_gate_test.dart
+          git diff --cached --check
+          git status --short
+          git commit -m "perf(assets): losslessly optimize onboarding illustration"
+          git push origin HEAD:apk-size-p2a-onboarding-webp
