@@ -1,9 +1,9 @@
 name: TEMP splash Dart format evidence
 
 on:
-  push:
+  pull_request:
     branches:
-      - tmp-splash-dart-format-evidence
+      - apk-size-p2-splash-dedup
 
 permissions:
   contents: read
