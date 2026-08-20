@@ -112,7 +112,6 @@ flutter:
 
   assets:
     - assets/audio/
-    - assets/brand/Owntend.png
     - assets/brand/google-g-logo.png
     - assets/illustrations/
     - assets/splash/owntend_splash_icon_3d.png
