@@ -1,0 +1,187 @@
+name: TEMP R8 configuration analysis
+
+on:
+  push:
+    branches:
+      - tmp-r8-config-analysis
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Collect non-secret staging R8 evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Set up Java 21
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: "3.47.0"
+          channel: stable
+          cache: true
+
+      - name: Initialize release-like workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter clean
+          flutter pub get --enforce-lockfile
+          flutter gen-l10n
+          dart run build_runner build
+          if ! git diff --quiet -- pubspec.lock; then
+            echo "pubspec.lock changed during workspace initialization" >&2
+            git diff -- pubspec.lock >&2
+            exit 1
+          fi
+          rm -f android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
+          if find android build -type f -name 'GeneratedPluginRegistrant.*' -print0 2>/dev/null \
+            | xargs -0 -r grep -nH 'IntegrationTestPlugin' \
+            | grep -Ev '/(debug|profile)/'; then
+            echo "Release plugin registrant still contains IntegrationTestPlugin" >&2
+            exit 1
+          fi
+
+      - name: Create ephemeral non-production signing key
+        shell: bash
+        run: |
+          set -euo pipefail
+          keytool -genkeypair \
+            -keystore android/app/tmp-r8-analysis.jks \
+            -storepass changeit \
+            -keypass changeit \
+            -alias tmp-r8-analysis \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 1 \
+            -dname "CN=Temporary R8 Analysis, OU=CI, O=Owntend"
+          cat > android/key.properties <<'EOF'
+          storePassword=changeit
+          keyPassword=changeit
+          keyAlias=tmp-r8-analysis
+          storeFile=tmp-r8-analysis.jks
+          EOF
+
+      - name: Discover AGP R8 analyzer tasks and staging runtime graph
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p tmp-r8-analysis
+          (
+            cd android
+            ./gradlew :app:tasks --all --console=plain \
+              > ../tmp-r8-analysis/gradle-app-tasks.txt
+            ./gradlew :app:dependencies \
+              --configuration stagingReleaseRuntimeClasspath \
+              --console=plain \
+              > ../tmp-r8-analysis/staging-release-runtime-classpath.txt
+          )
+          grep -Ei 'analy.*R8|R8.*analy' tmp-r8-analysis/gradle-app-tasks.txt \
+            > tmp-r8-analysis/r8-analyzer-task-lines.txt || true
+          cat tmp-r8-analysis/r8-analyzer-task-lines.txt
+
+      - name: Build minified staging arm64 release APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter build apk \
+            --flavor staging \
+            --release \
+            --target-platform android-arm64 \
+            --split-per-abi \
+            --dart-define-from-file=config/staging.example.json \
+            --no-pub
+          if find android build -type f -name 'GeneratedPluginRegistrant.*' -print0 2>/dev/null \
+            | xargs -0 -r grep -nH 'IntegrationTestPlugin' \
+            | grep -Ev '/(debug|profile)/'; then
+            echo "Release build produced a registrant containing IntegrationTestPlugin" >&2
+            exit 1
+          fi
+
+      - name: Run discovered staging R8 Configuration Analyzer
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p tmp-r8-analysis/analyzer-logs
+          mapfile -t candidates < <(
+            awk '{print $1}' tmp-r8-analysis/r8-analyzer-task-lines.txt \
+              | grep -Ei '^analy.*R8Config' \
+              | sort -u
+          )
+          printf '%s\n' "${candidates[@]:-}" \
+            > tmp-r8-analysis/discovered-r8-analyzer-tasks.txt
+
+          ran=0
+          for task in "${candidates[@]:-}"; do
+            if [[ "$task" =~ [Ss]taging[Rr]elease ]]; then
+              ran=1
+              (
+                cd android
+                ./gradlew ":app:$task" --console=plain --stacktrace
+              ) 2>&1 | tee "tmp-r8-analysis/analyzer-logs/${task}.log"
+            fi
+          done
+          if [[ "$ran" -eq 0 ]]; then
+            echo "No stagingRelease R8 Configuration Analyzer task was exposed by AGP." \
+              | tee tmp-r8-analysis/analyzer-not-run.txt
+          fi
+
+      - name: Collect merged R8 outputs and APK component baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p tmp-r8-analysis/r8-files
+          find android/app/build -type f -print \
+            | sort > tmp-r8-analysis/android-app-build-files.txt
+
+          while IFS= read -r file; do
+            rel="${file#android/app/build/}"
+            dest="tmp-r8-analysis/r8-files/$rel"
+            mkdir -p "$(dirname "$dest")"
+            cp "$file" "$dest"
+          done < <(
+            find android/app/build -type f \
+              \( -path '*/outputs/mapping/stagingRelease/*' \
+                 -o -iname '*r8*' \
+                 -o -iname '*proguard*' \
+                 -o -name 'configuration.txt' \
+                 -o -name 'mapping.txt' \
+                 -o -name 'seeds.txt' \
+                 -o -name 'usage.txt' \) \
+              | sort
+          )
+
+          apk="$(find build/app/outputs/flutter-apk -maxdepth 1 -type f -name '*arm64-v8a*staging*release*.apk' | head -n 1)"
+          test -n "$apk"
+          version_value="$(sed -n 's/^version:[[:space:]]*//p' pubspec.yaml | head -n 1)"
+          version_name="${version_value%%+*}-staging"
+          version_code="${version_value##*+}"
+          node tool/android_apk_size_report.mjs \
+            --apk "$apk" \
+            --output tmp-r8-analysis/apk-size-report.json \
+            --source-sha "$GITHUB_SHA" \
+            --version-name "$version_name" \
+            --version-code "$version_code" \
+            --abi arm64-v8a
+
+      - name: Upload R8 analysis evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: r8-config-analysis
+          path: tmp-r8-analysis/
+          if-no-files-found: error
+          retention-days: 2
