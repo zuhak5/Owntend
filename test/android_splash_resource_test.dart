@@ -4,13 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('Android 12 splash reuses light assets in dark mode', () {
-    const densities = <String>[
-      'mdpi',
-      'hdpi',
-      'xhdpi',
-      'xxhdpi',
-      'xxxhdpi',
-    ];
+    const densities = <String>['mdpi', 'hdpi', 'xhdpi', 'xxhdpi', 'xxxhdpi'];
 
     for (final density in densities) {
       final normal = File(
