@@ -219,13 +219,13 @@ test('APK rail builds, verifies, and attests without public release mutation', a
 
   assert.match(
     workflow,
-    /--attestation-output \(Join-Path \$PWD "release\\apk-evidence\\provenance-attestation\.json"\)/,
+    /\$EvidencePath = Join-Path \$PWD "release\\apk-evidence"/,
   );
-
   assert.match(
     workflow,
-    /--verification-output \(Join-Path \$PWD "release\\apk-evidence\\provenance-verification\.json"\)/,
+    /--attestation-output \(Join-Path \$env:EVIDENCE_PATH "provenance-attestation\.json"\)/,
   );
+  assert.match(workflow, /--verification-output \$VerificationPath/);
 
   assert.match(workflow, /--source-digest \$env:GITHUB_SHA/);
   assert.match(workflow, /--source-ref refs\/heads\/main/);

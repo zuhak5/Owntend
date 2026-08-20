@@ -7,6 +7,7 @@ const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 
 export const CANONICAL_NODE_TESTS = [
   'tool/account-deletion-site.test.mjs',
+  'tool/android-abi-evidence-contract.test.mjs',
   'tool/android-apk-size-report.test.mjs',
   'tool/android-lint-gate.test.mjs',
   'tool/asset-and-test-inventory.test.mjs',

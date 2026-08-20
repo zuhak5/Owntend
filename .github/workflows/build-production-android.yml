@@ -46,7 +46,7 @@ jobs:
     name: Build signed production APK
     needs: validate-release-source
     runs-on: windows-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     environment: production-android-signing
     outputs:
       handoff_artifact_id: ${{ steps.handoff.outputs.artifact-id }}
@@ -524,15 +524,6 @@ jobs:
             -ExpectedBuild $env:EXPECTED_BUILD
           "evidence_path=$EvidencePath" >> $env:GITHUB_OUTPUT
 
-      - name: Upload APK diagnostics
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: Owntend-production-apk-evidence-${{ github.run_number }}
-          path: release/apk-evidence
-          if-no-files-found: warn
-          retention-days: 30
-
       - name: Upload production APK handoff
         id: handoff
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -546,6 +537,28 @@ jobs:
             build/app/outputs/mapping/prodRelease
             build/app/intermediates/flutter/prodRelease
           if-no-files-found: error
+          retention-days: 30
+
+      - name: Build and verify ABI-specific APK evidence
+        shell: pwsh
+        env:
+          EXPECTED_VERSION: ${{ steps.release.outputs.version_name }}
+          EXPECTED_BUILD: ${{ steps.release.outputs.build_number }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          & ".\tool\build_prod_abi_evidence.ps1" `
+            -ExpectedVersion $env:EXPECTED_VERSION `
+            -ExpectedBuild $env:EXPECTED_BUILD
+
+      - name: Upload APK diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: Owntend-production-apk-evidence-${{ github.run_number }}
+          path: |
+            release/apk-evidence
+            release/abi-apk-evidence
+          if-no-files-found: warn
           retention-days: 30
 
       - name: Stop Gradle daemons before cache save
@@ -575,10 +588,18 @@ jobs:
           Remove-Item -LiteralPath "config\prod.json" -Force -ErrorAction SilentlyContinue
 
   attest-production-apk:
-    name: Attest production APK evidence
+    name: Attest production APK evidence (${{ matrix.variant }})
     needs: build-production-apk
     runs-on: windows-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        variant:
+          - universal
+          - arm64-v8a
+          - armeabi-v7a
+          - x86_64
 
     permissions:
       contents: read
@@ -612,68 +633,139 @@ jobs:
             throw "APK attestation requires exact current origin/main $MainSha, got $SourceSha."
           }
 
-      - name: Restore and verify release handoff
+      - name: Restore and verify release subject
+        id: subject
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-          HANDOFF_NAME: Owntend-production-apk-handoff-${{ github.run_id }}
+          VARIANT: ${{ matrix.variant }}
           APK_NAME: ${{ needs.build-production-apk.outputs.apk_name }}
           APK_SHA256: ${{ needs.build-production-apk.outputs.apk_sha256 }}
+          EXPECTED_VERSION: ${{ needs.build-production-apk.outputs.version_name }}
+          EXPECTED_BUILD: ${{ needs.build-production-apk.outputs.build_number }}
         run: |
           $ErrorActionPreference = "Stop"
 
-          gh run download $env:GITHUB_RUN_ID `
-            --name $env:HANDOFF_NAME `
-            --dir .
+          if ($env:VARIANT -eq "universal") {
+            $HandoffName = "Owntend-production-apk-handoff-$env:GITHUB_RUN_ID"
+            gh run download $env:GITHUB_RUN_ID `
+              --name $HandoffName `
+              --dir .
+            if ($LASTEXITCODE -ne 0) {
+              throw "Could not restore production APK handoff."
+            }
 
-          if ($LASTEXITCODE -ne 0) {
-            throw "Could not restore production APK handoff."
+            $SubjectPath = Join-Path $PWD "release\$env:APK_NAME"
+            $ChecksumPath = "$SubjectPath.sha256"
+            if (-not (Test-Path -LiteralPath $SubjectPath -PathType Leaf)) {
+              throw "Expected APK handoff file was not restored: $SubjectPath"
+            }
+            if (-not (Test-Path -LiteralPath $ChecksumPath -PathType Leaf)) {
+              throw "Expected checksum handoff file was not restored: $ChecksumPath"
+            }
+
+            $ActualHash = (Get-FileHash -LiteralPath $SubjectPath -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($ActualHash -ne $env:APK_SHA256) {
+              throw "APK handoff hash mismatch before provenance attestation."
+            }
+            $ExpectedLine = "$($env:APK_SHA256)  $($env:APK_NAME)"
+            $ChecksumLine = (Get-Content -LiteralPath $ChecksumPath -Raw).Trim()
+            if ($ChecksumLine -ne $ExpectedLine) {
+              throw "Checksum handoff contents do not match the APK."
+            }
+
+            $EvidencePath = Join-Path $PWD "release\apk-evidence"
+            $ProvenanceSuffix = ""
+            $SubjectSha256 = $ActualHash
+          }
+          else {
+            $RestoreRoot = Join-Path $PWD "abi-evidence-restore-$env:VARIANT"
+            New-Item -ItemType Directory -Path $RestoreRoot -Force | Out-Null
+            $EvidenceArtifact = "Owntend-production-apk-evidence-$env:GITHUB_RUN_NUMBER"
+            gh run download $env:GITHUB_RUN_ID `
+              --name $EvidenceArtifact `
+              --dir $RestoreRoot
+            if ($LASTEXITCODE -ne 0) {
+              throw "Could not restore ABI APK evidence artifact."
+            }
+
+            $IndexFiles = @(Get-ChildItem -LiteralPath $RestoreRoot -Recurse -File -Filter "abi-evidence-index.json")
+            if ($IndexFiles.Count -ne 1) {
+              throw "Expected exactly one ABI evidence index, found $($IndexFiles.Count)."
+            }
+            $IndexFile = $IndexFiles[0]
+            $Index = Get-Content -LiteralPath $IndexFile.FullName -Raw | ConvertFrom-Json
+            if ($Index.source_sha -ne $env:GITHUB_SHA) {
+              throw "ABI evidence source SHA mismatch: $($Index.source_sha)"
+            }
+            if ([string]$Index.version_name -ne $env:EXPECTED_VERSION -or
+                [string]$Index.version_code -ne $env:EXPECTED_BUILD) {
+              throw "ABI evidence version identity does not match the universal release."
+            }
+            if ($Index.universal_apk_remains_authoritative -ne $true -or
+                $Index.public_distribution_authorized -ne $false -or
+                $Index.versiondeck_publication_authorized -ne $false) {
+              throw "ABI evidence containment flags are invalid."
+            }
+
+            $Records = @($Index.artifacts | Where-Object { $_.abi -eq $env:VARIANT })
+            if ($Records.Count -ne 1) {
+              throw "Expected exactly one ABI evidence record for $env:VARIANT, found $($Records.Count)."
+            }
+            $Record = $Records[0]
+            if ($Record.package -ne "app.owntend.mobile" -or
+                [string]$Record.version_name -ne $env:EXPECTED_VERSION -or
+                [string]$Record.version_code -ne $env:EXPECTED_BUILD) {
+              throw "ABI evidence metadata mismatch for $env:VARIANT."
+            }
+            $RelativeArtifact = ([string]$Record.file).Replace('/', [System.IO.Path]::DirectorySeparatorChar)
+            $SubjectPath = Join-Path $IndexFile.Directory.FullName $RelativeArtifact
+            if (-not (Test-Path -LiteralPath $SubjectPath -PathType Leaf)) {
+              throw "ABI evidence APK was not restored: $SubjectPath"
+            }
+            $SubjectSha256 = (Get-FileHash -LiteralPath $SubjectPath -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($SubjectSha256 -ne [string]$Record.sha256) {
+              throw "ABI evidence hash mismatch for $env:VARIANT."
+            }
+
+            $RelativeChecksum = ([string]$Record.checksum_file).Replace('/', [System.IO.Path]::DirectorySeparatorChar)
+            $ChecksumPath = Join-Path $IndexFile.Directory.FullName $RelativeChecksum
+            if (-not (Test-Path -LiteralPath $ChecksumPath -PathType Leaf)) {
+              throw "ABI evidence checksum file was not restored: $ChecksumPath"
+            }
+            $ExpectedLine = "$SubjectSha256  $([System.IO.Path]::GetFileName($SubjectPath))"
+            $ChecksumLine = (Get-Content -LiteralPath $ChecksumPath -Raw).Trim()
+            if ($ChecksumLine -ne $ExpectedLine) {
+              throw "ABI evidence checksum contents mismatch for $env:VARIANT."
+            }
+
+            $EvidencePath = $IndexFile.Directory.FullName
+            $ProvenanceSuffix = "-$env:VARIANT"
           }
 
-          $ApkPath = Join-Path $PWD "release\$env:APK_NAME"
-          $ChecksumPath = "$ApkPath.sha256"
-
-          if (-not (Test-Path -LiteralPath $ApkPath -PathType Leaf)) {
-            throw "Expected APK handoff file was not restored: $ApkPath"
-          }
-
-          if (-not (Test-Path -LiteralPath $ChecksumPath -PathType Leaf)) {
-            throw "Expected checksum handoff file was not restored: $ChecksumPath"
-          }
-
-          $ActualHash = (
-            Get-FileHash -LiteralPath $ApkPath -Algorithm SHA256
-          ).Hash.ToLowerInvariant()
-
-          if ($ActualHash -ne $env:APK_SHA256) {
-            throw "APK handoff hash mismatch before provenance attestation."
-          }
-
-          $ExpectedLine = "$($env:APK_SHA256)  $($env:APK_NAME)"
-          $ChecksumLine = (
-            Get-Content -LiteralPath $ChecksumPath -Raw
-          ).Trim()
-
-          if ($ChecksumLine -ne $ExpectedLine) {
-            throw "Checksum handoff contents do not match the APK."
-          }
+          "subject_path=$SubjectPath" >> $env:GITHUB_OUTPUT
+          "subject_sha256=$SubjectSha256" >> $env:GITHUB_OUTPUT
+          "evidence_path=$EvidencePath" >> $env:GITHUB_OUTPUT
+          "provenance_suffix=$ProvenanceSuffix" >> $env:GITHUB_OUTPUT
 
       - name: Attest production APK provenance
         uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
         with:
-          subject-path: release/${{ needs.build-production-apk.outputs.apk_name }}
+          subject-path: ${{ steps.subject.outputs.subject_path }}
 
       - name: Verify and record APK provenance tuple
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-          APK_PATH: release\${{ needs.build-production-apk.outputs.apk_name }}
+          VARIANT: ${{ matrix.variant }}
+          SUBJECT_PATH: ${{ steps.subject.outputs.subject_path }}
+          SUBJECT_SHA256: ${{ steps.subject.outputs.subject_sha256 }}
+          EVIDENCE_PATH: ${{ steps.subject.outputs.evidence_path }}
         run: |
           $ErrorActionPreference = "Stop"
 
           $CertIdentity = "https://github.com/$env:GITHUB_REPOSITORY/.github/workflows/build-production-android.yml@refs/heads/main"
-
-          $VerificationOutput = (& gh attestation verify $env:APK_PATH `
+          $VerificationOutput = (& gh attestation verify $env:SUBJECT_PATH `
             --repo $env:GITHUB_REPOSITORY `
             --predicate-type https://slsa.dev/provenance/v1 `
             --source-digest $env:GITHUB_SHA `
@@ -684,31 +776,59 @@ jobs:
             --format json 2>&1 | Out-String)
 
           if ($LASTEXITCODE -ne 0) {
-            throw "APK provenance verification failed.`n$VerificationOutput"
+            throw "APK provenance verification failed for $env:VARIANT.`n$VerificationOutput"
           }
 
+          $Verified = @($VerificationOutput | ConvertFrom-Json)
+          if ($Verified.Count -eq 0) {
+            throw "No verified attestation was returned for $env:VARIANT."
+          }
+          $ExpectedSubjectName = [System.IO.Path]::GetFileName($env:SUBJECT_PATH)
+          foreach ($Record in $Verified) {
+            $Subjects = @($Record.verificationResult.statement.subject)
+            if ($Subjects.Count -ne 1) {
+              throw "Expected exactly one attested subject for $env:VARIANT."
+            }
+            if ([string]$Subjects[0].name -ne $ExpectedSubjectName) {
+              throw "Attested subject name mismatch for $env:VARIANT."
+            }
+            if ([string]$Subjects[0].digest.sha256 -ne $env:SUBJECT_SHA256) {
+              throw "Attested subject SHA-256 mismatch for $env:VARIANT."
+            }
+          }
+
+          if ($env:VARIANT -eq "universal") {
+            $VerificationPath = Join-Path $env:EVIDENCE_PATH "provenance-verification.json"
+          }
+          else {
+            $MetadataPath = Join-Path $env:EVIDENCE_PATH "metadata"
+            New-Item -ItemType Directory -Path $MetadataPath -Force | Out-Null
+            $VerificationPath = Join-Path $MetadataPath "provenance-verification-$env:VARIANT.json"
+          }
           [System.IO.File]::WriteAllText(
-            (Join-Path $PWD "release\apk-evidence\provenance-verification.json"),
+            $VerificationPath,
             $VerificationOutput,
             (New-Object System.Text.UTF8Encoding($false))
           )
 
-          & node .\tool\provenance_policy.mjs `
-            --artifact-path $env:APK_PATH `
-            --workflow-context (Join-Path $PWD "release\apk-evidence\workflow-context.json") `
-            --release-evidence (Join-Path $PWD "release\apk-evidence\release-evidence-summary.json") `
-            --attestation-output (Join-Path $PWD "release\apk-evidence\provenance-attestation.json") `
-            --verification-output (Join-Path $PWD "release\apk-evidence\provenance-verification.json")
+          if ($env:VARIANT -eq "universal") {
+            & node .\tool\provenance_policy.mjs `
+              --artifact-path $env:SUBJECT_PATH `
+              --workflow-context (Join-Path $env:EVIDENCE_PATH "workflow-context.json") `
+              --release-evidence (Join-Path $env:EVIDENCE_PATH "release-evidence-summary.json") `
+              --attestation-output (Join-Path $env:EVIDENCE_PATH "provenance-attestation.json") `
+              --verification-output $VerificationPath
 
-          if ($LASTEXITCODE -ne 0) {
-            throw "APK provenance policy validation failed."
+            if ($LASTEXITCODE -ne 0) {
+              throw "APK provenance policy validation failed."
+            }
           }
 
       - name: Upload APK provenance evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: Owntend-production-apk-provenance-${{ github.run_number }}
-          path: release/apk-evidence
+          name: Owntend-production-apk-provenance-${{ github.run_number }}${{ steps.subject.outputs.provenance_suffix }}
+          path: ${{ steps.subject.outputs.evidence_path }}
           if-no-files-found: warn
           retention-days: 30
