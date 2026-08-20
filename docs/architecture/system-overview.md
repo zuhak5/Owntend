@@ -44,6 +44,14 @@ The FTS5 search index is a derived local materialized view. SQLite invalidation 
 
 The local database is the immediate user-facing working set. Cloud synchronization does not make every UI read depend on network availability.
 
+## Runtime UI authority
+
+Ordinary local-first domain screens render from Drift-backed Riverpod providers. A local mutation commits through its repository and Drift transaction, Drift watchers emit, Riverpod updates, and already-mounted widgets render the new value without route remounts, manual refreshes, or screen-local collection caches. Multi-table repository watches may coalesce closely related Drift invalidations long enough to observe one coherent post-transaction aggregate; presentation screens must not stack a second debounce for the same domain state.
+
+The startup `InitialHomeSnapshot` is a first-ready-frame seed, not an ongoing competing source of truth. Home uses a live provider value whenever that concern has one and falls back to the startup seed only while the live concern has never produced usable data. Non-domain startup concerns such as profile, weather, backup state, notification count, and avatar/session state retain their own live-first fallbacks where appropriate.
+
+For populated streams, ordinary revalidation keeps the last usable provider value visible while replacement data is loading or converging. A first-load spinner remains valid when no usable value exists yet. Stable domain IDs remain widget identity for mutable lists.
+
 ## Cloud backend
 
 Supabase provides:
@@ -59,6 +67,8 @@ The backend is authoritative for ownership, point balances, charged operations, 
 ## Synchronization
 
 Local mutations become durable outbox work. The coordinator binds work to an authenticated account, pushes idempotent operations, pulls cloud changes using cursors and revisions, records shadows, handles retry and conflicts, and uses realtime events as invalidation rather than as complete authoritative payloads.
+
+Foreground resume and network restoration are pull-capable convergence points even when `lastSyncedAt` is recent. After ensuring Realtime, the coordinator schedules one broad convergence pass that also pushes pending local work; an already-running broad pull satisfies the request, while targeted or push-only work is followed by the required broad pull. The server feed is used only when its capability is enabled, otherwise the legacy pull remains the canonical fallback.
 
 See `sync-protocol.md`.
 
