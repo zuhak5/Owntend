@@ -317,6 +317,42 @@ foreach ($reportDir in $lintReportCandidates) {
 }
 
 $hash = (Get-FileHash -LiteralPath $resolvedArtifact -Algorithm SHA256).Hash.ToLowerInvariant()
+$apkSizeReportFile = $null
+$apkSizeReportHash = $null
+if ($ArtifactType -eq 'apk') {
+    if ([string]::IsNullOrWhiteSpace($sourceSha) -or
+        $sourceSha -notmatch '^[0-9A-Fa-f]{40}$') {
+        throw 'APK size reporting requires a full 40-character source SHA.'
+    }
+    $apkSizeReportFile = 'apk-size-report.json'
+    $apkSizeReportPath = Join-Path $resolvedOutput $apkSizeReportFile
+    $apkSizeReportScript = Join-Path $PSScriptRoot 'android_apk_size_report.mjs'
+    $previousPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    & node $apkSizeReportScript `
+        '--apk' $resolvedArtifact `
+        '--output' $apkSizeReportPath `
+        '--source-sha' $sourceSha `
+        '--version-name' $ExpectedVersion `
+        '--version-code' $ExpectedBuild
+    $apkSizeReportExitCode = $LASTEXITCODE
+    $ErrorActionPreference = $previousPreference
+    if ($apkSizeReportExitCode -ne 0) {
+        throw "APK size report generation failed with exit code $apkSizeReportExitCode."
+    }
+    $apkSizeReport = Get-Content -LiteralPath $apkSizeReportPath -Raw | ConvertFrom-Json
+    if ($apkSizeReport.artifactSha256 -ne $hash) {
+        throw 'APK size report artifact SHA-256 does not match release evidence.'
+    }
+    $artifactLength = (Get-Item -LiteralPath $resolvedArtifact).Length
+    if ([long]$apkSizeReport.totalBytes -ne $artifactLength) {
+        throw 'APK size report totalBytes does not match the release artifact length.'
+    }
+    $apkSizeReportHash = (
+        Get-FileHash -LiteralPath $apkSizeReportPath -Algorithm SHA256
+    ).Hash.ToLowerInvariant()
+}
+
 $summary = [ordered]@{
     artifact_type = $ArtifactType
     artifact_file = [System.IO.Path]::GetFileName($resolvedArtifact)
@@ -347,6 +383,8 @@ $summary = [ordered]@{
     lint_xml_report_file = $lintXmlFile
     lint_xml_report_sha256 = $lintXmlHash
     android_lint_verified = $true
+    apk_size_report_file = $apkSizeReportFile
+    apk_size_report_sha256 = $apkSizeReportHash
     generated_at_utc = [DateTime]::UtcNow.ToString('o')
 } | ConvertTo-Json
 [System.IO.File]::WriteAllText(

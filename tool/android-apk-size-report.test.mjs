@@ -145,3 +145,15 @@ test('CLI writes byte-identical JSON for the same APK', async () => {
     await fs.rm(directory, { recursive: true, force: true });
   }
 });
+
+test('release evidence integrates APK size reporting without replacing trust checks', async () => {
+  const collector = await fs.readFile(
+    new URL('./collect_android_release_evidence.ps1', import.meta.url),
+    'utf8',
+  );
+  assert.match(collector, /android_apk_size_report\.mjs/u);
+  assert.match(collector, /apk-size-report\.json/u);
+  assert.match(collector, /artifactSha256/u);
+  assert.match(collector, /totalBytes/u);
+  assert.match(collector, /apksigner|release artifact|artifact_sha256/iu);
+});
