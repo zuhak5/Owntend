@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  const asset = 'assets/illustrations/owntend-onboarding-hero-target.png';
+  const asset = 'assets/illustrations/owntend-onboarding-hero-target.webp';
 
   test(
     '$asset has feathered transparent perimeter and opaque subject',

@@ -15,7 +15,7 @@ import 'package:owntend/src/ui/components.dart' as hk_ui;
 import 'test_theme.dart';
 
 const _onboardingHeroImage = AssetImage(
-  'assets/illustrations/owntend-onboarding-hero-target.png',
+  'assets/illustrations/owntend-onboarding-hero-target.webp',
 );
 
 void main() {

@@ -118,7 +118,7 @@ class _WelcomeScreen extends StatelessWidget {
                   key: const ValueKey('onboarding-viewport'),
                   child: FullBleedIllustrationBackground(
                     key: const ValueKey('onboarding-hero-illustration'),
-                    illustrationAsset: 'assets/illustrations/owntend-onboarding-hero-target.png',
+                    illustrationAsset: 'assets/illustrations/owntend-onboarding-hero-target.webp',
                     alignment: Alignment.center,
                     fit: BoxFit.contain,
                     backgroundGradient: const RadialGradient(

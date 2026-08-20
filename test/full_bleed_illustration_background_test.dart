@@ -18,7 +18,7 @@ void main() {
           body: FullBleedIllustrationBackground(
             key: const ValueKey('full-bleed-background'),
             illustrationAsset:
-                'assets/illustrations/owntend-onboarding-hero-target.png',
+                'assets/illustrations/owntend-onboarding-hero-target.webp',
             backgroundGradient: const LinearGradient(
               colors: [Color(0xFFF8FAF5), Color(0xFFF7F9FC)],
             ),

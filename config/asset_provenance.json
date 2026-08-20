@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "schemaVersion": 1,
-  "lastReviewed": "2026-08-14T00:00:00Z",
+  "lastReviewed": "2026-08-20T00:00:00Z",
   "reviewer": "zuhak5",
   "legalDisposition": "APPROVED_FOR_DISTRIBUTION",
   "assets": [
@@ -118,18 +118,18 @@
       "notes": "Geist font family (SemiBold weight)."
     },
     {
-      "path": "assets/illustrations/owntend-onboarding-hero-target.png",
+      "path": "assets/illustrations/owntend-onboarding-hero-target.webp",
       "category": "illustration",
-      "sha256": "ed3dc4d2cb54ebe7025cd7d06be865a84a5e4e543fa17c0b0b98e59dc2292ec5",
-      "sizeBytes": 1545709,
+      "sha256": "3c6df74fe77784a674f3ff8b07f5bfbaf84ba001385b9c498f7ebdee8b2c5119",
+      "sizeBytes": 1068786,
       "origin": "First-party illustration for Owntend",
       "creator": "Thulfiqar AL-Zamili",
       "license": "Proprietary",
       "licenseUrl": "https://github.com/zuhak5/Owntend",
       "redistributionScope": "all",
       "trademarkRestricted": false,
-      "modification": "none",
-      "notes": "Onboarding hero target graphic."
+      "modification": "lossless WebP transcode (Pillow 12.3.0, method 6, exact)",
+      "notes": "Onboarding hero target graphic. Losslessly transcoded from PNG; decoded 1024x1536 RGBA bytes are identical to the source."
     },
     {
       "path": "assets/illustrations/owntend-restore-hero-target.png",
