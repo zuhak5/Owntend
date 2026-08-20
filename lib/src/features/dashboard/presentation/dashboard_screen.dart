@@ -9,10 +9,6 @@ class DashboardScreen extends ConsumerStatefulWidget {
 
 class _DashboardScreenState extends ConsumerState<DashboardScreen>
     with WidgetsBindingObserver {
-  static const _homeDataSettleDuration = Duration(milliseconds: 180);
-
-  late _HomeRenderData _homeData;
-  Timer? _homeDataTimer;
   final LayerLink _weatherEducationLink = LayerLink();
   final LayerLink _notificationEducationLink = LayerLink();
   final GlobalKey _weatherEducationTargetKey = GlobalKey();
@@ -28,10 +24,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     _nativeAdPresentationDepth = ref.read(
       nativeAdPresentationDepthProvider.notifier,
     );
-    _homeData = _readHomeData();
-    ref.listenManual(tasksProvider, (_, _) => _scheduleHomeDataCommit());
-    ref.listenManual(assetsProvider, (_, _) => _scheduleHomeDataCommit());
-    ref.listenManual(roomsProvider, (_, _) => _scheduleHomeDataCommit());
     ref.listenManual(permissionEducationControllerProvider, (_, next) {
       _setPermissionOverlayNativeAdSuspension(
         next.isVisible && next.activeCapability != null,
@@ -85,7 +77,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   void dispose() {
     _setPermissionOverlayNativeAdSuspension(false, deferProviderUpdate: true);
     WidgetsBinding.instance.removeObserver(this);
-    _homeDataTimer?.cancel();
     super.dispose();
   }
 
@@ -102,40 +93,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     } else {
       _nativeAdPresentationDepth.pop();
     }
-  }
-
-  _HomeRenderData _readHomeData() {
-    final snapshot = ref.read(initialHomeSnapshotProvider).value;
-    if (snapshot != null) {
-      return _HomeRenderData(
-        tasks: snapshot.tasks,
-        assets: snapshot.assets,
-        rooms: snapshot.rooms,
-      );
-    }
-    return _HomeRenderData(
-      tasks: ref.read(tasksProvider).value ?? const [],
-      assets: ref.read(assetsProvider).value ?? const [],
-      rooms: ref.read(roomsProvider).value ?? const [],
-    );
-  }
-
-  void _scheduleHomeDataCommit() {
-    _homeDataTimer?.cancel();
-    _homeDataTimer = Timer(_homeDataSettleDuration, () {
-      if (!mounted) {
-        return;
-      }
-      final next = _HomeRenderData(
-        tasks: ref.read(tasksProvider).value ?? _homeData.tasks,
-        assets: ref.read(assetsProvider).value ?? _homeData.assets,
-        rooms: ref.read(roomsProvider).value ?? _homeData.rooms,
-      );
-      if (next.fingerprint == _homeData.fingerprint) {
-        return;
-      }
-      setState(() => _homeData = next);
-    });
   }
 
   void _clearPermissionSetupQuery() {
@@ -155,13 +112,23 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
 
   @override
   Widget build(BuildContext context) {
-    final tasks = _homeData.tasks;
+    final startupSnapshot = ref.watch(initialHomeSnapshotProvider).value;
+    final tasks =
+        ref.watch(tasksProvider).value ??
+        startupSnapshot?.tasks ??
+        const <TaskItem>[];
+    final assets =
+        ref.watch(assetsProvider).value ??
+        startupSnapshot?.assets ??
+        const <Asset>[];
+    final rooms =
+        ref.watch(roomsProvider).value ??
+        startupSnapshot?.rooms ??
+        const <Room>[];
     final now = DateTime.now();
     final taskBuckets = getTaskBuckets(tasks, now);
     final homeTaskSections = _homeTaskSections(context, taskBuckets);
     const homeTaskLimit = 3;
-    final assets = _homeData.assets;
-    final rooms = _homeData.rooms;
     final topPadding = MediaQuery.paddingOf(context).top;
     final headerExtent = _dashboardHeaderExtent(context, topPadding);
     final hasThings = assets.isNotEmpty;
@@ -413,23 +380,6 @@ List<_HomeTaskSectionData> _homeTaskSections(
     ];
   }
   return const [];
-}
-
-class _HomeRenderData {
-  _HomeRenderData({
-    required this.tasks,
-    required this.assets,
-    required this.rooms,
-  }) : fingerprint = Object.hash(
-         taskListFingerprint(tasks),
-         assetListFingerprint(assets),
-         roomListFingerprint(rooms),
-       );
-
-  final List<TaskItem> tasks;
-  final List<Asset> assets;
-  final List<Room> rooms;
-  final int fingerprint;
 }
 
 class _DashboardWeatherCard extends ConsumerWidget {
@@ -1698,7 +1648,7 @@ class _WeatherCard extends StatelessWidget {
                                     ),
                                     const SizedBox(height: HkSpacing.space2),
                                     Text(
-                                      '${_localizedWeatherSummary(context, current.weatherCode)} \u00B7 ${context.l10n.updatedTime(_formatShortTime(context, current.updatedAt))}',
+                                      '${_localizedWeatherSummary(context, current.weatherCode)} · ${context.l10n.updatedTime(_formatShortTime(context, current.updatedAt))}',
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: Theme.of(context)
@@ -1724,7 +1674,7 @@ class _WeatherCard extends StatelessWidget {
                                   fit: BoxFit.scaleDown,
                                   alignment: AlignmentDirectional.centerEnd,
                                   child: Text(
-                                    '${current.temperature.round()}\u00B0C',
+                                    '${current.temperature.round()}°C',
                                     style: Theme.of(context)
                                         .textTheme
                                         .displaySmall
@@ -1940,7 +1890,7 @@ class WeatherDetailChips extends StatelessWidget {
               child: _WeatherDetailChip(
                 icon: Symbols.thermostat_rounded,
                 label: context.l10n.feels,
-                value: '${weather.apparentTemperature.round()}\u00B0C',
+                value: '${weather.apparentTemperature.round()}°C',
                 compact: compact,
                 showIcon: showIcons,
               ),
