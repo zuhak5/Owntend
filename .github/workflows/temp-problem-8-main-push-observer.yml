@@ -1,0 +1,85 @@
+name: Temporary Problem 8 Main Push Observer
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+    branches: [main]
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  observe-main-push:
+    if: >-
+      github.event.pull_request.draft == true &&
+      github.event.pull_request.head.ref == 'fix/problem-8-live-runtime-updates' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Observe exact Problem 8 main push runs
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MERGE_SHA: 7d51a4c728f61f7c13ec6595b87117192a852a13
+        run: |
+          set -euo pipefail
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/runs?event=push&branch=main&head_sha=${MERGE_SHA}&per_page=100"
+
+          for attempt in $(seq 1 140); do
+            response="$(curl --fail --silent --show-error \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "${api}")"
+
+            flutter="$(jq -c --arg sha "${MERGE_SHA}" '
+              first(.workflow_runs[]
+                | select(.event == "push")
+                | select(.head_branch == "main")
+                | select(.head_sha == $sha)
+                | select(.run_attempt == 1)
+                | select(.name == "Validate Flutter")) // empty
+            ' <<<"${response}")"
+            backend="$(jq -c --arg sha "${MERGE_SHA}" '
+              first(.workflow_runs[]
+                | select(.event == "push")
+                | select(.head_branch == "main")
+                | select(.head_sha == $sha)
+                | select(.run_attempt == 1)
+                | select(.name == "Validate Google Backend and Release Contracts")) // empty
+            ' <<<"${response}")"
+
+            if [[ -n "${flutter}" && -n "${backend}" ]]; then
+              flutter_id="$(jq -r '.id' <<<"${flutter}")"
+              flutter_status="$(jq -r '.status' <<<"${flutter}")"
+              flutter_conclusion="$(jq -r '.conclusion // ""' <<<"${flutter}")"
+              backend_id="$(jq -r '.id' <<<"${backend}")"
+              backend_status="$(jq -r '.status' <<<"${backend}")"
+              backend_conclusion="$(jq -r '.conclusion // ""' <<<"${backend}")"
+
+              echo "OBSERVED|Validate Flutter|${flutter_id}|${flutter_status}|${flutter_conclusion}"
+              echo "OBSERVED|Validate Google Backend and Release Contracts|${backend_id}|${backend_status}|${backend_conclusion}"
+
+              if [[ "${flutter_status}" == "completed" && "${flutter_conclusion}" != "success" ]]; then
+                exit 1
+              fi
+              if [[ "${backend_status}" == "completed" && "${backend_conclusion}" != "success" ]]; then
+                exit 1
+              fi
+              if [[ "${flutter_status}" == "completed" && "${flutter_conclusion}" == "success" && \
+                    "${backend_status}" == "completed" && "${backend_conclusion}" == "success" ]]; then
+                echo "OBSERVER_RESULT|${MERGE_SHA}|Validate Flutter|${flutter_id}|success"
+                echo "OBSERVER_RESULT|${MERGE_SHA}|Validate Google Backend and Release Contracts|${backend_id}|success"
+                exit 0
+              fi
+            else
+              echo "OBSERVED|${MERGE_SHA}|waiting-for-both-exact-push-runs"
+            fi
+
+            sleep 15
+          done
+
+          echo "Exact main push workflows did not both reach terminal success." >&2
+          exit 1
