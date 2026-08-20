@@ -1,0 +1,175 @@
+name: TEMP PNG recompression evidence
+
+on:
+  push:
+    branches:
+      - apk-size-p2-png-recompress-evidence
+
+permissions:
+  contents: read
+
+jobs:
+  recompress:
+    name: Recompress PNG IDAT streams
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Recompress PNGs without changing decoded scanlines or metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import pathlib
+          import struct
+          import zlib
+
+          PNG_SIGNATURE = b'\x89PNG\r\n\x1a\n'
+          INPUTS = {
+              'onboarding': pathlib.Path('assets/illustrations/owntend-onboarding-hero-target.png'),
+              'restore': pathlib.Path('assets/illustrations/owntend-restore-hero-target.png'),
+          }
+          OUT = pathlib.Path('tmp-png-recompression-evidence')
+          OUT.mkdir(parents=True, exist_ok=True)
+
+          def sha256(data: bytes) -> str:
+              return hashlib.sha256(data).hexdigest()
+
+          def parse_png(data: bytes):
+              if not data.startswith(PNG_SIGNATURE):
+                  raise ValueError('Not a PNG')
+              chunks = []
+              offset = len(PNG_SIGNATURE)
+              while offset < len(data):
+                  if offset + 12 > len(data):
+                      raise ValueError('Truncated PNG chunk header')
+                  length = struct.unpack('>I', data[offset:offset + 4])[0]
+                  end = offset + 12 + length
+                  if end > len(data):
+                      raise ValueError('Truncated PNG chunk')
+                  chunk_type = data[offset + 4:offset + 8]
+                  chunk_data = data[offset + 8:offset + 8 + length]
+                  stored_crc = struct.unpack('>I', data[offset + 8 + length:end])[0]
+                  actual_crc = zlib.crc32(chunk_type)
+                  actual_crc = zlib.crc32(chunk_data, actual_crc) & 0xffffffff
+                  if stored_crc != actual_crc:
+                      raise ValueError(f'CRC mismatch in {chunk_type!r}')
+                  chunks.append((chunk_type, chunk_data, data[offset:end]))
+                  offset = end
+                  if chunk_type == b'IEND':
+                      break
+              if offset != len(data):
+                  raise ValueError('Trailing bytes after IEND')
+              return chunks
+
+          def encode_chunk(chunk_type: bytes, chunk_data: bytes) -> bytes:
+              crc = zlib.crc32(chunk_type)
+              crc = zlib.crc32(chunk_data, crc) & 0xffffffff
+              return struct.pack('>I', len(chunk_data)) + chunk_type + chunk_data + struct.pack('>I', crc)
+
+          strategies = [
+              ('default', zlib.Z_DEFAULT_STRATEGY),
+              ('filtered', zlib.Z_FILTERED),
+              ('rle', zlib.Z_RLE),
+              ('fixed', zlib.Z_FIXED),
+          ]
+
+          report = {'schemaVersion': 1, 'method': 'PNG IDAT deflate recompression only', 'assets': []}
+
+          for label, source_path in INPUTS.items():
+              source = source_path.read_bytes()
+              chunks = parse_png(source)
+              idat_data = b''.join(chunk_data for chunk_type, chunk_data, _ in chunks if chunk_type == b'IDAT')
+              if not idat_data:
+                  raise ValueError(f'{source_path}: no IDAT chunks')
+              raw_scanlines = zlib.decompress(idat_data)
+
+              ihdr = next(chunk_data for chunk_type, chunk_data, _ in chunks if chunk_type == b'IHDR')
+              width, height, bit_depth, color_type, compression, filtering, interlace = struct.unpack('>IIBBBBB', ihdr)
+              has_alpha = color_type in (4, 6) or any(chunk_type == b'tRNS' for chunk_type, _, _ in chunks)
+
+              candidates = []
+              for strategy_name, strategy in strategies:
+                  compressor = zlib.compressobj(
+                      level=9,
+                      method=zlib.DEFLATED,
+                      wbits=15,
+                      memLevel=9,
+                      strategy=strategy,
+                  )
+                  compressed = compressor.compress(raw_scanlines) + compressor.flush(zlib.Z_FINISH)
+                  candidates.append((len(compressed), strategy_name, compressed))
+              _, strategy_name, best_idat = min(candidates, key=lambda item: (item[0], item[1]))
+
+              rebuilt = bytearray(PNG_SIGNATURE)
+              emitted_idat = False
+              source_non_idat = bytearray(PNG_SIGNATURE)
+              candidate_non_idat = bytearray(PNG_SIGNATURE)
+              chunk_types = []
+              for chunk_type, chunk_data, raw_chunk in chunks:
+                  chunk_types.append(chunk_type.decode('ascii'))
+                  if chunk_type == b'IDAT':
+                      if not emitted_idat:
+                          rebuilt += encode_chunk(b'IDAT', best_idat)
+                          emitted_idat = True
+                      continue
+                  rebuilt += raw_chunk
+                  source_non_idat += raw_chunk
+                  candidate_non_idat += raw_chunk
+
+              candidate = bytes(rebuilt)
+              candidate_chunks = parse_png(candidate)
+              candidate_raw_scanlines = zlib.decompress(
+                  b''.join(chunk_data for chunk_type, chunk_data, _ in candidate_chunks if chunk_type == b'IDAT')
+              )
+              if candidate_raw_scanlines != raw_scanlines:
+                  raise ValueError(f'{source_path}: decoded scanline bytes changed')
+              if bytes(source_non_idat) != bytes(candidate_non_idat):
+                  raise ValueError(f'{source_path}: non-IDAT chunks changed')
+
+              output_path = OUT / f'{label}.png'
+              output_path.write_bytes(candidate)
+              report['assets'].append({
+                  'label': label,
+                  'sourcePath': source_path.as_posix(),
+                  'candidatePath': output_path.as_posix(),
+                  'sourceBytes': len(source),
+                  'candidateBytes': len(candidate),
+                  'savingBytes': len(source) - len(candidate),
+                  'savingPercent': round((len(source) - len(candidate)) * 100 / len(source), 6),
+                  'sourceSha256': sha256(source),
+                  'candidateSha256': sha256(candidate),
+                  'decodedScanlinesSha256': sha256(raw_scanlines),
+                  'decodedScanlinesIdentical': candidate_raw_scanlines == raw_scanlines,
+                  'nonIdatChunksSha256': sha256(bytes(source_non_idat)),
+                  'nonIdatChunksIdentical': bytes(source_non_idat) == bytes(candidate_non_idat),
+                  'width': width,
+                  'height': height,
+                  'bitDepth': bit_depth,
+                  'colorType': color_type,
+                  'hasAlpha': has_alpha,
+                  'compressionMethod': compression,
+                  'filterMethod': filtering,
+                  'interlaceMethod': interlace,
+                  'sourceIdatBytes': len(idat_data),
+                  'candidateIdatBytes': len(best_idat),
+                  'zlibStrategy': strategy_name,
+                  'chunkTypes': chunk_types,
+              })
+
+          (OUT / 'evidence.json').write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
+          print(json.dumps(report, indent=2))
+          PY
+
+      - name: Upload recompression evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: png-recompression-evidence
+          path: tmp-png-recompression-evidence/
+          if-no-files-found: error
+          retention-days: 7
