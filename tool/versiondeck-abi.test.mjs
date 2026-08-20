@@ -160,7 +160,7 @@ test("normalization verifies every ABI and aliases ARM64 for backward UI compati
 
 test("schema fails closed if primary alias or a variant is tampered", async () => {
   const normalized = await normalizeRelease(splitRelease(), normalizationOptions());
-  const manifest = {
+  const manifest = JSON.parse(JSON.stringify({
     schemaVersion: 5,
     generatedAt: "2026-08-20T13:56:00Z",
     leaseExpiresAt: "2026-08-21T13:56:00Z",
@@ -174,7 +174,7 @@ test("schema fails closed if primary alias or a variant is tampered", async () =
     latestStableReleaseId: normalized.release.id,
     latestPrereleaseReleaseId: null,
     releases: [normalized.release],
-  };
+  }));
   assert.deepEqual(validateVersionDeckManifest(manifest, { now: NOW }), []);
 
   manifest.releases[0].apk.sha256 = "f".repeat(64);
