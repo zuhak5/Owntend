@@ -16,12 +16,12 @@ concurrency:
 jobs:
   cleanup-obsolete-action-runs:
     name: Remove obsolete Actions history
-    if: github.event_name == 'push' && github.ref == 'refs/heads/chore/cleanup-stale-actions-20260820'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/chore/cleanup-stale-actions-20260820' && github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       actions: write
-      contents: read
+      contents: write
     steps:
       - name: Delete runs whose workflow path is absent from main
         env:
@@ -86,6 +86,34 @@ jobs:
             cat /tmp/stale-runs.tsv
             exit 1
           fi
+
+          gh api "repos/$GITHUB_REPOSITORY/actions/workflows?per_page=100" > /tmp/workflows.json
+          jq -n \
+            --arg run_id "$GITHUB_RUN_ID" \
+            --arg run_sha "$GITHUB_SHA" \
+            --argjson deleted "$deleted" \
+            --argjson remaining "$remaining" \
+            --rawfile keep /tmp/keep-workflows.txt \
+            --slurpfile registry /tmp/workflows.json \
+            '{
+              cleanup_run_id: ($run_id | tonumber),
+              cleanup_sha: $run_sha,
+              deleted_stale_runs: $deleted,
+              remaining_stale_runs: $remaining,
+              canonical_workflows: ($keep | split("\n") | map(select(length > 0))),
+              stale_registry_entries: [
+                $registry[0].workflows[]
+                | select(.path as $path | (($keep | split("\n") | index($path)) == null))
+                | {id, name, path, state}
+              ]
+            }' > /tmp/actions-cleanup-summary.json
+
+          cat /tmp/actions-cleanup-summary.json
+          encoded="$(base64 -w0 /tmp/actions-cleanup-summary.json)"
+          gh api --method PUT "repos/$GITHUB_REPOSITORY/contents/.actions-cleanup-summary.json" \
+            -f message='Write temporary Actions cleanup summary' \
+            -f content="$encoded" \
+            -f branch="$GITHUB_REF_NAME" >/dev/null
 
   validate-advisor-source:
     name: Require current main Advisor source
