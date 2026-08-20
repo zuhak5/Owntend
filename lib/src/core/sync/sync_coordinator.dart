@@ -528,10 +528,7 @@ class SyncCoordinator implements CloudSyncRepository {
       ),
       SyncMode.incrementalPull =>
         broadPullRequested
-            ? const SyncWork(
-                mode: SyncMode.incrementalPull,
-                pullTables: null,
-              )
+            ? const SyncWork(mode: SyncMode.incrementalPull, pullTables: null)
             : targetTables.isNotEmpty
             ? SyncWork(
                 mode: SyncMode.targetedPull,
@@ -2304,10 +2301,7 @@ class SyncCoordinator implements CloudSyncRepository {
     if (account == null) return;
     if (account.enabled && _authRepository.currentSession != null) {
       await _ensureRealtime();
-      _scheduleAutomaticSync(
-        delay: Duration.zero,
-        requireBroadPull: true,
-      );
+      _scheduleAutomaticSync(delay: Duration.zero, requireBroadPull: true);
     }
   }
 
@@ -2443,10 +2437,7 @@ class SyncCoordinator implements CloudSyncRepository {
     }
     await _ensureRealtime();
     if (restored) {
-      _scheduleAutomaticSync(
-        delay: Duration.zero,
-        requireBroadPull: true,
-      );
+      _scheduleAutomaticSync(delay: Duration.zero, requireBroadPull: true);
     }
     await _emit();
   }
