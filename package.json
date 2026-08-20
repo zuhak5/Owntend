@@ -5,11 +5,13 @@
   "scripts": {
     "test:all": "node tool/test_inventory.mjs --run",
     "test:account-deletion": "node --test tool/account-deletion-site.test.mjs",
+    "test:android-apk-size": "node --test tool/android-apk-size-report.test.mjs",
     "test:android-lint": "node --test tool/android-lint-gate.test.mjs",
     "test:asset-provenance": "node --test tool/asset-provenance.test.mjs",
     "test:dependency-security": "node --test tool/dependency-security-and-notices.test.mjs",
     "test:supabase-advisors": "node --test tool/supabase-advisors.test.mjs",
     "test:toolchain": "node --test tool/toolchain.test.mjs",
+    "report:android-apk-size": "node tool/android_apk_size_report.mjs",
     "validate:asset-provenance": "node tool/validate_asset_provenance.mjs",
     "validate:dependency-policy": "node tool/dependency_review_policy.mjs",
     "validate:google-contracts": "node tool/validate_google_release_contracts.mjs",
