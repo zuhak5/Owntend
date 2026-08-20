@@ -16,9 +16,9 @@ const read = async (path) =>
 test('GitHub Actions use only reviewed immutable references', async () => {
   const result = await validateRepositoryActionReferences();
   assert.deepEqual(result.errors, []);
-  assert.equal(result.externalReferences, 49);
+  assert.equal(result.externalReferences, 52);
   assert.equal(result.localReferences, 0);
-  assert.equal(result.files.length, 7);
+  assert.equal(result.files.length, 8);
 });
 
 test('GitHub Actions policy rejects mutable, shortened, and unowned references', () => {

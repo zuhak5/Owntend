@@ -1,0 +1,107 @@
+name: Verify Production APK Artifact Set
+
+on:
+  workflow_run:
+    workflows:
+      - Build Production APK
+    types:
+      - completed
+
+permissions:
+  contents: read
+  actions: read
+  attestations: read
+
+jobs:
+  verify-production-apk-artifact-set:
+    name: Verify ABI APK artifact set
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'workflow_dispatch' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+      SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+      SOURCE_RUN_NUMBER: ${{ github.event.workflow_run.run_number }}
+
+    steps:
+      - name: Check out exact production source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Require triggering source to remain current main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main --no-tags
+          checked_out_sha="$(git rev-parse HEAD)"
+          main_sha="$(git rev-parse origin/main)"
+          test "$checked_out_sha" = "$SOURCE_SHA"
+          if [[ "$SOURCE_SHA" != "$main_sha" ]]; then
+            echo "ABI artifact-set verification requires exact current main $main_sha, got $SOURCE_SHA." >&2
+            exit 1
+          fi
+
+      - name: Set up Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Resolve release identity
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          version_value="$(sed -n 's/^version:[[:space:]]*//p' pubspec.yaml | head -n 1)"
+          if [[ ! "$version_value" =~ ^([0-9]+\.[0-9]+\.[0-9]+)\+([0-9]+)$ ]]; then
+            echo "Expected pubspec version x.y.z+build, got: $version_value" >&2
+            exit 1
+          fi
+          echo "version_name=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+          echo "version_code=${BASH_REMATCH[2]}" >> "$GITHUB_OUTPUT"
+
+      - name: Restore protected ABI APK evidence
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          artifact_name="Owntend-production-apk-evidence-$SOURCE_RUN_NUMBER"
+          rm -rf restored-apk-evidence
+          mkdir -p restored-apk-evidence
+          gh run download "$SOURCE_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "$artifact_name" \
+            --dir restored-apk-evidence
+          test -f restored-apk-evidence/abi-apk-evidence/abi-evidence-index.json
+
+      - name: Verify strict ABI artifact set and provenance
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_VERSION: ${{ steps.release.outputs.version_name }}
+          EXPECTED_BUILD: ${{ steps.release.outputs.version_code }}
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          node tool/verify_android_apk_artifact_set.mjs \
+            --root restored-apk-evidence/abi-apk-evidence \
+            --source-sha "$SOURCE_SHA" \
+            --version-name "$EXPECTED_VERSION" \
+            --version-code "$EXPECTED_BUILD" \
+            --output release/apk-artifact-set-verification.json
+
+      - name: Upload verified ABI artifact-set evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: Owntend-production-apk-artifact-set-verification-${{ github.event.workflow_run.run_number }}
+          path: release/apk-artifact-set-verification.json
+          if-no-files-found: error
+          retention-days: 30
