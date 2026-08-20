@@ -76,6 +76,25 @@ jobs:
           storeFile=tmp-r8-analysis.jks
           EOF
 
+      - name: Build minified staging arm64 release APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter build apk \
+            --flavor staging \
+            --release \
+            --target-platform android-arm64 \
+            --split-per-abi \
+            --dart-define-from-file=config/staging.example.json \
+            --no-pub
+          test -x android/gradlew
+          if find android build -type f -name 'GeneratedPluginRegistrant.*' -print0 2>/dev/null \
+            | xargs -0 -r grep -nH 'IntegrationTestPlugin' \
+            | grep -Ev '/(debug|profile)/'; then
+            echo "Release build produced a registrant containing IntegrationTestPlugin" >&2
+            exit 1
+          fi
+
       - name: Discover AGP R8 analyzer tasks and staging runtime graph
         shell: bash
         run: |
@@ -93,24 +112,6 @@ jobs:
           grep -Ei 'analy.*R8|R8.*analy' tmp-r8-analysis/gradle-app-tasks.txt \
             > tmp-r8-analysis/r8-analyzer-task-lines.txt || true
           cat tmp-r8-analysis/r8-analyzer-task-lines.txt
-
-      - name: Build minified staging arm64 release APK
-        shell: bash
-        run: |
-          set -euo pipefail
-          flutter build apk \
-            --flavor staging \
-            --release \
-            --target-platform android-arm64 \
-            --split-per-abi \
-            --dart-define-from-file=config/staging.example.json \
-            --no-pub
-          if find android build -type f -name 'GeneratedPluginRegistrant.*' -print0 2>/dev/null \
-            | xargs -0 -r grep -nH 'IntegrationTestPlugin' \
-            | grep -Ev '/(debug|profile)/'; then
-            echo "Release build produced a registrant containing IntegrationTestPlugin" >&2
-            exit 1
-          fi
 
       - name: Run discovered staging R8 Configuration Analyzer
         shell: bash
