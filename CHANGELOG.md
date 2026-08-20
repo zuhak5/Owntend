@@ -7,7 +7,7 @@ The current application version is defined only in `pubspec.yaml`. Released vers
 
 ## Unreleased
 
-
+- Made local-first runtime screens update live from Drift/Riverpod without duplicate Home/Rooms render delays, kept startup Home snapshots seed-only once live domain values exist, and made resume/reconnect convergence pull-capable even after a recent sync so missed Realtime changes repair without navigation or manual refresh.
 - Fixed points counter synchronization with one auth-scoped, server-authoritative wallet owner that immediately adopts charged RPC/recovery balances, converges external/SSV changes through Realtime plus canonical resume/reconnect refetches, and prevents stale snapshots or cross-account balances from regressing the UI.
 
 ### Fixed
