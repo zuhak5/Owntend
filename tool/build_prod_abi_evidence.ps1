@@ -208,13 +208,13 @@ foreach ($abi in $expectedAbis) {
     $actualBuild = $Matches[2]
     $actualVersion = $Matches[3]
     if ($actualPackage -ne $expectedPackage) {
-        throw "Unexpected package for $abi: $actualPackage"
+        throw "Unexpected package for ${abi}: $actualPackage"
     }
     if ($actualVersion -ne $ExpectedVersion) {
-        throw "Unexpected versionName for $abi: $actualVersion"
+        throw "Unexpected versionName for ${abi}: $actualVersion"
     }
     if ($actualBuild -ne $ExpectedBuild) {
-        throw "Unexpected versionCode for $abi: $actualBuild. Split APKs must preserve the pubspec build number."
+        throw "Unexpected versionCode for ${abi}: $actualBuild. Split APKs must preserve the pubspec build number."
     }
     if ($badging -match '(?m)^application-debuggable') {
         throw "Production ABI APK is debuggable: $abi"
@@ -241,7 +241,7 @@ foreach ($abi in $expectedAbis) {
     $symbolFile = $symbolFileByAbi[$abi]
     $symbolSource = Join-Path $splitDebugRoot $symbolFile
     if (-not (Test-Path -LiteralPath $symbolSource -PathType Leaf)) {
-        throw "Missing Dart symbols for $abi: $symbolSource"
+        throw "Missing Dart symbols for ${abi}: $symbolSource"
     }
     Copy-Item -LiteralPath $symbolSource -Destination (Join-Path $symbolsRoot $symbolFile) -Force
 
@@ -268,7 +268,7 @@ foreach ($abi in $expectedAbis) {
     }
     $reportedLibAbis = @($sizeReport.components.lib.byAbi.PSObject.Properties.Name)
     if ($reportedLibAbis.Count -ne 1 -or $reportedLibAbis[0] -ne $abi) {
-        throw "APK size report ABI mismatch for $abi: $($reportedLibAbis -join ', ')."
+        throw "APK size report ABI mismatch for ${abi}: $($reportedLibAbis -join ', ')."
     }
 
     $artifactRecords += [ordered]@{
