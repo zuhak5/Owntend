@@ -84,6 +84,7 @@ jobs:
             --flavor staging \
             --release \
             --target-platform android-arm64 \
+            --split-per-abi \
             --dart-define-from-file=config/staging.example.json \
             --no-pub
           if find android build -type f -name 'GeneratedPluginRegistrant.*' -print0 2>/dev/null \
