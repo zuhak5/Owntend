@@ -2,9 +2,6 @@ name: Audit Supabase Advisors
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - chore/cleanup-stale-actions-20260820
 
 permissions:
   contents: read
@@ -14,110 +11,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  cleanup-obsolete-action-runs:
-    name: Remove obsolete Actions history
-    if: github.event_name == 'push' && github.ref == 'refs/heads/chore/cleanup-stale-actions-20260820' && github.actor != 'github-actions[bot]'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      actions: write
-      contents: write
-    steps:
-      - name: Delete runs whose workflow path is absent from main
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          gh api "repos/$GITHUB_REPOSITORY/contents/.github/workflows?ref=main" \
-            --jq '.[] | select(.type == "file") | .path' \
-            | sort -u > /tmp/keep-workflows.txt
-
-          echo "Canonical workflow paths on main:"
-          cat /tmp/keep-workflows.txt
-
-          scan_stale_runs() {
-            gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs?per_page=100" \
-              --jq '.workflow_runs[] | [.id, .path] | @tsv' \
-              | awk 'NF >= 2' \
-              | while IFS=$'\t' read -r run_id workflow_path; do
-                  if ! grep -Fxq "$workflow_path" /tmp/keep-workflows.txt; then
-                    printf '%s\t%s\n' "$run_id" "$workflow_path"
-                  fi
-                done
-          }
-
-          deleted=0
-          for pass in $(seq 1 10); do
-            scan_stale_runs > /tmp/stale-runs.tsv
-            if [ ! -s /tmp/stale-runs.tsv ]; then
-              break
-            fi
-
-            echo "Pass $pass: $(wc -l < /tmp/stale-runs.tsv | tr -d ' ') stale runs remain"
-            while IFS=$'\t' read -r run_id workflow_path; do
-              [ -z "$run_id" ] && continue
-              echo "Deleting run $run_id from obsolete workflow path: $workflow_path"
-              set +e
-              response="$(gh api --method DELETE "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" 2>&1)"
-              code=$?
-              set -e
-              if [ "$code" -eq 0 ]; then
-                deleted=$((deleted + 1))
-                continue
-              fi
-
-              if printf '%s' "$response" | grep -q '409'; then
-                gh api --method POST "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/cancel" >/dev/null 2>&1 || true
-              else
-                echo "$response"
-              fi
-            done < /tmp/stale-runs.tsv
-
-            sleep 2
-          done
-
-          scan_stale_runs > /tmp/stale-runs.tsv
-          remaining="$(wc -l < /tmp/stale-runs.tsv | tr -d ' ')"
-          echo "Deleted at least $deleted obsolete workflow runs."
-          echo "Remaining obsolete workflow runs: $remaining"
-          if [ "$remaining" -ne 0 ]; then
-            cat /tmp/stale-runs.tsv
-            exit 1
-          fi
-
-          gh api "repos/$GITHUB_REPOSITORY/actions/workflows?per_page=100" > /tmp/workflows.json
-          jq -n \
-            --arg run_id "$GITHUB_RUN_ID" \
-            --arg run_sha "$GITHUB_SHA" \
-            --argjson deleted "$deleted" \
-            --argjson remaining "$remaining" \
-            --rawfile keep /tmp/keep-workflows.txt \
-            --slurpfile registry /tmp/workflows.json \
-            '{
-              cleanup_run_id: ($run_id | tonumber),
-              cleanup_sha: $run_sha,
-              deleted_stale_runs: $deleted,
-              remaining_stale_runs: $remaining,
-              canonical_workflows: ($keep | split("\n") | map(select(length > 0))),
-              stale_registry_entries: [
-                $registry[0].workflows[]
-                | select(.path as $path | (($keep | split("\n") | index($path)) == null))
-                | {id, name, path, state}
-              ]
-            }' > /tmp/actions-cleanup-summary.json
-
-          cat /tmp/actions-cleanup-summary.json
-          encoded="$(base64 -w0 /tmp/actions-cleanup-summary.json)"
-          gh api --method PUT "repos/$GITHUB_REPOSITORY/contents/.actions-cleanup-summary.json" \
-            -f message='Write temporary Actions cleanup summary' \
-            -f content="$encoded" \
-            -f branch="$GITHUB_REF_NAME" >/dev/null
-
   validate-advisor-source:
     name: Require current main Advisor source
-    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -151,7 +46,6 @@ jobs:
 
   advisors:
     name: Hosted security and performance advisors
-    if: github.event_name == 'workflow_dispatch'
     needs: validate-advisor-source
     runs-on: ubuntu-latest
     environment: production-supabase-advisors
