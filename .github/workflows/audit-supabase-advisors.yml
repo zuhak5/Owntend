@@ -1,93 +1,125 @@
 name: Audit Supabase Advisors
 
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - tmp-actions-stale-cleanup
 
 permissions:
   contents: read
-
-concurrency:
-  group: supabase-advisors-${{ github.ref }}
-  cancel-in-progress: false
+  actions: write
 
 jobs:
-  validate-advisor-source:
-    name: Require current main Advisor source
+  cleanup-stale-actions-history:
+    name: Remove workflow runs absent from main
     runs-on: ubuntu-latest
-    timeout-minutes: 5
-    outputs:
-      source_sha: ${{ steps.source.outputs.sha }}
+    timeout-minutes: 15
     steps:
-      - name: Reject a non-main dispatch
+      - name: Delete runs for workflow files absent from main
         shell: bash
-        run: |
-          set -euo pipefail
-          test "$GITHUB_REF" = "refs/heads/main"
-
-      - name: Check out selected source without persisted credentials
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
-        with:
-          ref: ${{ github.sha }}
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Require selected SHA to equal current origin/main
-        id: source
-        shell: bash
-        run: |
-          set -euo pipefail
-          git fetch origin main --no-tags
-          source_sha="$(git rev-parse HEAD)"
-          remote_sha="$(git rev-parse origin/main)"
-          test "$source_sha" = "$GITHUB_SHA"
-          test "$source_sha" = "$remote_sha"
-          test "${#source_sha}" -eq 40
-          echo "sha=$source_sha" >> "$GITHUB_OUTPUT"
-
-  advisors:
-    name: Hosted security and performance advisors
-    needs: validate-advisor-source
-    runs-on: ubuntu-latest
-    environment: production-supabase-advisors
-    timeout-minutes: 10
-    steps:
-      - name: Check out validated Advisor source
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
-        with:
-          ref: ${{ needs.validate-advisor-source.outputs.source_sha }}
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Revalidate exact current main after approval
         env:
-          EXPECTED_SOURCE_SHA: ${{ needs.validate-advisor-source.outputs.source_sha }}
-        shell: bash
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          CURRENT_RUN_ID: ${{ github.run_id }}
         run: |
           set -euo pipefail
-          git fetch origin main --no-tags
-          source_sha="$(git rev-parse HEAD)"
-          remote_sha="$(git rev-parse origin/main)"
-          test "$source_sha" = "$EXPECTED_SOURCE_SHA"
-          test "$source_sha" = "$GITHUB_SHA"
-          test "$source_sha" = "$remote_sha"
 
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
-        with:
-          node-version: '24'
+          allowed="$(mktemp)"
+          runs="$(mktemp)"
+          remaining="$(mktemp)"
 
-      - name: Query hosted Supabase Advisors
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ADVISOR_ACCESS_TOKEN }}
-          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
-          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
-          SUPABASE_ADVISOR_REPORT: artifacts/supabase-advisors.json
-        run: node tool/audit_supabase_advisors.mjs
+          gh api "repos/$REPO/contents/.github/workflows?ref=main" \
+            --jq '.[] | select(.type == "file") | .path' \
+            | sort -u > "$allowed"
 
-      - name: Upload sanitized advisor evidence
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: supabase-advisors-${{ needs.validate-advisor-source.outputs.source_sha }}
-          path: artifacts/supabase-advisors.json
-          if-no-files-found: error
-          retention-days: 14
+          # Fail closed if the source-of-truth lookup is incomplete or points
+          # anywhere other than the repository's real main workflow directory.
+          test -s "$allowed"
+          grep -Fxq '.github/workflows/audit-supabase-advisors.yml' "$allowed"
+
+          echo '### Main workflow source of truth' >> "$GITHUB_STEP_SUMMARY"
+          sed 's/^/- `/' "$allowed" | sed 's/$/`/' >> "$GITHUB_STEP_SUMMARY"
+
+          gh api --paginate "repos/$REPO/actions/runs?per_page=100" \
+            --jq '.workflow_runs[] | [.id, .path, .status, .name, .html_url] | @tsv' \
+            > "$runs"
+
+          stale_before=0
+          deleted=0
+          blocked=0
+
+          while IFS=$'\t' read -r run_id run_path run_status run_name run_url; do
+            [ -n "$run_id" ] || continue
+            normalized_path="${run_path%%@*}"
+
+            if grep -Fxq "$normalized_path" "$allowed"; then
+              continue
+            fi
+
+            stale_before=$((stale_before + 1))
+            echo "Stale run: id=$run_id status=$run_status path=$normalized_path name=$run_name"
+
+            # The cleanup job itself uses a path that exists on main, so this
+            # guard should never be needed; retain it as a fail-safe anyway.
+            if [ "$run_id" = "$CURRENT_RUN_ID" ]; then
+              echo "::error::Refusing to delete the currently executing run $run_id"
+              blocked=$((blocked + 1))
+              continue
+            fi
+
+            if [ "$run_status" != 'completed' ]; then
+              gh api -X POST "repos/$REPO/actions/runs/$run_id/cancel" >/dev/null || true
+              for _ in $(seq 1 30); do
+                sleep 2
+                run_status="$(gh api "repos/$REPO/actions/runs/$run_id" --jq '.status' 2>/dev/null || echo unknown)"
+                [ "$run_status" = 'completed' ] && break
+              done
+            fi
+
+            if [ "$run_status" != 'completed' ]; then
+              echo "::error::Stale run $run_id did not reach completed state (status=$run_status)"
+              blocked=$((blocked + 1))
+              continue
+            fi
+
+            gh api -X DELETE "repos/$REPO/actions/runs/$run_id" >/dev/null
+            deleted=$((deleted + 1))
+          done < "$runs"
+
+          # Re-query instead of trusting the delete responses. Any remaining
+          # run whose workflow path is not in main makes this cleanup fail.
+          sleep 2
+          gh api --paginate "repos/$REPO/actions/runs?per_page=100" \
+            --jq '.workflow_runs[] | [.id, .path, .status, .name, .html_url] | @tsv' \
+            > "$runs"
+
+          : > "$remaining"
+          while IFS=$'\t' read -r run_id run_path run_status run_name run_url; do
+            [ -n "$run_id" ] || continue
+            normalized_path="${run_path%%@*}"
+            if ! grep -Fxq "$normalized_path" "$allowed"; then
+              printf '%s\t%s\t%s\t%s\t%s\n' \
+                "$run_id" "$normalized_path" "$run_status" "$run_name" "$run_url" \
+                >> "$remaining"
+            fi
+          done < "$runs"
+
+          {
+            echo
+            echo '### Cleanup result'
+            echo "- Stale runs found before cleanup: $stale_before"
+            echo "- Stale runs deleted: $deleted"
+            echo "- Stale runs blocked: $blocked"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ -s "$remaining" ]; then
+            echo '- Remaining stale runs:' >> "$GITHUB_STEP_SUMMARY"
+            while IFS=$'\t' read -r run_id run_path run_status run_name run_url; do
+              echo "  - $run_id — \`$run_path\` — $run_status — $run_name" >> "$GITHUB_STEP_SUMMARY"
+            done < "$remaining"
+            echo '::error::One or more workflow runs still reference files absent from main.'
+            cat "$remaining"
+            exit 1
+          fi
+
+          echo '- Remaining stale runs: 0' >> "$GITHUB_STEP_SUMMARY"
