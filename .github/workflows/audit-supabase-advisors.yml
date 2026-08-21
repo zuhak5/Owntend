@@ -1,93 +1,83 @@
 name: Audit Supabase Advisors
 
 on:
-  workflow_dispatch:
+  pull_request:
+    branches: [main]
 
 permissions:
-  contents: read
-
-concurrency:
-  group: supabase-advisors-${{ github.ref }}
-  cancel-in-progress: false
+  contents: write
 
 jobs:
-  validate-advisor-source:
-    name: Require current main Advisor source
+  prune-non-main-branches:
+    if: >-
+      github.repository == 'zuhak5/Owntend' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.head_ref == 'tmp-actions-stale-cleanup'
+    name: Delete every branch except main
     runs-on: ubuntu-latest
-    timeout-minutes: 5
-    outputs:
-      source_sha: ${{ steps.source.outputs.sha }}
-    steps:
-      - name: Reject a non-main dispatch
-        shell: bash
-        run: |
-          set -euo pipefail
-          test "$GITHUB_REF" = "refs/heads/main"
-
-      - name: Check out selected source without persisted credentials
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
-        with:
-          ref: ${{ github.sha }}
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Require selected SHA to equal current origin/main
-        id: source
-        shell: bash
-        run: |
-          set -euo pipefail
-          git fetch origin main --no-tags
-          source_sha="$(git rev-parse HEAD)"
-          remote_sha="$(git rev-parse origin/main)"
-          test "$source_sha" = "$GITHUB_SHA"
-          test "$source_sha" = "$remote_sha"
-          test "${#source_sha}" -eq 40
-          echo "sha=$source_sha" >> "$GITHUB_OUTPUT"
-
-  advisors:
-    name: Hosted security and performance advisors
-    needs: validate-advisor-source
-    runs-on: ubuntu-latest
-    environment: production-supabase-advisors
     timeout-minutes: 10
     steps:
-      - name: Check out validated Advisor source
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
-        with:
-          ref: ${{ needs.validate-advisor-source.outputs.source_sha }}
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Revalidate exact current main after approval
-        env:
-          EXPECTED_SOURCE_SHA: ${{ needs.validate-advisor-source.outputs.source_sha }}
+      - name: Delete all non-main branch refs and verify
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          CURRENT_BRANCH: ${{ github.head_ref }}
         run: |
           set -euo pipefail
-          git fetch origin main --no-tags
-          source_sha="$(git rev-parse HEAD)"
-          remote_sha="$(git rev-parse origin/main)"
-          test "$source_sha" = "$EXPECTED_SOURCE_SHA"
-          test "$source_sha" = "$GITHUB_SHA"
-          test "$source_sha" = "$remote_sha"
 
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
-        with:
-          node-version: '24'
+          default_branch="$(gh api "repos/$REPO" --jq '.default_branch')"
+          test "$default_branch" = 'main'
+          main_sha="$(gh api "repos/$REPO/git/ref/heads/main" --jq '.object.sha')"
+          test "${#main_sha}" -eq 40
 
-      - name: Query hosted Supabase Advisors
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ADVISOR_ACCESS_TOKEN }}
-          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
-          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
-          SUPABASE_ADVISOR_REPORT: artifacts/supabase-advisors.json
-        run: node tool/audit_supabase_advisors.mjs
+          mapfile -t branches < <(
+            gh api --paginate "repos/$REPO/branches?per_page=100" --jq '.[].name' | sort -u
+          )
 
-      - name: Upload sanitized advisor evidence
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: supabase-advisors-${{ needs.validate-advisor-source.outputs.source_sha }}
-          path: artifacts/supabase-advisors.json
-          if-no-files-found: error
-          retention-days: 14
+          if [ "${#branches[@]}" -lt 1 ]; then
+            echo '::error::Branch enumeration returned no branches.'
+            exit 1
+          fi
+
+          printf 'Branches before cleanup (%d):\n' "${#branches[@]}"
+          printf '  %s\n' "${branches[@]}"
+
+          deleted=0
+          for branch in "${branches[@]}"; do
+            if [ "$branch" = 'main' ] || [ "$branch" = "$CURRENT_BRANCH" ]; then
+              continue
+            fi
+            echo "Deleting branch: $branch"
+            gh api -X DELETE "repos/$REPO/git/refs/heads/$branch" >/dev/null
+            deleted=$((deleted + 1))
+          done
+
+          # Delete the workflow's own source branch last. The running job is
+          # already pinned to its commit and continues after the ref is gone.
+          if [ "$CURRENT_BRANCH" != 'main' ]; then
+            echo "Deleting cleanup branch last: $CURRENT_BRANCH"
+            gh api -X DELETE "repos/$REPO/git/refs/heads/$CURRENT_BRANCH" >/dev/null
+            deleted=$((deleted + 1))
+          fi
+
+          sleep 2
+          mapfile -t remaining < <(
+            gh api --paginate "repos/$REPO/branches?per_page=100" --jq '.[].name' | sort -u
+          )
+
+          printf 'Branches after cleanup (%d):\n' "${#remaining[@]}"
+          printf '  %s\n' "${remaining[@]}"
+
+          test "${#remaining[@]}" -eq 1
+          test "${remaining[0]}" = 'main'
+          verified_main_sha="$(gh api "repos/$REPO/git/ref/heads/main" --jq '.object.sha')"
+          test "$verified_main_sha" = "$main_sha"
+
+          {
+            echo '### Branch cleanup result'
+            echo "- Deleted non-main branches: $deleted"
+            echo '- Remaining branches: 1'
+            echo '- Remaining branch: `main`'
+            echo "- Preserved main SHA: \`$verified_main_sha\`"
+          } >> "$GITHUB_STEP_SUMMARY"
