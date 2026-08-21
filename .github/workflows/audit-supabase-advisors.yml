@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - tmp-actions-stale-cleanup
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -59,8 +62,8 @@ jobs:
             stale_before=$((stale_before + 1))
             echo "Stale run: id=$run_id status=$run_status path=$normalized_path name=$run_name"
 
-            # The cleanup job itself uses a path that exists on main, so this
-            # guard should never be needed; retain it as a fail-safe anyway.
+            # This cleanup reuses a workflow path that exists on main, so it
+            # cannot classify its own run as stale. Keep the guard anyway.
             if [ "$run_id" = "$CURRENT_RUN_ID" ]; then
               echo "::error::Refusing to delete the currently executing run $run_id"
               blocked=$((blocked + 1))
@@ -86,8 +89,8 @@ jobs:
             deleted=$((deleted + 1))
           done < "$runs"
 
-          # Re-query instead of trusting the delete responses. Any remaining
-          # run whose workflow path is not in main makes this cleanup fail.
+          # Re-query rather than trusting the delete responses. Any remaining
+          # run whose workflow path is absent from main makes this cleanup fail.
           sleep 2
           gh api --paginate "repos/$REPO/actions/runs?per_page=100" \
             --jq '.workflow_runs[] | [.id, .path, .status, .name, .html_url] | @tsv' \
