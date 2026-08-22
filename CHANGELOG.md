@@ -16,6 +16,7 @@ The current application version is defined only in `pubspec.yaml`. Released vers
 
 ### Fixed
 
+- Pinned generated `*.g.dart` files to LF checkouts so the Windows Flutter CI runner can reproduce Drift output without false CRLF-only generated-source failures.
 - Revoked inherited Supabase Data API execution from anonymous and authenticated callers for the four server-only account-cleanup, recent-session, and AdMob settlement `SECURITY DEFINER` RPCs, with explicit service-role grants and pgTAP regression coverage.
 - Removed editable/persisted task Health Group; task scoring, statistics, and icons now derive from the linked item's Item Type. General remains explicitly excluded from weighted health-score normalization, while Cleaning remains task semantics.
 - Made the “Today’s care is complete” reward prompt content-sized and accessible, with concise English/Arabic copy, responsive non-truncated actions, reduced-motion handling, and verification-pending messaging that never implies device-side reward credit.

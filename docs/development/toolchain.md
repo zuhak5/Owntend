@@ -40,6 +40,10 @@ node --test tool/shorebird.test.mjs
 
 The `--require-shorebird` form additionally requires the exact installed fork and is run by Shorebird release/patch workflows.
 
+## Generated source reproducibility
+
+Generated `*.g.dart` files are checked out with LF line endings on every platform through [`.gitattributes`](../../.gitattributes). This keeps `dart run build_runner build --only-check` byte-reproducible on Windows runners instead of reporting CRLF-only Drift output as stale.
+
 ## Controlled updates
 
 Update the canonical JSON, installer/download validation, Gradle/lockfiles, action pins, release and patch dry-runs, evidence verifiers, dependency/security notices, documentation, and tests in one change. Reconfirm Shorebird's supported Android requirements, CLI argument behavior, signing protocol, Flutter/engine revisions, Bundletool digest, and gcloud/action releases from official upstream sources. A toolchain, native, asset, or dependency update requires a new Shorebird release; it is never patch-eligible.
