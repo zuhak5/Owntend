@@ -26,11 +26,15 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        GoogleMobileAdsPlugin.registerNativeAdFactory(
-            flutterEngine,
-            "owntendNative",
-            OwntendNativeAdFactory(this),
-        )
+        try {
+            GoogleMobileAdsPlugin.registerNativeAdFactory(
+                flutterEngine,
+                "owntendNative",
+                OwntendNativeAdFactory(this),
+            )
+        } catch (e: Exception) {
+            android.util.Log.e("MainActivity", "Failed to register native ad factory", e)
+        }
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             "owntend/system_ui",
@@ -48,10 +52,14 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
-        GoogleMobileAdsPlugin.unregisterNativeAdFactory(
-            flutterEngine,
-            "owntendNative",
-        )
+        try {
+            GoogleMobileAdsPlugin.unregisterNativeAdFactory(
+                flutterEngine,
+                "owntendNative",
+            )
+        } catch (e: Exception) {
+            android.util.Log.e("MainActivity", "Failed to unregister native ad factory", e)
+        }
         super.cleanUpFlutterEngine(flutterEngine)
     }
 

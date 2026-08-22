@@ -16,6 +16,7 @@ The current application version is defined only in `pubspec.yaml`. Released vers
 
 ### Fixed
 
+- Fixed Android plugin registration in minified release builds by using additive Gradle sourceSet configuration and preserving Flutter plugin reflection entry points in ProGuard rules.
 - Resolved batched build provenance attestations by matching target artifact subjects across multi-subject SLSA statements in VersionDeck APK verification tooling.
 - Fixed Bundletool password flag format to use `pass:` prefix and pinned Node.js setup in the protected VersionDeck APK derivation workflow job.
 - Included R8 `mapping.txt` in the canonical Shorebird release evidence artifact upload to support downstream protected VersionDeck APK derivation and symbol packaging.
