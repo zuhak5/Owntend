@@ -5,11 +5,11 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
-const profileRevisionMigration = path.join(
+const initialSchemaMigration = path.join(
   repositoryRoot,
   'supabase',
   'migrations',
-  '20260815000006_profile_revision.sql',
+  '20260821124930_initial_schema.sql',
 );
 const supabaseDeploymentWorkflow = path.join(
   repositoryRoot,
@@ -18,66 +18,47 @@ const supabaseDeploymentWorkflow = path.join(
   'deploy-supabase-migrations.yml',
 );
 
-test('profile revision baseline protects NULL initialization from metadata trigger', async () => {
-  const sql = await fs.readFile(profileRevisionMigration, 'utf8');
+test('profile revision is canonical at initial schema creation', async () => {
+  const sql = await fs.readFile(initialSchemaMigration, 'utf8');
 
-  const beginIndex = sql.indexOf('BEGIN;');
-  const addColumnIndex = sql.indexOf(
-    'ADD COLUMN IF NOT EXISTS revision BIGINT;',
+  const profilesIndex = sql.indexOf(
+    'CREATE TABLE IF NOT EXISTS "public"."profiles"',
   );
-  const disableIndex = sql.indexOf('DISABLE TRIGGER set_row_metadata;');
-  const backfillIndex = sql.indexOf('UPDATE public.profiles');
-  const enableIndex = sql.indexOf('ENABLE TRIGGER set_row_metadata;');
-  const notNullIndex = sql.indexOf('ALTER COLUMN revision SET NOT NULL;');
+  const revisionIndex = sql.indexOf(
+    '"revision" bigint DEFAULT 1 NOT NULL',
+    profilesIndex,
+  );
+  const revisionConstraintIndex = sql.indexOf(
+    'CONSTRAINT "profiles_revision_positive"',
+    profilesIndex,
+  );
   const changeFeedTriggerIndex = sql.indexOf(
-    'CREATE TRIGGER trg_server_change_feed_profiles',
+    'CREATE OR REPLACE TRIGGER "trg_server_change_feed_profiles"',
   );
-  const commitIndex = sql.lastIndexOf('COMMIT;');
 
   for (const [label, index] of [
-    ['BEGIN', beginIndex],
-    ['revision column addition', addColumnIndex],
-    ['metadata trigger disable', disableIndex],
-    ['profile revision initialization', backfillIndex],
-    ['metadata trigger enable', enableIndex],
-    ['revision NOT NULL constraint', notNullIndex],
+    ['profiles table', profilesIndex],
+    ['revision definition', revisionIndex],
+    ['positive revision constraint', revisionConstraintIndex],
     ['profile change-feed trigger', changeFeedTriggerIndex],
-    ['COMMIT', commitIndex],
   ]) {
     assert.notEqual(index, -1, `${label} must remain in the baseline`);
   }
 
-  assert.ok(beginIndex < addColumnIndex, 'baseline must add revision after BEGIN');
   assert.ok(
-    addColumnIndex < disableIndex,
-    'revision must exist before disabling the profile metadata trigger',
-  );
-  assert.ok(
-    disableIndex < backfillIndex,
-    'metadata trigger must be disabled before initializing profile revisions',
+    profilesIndex < revisionIndex,
+    'revision must be part of the profile table definition',
   );
   assert.ok(
-    backfillIndex < enableIndex,
-    'metadata trigger must be restored after profile revision initialization',
+    revisionIndex < revisionConstraintIndex,
+    'the positive constraint must follow the non-null default definition',
   );
   assert.ok(
-    enableIndex < notNullIndex,
-    'metadata trigger must be restored before steady-state constraints are enforced',
+    revisionConstraintIndex < changeFeedTriggerIndex,
+    'revision invariants must exist before change-feed logging is enabled',
   );
-  assert.ok(
-    notNullIndex < changeFeedTriggerIndex,
-    'revision constraints must be established before enabling profile change-feed logging',
-  );
-  assert.ok(
-    changeFeedTriggerIndex < commitIndex,
-    'all profile sync changes must remain inside the baseline transaction',
-  );
-
-  assert.match(
-    sql,
-    /UPDATE public\.profiles\s+SET revision = 1\s+WHERE revision IS NULL;/,
-    'profiles must be initialized to revision 1',
-  );
+  assert.doesNotMatch(sql, /ALTER TABLE[^;]+profiles[^;]+ADD COLUMN[^;]+revision/is);
+  assert.doesNotMatch(sql, /UPDATE public\.profiles\s+SET revision/i);
 });
 
 test('prelaunch hosted reset is explicit, exact-main, project-bound, lifecycle-gated, and non-interactive', async () => {

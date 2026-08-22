@@ -4,7 +4,7 @@ create extension if not exists pgtap with schema extensions;
 set local role postgres;
 set search_path = public, extensions, pg_catalog;
 
-select extensions.plan(35);
+select extensions.plan(33);
 
 select extensions.has_table('public', 'profiles', 'profiles table exists');
 select extensions.has_table('public', 'areas', 'areas table exists');
@@ -23,26 +23,6 @@ select extensions.has_table('public', 'maintenance_records', 'records table exis
 
 select extensions.col_is_pk('public', 'profiles', 'user_id', 'profile user id is primary');
 select extensions.has_column('public', 'profiles', 'nickname', 'profiles store nickname');
-select extensions.ok(
-  not exists (
-    select 1
-    from information_schema.columns
-    where table_schema = 'public'
-      and table_name = 'profiles'
-      and column_name = 'display_name'
-  ),
-  'legacy profile display name is removed'
-);
-select extensions.ok(
-  not exists (
-    select 1
-    from information_schema.columns
-    where table_schema = 'public'
-      and table_name = 'profiles'
-      and column_name = 'avatar_object_path'
-  ),
-  'legacy profile avatar path is removed'
-);
 select extensions.has_column('public', 'device_details', 'created_at', 'detail tables have create time');
 select extensions.has_column('public', 'asset_tags', 'updated_at', 'join rows have update time');
 select extensions.ok(
@@ -102,7 +82,7 @@ select extensions.ok(
   exists (
     select 1 from information_schema.columns
     where table_schema = 'public' and table_name = 'maintenance_plans'
-      and column_name = 'interval_count'
+      and column_name = 'recurrence_interval'
   ) and exists (
     select 1 from information_schema.columns
     where table_schema = 'public' and table_name = 'streaks'

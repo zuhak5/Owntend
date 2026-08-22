@@ -1028,13 +1028,6 @@
   ,"owntendAlertsDescription": "يتحكم في كل قنوات تنبيه Owntend. ما زالت تذكيرات الجهاز تتطلب إذن أندرويد."
   ,"weatherAlertsInboxDescription": "تحذيرات الطقس التي تظهر في صندوق Owntend؛ ويتبع إرسالها للجهاز إعداد التذكيرات."
   ,"fix": "إصلاح"
-  ,"quarantinedDataTitle": "حجر البيانات المحلية"
-  ,"quarantinedDataDescription": "تم العثور على بيانات محفوظة من حساب سابق أو جلسة بدون اتصال على هذا الجهاز. لحماية خصوصية بياناتك، لا يمكن رفع هذه البيانات إلى حسابك تلقائياً."
-  ,"exportSafetyBackup": "تصدير نسخة احتياطية آمنة"
-  ,"resetLocalData": "إعادة ضبط البيانات المحلية"
-  ,"importLocalData": "استيراد البيانات إلى حسابي"
-  ,"importLocalDataConfirmation": "هل أنت تأكد من رغبتك في دمج واستيراد جميع العناصر والغرف والمهام المحلية إلى حسابك؟"
-  ,"resetLocalDataConfirmation": "هل أنت تأكد من رغبتك في مسح البيانات المحلية؟ سيؤدي ذلك إلى حذف جميع العناصر غير المتزامنة على هذا الجهاز. قم بإنشاء نسخة احتياطية أولاً إذا كنت تريد حفظها."
   ,"reminderDaysBeforeDue": "{count, plural, =0{في نفس اليوم} =1{قبل يوم واحد من الاستحقاق} =2{قبل يومين من الاستحقاق} few{قبل {count} أيام من الاستحقاق} many{قبل {count} يوماً من الاستحقاق} other{قبل {count} يوم من الاستحقاق}}"
   ,"@reminderDaysBeforeDue": {"placeholders": {"count": {"type": "int"}}}
   ,"durationMinutes": "{count, plural, =0{0 دقيقة} =1{دقيقة واحدة} =2{دقيقتان} few{{count} دقائق} many{{count} دقيقة} other{{count} دقيقة}}"

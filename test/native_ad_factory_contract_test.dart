@@ -16,16 +16,17 @@ const _paletteKeys = <String>[
 ];
 
 void main() {
-  test('Flutter and Android share the complete schema-v2 palette contract', () {
-    final flutter = File('lib/src/features/monetization/monetization.dart')
-        .readAsStringSync();
+  test('Flutter and Android share the complete schema-1 palette contract', () {
+    final flutter = File(
+      'lib/src/features/monetization/src/native_ad_card.dart',
+    ).readAsStringSync();
     final kotlin = File(
       'android/app/src/main/kotlin/app/owntend/mobile/'
       'OwntendNativeAdFactory.kt',
     ).readAsStringSync();
 
-    expect(flutter, contains("'schemaVersion': 2"));
-    expect(kotlin, contains('private const val SCHEMA_VERSION = 2'));
+    expect(flutter, contains("'schemaVersion': 1"));
+    expect(kotlin, contains('private const val SCHEMA_VERSION = 1'));
     for (final key in _paletteKeys) {
       expect(flutter, contains("'$key'"), reason: 'Flutter must emit $key.');
       expect(kotlin, contains('"$key"'), reason: 'Android must consume $key.');
@@ -148,7 +149,7 @@ void main() {
     }
 
     expect(constructorOwners, [
-      'lib/src/features/monetization/monetization.dart',
+      'lib/src/features/monetization/src/native_ad_card.dart',
     ]);
   });
 
@@ -186,8 +187,9 @@ void main() {
   });
 
   test('mounted native ads enforce the shared cache expiry deadline', () {
-    final flutter = File('lib/src/features/monetization/monetization.dart')
-        .readAsStringSync();
+    final flutter = File(
+      'lib/src/features/monetization/src/native_ad_card.dart',
+    ).readAsStringSync();
 
     expect(flutter, contains('Timer? _expiryTimer;'));
     expect(flutter, contains('_expiryTimer = Timer(kAdCacheMaxAge'));

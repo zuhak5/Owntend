@@ -209,7 +209,7 @@ void main() {
     expect(config.creationIsFree, isFalse);
   });
 
-  test('legacy retry delay is epoch bounded', () {
+  test('ad retry delay is epoch bounded', () {
     expect(adRetryDelayForFailure(1), const Duration(seconds: 2));
     expect(adRetryDelayForFailure(2), const Duration(seconds: 8));
     expect(adRetryDelayForFailure(3), const Duration(seconds: 30));

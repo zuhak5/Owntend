@@ -1,0 +1,187 @@
+name: Shorebird Android Patch
+
+on:
+  workflow_dispatch:
+    inputs:
+      flavor:
+        description: "Owntend flavor and Shorebird app"
+        required: true
+        default: staging
+        type: choice
+        options: [dev, staging, prod]
+      operation:
+        description: "Validate runs all checks and Shorebird dry-run; publish uploads only to staging track"
+        required: true
+        default: validate
+        type: choice
+        options: [validate, publish]
+      release_version:
+        description: "Exact Shorebird release version (x.y.z+N)"
+        required: true
+        type: string
+      release_base_sha:
+        description: "Exact commit SHA used for the base release"
+        required: true
+        type: string
+      candidate_sha:
+        description: "Exact patch candidate commit SHA"
+        required: true
+        type: string
+
+concurrency:
+  group: shorebird-patch-${{ inputs.flavor }}-${{ inputs.release_version }}
+  cancel-in-progress: false
+
+jobs:
+  patch:
+    runs-on: windows-latest
+    timeout-minutes: 120
+    environment: ${{ fromJSON('{"dev":"development","staging":"staging","prod":"production"}')[inputs.flavor] }}
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ inputs.candidate_sha }}
+          fetch-depth: 0
+      - name: Validate immutable identities and publication authority
+        shell: pwsh
+        env:
+          NONPROD_ENABLED: ${{ vars.SHOREBIRD_NONPRODUCTION_PATCHES_ENABLED }}
+          PROD_ENABLED: ${{ vars.SHOREBIRD_PRODUCTION_PATCHES_ENABLED }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          if ("${{ inputs.release_version }}" -notmatch '^\d+\.\d+\.\d+\+[1-9]\d*$') { throw "Invalid release_version." }
+          foreach ($Sha in @("${{ inputs.release_base_sha }}", "${{ inputs.candidate_sha }}")) { if ($Sha -notmatch '^[0-9a-f]{40}$') { throw "Commit identities must be lowercase full SHAs." } }
+          if ((git rev-parse HEAD).Trim() -ne "${{ inputs.candidate_sha }}") { throw "Candidate checkout mismatch." }
+          if ("${{ inputs.operation }}" -eq "publish") {
+            $ExpectedRef = "refs/heads/release/${{ inputs.release_version }}"
+            if ($env:GITHUB_REF -ne $ExpectedRef) { throw "Patch publication must be dispatched from $ExpectedRef." }
+            git fetch origin "release/${{ inputs.release_version }}" --no-tags
+            if ($LASTEXITCODE -ne 0) { throw "Could not refresh the exact release branch." }
+            $ReleaseTip = (git rev-parse "origin/release/${{ inputs.release_version }}").Trim()
+            if ($ReleaseTip -ne "${{ inputs.candidate_sha }}") { throw "Patch publication candidate must be the exact release-branch tip $ReleaseTip." }
+            if ("${{ inputs.flavor }}" -eq "prod" -and $env:PROD_ENABLED -cne "true") { throw "Production patch publication is disabled." }
+            if ("${{ inputs.flavor }}" -ne "prod" -and $env:NONPROD_ENABLED -cne "true") { throw "Non-production patch publication is disabled." }
+          }
+      - name: Require exact production backend gate
+        if: ${{ inputs.flavor == 'prod' }}
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $Runs = gh api "repos/$env:GITHUB_REPOSITORY/actions/workflows/validate-google-backend.yml/runs?head_sha=${{ inputs.candidate_sha }}&status=completed&per_page=20" | ConvertFrom-Json
+          $Passed = @($Runs.workflow_runs | Where-Object {
+            $_.path -eq ".github/workflows/validate-google-backend.yml" -and $_.head_sha -eq "${{ inputs.candidate_sha }}" -and
+            $_.event -in @("push", "workflow_dispatch") -and $_.conclusion -eq "success"
+          })
+          if ($Passed.Count -eq 0) { throw "The exact Google/backend/database workflow has not passed for this production patch candidate." }
+      - name: Run fail-closed static patch eligibility
+        shell: pwsh
+        run: |
+          git fetch origin "${{ inputs.release_base_sha }}" --no-tags
+          if ($LASTEXITCODE -ne 0) { throw "Could not fetch release base." }
+          node tool/shorebird_patch_eligibility.mjs --base-ref "${{ inputs.release_base_sha }}" --candidate-ref "${{ inputs.candidate_sha }}" --output release/shorebird-patch-eligibility.json
+      - name: Set up Java 21
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+      - name: Set up canonical Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: "3.47.0"
+          channel: stable
+          cache: true
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Authenticate to Google Cloud by OIDC
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+      - name: Set up pinned Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@e427ad8a34f8676edf47cf7d7925499adf3eb74f # v2.2.1
+        with:
+          version: "581.0.0"
+      - name: Generate configuration and restore Android signing
+        shell: pwsh
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
+          GOOGLE_WEB_CLIENT_ID: ${{ vars.GOOGLE_WEB_CLIENT_ID }}
+          SENTRY_DSN: ${{ vars.SENTRY_DSN }}
+          SHOREBIRD_DEV_APP_ID: ${{ vars.SHOREBIRD_DEV_APP_ID }}
+          SHOREBIRD_STAGING_APP_ID: ${{ vars.SHOREBIRD_STAGING_APP_ID }}
+          SHOREBIRD_PROD_APP_ID: ${{ vars.SHOREBIRD_PROD_APP_ID }}
+          ANDROID_KEYSTORE_BASE64: ${{ inputs.flavor == 'prod' && secrets.PLAY_UPLOAD_KEYSTORE_BASE64 || secrets.SHOREBIRD_ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEY_ALIAS: ${{ inputs.flavor == 'prod' && secrets.PLAY_UPLOAD_KEY_ALIAS || secrets.SHOREBIRD_ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ inputs.flavor == 'prod' && secrets.PLAY_UPLOAD_KEY_PASSWORD || secrets.SHOREBIRD_ANDROID_KEY_PASSWORD }}
+          ANDROID_STORE_PASSWORD: ${{ inputs.flavor == 'prod' && secrets.PLAY_UPLOAD_STORE_PASSWORD || secrets.SHOREBIRD_ANDROID_STORE_PASSWORD }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          foreach ($Name in @("SUPABASE_URL", "SUPABASE_PUBLISHABLE_KEY", "GOOGLE_WEB_CLIENT_ID", "ANDROID_KEYSTORE_BASE64", "ANDROID_KEY_ALIAS", "ANDROID_KEY_PASSWORD", "ANDROID_STORE_PASSWORD")) {
+            if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($Name))) { throw "Missing required value: $Name" }
+          }
+          $Config = [ordered]@{ APP_ENV = "${{ inputs.flavor }}"; SUPABASE_URL = $env:SUPABASE_URL; SUPABASE_PUBLISHABLE_KEY = $env:SUPABASE_PUBLISHABLE_KEY; GOOGLE_WEB_CLIENT_ID = $env:GOOGLE_WEB_CLIENT_ID; SENTRY_ENABLED = -not [string]::IsNullOrWhiteSpace($env:SENTRY_DSN); SENTRY_DSN = $env:SENTRY_DSN; SENTRY_TRACES_SAMPLE_RATE = "0.0" }
+          $Config | ConvertTo-Json | Set-Content -LiteralPath "config\${{ inputs.flavor }}.json" -Encoding utf8NoBOM
+          .\tool\configure_shorebird.ps1 -EnsurePubspecAsset
+          [IO.File]::WriteAllBytes((Join-Path $PWD "android\app\owntend-release.jks"), [Convert]::FromBase64String($env:ANDROID_KEYSTORE_BASE64))
+          @("storePassword=$env:ANDROID_STORE_PASSWORD", "keyPassword=$env:ANDROID_KEY_PASSWORD", "keyAlias=$env:ANDROID_KEY_ALIAS", "storeFile=owntend-release.jks") | Set-Content -LiteralPath "android\key.properties" -Encoding utf8NoBOM
+      - name: Install exact Shorebird CLI and validate dependencies
+        shell: pwsh
+        run: |
+          flutter clean
+          .\tool\verify_android_release_registrants.ps1 -RemoveGeneratedMain
+          .\tool\install_shorebird.ps1
+          npm ci
+          flutter pub get --enforce-lockfile
+          if (-not [string]::IsNullOrWhiteSpace((git status --porcelain pubspec.lock | Out-String).Trim())) { throw "pubspec.lock changed during enforced resolution." }
+          flutter gen-l10n
+          dart run build_runner build --only-check
+          flutter analyze --no-pub
+          flutter test --no-pub --concurrency=1 --timeout 3m --exclude-tags production-config
+          if ("${{ inputs.flavor }}" -eq "prod") {
+            flutter test --no-pub test/prod_build_config_test.dart --dart-define-from-file="config\prod.json" --dart-define=VERIFY_PRODUCTION_CONFIG=true
+          }
+          node tool/toolchain_manifest.mjs --enforce --require-shorebird
+          node --test tool/shorebird.test.mjs tool/toolchain.test.mjs
+      - name: Run mandatory Shorebird dry-run, then optional staging publication
+        shell: pwsh
+        env:
+          SHOREBIRD_TOKEN: ${{ secrets.SHOREBIRD_TOKEN }}
+          GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+          SHOREBIRD_KMS_LOCATION: ${{ vars.SHOREBIRD_KMS_LOCATION }}
+          SHOREBIRD_KMS_KEYRING: ${{ vars.SHOREBIRD_KMS_KEYRING }}
+          SHOREBIRD_KMS_KEY: ${{ vars.SHOREBIRD_KMS_KEY }}
+          SHOREBIRD_KMS_KEY_VERSION: ${{ vars.SHOREBIRD_KMS_KEY_VERSION }}
+        run: |
+          $Parameters = @{ Flavor = "${{ inputs.flavor }}"; ReleaseVersion = "${{ inputs.release_version }}"; ReleaseBaseSha = "${{ inputs.release_base_sha }}"; ConfigPath = "config\${{ inputs.flavor }}.json" }
+          .\tool\verify_android_release_registrants.ps1 -RemoveGeneratedMain
+          .\tool\invoke_shorebird_patch.ps1 @Parameters -DryRun
+          if ("${{ inputs.operation }}" -eq "publish") { .\tool\invoke_shorebird_patch.ps1 @Parameters }
+          .\tool\verify_android_release_registrants.ps1
+      - name: Upload patch validation evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: Owntend-shorebird-patch-${{ inputs.flavor }}-${{ github.run_id }}
+          path: |
+            release/shorebird-patch-eligibility.json
+            build/shorebird-patch-${{ inputs.flavor }}-*.json
+            build/shorebird-symbols/${{ inputs.flavor }}/patch-*/**
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Remove ephemeral credentials
+        if: always()
+        shell: pwsh
+        run: |
+          Remove-Item -LiteralPath "android\key.properties", "android\app\owntend-release.jks", "shorebird.yaml", "config\${{ inputs.flavor }}.json" -Force -ErrorAction SilentlyContinue

@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:owntend/src/core/utils/redacting_logger.dart';
 
 void main() {
-  group('Startup Performance Spans & Benchmarks (P1-E)', () {
+  group('Startup performance spans and benchmarks', () {
     test('Startup spans record pre-first-frame and cloud-ready milestones without PII', () {
       AppLogger.clearForTesting();
 

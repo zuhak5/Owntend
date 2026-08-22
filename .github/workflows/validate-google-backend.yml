@@ -27,6 +27,9 @@ jobs:
       - name: Verify Deno formatting
         run: >-
           deno fmt --check
+          supabase/functions/_shared/request.ts
+          supabase/functions/_shared/sentry.ts
+          supabase/functions/_shared/sentry_test.ts
           supabase/functions/admob-ssv-handler/index.ts
           supabase/functions/admob-ssv-handler/index_test.ts
           supabase/functions/delete-account/index.ts
@@ -35,6 +38,7 @@ jobs:
           supabase/functions/account-deletion-status/index_test.ts
       - name: Type-check locked Edge Functions
         run: |
+          deno install --frozen --config deno.json
           cd supabase/functions/admob-ssv-handler && deno install --frozen && cd ../../..
           cd supabase/functions/delete-account && deno install --frozen && cd ../../..
           cd supabase/functions/account-deletion-status && deno install --frozen && cd ../../..
@@ -43,6 +47,7 @@ jobs:
           cd supabase/functions/account-deletion-status && deno check --frozen index.ts && cd ../../..
       - name: Test locked Edge Functions
         run: |
+          deno test --frozen --allow-env --allow-net --config deno.json supabase/functions/_shared/sentry_test.ts
           cd supabase/functions/admob-ssv-handler && deno test --frozen --allow-env --allow-net index_test.ts && cd ../../..
           cd supabase/functions/delete-account && deno test --frozen --allow-env --allow-net index_test.ts && cd ../../..
           cd supabase/functions/account-deletion-status && deno test --frozen --allow-env --allow-net index_test.ts && cd ../../..
@@ -83,6 +88,39 @@ jobs:
         run: npm run supabase:lint
       - name: Run database authorization and monetization tests
         run: npm run supabase:test
+      - name: Stop local Supabase stack
+        if: always()
+        run: npx supabase stop --no-backup
+
+  application-backend-integration:
+    name: Two-user application/backend integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: "24"
+          cache: npm
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: "3.47.0"
+          channel: stable
+          cache: true
+      - run: npm ci
+      - run: flutter pub get --enforce-lockfile
+      - name: Start the disposable local backend
+        run: npx supabase start
+      - name: Run real Auth, RLS, sync, and Storage scenarios
+        shell: bash
+        run: |
+          set -euo pipefail
+          eval "$(npx supabase status -o env)"
+          flutter test --no-pub --concurrency=1 --timeout 3m \
+            test/backend_integration/local_backend_sync_test.dart \
+            "--dart-define=OWNTEND_TEST_SUPABASE_URL=$API_URL" \
+            "--dart-define=OWNTEND_TEST_SUPABASE_ANON_KEY=$ANON_KEY" \
+            "--dart-define=OWNTEND_TEST_SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY"
       - name: Stop local Supabase stack
         if: always()
         run: npx supabase stop --no-backup

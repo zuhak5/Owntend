@@ -5,7 +5,7 @@ import 'package:owntend/src/core/database/app_database.dart';
 import 'package:owntend/src/core/sync/local_sync_store.dart';
 
 void main() {
-  group('Failed Mutation Diagnostics & Resolution (P0-B, P1-B)', () {
+  group('Failed mutation diagnostics and resolution', () {
     late AppDatabase db;
     late LocalSyncStore store;
 
@@ -104,7 +104,7 @@ void main() {
             .insertOnConflictUpdate(
               SyncOutboxCompanion.insert(
                 entity: 'user_setting',
-                recordKey: 'permission_education_seen_v2',
+                recordKey: 'permission_education_seen',
                 operation: 'upsert',
                 changedAt: Value(now),
                 state: const Value('failedVisible'),
@@ -114,7 +114,7 @@ void main() {
 
         await store.resolveFailedMutation(
           entity: 'user_setting',
-          recordKey: 'permission_education_seen_v2',
+          recordKey: 'permission_education_seen',
           action: 'retry',
         );
 
@@ -122,7 +122,7 @@ void main() {
         final retried = pending.firstWhere(
           (m) =>
               m.entity == 'user_setting' &&
-              m.recordKey == 'permission_education_seen_v2',
+              m.recordKey == 'permission_education_seen',
         );
         expect(retried.state.name, 'pending');
       },

@@ -6,14 +6,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/utils/app_failure.dart';
 import '../../../core/domain/models.dart';
-import '../../../core/database/app_database.dart';
-import '../../../core/sync/sync_providers.dart';
 import '../../../ui/app_theme.dart';
 import '../../../ui/components.dart' as hk_ui;
 import '../../../ui/full_bleed_illustration_background.dart';
 import '../../../ui/full_canvas_system_ui.dart';
 import 'auth_providers.dart';
-import 'quarantine_resolution_view.dart';
 
 class AuthenticationGate extends ConsumerStatefulWidget {
   const AuthenticationGate({
@@ -65,15 +62,6 @@ class _AuthenticationGateState extends ConsumerState<AuthenticationGate> {
     final session = ref.watch(authSessionProvider).value;
 
     if (session != null) {
-      final syncStatus = ref.watch(syncStatusProvider).value;
-      if (syncStatus != null &&
-          (syncStatus.migrationState == 'quarantined' ||
-              syncStatus.blockedReason == 'quarantined')) {
-        final database = ref.watch(databaseProvider);
-        return StandardSystemUi(
-          child: Scaffold(body: QuarantineResolutionView(database: database)),
-        );
-      }
       return StandardSystemUi(child: widget.child);
     }
 

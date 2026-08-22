@@ -3727,30 +3727,6 @@ class AppLocalizationsAr extends AppLocalizations {
   String get fix => 'إصلاح';
 
   @override
-  String get quarantinedDataTitle => 'حجر البيانات المحلية';
-
-  @override
-  String get quarantinedDataDescription =>
-      'تم العثور على بيانات محفوظة من حساب سابق أو جلسة بدون اتصال على هذا الجهاز. لحماية خصوصية بياناتك، لا يمكن رفع هذه البيانات إلى حسابك تلقائياً.';
-
-  @override
-  String get exportSafetyBackup => 'تصدير نسخة احتياطية آمنة';
-
-  @override
-  String get resetLocalData => 'إعادة ضبط البيانات المحلية';
-
-  @override
-  String get importLocalData => 'استيراد البيانات إلى حسابي';
-
-  @override
-  String get importLocalDataConfirmation =>
-      'هل أنت تأكد من رغبتك في دمج واستيراد جميع العناصر والغرف والمهام المحلية إلى حسابك؟';
-
-  @override
-  String get resetLocalDataConfirmation =>
-      'هل أنت تأكد من رغبتك في مسح البيانات المحلية؟ سيؤدي ذلك إلى حذف جميع العناصر غير المتزامنة على هذا الجهاز. قم بإنشاء نسخة احتياطية أولاً إذا كنت تريد حفظها.';
-
-  @override
   String reminderDaysBeforeDue(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,

@@ -1,4 +1,17 @@
-part of '../../../../main.dart';
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:material_symbols_icons/symbols.dart';
+import 'package:owntend/l10n/app_localizations_ext.dart';
+
+import '../../../core/domain/models.dart';
+import '../../../core/providers/app_providers.dart';
+import '../../../core/utils/app_failure.dart';
+import '../../../ui/app_theme.dart';
+import '../../../ui/components.dart' as hk_ui;
+import '../../monetization/monetization.dart';
 
 class SearchScreen extends ConsumerStatefulWidget {
   const SearchScreen({super.key});
@@ -61,7 +74,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     } catch (error) {
       if (!mounted) return;
       setState(() {
-        _error = _failureMessage(context, error);
+        _error = localizedFailureMessage(
+          context.l10n,
+          appFailureCodeFor(error),
+        );
         _loading = false;
       });
     }
@@ -107,7 +123,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               ],
               if (_error != null) ...[
                 const SizedBox(height: HkSpacing.sm),
-                ErrorPanel(message: _error!),
+                hk_ui.ErrorPanel(message: _error!),
               ],
               if (_results.isNotEmpty) ...[
                 const SizedBox(height: HkSpacing.sm),

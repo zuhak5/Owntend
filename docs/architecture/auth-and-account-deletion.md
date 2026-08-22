@@ -23,7 +23,7 @@ For an authenticated account, the sign-out sequence is:
 
 1. Capture the current Supabase user ID as the immutable expected account identity.
 2. Enter the coordinator's account-transition barrier for that identity. The coordinator advances the account epoch, rejects new automatic sync work, stops realtime, and waits for or safely detaches in-flight account work.
-3. Cancel all account-scoped WorkManager tasks with `cancelAccountScopedBackgroundWork()`, including daily refresh, restore recovery, and legacy cloud-sync work. This cancellation is not best-effort for sign-out: failure propagates and cloud/provider sign-out does not run.
+3. Cancel all account-scoped WorkManager tasks with `cancelAccountScopedBackgroundWork()`, including daily refresh, restore recovery, and cloud synchronization. This cancellation is not best-effort for sign-out: failure propagates and cloud/provider sign-out does not run.
 4. Re-check that the authenticated identity is still the captured user ID.
 5. Only after the barrier succeeds, delegate to Supabase Auth (`SignOutScope.local` or `SignOutScope.global`) and Google Sign-In.
 6. Resolve the account-transition barrier according to the resulting auth state. If sign-out failed and the authenticated session remains, `cancelAccountDeletion()` is the rollback path and may resume background sync, realtime, and normal scheduling. If sign-out succeeded and the session is gone, `completeAccountSignOut()` is terminal: it clears the transition state while keeping scheduled sync work cancelled and realtime stopped, and account-scoped WorkManager tasks are cancelled again. The local account binding remains intact in both cases.
@@ -72,6 +72,6 @@ These rules ensure that work authorized for one account cannot be reinterpreted 
 ## Browser deletion sequence
 
 > **Current availability:** the public page is intentionally unavailable while
-> TASK-001 production containment is active.
+> Pre-release production containment is active.
 > This does not change the in-app deletion sequence or backend contract. See the
 > [containment record](../operations/production-containment.md).

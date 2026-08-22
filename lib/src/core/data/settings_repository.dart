@@ -119,19 +119,19 @@ class DriftSettingsRepository implements SettingsRepository {
 
   @override
   Future<bool> permissionEducationSeen() async {
-    final row = await _setting('permission_education_seen_v2');
+    final row = await _setting('permission_education_seen');
     return _boolSetting(row?.value);
   }
 
   @override
   Future<void> setPermissionEducationSeen(bool seen) {
-    return _setSetting('permission_education_seen_v2', seen.toString());
+    return _setSetting('permission_education_seen', seen.toString());
   }
 
   @override
   Stream<bool> watchPermissionEducationSeen() {
     final query = db.select(db.settings)
-      ..where((setting) => setting.key.equals('permission_education_seen_v2'));
+      ..where((setting) => setting.key.equals('permission_education_seen'));
     return query.watchSingleOrNull().map((row) => _boolSetting(row?.value));
   }
 
@@ -218,30 +218,16 @@ class DriftSettingsRepository implements SettingsRepository {
   @override
   Future<domain.NotificationPreferences> notificationPreferences() async {
     final row = await _setting('notification_preferences');
-    final legacyRow = await _setting('notifications_enabled');
-    return _notificationPreferencesFromValue(
-      row?.value,
-      legacyEnabled: legacyRow == null ? null : _boolSetting(legacyRow.value),
-    );
+    return _notificationPreferencesFromValue(row?.value);
   }
 
   @override
   Stream<domain.NotificationPreferences> watchNotificationPreferences() {
     final query = db.select(db.settings)
-      ..where(
-        (setting) => setting.key.isIn([
-          'notification_preferences',
-          'notifications_enabled',
-        ]),
-      );
-    return query.watch().map((rows) {
-      final byKey = {for (final row in rows) row.key: row.value};
-      final legacyValue = byKey['notifications_enabled'];
-      return _notificationPreferencesFromValue(
-        byKey['notification_preferences'],
-        legacyEnabled: legacyValue == null ? null : _boolSetting(legacyValue),
-      );
-    });
+      ..where((setting) => setting.key.equals('notification_preferences'));
+    return query.watchSingleOrNull().map(
+      (row) => _notificationPreferencesFromValue(row?.value),
+    );
   }
 
   @override
@@ -332,19 +318,11 @@ class DriftSettingsRepository implements SettingsRepository {
     domain.NotificationPreferences preferences,
   ) async {
     final normalized = _normalizeNotificationPreferences(preferences);
-    final now = DateTime.now();
-    await db.transaction(() async {
-      await _setSettingAt(
-        'notification_preferences',
-        jsonEncode(_notificationPreferencesToJson(normalized)),
-        now,
-      );
-      await _setSettingAt(
-        'notifications_enabled',
-        normalized.enabled.toString(),
-        now,
-      );
-    });
+    await _setSettingAt(
+      'notification_preferences',
+      jsonEncode(_notificationPreferencesToJson(normalized)),
+      DateTime.now(),
+    );
   }
 
   Future<SettingRow?> _setting(String key) {

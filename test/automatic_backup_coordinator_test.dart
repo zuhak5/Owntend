@@ -90,7 +90,7 @@ void main() {
   });
 
   test('startup wiring defers backup until ready and resume', () {
-    final rawSource = File('lib/main.dart').readAsStringSync();
+    final rawSource = File('lib/src/app/owntend_app.dart').readAsStringSync();
     final source = rawSource.replaceAll('\r\n', '\n');
 
     expect(

@@ -30,7 +30,7 @@ Each migration should be:
 7. Inspect the final migration diff and documentation.
 8. Merge only after canonical CI is green.
 9. Rebuild the authorized hosted pre-launch project from exact current `main` through the protected reset workflow.
-10. Re-run hosted migration, ACL, Advisor, and parity checks before enabling gated capabilities.
+10. Re-run hosted migration, ACL, Advisor, feed-parity, and integration checks before allowing a release to depend on the hosted baseline.
 
 ### After launch
 
@@ -122,26 +122,21 @@ Database-side pgTAP coverage independently locks the exposed RPC security mode, 
 
 The backend and Android release workflows enforce locked `deno fmt --check`, `deno check --frozen`, and `deno test --frozen` commands for `admob-ssv-handler`, `delete-account`, and `account-deletion-status`. Passing them validates committed source contracts only; it does not prove which revision or secrets are deployed to a hosted project.
 
-## Pre-launch consolidated baseline
+## Pre-launch canonical baseline
 
-The zero-user launch database is defined by the ordered baseline modules under `supabase/migrations/`:
+The zero-user launch database is defined by exactly one migration:
+[`20260821124930_initial_schema.sql`](../../supabase/migrations/20260821124930_initial_schema.sql).
+It creates the final owner-scoped domain schema, RLS and grants, contract-1
+change feed and authoritative snapshot RPC, private Storage media saga,
+server-authoritative monetization, maintenance completion, account-deletion
+recovery, Realtime publication, indexes, triggers, and scheduled retention.
 
-1. [`20260815000001_core_schema.sql`](../../supabase/migrations/20260815000001_core_schema.sql): owner-scoped entities, initial sync/change-feed structures, Realtime publication, indexes, and RLS.
-2. [`20260815000002_storage_and_media.sql`](../../supabase/migrations/20260815000002_storage_and_media.sql): private `user-media` storage, upload staging/finalization, cleanup, and primary-photo RPCs.
-3. [`20260815000003_points_monetization.sql`](../../supabase/migrations/20260815000003_points_monetization.sql): points ledger, wallets, SSV verification, charged creation RPCs, and monetization authority.
-4. [`20260815000004_task_completion_and_rpc.sql`](../../supabase/migrations/20260815000004_task_completion_and_rpc.sql): server-authoritative maintenance completion RPC foundation.
-5. [`20260815000005_account_deletion_and_recovery.sql`](../../supabase/migrations/20260815000005_account_deletion_and_recovery.sql): account-deletion operation lifecycle, recovery, acknowledgement, and pruning.
-6. [`20260815000006_profile_revision.sql`](../../supabase/migrations/20260815000006_profile_revision.sql): profile revision invariant and profile change-feed trigger.
-7. [`20260815000007_completion_integrity.sql`](../../supabase/migrations/20260815000007_completion_integrity.sql): final maintenance completion/undo integrity and recurrence behavior.
-8. [`20260815000008_asset_device_contract.sql`](../../supabase/migrations/20260815000008_asset_device_contract.sql): final asset/device field and RPC contract.
-9. [`20260815000009_charged_operation_recovery.sql`](../../supabase/migrations/20260815000009_charged_operation_recovery.sql): hash-qualified charged-operation recovery and capability `1.2.0`.
-10. [`20260815000010_change_feed.sql`](../../supabase/migrations/20260815000010_change_feed.sql): canonical 17-entity change-feed identity, typed `key_data`, durable delete keys, triggers, paging, and parity foundation.
-11. [`20260815000011_change_feed_access.sql`](../../supabase/migrations/20260815000011_change_feed_access.sql): final feed protocol `1.0.1`, authenticated-only `SECURITY INVOKER` RPCs, `auth.uid()` account scope, explicit Data API ACL normalization, and trigger-only definer execution.
-12. [`20260815000012_api_security_and_rls.sql`](../../supabase/migrations/20260815000012_api_security_and_rls.sql): Advisor-safe public RPC wrappers over private privileged media/monetization implementations, init-plan-safe ownership policies, and the covering notifications foreign-key index.
-
-The former duplicate baseline replays and remediation-era forward patch files are intentionally absent. They represented audit history for an environment that had not launched, not a compatibility contract that Owntend needs to preserve.
-
-The checked-in feed capability remains disabled. After hosted migrations match this baseline, enablement still requires exact-main hosted verification: no pending migration drift, protocol `1.0.1`, zero malformed feed rows, effective feed RPC ACLs matching the baseline, no unresolved blocking feed/security Advisor findings, and parity success for every hosted account (or explicit evidence that the environment contains zero accounts).
+There is no unpublished patch ladder, archive schema, rollout-capability table,
+or second incremental protocol. The one migration is the executable cloud
+baseline; the numbered pgTAP files organize assertions, not migration stages.
+Before any hosted release dependency, verify exact-main migration identity,
+effective ACLs, zero malformed feed rows, service-only feed parity, Advisors,
+and the two-user application/backend integration suite.
 
 ## Deployment evidence
 

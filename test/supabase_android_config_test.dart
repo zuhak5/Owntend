@@ -62,7 +62,8 @@ void main() {
   });
 
   test('guarded production build preserves maintained registrants', () {
-    final script = File('tool/build_prod.ps1').readAsStringSync();
+    final script = File('tool/verify_android_release_registrants.ps1')
+        .readAsStringSync();
 
     expect(script, contains(r'$relativePath -match'));
     expect(script, contains('debug|profile'));
@@ -86,7 +87,7 @@ void main() {
         ),
       ),
     );
-    expect(script, contains('Remove-GeneratedAndroidRegistrants'));
+    expect(script, contains(r'$RemoveGeneratedMain'));
     expect(script, contains("-Pattern 'IntegrationTestPlugin'"));
     expect(
       script,

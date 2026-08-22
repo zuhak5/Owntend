@@ -1,4 +1,4 @@
-part of '../../../../main.dart';
+part of 'rooms_presentation.dart';
 
 class RoomsScreen extends ConsumerStatefulWidget {
   const RoomsScreen({super.key});
@@ -305,7 +305,7 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen> {
             );
           },
           error: (error, _) =>
-              ErrorPanel(message: _failureMessage(context, error)),
+              hk_ui.ErrorPanel(message: failureMessage(context, error)),
           loading: () => const Center(child: CircularProgressIndicator()),
         ),
       ),
@@ -319,7 +319,7 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen> {
     }
     return rooms.where((room) {
       return room.name.toLowerCase().contains(query) ||
-          _roomTypeLabel(context, room.roomType).toLowerCase().contains(query);
+          roomTypeLabel(context, room.roomType).toLowerCase().contains(query);
     }).toList();
   }
 
@@ -477,7 +477,7 @@ class AreaChip extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(
-                    selected ? Symbols.check_rounded : _iconForArea(area),
+                    selected ? Symbols.check_rounded : iconForArea(area),
                     color: foreground,
                     size: 15,
                   ),
@@ -550,7 +550,7 @@ class SelectedAreaTools extends StatelessWidget {
         borderRadius: hk_ui.kSwipeRowRadius,
         child: Row(
           children: [
-            Icon(_iconForArea(area), color: scheme.primary, size: 20),
+            Icon(iconForArea(area), color: scheme.primary, size: 20),
             const SizedBox(width: HkSpacing.xs),
             Expanded(
               child: Column(
@@ -562,7 +562,7 @@ class SelectedAreaTools extends StatelessWidget {
                     style: Theme.of(context).textTheme.titleSmall,
                   ),
                   Text(
-                    _areaKindLabel(context, area.kind),
+                    areaKindLabel(context, area.kind),
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ],
@@ -606,40 +606,6 @@ class SelectedAreaTools extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _PopupActionLabel extends StatelessWidget {
-  const _PopupActionLabel({
-    required this.icon,
-    required this.label,
-    this.destructive = false,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool destructive;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = destructive
-        ? Theme.of(context).colorScheme.error
-        : Theme.of(context).colorScheme.onSurfaceVariant;
-    return Row(
-      children: [
-        Icon(icon, size: 20, color: color),
-        const SizedBox(width: HkSpacing.sm),
-        Expanded(
-          child: Text(
-            label,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: destructive ? color : null,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-      ],
     );
   }
 }
@@ -699,7 +665,7 @@ class RoomCard extends StatelessWidget {
         : dueToday > 0
         ? context.l10n.roomTaskStatusDueToday(dueToday)
         : context.l10n.onTrack;
-    final typeLabel = _roomTypeLabel(context, room.roomType);
+    final typeLabel = roomTypeLabel(context, room.roomType);
     final itemCountLabel = context.l10n.itemCount(thingCount);
     return hk_ui.PremiumCard(
       padding: EdgeInsets.zero,
@@ -719,11 +685,7 @@ class RoomCard extends StatelessWidget {
                   color: scheme.secondaryContainer,
                   shape: BoxShape.circle,
                 ),
-                child: Icon(
-                  _iconForRoom(room),
-                  color: scheme.primary,
-                  size: 18,
-                ),
+                child: Icon(iconForRoom(room), color: scheme.primary, size: 18),
               ),
               const SizedBox(width: HkSpacing.xs),
               Expanded(
@@ -793,14 +755,14 @@ class RoomCard extends StatelessWidget {
                   itemBuilder: (context) => [
                     PopupMenuItem(
                       value: 'thing',
-                      child: _PopupActionLabel(
+                      child: hk_ui.PopupActionLabel(
                         icon: Symbols.add_home_work_rounded,
                         label: context.l10n.addItem,
                       ),
                     ),
                     PopupMenuItem(
                       value: 'edit',
-                      child: _PopupActionLabel(
+                      child: hk_ui.PopupActionLabel(
                         icon: Symbols.edit_rounded,
                         label: context.l10n.edit,
                       ),
@@ -808,7 +770,7 @@ class RoomCard extends StatelessWidget {
                     PopupMenuItem(
                       value: 'up',
                       enabled: onMoveUp != null,
-                      child: _PopupActionLabel(
+                      child: hk_ui.PopupActionLabel(
                         icon: Symbols.arrow_upward_rounded,
                         label: context.l10n.moveUp,
                       ),
@@ -816,7 +778,7 @@ class RoomCard extends StatelessWidget {
                     PopupMenuItem(
                       value: 'down',
                       enabled: onMoveDown != null,
-                      child: _PopupActionLabel(
+                      child: hk_ui.PopupActionLabel(
                         icon: Symbols.arrow_downward_rounded,
                         label: context.l10n.moveDown,
                       ),
@@ -824,7 +786,7 @@ class RoomCard extends StatelessWidget {
                     if (onArchive != null)
                       PopupMenuItem(
                         value: 'archive',
-                        child: _PopupActionLabel(
+                        child: hk_ui.PopupActionLabel(
                           icon: Symbols.delete_rounded,
                           label: context.l10n.moveRoomToTrash,
                           destructive: true,

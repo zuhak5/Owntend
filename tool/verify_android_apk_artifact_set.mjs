@@ -19,7 +19,7 @@ export const EXPECTED_ANDROID_PACKAGE = 'app.owntend.mobile';
 export const EXPECTED_ANDROID_SIGNER_SHA256 =
   '3E:98:0E:B5:BB:68:A5:19:90:E7:70:56:D4:E1:09:95:B2:E0:4F:B3:88:A7:34:42:B7:9A:46:C8:53:36:1E:51';
 export const EXPECTED_PROVENANCE_WORKFLOW =
-  'https://github.com/zuhak5/Owntend/.github/workflows/build-production-android.yml@refs/heads/main';
+  'https://github.com/zuhak5/Owntend/.github/workflows/shorebird-release-android.yml@refs/heads/main';
 
 const EXPECTED_REPOSITORY = 'zuhak5/Owntend';
 const EXPECTED_PREDICATE_TYPE = 'https://slsa.dev/provenance/v1';
@@ -75,9 +75,23 @@ export function validateAbiEvidenceIndex(
   const errors = [];
   if (!isPlainObject(index)) return ['ABI evidence index is not an object.'];
 
-  if (index.schema_version !== 1) errors.push('ABI evidence schema version is invalid.');
-  if (index.evidence_mode !== 'protected-abi-apk-evidence') {
+  if (index.schema_version !== 2) errors.push('ABI evidence schema version is invalid.');
+  if (index.evidence_mode !== 'protected-shorebird-aab-derived-apk-evidence') {
     errors.push('ABI evidence mode is invalid.');
+  }
+  if (index.derivation_mode !== 'pinned-bundletool-universal-pruned-per-abi') {
+    errors.push('ABI evidence derivation mode is invalid.');
+  }
+  if (!normalizedSha(index.canonical_aab_sha256)) {
+    errors.push('Canonical Shorebird AAB SHA-256 is invalid.');
+  }
+  if (index.bundletool_version !== '1.18.3' ||
+      normalizedSha(index.bundletool_sha256) !== 'a099cfa1543f55593bc2ed16a70a7c67fe54b1747bb7301f37fdfd6d91028e29') {
+    errors.push('Pinned bundletool identity is invalid.');
+  }
+  const expectedUniversal = `artifacts/Owntend-${index.version_name}-build-${index.version_code}-universal.apk`;
+  if (index.universal_apk_file !== expectedUniversal || !normalizedSha(index.universal_apk_sha256)) {
+    errors.push('Universal APK identity is invalid.');
   }
   if (!COMMIT_PATTERN.test(String(index.source_sha || ''))) {
     errors.push('ABI evidence source SHA is invalid.');
@@ -108,13 +122,13 @@ export function validateAbiEvidenceIndex(
     errors.push('ABI evidence expected ABI set is invalid.');
   }
   if (index.universal_apk_remains_authoritative !== true) {
-    errors.push('ABI evidence must keep the universal APK authoritative during P1-C.');
+    errors.push('ABI evidence must keep the universal APK authoritative during production containment.');
   }
   if (index.public_distribution_authorized !== false) {
-    errors.push('ABI evidence must not authorize public split-APK distribution during P1-C.');
+    errors.push('ABI evidence must not authorize public split-APK distribution during production containment.');
   }
   if (index.versiondeck_publication_authorized !== false) {
-    errors.push('ABI evidence must not authorize VersionDeck split publication during P1-C.');
+    errors.push('ABI evidence must not authorize VersionDeck split publication during production containment.');
   }
 
   const records = Array.isArray(index.artifacts) ? index.artifacts : [];
@@ -196,15 +210,6 @@ export function validateAbiEvidenceIndex(
   }
   if (index.r8_mapping_file !== 'symbols/mapping.txt') {
     errors.push('ABI evidence R8 mapping identity is invalid.');
-  }
-  if (index.dart_obfuscation_map_file !== 'symbols/obfuscation-map.json') {
-    errors.push('ABI evidence Dart obfuscation map identity is invalid.');
-  }
-  if (
-    index.output_metadata_file != null &&
-    index.output_metadata_file !== 'metadata/output-metadata-apk.json'
-  ) {
-    errors.push('ABI evidence output metadata identity is invalid.');
   }
   return errors;
 }
@@ -380,7 +385,7 @@ export function normalizeVerifiedProvenance(jsonText, { sourceSha, artifactName,
     githubWorkflowRef: 'refs/heads/main',
     githubWorkflowTrigger: 'workflow_dispatch',
     buildTrigger: 'workflow_dispatch',
-    githubWorkflowName: 'Build Production APK',
+    githubWorkflowName: 'Shorebird Android Release',
     runnerEnvironment: 'github-hosted',
     sourceRepositoryVisibilityAtSigning: 'public',
   };
@@ -402,7 +407,7 @@ export function normalizeVerifiedProvenance(jsonText, { sourceSha, artifactName,
   const buildDefinition = statement.predicate?.buildDefinition;
   const workflow = buildDefinition?.externalParameters?.workflow;
   if (
-    workflow?.path !== '.github/workflows/build-production-android.yml' ||
+    workflow?.path !== '.github/workflows/shorebird-release-android.yml' ||
     workflow?.ref !== 'refs/heads/main' ||
     workflow?.repository !== `https://github.com/${EXPECTED_REPOSITORY}`
   ) {
@@ -445,7 +450,7 @@ export function normalizeVerifiedProvenance(jsonText, { sourceSha, artifactName,
     artifactSha256: normalizedSha(artifactSha256),
     signerWorkflow: EXPECTED_PROVENANCE_WORKFLOW,
     signerDigest: sourceSha,
-    workflowName: 'Build Production APK',
+    workflowName: 'Shorebird Android Release',
     workflowTrigger: 'workflow_dispatch',
     runnerEnvironment: 'github-hosted',
     runInvocationUri,

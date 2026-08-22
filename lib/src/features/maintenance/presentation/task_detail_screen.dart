@@ -1,4 +1,4 @@
-part of '../../../../main.dart';
+part of 'maintenance_presentation.dart';
 
 class TaskDetailScreen extends ConsumerWidget {
   const TaskDetailScreen({required this.planId, super.key});
@@ -69,7 +69,7 @@ class TaskDetailScreen extends ConsumerWidget {
                   if (task.plan.isEnabled)
                     PopupMenuItem(
                       value: 'skip',
-                      child: _PopupActionLabel(
+                      child: hk_ui.PopupActionLabel(
                         icon: Symbols.skip_next_rounded,
                         label: context.l10n.skipThisOccurrence,
                       ),
@@ -77,14 +77,14 @@ class TaskDetailScreen extends ConsumerWidget {
                   if (task.plan.isEnabled)
                     PopupMenuItem(
                       value: 'postpone',
-                      child: _PopupActionLabel(
+                      child: hk_ui.PopupActionLabel(
                         icon: Symbols.edit_calendar_rounded,
                         label: context.l10n.postponeDueDate,
                       ),
                     ),
                   PopupMenuItem(
                     value: 'set_enabled',
-                    child: _PopupActionLabel(
+                    child: hk_ui.PopupActionLabel(
                       icon: task.plan.isEnabled
                           ? Symbols.pause_circle_rounded
                           : Symbols.play_circle_rounded,
@@ -95,7 +95,7 @@ class TaskDetailScreen extends ConsumerWidget {
                   ),
                   PopupMenuItem(
                     value: 'delete',
-                    child: _PopupActionLabel(
+                    child: hk_ui.PopupActionLabel(
                       icon: Symbols.delete_rounded,
                       label: context.l10n.moveTaskToTrash,
                       destructive: true,
@@ -146,7 +146,7 @@ class TaskDetailScreen extends ConsumerWidget {
                                     .colorScheme
                                     .secondaryContainer,
                                 child: Icon(
-                                  _iconForAssetType(task.asset.assetType),
+                                  iconForAssetType(task.asset.assetType),
                                 ),
                               ),
                               const SizedBox(width: HkSpacing.sm),
@@ -189,8 +189,8 @@ class TaskDetailScreen extends ConsumerWidget {
                             children: [
                               if (task.plan.isEnabled)
                                 hk_ui.StatusPill(
-                                  label: _taskStatusLabel(context, task.status),
-                                  color: _taskStatusColor(context, task.status),
+                                  label: taskStatusLabel(context, task.status),
+                                  color: taskStatusColor(context, task.status),
                                 )
                               else
                                 hk_ui.StatusPill(
@@ -202,14 +202,14 @@ class TaskDetailScreen extends ConsumerWidget {
                                   semanticLabel: context.l10n.taskDisabled,
                                 ),
                               hk_ui.StatusPill(
-                                label: _recurrenceLabel(
+                                label: recurrenceLabel(
                                   context,
                                   task.plan.recurrence,
                                 ),
                                 color: Theme.of(context).colorScheme.primary,
                               ),
                               hk_ui.StatusPill(
-                                label: _priorityLabel(
+                                label: priorityLabel(
                                   context,
                                   task.plan.priority,
                                 ),
@@ -218,16 +218,16 @@ class TaskDetailScreen extends ConsumerWidget {
                             ],
                           ),
                           const SizedBox(height: HkSpacing.xs),
-                          _DetailRow(
+                          DetailRow(
                             icon: Symbols.event_rounded,
                             label: context.l10n.nextDue,
-                            value: _formatLongDate(
+                            value: formatLongDate(
                               context,
                               task.plan.nextDueDate,
                             ),
                           ),
                           if (task.plan.reminderDaysBefore > 0)
-                            _DetailRow(
+                            DetailRow(
                               icon: Symbols.notifications_active_rounded,
                               label: context.l10n.reminder,
                               value: context.l10n.reminderDaysBeforeDue(
@@ -236,13 +236,13 @@ class TaskDetailScreen extends ConsumerWidget {
                             ),
                           if (task.plan.instructions?.trim().isNotEmpty ??
                               false)
-                            _DetailRow(
+                            DetailRow(
                               icon: Symbols.notes_rounded,
                               label: context.l10n.instructions,
                               value: task.plan.instructions!,
                               contentType: 'maintenance_plan.instructions',
                             ),
-                          ..._taskMetadataRows(context, task.plan.metadata),
+                          ...taskMetadataRows(context, task.plan.metadata),
                           const SizedBox(height: HkSpacing.xs),
                           _TaskItemActionRow(
                             itemName: task.asset.name,
@@ -258,12 +258,13 @@ class TaskDetailScreen extends ConsumerWidget {
                       subtitle: context.l10n.completionHistoryForThisTask,
                     ),
                     records.when(
-                      data: (items) => _MaintenanceTimeline(
+                      data: (items) => MaintenanceTimeline(
                         records: items,
                         taskTitle: task.plan.title,
                       ),
-                      error: (error, _) =>
-                          ErrorPanel(message: _failureMessage(context, error)),
+                      error: (error, _) => hk_ui.ErrorPanel(
+                        message: failureMessage(context, error),
+                      ),
                       loading: () =>
                           const Center(child: CircularProgressIndicator()),
                     ),
@@ -276,7 +277,7 @@ class TaskDetailScreen extends ConsumerWidget {
       },
       error: (error, _) => Scaffold(
         appBar: AppBar(title: Text(context.l10n.task)),
-        body: ErrorPanel(message: _failureMessage(context, error)),
+        body: hk_ui.ErrorPanel(message: failureMessage(context, error)),
       ),
       loading: () =>
           const Scaffold(body: Center(child: CircularProgressIndicator())),

@@ -8,7 +8,7 @@ The first Flutter frame is owned by one process-lifetime splash above deferred s
 
 ## Navigation surfaces
 
-The current application exposes dashboard, assets, maintenance, calendar, search, trash, statistics, settings, account, backup, notifications, capability setup at `/permissions/setup`, and additional utility surfaces through GoRouter. `/profile` redirects to `/account`. The route definitions in `lib/main.dart` remain authoritative.
+The current application exposes dashboard, assets, maintenance, calendar, search, trash, statistics, settings, account, backup, notifications, capability setup at `/permissions/setup`, and additional utility surfaces through GoRouter. `/profile` redirects to `/account`. The route definitions in `lib/src/features/navigation/app_router.dart`, composed by `navigation_presentation.dart`, are authoritative.
 
 ## Organization model
 
@@ -51,10 +51,10 @@ Transient feedback has one protected queue. Passive messages and errors wait beh
 - Account deletion with recent reauthentication and coordinated local/remote cleanup.
 - A public VersionDeck deletion page that authenticates with Google OAuth PKCE through Supabase, requires explicit confirmation, and invokes the protected deletion function with the signed-in bearer token.
 
-The VersionDeck page is intentionally unpublished during active TASK-001
+The VersionDeck page is intentionally unpublished during active pre-release
 production containment, so the public browser deletion route is currently
 unavailable. The in-app authenticated deletion flow is unchanged. See the
-[`TASK-001 containment record`](../operations/production-containment.md).
+[production containment record](../operations/production-containment.md).
 
 Signed-out or offline operation must remain explicit; the application should not imply cloud protection when synchronization is unavailable.
 
@@ -74,14 +74,14 @@ The first-dashboard education flow considers weather-area and notification setup
 
 ## Backup and restore
 
-- Versioned ZIP backups.
+- Production-v1 ZIP backups with one format contract.
 - Manifest and cryptographic hash validation.
 - Media inclusion and staging.
 - Retention of automatic backups.
 - Pre-restore safety backup.
 - Compatibility checks and rollback on failure.
 
-Backups exported outside the app are user-controlled sensitive files. Current-schema backups do not contain a Category table; legacy backup compatibility is handled only where the accepted backup format requires it.
+Backups exported outside the app are user-controlled sensitive files. The pre-launch application accepts only the canonical format-1/schema-1 contract and contains no obsolete Category table or old-format migration path.
 
 ## Monetization
 
@@ -111,12 +111,13 @@ Repository tests cover the application eligibility, ownership, native schema, an
 
 Sentry provides technical error and performance diagnostics when enabled. The intended policy excludes user content and direct identifiers and disables screenshots, session replay, view hierarchy, and raw HTTP payload capture.
 
+Shorebird-enabled Android releases can receive signed Dart-only patches after a new base release is registered. Patches cannot change native code, packaged assets, dependencies, or toolchain inputs; production patches are published to staging, verified on a device, and promoted as an exact numbered patch through a protected workflow. The updater checks in the background at startup and normally applies a downloaded patch on the next launch.
+
 ## Distribution
 
-Production distribution is currently paused under TASK-001 containment. Historical Build 44
-evidence remains retained.
+Production distribution is currently paused under the pre-release containment policy.
 
-Release validation covers Edge Functions, browser deletion/static contracts, and local-stack database security. Separate rails produce a Play AAB and a standalone APK. The AAB rail creates evidence but does not upload to Google Play; Console upload and rollout require explicit operator authorization and evidence. The APK rail can publish Sentry state, after which VersionDeck independently verifies release identity before exposing a download.
+Release validation covers Edge Functions, browser deletion/static contracts, and local-stack database security. One pinned Shorebird rail produces the canonical Play AAB; a protected job derives VersionDeck's universal and ABI APKs from that exact AAB without recompiling Flutter. Play upload, Sentry mutation, GitHub Release, and VersionDeck verified publication remain separately authorized, independently verified operations.
 
 ## Product change checklist
 

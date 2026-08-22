@@ -1502,13 +1502,6 @@
   ,"owntendAlertsDescription": "Controls every Owntend alert channel. Device reminders still require Android access."
   ,"weatherAlertsInboxDescription": "Weather warnings shown in Owntend''s inbox; device delivery follows the reminder setting."
   ,"fix": "Fix"
-  ,"quarantinedDataTitle": "Local Data Quarantine"
-  ,"quarantinedDataDescription": "Preserved data from a previous account or offline session was found on this device. To protect your data privacy, this local data cannot be uploaded to your account automatically."
-  ,"exportSafetyBackup": "Export Safety Backup"
-  ,"resetLocalData": "Reset Local Data"
-  ,"importLocalData": "Import Data into My Account"
-  ,"importLocalDataConfirmation": "Are you sure you want to merge and import all local items, rooms, and tasks into your account?"
-  ,"resetLocalDataConfirmation": "Are you sure you want to wipe local data? This will clear all un-synced items on this device. Create a backup first if you want to save them."
   ,"reminderDaysBeforeDue": "{count, plural, =0{On the due date} =1{1 day before due} other{{count} days before due}}"
   ,"@reminderDaysBeforeDue": {"placeholders": {"count": {"type": "int"}}}
   ,"durationMinutes": "{count, plural, =1{1 minute} other{{count} minutes}}"

@@ -3,7 +3,6 @@ import 'dart:io';
 
 import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart';
-import 'package:drift/native.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -18,8 +17,7 @@ import 'restore_journal.dart';
 import 'sidecar_registry.dart';
 
 const _uuid = Uuid();
-const _currentFormatVersion = 2;
-const _minimumFormatVersion = 1;
+const _currentFormatVersion = 1;
 const _manifestName = 'manifest.json';
 const _backupStateFileName = 'owntend-backup-state.json';
 const _backupFolderName = 'backups';
@@ -62,7 +60,6 @@ const _currentSchemaTables = [
   'maintenance_plans',
   'maintenance_plan_metadata',
   'maintenance_records',
-  'notifications',
   'notification_inbox',
   'settings',
   'streaks',
@@ -246,8 +243,6 @@ class ZipBackupService
           AppDatabase.databaseFileName,
         ),
       );
-      await _migrateExtractedDatabase(extractedDb);
-
       final mediaToken = _uuid.v7();
       journalEntry = journalEntry.copyWith(
         phase: RestorePhase.mediaStaged,
@@ -527,16 +522,11 @@ class ZipBackupService
     }
 
     final manifest = _readManifest(manifestEntry);
-    final formatVersion = _readInt(manifest, 'format', fallback: 1);
+    final formatVersion = _readInt(manifest, 'format', fallback: 0);
     final appName = manifest['app'];
-    if (appName != 'Owntend' || formatVersion < _minimumFormatVersion) {
+    if (appName != 'Owntend' || formatVersion != _currentFormatVersion) {
       throw const BackupException(
         'Backup format is not recognized. Choose an Owntend backup ZIP.',
-      );
-    }
-    if (formatVersion > _currentFormatVersion) {
-      throw const BackupException(
-        'Backup was created by a newer Owntend version. Update the app, then try again.',
       );
     }
 
@@ -579,9 +569,7 @@ class ZipBackupService
         );
       }
 
-      if (formatVersion >= 2) {
-        _validateManifestFiles(manifest, archive);
-      }
+      _validateManifestFiles(manifest, archive);
 
       final summary = _readDatabaseSummary(
         extractedDb.path,
@@ -597,7 +585,6 @@ class ZipBackupService
           _readDateTime(manifest, 'createdAt') ??
           (await zipFile.lastModified()).toUtc();
       final warnings = <String>[
-        if (formatVersion < _currentFormatVersion) 'This is an older backup format. Owntend will migrate it during restore.',
         ..._readStringList(manifest, 'warnings'),
         ...summary.warnings,
       ];
@@ -832,13 +819,13 @@ class ZipBackupService
       final effectiveSchema = schemaVersion == 0
           ? manifestSchemaVersion
           : schemaVersion;
-      if (effectiveSchema > db.schemaVersion) {
+      if (effectiveSchema != db.schemaVersion) {
         throw const BackupException(
-          'Backup database is newer than this app. Update Owntend before restoring.',
+          'Backup database schema is not compatible with this Owntend version.',
         );
       }
 
-      final requiredTables = _requiredTablesForSchema(effectiveSchema);
+      final requiredTables = _requiredTablesForCurrentSchema();
       final missingTables = requiredTables
           .where((table) => !_tableExists(sqliteDb!, table))
           .toList();
@@ -877,20 +864,6 @@ class ZipBackupService
       );
     } finally {
       sqliteDb?.close();
-    }
-  }
-
-  Future<void> _migrateExtractedDatabase(File databaseFile) async {
-    AppDatabase? restoreDb;
-    try {
-      restoreDb = AppDatabase(executor: NativeDatabase(databaseFile));
-      await restoreDb.customSelect('SELECT 1').get();
-    } catch (error) {
-      throw BackupException(
-        'Backup database could not be prepared for this app version. Details: $error',
-      );
-    } finally {
-      await restoreDb?.close();
     }
   }
 
@@ -1346,7 +1319,7 @@ Map<String, Object?>? _statusToJson(BackupStatus? status) {
   };
 }
 
-List<String> _requiredTablesForSchema(int schemaVersion) {
+List<String> _requiredTablesForCurrentSchema() {
   return _currentSchemaTables;
 }
 

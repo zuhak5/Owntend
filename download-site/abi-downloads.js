@@ -3,7 +3,7 @@ import {
   VERSIONDECK_SPLIT_ABIS,
   VersionDeckManifestState,
   classifyVersionDeckManifest,
-} from "./manifest-schema-v5.js";
+} from "./manifest-schema.js";
 
 const ABI_LABELS = Object.freeze({
   "arm64-v8a": "ARM64 — most modern Android phones",

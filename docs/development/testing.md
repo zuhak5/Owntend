@@ -47,11 +47,17 @@ and validate the static artifact after focused tests.
 
 ### Release validation
 
-The AAB and APK rails are separate. Both require a successful `Validate Google
-Backend and Release Contracts` run. The AAB rail
-verifies one signed bundle and emits manifest, dependency, signing, and checksum
-evidence; it does not upload to Google Play. The APK rail additionally verifies
-the standalone signer/package/version and mutates Sentry release state.
+One pinned Shorebird rail builds the canonical AAB. Production requires the exact
+`Validate Google Backend and Release Contracts` result. A protected downstream
+job derives the universal and three ABI APKs from that AAB and verifies the
+standalone signer/package/version without invoking Flutter again. None of these
+steps uploads to Play, mutates Sentry, or deploys VersionDeck.
+
+`npm run test:shorebird` protects configuration generation, exact pins, KMS
+commands, patch eligibility, and runtime attribution. Patch workflows additionally
+run `tool/shorebird_patch_eligibility.mjs` against exact commits and a Shorebird
+dry-run. Physical-device staging evidence is required before promotion and cannot
+be replaced by unit/CI tests.
 
 ## Security assertion testing
 
@@ -166,7 +172,15 @@ flutter test --no-pub test/supabase_android_config_test.dart
 Edge Functions, public browser deletion, and release/static contracts:
 
 ```powershell
+deno install --frozen --config deno.json
+Push-Location supabase/functions/admob-ssv-handler; deno install --frozen; Pop-Location
+Push-Location supabase/functions/delete-account; deno install --frozen; Pop-Location
+Push-Location supabase/functions/account-deletion-status; deno install --frozen; Pop-Location
+
 deno fmt --check `
+  supabase/functions/_shared/request.ts `
+  supabase/functions/_shared/sentry.ts `
+  supabase/functions/_shared/sentry_test.ts `
   supabase/functions/admob-ssv-handler/index.ts `
   supabase/functions/admob-ssv-handler/index_test.ts `
   supabase/functions/delete-account/index.ts `
@@ -177,6 +191,12 @@ deno fmt --check `
 deno check --frozen supabase/functions/admob-ssv-handler/index.ts
 deno check --frozen supabase/functions/delete-account/index.ts
 deno check --frozen supabase/functions/account-deletion-status/index.ts
+
+deno test --frozen --allow-env --allow-net --config deno.json `
+  supabase/functions/_shared/sentry_test.ts
+Push-Location supabase/functions/admob-ssv-handler; deno test --frozen --allow-env --allow-net index_test.ts; Pop-Location
+Push-Location supabase/functions/delete-account; deno test --frozen --allow-env --allow-net index_test.ts; Pop-Location
+Push-Location supabase/functions/account-deletion-status; deno test --frozen --allow-env --allow-net index_test.ts; Pop-Location
 
 node --test `
   tool/account-deletion-site.test.mjs `
@@ -226,7 +246,7 @@ Test every global/per-format runtime gate, generation invalidation, stale callba
 
 ### Backup and restore
 
-Test valid current/historical backups, unsupported versions, path traversal, duplicate paths, oversized expansion, hash mismatch, insufficient storage, interrupted replacement, rollback, account mismatch, and sync restart.
+Test valid format-1/schema-1 backups, unsupported versions, path traversal, duplicate paths, oversized expansion, hash mismatch, insufficient storage, interrupted replacement, rollback, account mismatch, and sync restart.
 
 ### Notifications
 
@@ -247,22 +267,22 @@ Test the first Flutter owner, fixed splash lifetime across startup/failure branc
 - State explicitly when a device, hosted service, or protected workflow remains untested.
 
 
-### Problem #7 wallet synchronization
+### Wallet synchronization
 
-`test/problem_007_wallet_sync_test.dart` covers the auth-scoped wallet owner,
+[`test/wallet_sync_test.dart`](../../test/wallet_sync_test.dart) covers the auth-scoped wallet owner,
 authoritative mutation adoption, stale-snapshot ordering, external updates,
 last-good refresh behavior, account isolation, reconnect, points-pill updates,
 and the boundary that keeps wallets outside the generic change feed.
 `test/charged_operation_journal_test.dart` additionally verifies authoritative
 balances recovered from completed status and exact replay.
 
-`supabase/tests/database/0023_problem_007_wallet_realtime.test.sql` proves the
+[`supabase/tests/database/0026_wallet_realtime.test.sql`](../../supabase/tests/database/0026_wallet_realtime.test.sql) proves the
 wallet Realtime publication/replica identity and its read-only authenticated
-RLS/grant contract. Existing monetization, SSV-hardening, charged-operation,
-17-table Realtime, BUG-005, and BUG-011 suites remain required regressions.
+RLS/grant contract. Existing monetization, SSV security, charged-operation,
+17-table Realtime, recovery, and notification-completion suites remain required regressions.
 
-### Problem #8 live runtime updates
+### Live runtime updates
 
-`test/problem_008_live_runtime_updates_test.dart` covers local repository mutations reaching the existing Drift-backed Riverpod streams without a post-population loading/empty gap, room/item/task completion convergence, preservation of the repository aggregate settle boundary, removal of the redundant Dashboard/Rooms render caches, live-first Home startup-snapshot precedence, and the recent-sync resume regression where a missed remote change must trigger a broad pull and repair local Drift state.
+[`test/live_runtime_updates_test.dart`](../../test/live_runtime_updates_test.dart) covers local repository mutations reaching the existing Drift-backed Riverpod streams without a post-population loading/empty gap, room/item/task completion convergence, preservation of the repository aggregate settle boundary, removal of redundant Dashboard/Rooms render caches, live-first Home startup-snapshot precedence, and the recent-sync resume regression where a missed remote change must trigger a broad pull and repair local Drift state.
 
-Keep the existing coordinator, Realtime, hydration, notification-completion, backup, search-generation, and wallet suites in the same validation run. In particular, `test/sync_coordinator_test.dart` retains active broad-pull coalescing and canonical Realtime convergence coverage, while BUG-004/005/008/011/012/015 and Problem #7 tests protect the authority, account-scope, startup, completion, backup, search, and monetization boundaries that Problem #8 must not bypass.
+Keep the coordinator, Realtime, hydration, notification-completion, backup, search-generation, and wallet suites in the same validation run. In particular, [`test/sync_coordinator_test.dart`](../../test/sync_coordinator_test.dart) retains active broad-pull coalescing and canonical Realtime convergence coverage, while the focused recovery, account-scope, startup, completion, backup, search, and monetization tests protect those boundaries.

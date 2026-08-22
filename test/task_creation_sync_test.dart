@@ -27,16 +27,17 @@ void main() {
     final taskDetail = File(
       'lib/src/features/maintenance/presentation/task_detail_screen.dart',
     ).readAsStringSync();
-    final sharedWidgets = File('lib/src/ui/shared_widgets.dart')
+    final domainFormatters = File('lib/src/ui/domain_formatters.dart')
         .readAsStringSync();
-    final components = File('lib/src/ui/components.dart').readAsStringSync();
+    final components = File('lib/src/ui/components/navigation.dart')
+        .readAsStringSync();
     final statistics = File('lib/src/core/data/statistics_repository.dart')
         .readAsStringSync();
     final assetRepository = File('lib/src/core/data/asset_repository.dart')
         .readAsStringSync();
 
-    expect(taskDetail, contains('_iconForAssetType(task.asset.assetType)'));
-    expect(sharedWidgets, contains('_iconForAssetType(task.asset.assetType)'));
+    expect(taskDetail, contains('iconForAssetType(task.asset.assetType)'));
+    expect(domainFormatters, contains('IconData iconForAssetType'));
     expect(components, contains('iconForAssetType(task.asset.assetType)'));
     expect(statistics, contains('task.asset.assetType'));
     expect(assetRepository, contains('domain.AssetType.plant.name'));
@@ -50,7 +51,7 @@ void main() {
     expect(spec.localColumns, isNot(contains('health_group')));
   });
 
-  group('Task Creation Composite Acknowledgment Tests (P1-A)', () {
+  group('Task creation composite acknowledgment', () {
     late AppDatabase db;
     late LocalSyncStore store;
 
@@ -151,9 +152,9 @@ void main() {
         'user_id': 'user-1',
         'asset_id': assetId,
         'title': 'Server Authoritative Task Title',
-        'description': 'Server instructions',
-        'interval_count': 30,
-        'interval_unit': 'days',
+        'instructions': 'Server instructions',
+        'recurrence_interval': 30,
+        'recurrence_unit': 'days',
         'priority': 'medium',
         'next_due_date': now.toIso8601String(),
         'reminder_days_before': 1,

@@ -1,0 +1,60 @@
+name: Promote Shorebird Patch
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: "Exact production release version (x.y.z+N)"
+        required: true
+        type: string
+      patch_number:
+        description: "Exact patch number already verified on staging track"
+        required: true
+        type: number
+      preview_confirmation:
+        description: "Type PREVIEWED PATCH x.y.z+N#P after device verification"
+        required: true
+        type: string
+
+concurrency:
+  group: shorebird-promote-production
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    environment: production
+    permissions:
+      contents: read
+    steps:
+      - name: Check out current main
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          fetch-depth: 0
+      - name: Require exact main and promotion authority
+        shell: pwsh
+        env:
+          PROMOTION_ENABLED: ${{ vars.SHOREBIRD_PRODUCTION_PROMOTIONS_ENABLED }}
+        run: |
+          git fetch origin main --no-tags
+          if ($LASTEXITCODE -ne 0) { throw "Could not refresh origin/main." }
+          if ($env:GITHUB_REF -ne "refs/heads/main" -or (git rev-parse HEAD).Trim() -ne (git rev-parse origin/main).Trim()) { throw "Promotion requires exact current main." }
+          if ($env:PROMOTION_ENABLED -cne "true") { throw "Production Shorebird promotion is disabled." }
+      - name: Install exact Shorebird CLI
+        shell: pwsh
+        run: .\tool\install_shorebird.ps1
+      - name: Promote only the exact staged and device-previewed patch
+        shell: pwsh
+        env:
+          SHOREBIRD_TOKEN: ${{ secrets.SHOREBIRD_TOKEN }}
+          SHOREBIRD_PROD_APP_ID: ${{ vars.SHOREBIRD_PROD_APP_ID }}
+        run: |
+          .\tool\promote_shorebird_patch.ps1 -AppId $env:SHOREBIRD_PROD_APP_ID -ReleaseVersion "${{ inputs.release_version }}" -PatchNumber ${{ inputs.patch_number }} -PreviewConfirmation "${{ inputs.preview_confirmation }}"
+      - name: Upload immutable promotion evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: Owntend-shorebird-promotion-${{ inputs.release_version }}-patch-${{ inputs.patch_number }}-${{ github.run_id }}
+          path: release/shorebird-promotion-evidence.json
+          if-no-files-found: error
+          retention-days: 30

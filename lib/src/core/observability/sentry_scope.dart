@@ -29,6 +29,7 @@ Future<void> applyOwntendBaseScope(
   await scope.setTag('app_environment', config.environment);
   await scope.setTag('app_version', config.appVersion);
   await scope.setTag('build_number', config.dist);
+  await scope.setTag('shorebird_patch_number', config.shorebirdPatchNumber);
   await scope.setTag('run_id', runId);
   await scope.removeContexts('account');
 }

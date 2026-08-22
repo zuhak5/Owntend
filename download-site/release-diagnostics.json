@@ -1,4 +1,11 @@
 {
-  "generatedAt": "2026-08-03T00:00:00.000Z",
-  "diagnostics": []
+  "generatedAt": "2026-08-21T14:30:00.000Z",
+  "diagnostics": [
+    {
+      "type": "publication-disabled",
+      "reasonCode": "pre-release",
+      "message": "Owntend 1.0.0 is in active pre-release preparation. Downloads will be enabled upon initial publication.",
+      "updatedAt": "2026-08-21T14:30:00.000Z"
+    }
+  ]
 }

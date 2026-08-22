@@ -15,10 +15,10 @@ void main() {
 
   test('cloud aliases map to the canonical local sync fields', () {
     final plan = syncSpecByEntity['maintenance_plan']!;
-    expect(plan.remoteColumnFor('instructions'), 'description');
-    expect(plan.remoteColumnFor('recurrence_interval'), 'interval_count');
-    expect(plan.remoteColumnFor('recurrence_unit'), 'interval_unit');
-    expect(plan.localColumnFor('interval_count'), 'recurrence_interval');
+    expect(plan.remoteColumnFor('instructions'), 'instructions');
+    expect(plan.remoteColumnFor('recurrence_interval'), 'recurrence_interval');
+    expect(plan.remoteColumnFor('recurrence_unit'), 'recurrence_unit');
+    expect(plan.localColumnFor('recurrence_interval'), 'recurrence_interval');
 
     final streak = syncSpecByEntity['streak']!;
     expect(streak.remoteColumnFor('best_streak'), 'longest_streak');

@@ -1,6 +1,6 @@
 # Owntend
 
-Owntend is an Android-first Flutter application for organizing household assets and keeping maintenance work on schedule. It combines an offline-first Drift database with authenticated Supabase synchronization, reminders, backup and restore, statistics, Google sign-in, privacy-preserving Sentry observability, and an independently verified APK download site named VersionDeck.
+Owntend is an Android-first Flutter application for organizing household assets and keeping maintenance work on schedule. It combines an offline-first Drift database with authenticated Supabase synchronization, reminders, backup and restore, statistics, Google sign-in, privacy-preserving Sentry observability, signed Shorebird Dart code push, and an independently verified APK download site named VersionDeck.
 
 ## Current stack
 
@@ -10,6 +10,7 @@ Owntend is an Android-first Flutter application for organizing household assets 
 - Supabase Auth, Postgres, Storage, Realtime, RPCs, and Edge Functions
 - Google sign-in and Google Mobile Ads
 - Sentry Flutter
+- Shorebird Android releases and strict, KMS-signed Dart patches
 - Flutter local notifications, foreground tasks, Workmanager, and coarse location
 - PowerShell release tooling, Node.js, and static site hosting
 
@@ -58,6 +59,7 @@ Start at [`docs/README.md`](docs/README.md). Particularly important documents ar
 - [`docs/architecture/sync-protocol.md`](docs/architecture/sync-protocol.md)
 - [`docs/development/testing.md`](docs/development/testing.md)
 - [`docs/SENTRY_OPERATIONS.md`](docs/SENTRY_OPERATIONS.md)
+- [`docs/operations/shorebird-code-push.md`](docs/operations/shorebird-code-push.md)
 - [`docs/versiondeck-release-runbook.md`](docs/versiondeck-release-runbook.md)
 - [`docs/governance/documentation-maintenance.md`](docs/governance/documentation-maintenance.md)
 - [`PRIVACY.md`](PRIVACY.md)
@@ -67,15 +69,16 @@ Documentation is part of the implementation contract. Humans, AI agents, bots, a
 
 ## Production releases
 
-Production publication remains under scoped containment. Exact-main signed APK
-and AAB evidence builds may run, but they do not authorize Sentry release
-mutation, GitHub Release/tag publication, Google Play upload or rollout, hosted
-backend mutation, or verified VersionDeck downloads. Historical releases remain
-preserved. See the
-[`TASK-001 containment record`](docs/operations/production-containment.md).
+Production publication remains under scoped containment. Shorebird release and
+patch dry-runs may run, but production release/patch/promotion, Sentry mutation,
+GitHub Release/tag publication, Google Play upload/rollout, hosted backend
+mutation, and verified VersionDeck downloads require separate authorization.
+Historical releases remain preserved. See the
+[production containment record](docs/operations/production-containment.md).
 
-Production Android evidence builds validate production configuration, signing
-identity, package metadata, APK debuggability, checksums, tests, and provenance.
+The canonical Android rail builds one Shorebird AAB and derives VersionDeck APK
+evidence from that exact AAB. It validates configuration, signing identity,
+package metadata, debuggability, checksums, symbols, tests, and provenance.
 Sentry runtime ingestion may use the public DSN, but Sentry release mutation
 remains a separate contained operation.
 

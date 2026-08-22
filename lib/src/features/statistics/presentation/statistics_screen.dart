@@ -1,4 +1,19 @@
-part of '../../../../main.dart';
+import 'dart:math' as math;
+
+import 'package:fl_chart/fl_chart.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
+import 'package:material_symbols_icons/symbols.dart';
+import 'package:owntend/l10n/app_localizations_ext.dart';
+
+import '../../../core/domain/models.dart';
+import '../../../core/providers/app_providers.dart';
+import '../../../core/utils/app_failure.dart';
+import '../../../ui/app_theme.dart';
+import '../../../ui/components.dart' as hk_ui;
+import '../../../ui/domain_localization.dart';
+import '../../monetization/monetization.dart';
 
 class StatisticsScreen extends ConsumerWidget {
   const StatisticsScreen({super.key});
@@ -30,8 +45,12 @@ class StatisticsScreen extends ConsumerWidget {
               ),
             ),
           ),
-          error: (error, _) =>
-              ErrorPanel(message: _failureMessage(context, error)),
+          error: (error, _) => hk_ui.ErrorPanel(
+            message: localizedFailureMessage(
+              context.l10n,
+              appFailureCodeFor(error),
+            ),
+          ),
           loading: () => const Center(child: CircularProgressIndicator()),
         ),
       ),
@@ -425,6 +444,9 @@ String _statisticsMonthLabel(BuildContext context, String value) {
   return DateFormat.MMM(localeTag).format(DateTime(year, month));
 }
 
+String _statisticsLocaleTag(BuildContext context) =>
+    Localizations.localeOf(context).toLanguageTag();
+
 class TaskDistributionChart extends StatelessWidget {
   const TaskDistributionChart({required this.data, super.key});
 
@@ -452,7 +474,10 @@ class TaskDistributionChart extends StatelessWidget {
       ..sort((a, b) => b.value.compareTo(a.value));
     final total = entries.fold<int>(0, (sum, entry) => sum + entry.value);
     final semanticValue = entries
-        .map((entry) => '${_assetTypeLabel(context, entry.key)} ${entry.value}')
+        .map(
+          (entry) =>
+              '${localizedAssetTypeLabel(context, entry.key)} ${entry.value}',
+        )
         .join(', ');
     final sectionTitleStyle =
         Theme.of(context).textTheme.labelSmall
@@ -495,7 +520,7 @@ class TaskDistributionChart extends StatelessWidget {
                           PieChartSectionData(
                             value: entries[index].value.toDouble(),
                             title: NumberFormat.percentPattern(
-                              _localeTag(context),
+                              _statisticsLocaleTag(context),
                             ).format(entries[index].value / total),
                             color: colors[index % colors.length],
                             radius: radius,
@@ -535,7 +560,7 @@ class TaskDistributionChart extends StatelessWidget {
                               'statistics-legend-${entries[index].key.name}',
                             ),
                             label:
-                                '${_assetTypeLabel(context, entries[index].key)} ${entries[index].value}',
+                                '${localizedAssetTypeLabel(context, entries[index].key)} ${entries[index].value}',
                             color: colors[index % colors.length],
                           ),
                         ),
@@ -589,311 +614,6 @@ class _StatisticsLegendItem extends StatelessWidget {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _CalendarSummaryCard extends StatelessWidget {
-  const _CalendarSummaryCard({
-    required this.overdue,
-    required this.today,
-    required this.upcoming,
-  });
-
-  final int overdue;
-  final int today;
-  final int upcoming;
-
-  @override
-  Widget build(BuildContext context) {
-    return hk_ui.PremiumCard(
-      borderRadius: HkRadii.xxl,
-      backgroundColor: Theme.of(context).colorScheme.surfaceContainerLowest
-          .withValues(alpha: 0.92),
-      child: SizedBox(
-        height: 70,
-        child: Row(
-          children: [
-            Expanded(
-              child: _MiniCalendarMetric(
-                label: context.l10n.overdue,
-                value: overdue,
-                color: HkColors.tertiary,
-                icon: Symbols.warning_rounded,
-              ),
-            ),
-            Expanded(
-              child: _MiniCalendarMetric(
-                label: context.l10n.today,
-                value: today,
-                color: HkColors.amber,
-                icon: Symbols.today_rounded,
-              ),
-            ),
-            Expanded(
-              child: _MiniCalendarMetric(
-                label: context.l10n.upcoming,
-                value: upcoming,
-                color: Theme.of(context).colorScheme.primary,
-                icon: Symbols.event_upcoming_rounded,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _MiniCalendarMetric extends StatelessWidget {
-  const _MiniCalendarMetric({
-    required this.label,
-    required this.value,
-    required this.color,
-    required this.icon,
-  });
-
-  final String label;
-  final int value;
-  final Color color;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Icon(icon, color: color, size: 16),
-        const SizedBox(height: 2),
-        Text(
-          '$value',
-          style: Theme.of(context).textTheme.titleLarge
-              ?.copyWith(color: color, fontWeight: FontWeight.w800),
-        ),
-        Text(label, style: Theme.of(context).textTheme.labelSmall),
-      ],
-    );
-  }
-}
-
-class _CalendarMonthCard extends StatelessWidget {
-  const _CalendarMonthCard({
-    required this.month,
-    required this.selectedDate,
-    required this.taskCounts,
-    required this.onDateSelected,
-    required this.onPreviousMonth,
-    required this.onNextMonth,
-  });
-
-  final DateTime month;
-  final DateTime selectedDate;
-  final Map<DateTime, int> taskCounts;
-  final ValueChanged<DateTime> onDateSelected;
-  final VoidCallback onPreviousMonth;
-  final VoidCallback onNextMonth;
-
-  @override
-  Widget build(BuildContext context) {
-    final weeks = hk_dates.calendarMonthGrid(month);
-    final today = hk_dates.dateOnly(DateTime.now());
-    final weekdayFormat = DateFormat.E(_localeTag(context));
-    final weekdays = [
-      for (var offset = 0; offset < DateTime.daysPerWeek; offset += 1)
-        weekdayFormat.format(DateTime(2024, 1, 7 + offset)),
-    ];
-    final rtl = Directionality.of(context) == TextDirection.rtl;
-    return hk_ui.PremiumCard(
-      borderRadius: HkRadii.xxl,
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  DateFormat.yMMMM(_localeTag(context)).format(month),
-                  style: Theme.of(context).textTheme.titleSmall
-                      ?.copyWith(fontWeight: FontWeight.w700),
-                ),
-              ),
-              IconButton(
-                tooltip: context.l10n.previousMonth,
-                onPressed: onPreviousMonth,
-                iconSize: 18,
-                style: IconButton.styleFrom(
-                  minimumSize: const Size(40, 40),
-                  padding: EdgeInsets.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-                icon: Icon(
-                  rtl
-                      ? Symbols.chevron_right_rounded
-                      : Symbols.chevron_left_rounded,
-                ),
-              ),
-              IconButton(
-                tooltip: context.l10n.nextMonth,
-                onPressed: onNextMonth,
-                iconSize: 18,
-                style: IconButton.styleFrom(
-                  minimumSize: const Size(40, 40),
-                  padding: EdgeInsets.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-                icon: Icon(
-                  rtl
-                      ? Symbols.chevron_left_rounded
-                      : Symbols.chevron_right_rounded,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: HkSpacing.space4),
-          Row(
-            children: [
-              for (final weekday in weekdays)
-                Expanded(
-                  child: Center(
-                    child: Text(
-                      weekday,
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: HkSpacing.space4),
-          Column(
-            children: [
-              for (
-                var weekIndex = 0;
-                weekIndex < weeks.length;
-                weekIndex++
-              ) ...[
-                Row(
-                  children: [
-                    for (
-                      var dayIndex = 0;
-                      dayIndex < weeks[weekIndex].length;
-                      dayIndex++
-                    ) ...[
-                      Expanded(
-                        child: AspectRatio(
-                          aspectRatio: 1,
-                          child: _CalendarDayCell(
-                            date: weeks[weekIndex][dayIndex],
-                            selectedDate: selectedDate,
-                            today: today,
-                            taskCounts: taskCounts,
-                            onDateSelected: onDateSelected,
-                          ),
-                        ),
-                      ),
-                      if (dayIndex != weeks[weekIndex].length - 1)
-                        const SizedBox(width: HkSpacing.space4),
-                    ],
-                  ],
-                ),
-                if (weekIndex != weeks.length - 1)
-                  const SizedBox(height: HkSpacing.space4),
-              ],
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CalendarDayCell extends StatelessWidget {
-  const _CalendarDayCell({
-    required this.date,
-    required this.selectedDate,
-    required this.today,
-    required this.taskCounts,
-    required this.onDateSelected,
-  });
-
-  final DateTime? date;
-  final DateTime selectedDate;
-  final DateTime today;
-  final Map<DateTime, int> taskCounts;
-  final ValueChanged<DateTime> onDateSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    final dateValue = date;
-    if (dateValue == null) {
-      return const SizedBox.shrink();
-    }
-    final dayValue = dateValue.day;
-    final dateOnly = hk_dates.dateOnly(dateValue);
-    final selected = hk_dates.isSameDate(dateOnly, selectedDate);
-    final isToday = hk_dates.isSameDate(dateOnly, today);
-    final count = taskCounts[dateOnly] ?? 0;
-    final scheme = Theme.of(context).colorScheme;
-    final background = selected
-        ? scheme.primary
-        : count > 0
-        ? scheme.secondaryContainer
-        : scheme.surfaceContainerLowest;
-    final foreground = selected ? scheme.onPrimary : scheme.onSurface;
-    return Semantics(
-      button: true,
-      selected: selected,
-      label: context.l10n.calendarDaySummary(
-        isToday.toString(),
-        DateFormat.yMMMMd(Localizations.localeOf(context).toLanguageTag())
-            .format(dateOnly),
-        count,
-      ),
-      child: InkWell(
-        key: ValueKey('calendar-day-${dateOnly.toIso8601String()}'),
-        borderRadius: BorderRadius.circular(HkRadii.md),
-        onTap: () => onDateSelected(dateOnly),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          decoration: BoxDecoration(
-            color: background,
-            borderRadius: BorderRadius.circular(HkRadii.md),
-            border: Border.all(
-              color: isToday && !selected
-                  ? scheme.primary.withValues(alpha: 0.55)
-                  : Colors.transparent,
-            ),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                '$dayValue',
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  color: foreground,
-                  fontWeight: selected || isToday
-                      ? FontWeight.w800
-                      : FontWeight.w600,
-                ),
-              ),
-              SizedBox(
-                height: 11,
-                child: count > 0
-                    ? Text(
-                        '$count',
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: foreground,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      )
-                    : null,
-              ),
-            ],
-          ),
         ),
       ),
     );

@@ -424,7 +424,7 @@ select extensions.is(
   'ordinary task creation costs one point'
 );
 select extensions.is(
-  (select description from public.maintenance_plans where id = 'points-general-task'),
+  (select instructions from public.maintenance_plans where id = 'points-general-task'),
   'Inspect the general asset',
   'task creation preserves the Flutter instructions field in the cloud alias'
 );
@@ -512,7 +512,7 @@ select extensions.is(
 
 select extensions.throws_ok(
   $$insert into public.maintenance_plans (
-      user_id, id, asset_id, title, interval_count, interval_unit,
+      user_id, id, asset_id, title, recurrence_interval, recurrence_unit,
       priority, created_at, updated_at
     ) values (
       '44444444-4444-4444-4444-444444444444', 'bypass-task',

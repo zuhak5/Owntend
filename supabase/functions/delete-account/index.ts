@@ -4,12 +4,14 @@ import {
   createEdgeExceptionReporter,
   type EdgeExceptionReporter,
 } from "../_shared/sentry.ts";
+import { readBoundedJsonObject } from "../_shared/request.ts";
 
 const jsonHeaders = {
   "Content-Type": "application/json",
   "Cache-Control": "no-store",
 };
 const requiredConfirmation = "delete-my-account";
+const maxDeletionBodyBytes = 512;
 const recoveryKeyPattern = /^[A-Za-z0-9_-]{43}$/;
 const allowedBrowserOrigins = new Set([
   "https://owntend.app",
@@ -111,7 +113,17 @@ export async function handleDeleteAccount(
     return respond(401, { error: "missing_authorization" });
   }
 
-  const deletionPayload = await readDeletionPayload(request);
+  const deletionPayloadResult = await readDeletionPayload(request);
+  if (!deletionPayloadResult.ok) {
+    if (deletionPayloadResult.reason === "too_large") {
+      return respond(413, { error: "request_too_large" });
+    }
+    if (deletionPayloadResult.reason === "unsupported_media_type") {
+      return respond(415, { error: "unsupported_media_type" });
+    }
+    return respond(400, { error: "invalid_request" });
+  }
+  const deletionPayload = deletionPayloadResult.value;
   if (!deletionPayload.confirmed) {
     return respond(400, { error: "confirmation_required" });
   }
@@ -376,22 +388,29 @@ function createAccountDeletionServices(
 
 async function readDeletionPayload(
   request: Request,
-): Promise<{ confirmed: boolean; recoveryKey: string | null }> {
-  try {
-    const body: unknown = await request.json();
-    if (typeof body !== "object" || body == null) {
-      return { confirmed: false, recoveryKey: null };
-    }
-    const candidate = body as Record<string, unknown>;
-    return {
+): Promise<
+  | {
+    ok: true;
+    value: { confirmed: boolean; recoveryKey: string | null };
+  }
+  | { ok: false; reason: "invalid" | "too_large" | "unsupported_media_type" }
+> {
+  const result = await readBoundedJsonObject(request, maxDeletionBodyBytes);
+  if (!result.ok) return result;
+  const candidate = result.value;
+  const keys = Object.keys(candidate);
+  if (keys.some((key) => key !== "confirmation" && key !== "recovery_key")) {
+    return { ok: false, reason: "invalid" };
+  }
+  return {
+    ok: true,
+    value: {
       confirmed: candidate.confirmation === requiredConfirmation,
       recoveryKey: isRecoveryKey(candidate.recovery_key)
         ? candidate.recovery_key
         : null,
-    };
-  } catch {
-    return { confirmed: false, recoveryKey: null };
-  }
+    },
+  };
 }
 
 function isRecoveryKey(value: unknown): value is string {

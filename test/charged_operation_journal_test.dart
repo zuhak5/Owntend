@@ -78,10 +78,7 @@ class _FakeMonetizationRepository implements MonetizationRepository {
       throw Exception('Network unavailable during operation recovery');
     }
     if (statusToReturn != null) return statusToReturn!;
-    return const ChargedOperationStatusResult(
-      status: 'not_found',
-      capabilityVersion: '1.2.0',
-    );
+    return const ChargedOperationStatusResult(status: 'not_found');
   }
 
   @override
@@ -258,7 +255,6 @@ void main() {
         final fakeMonetization = _FakeMonetizationRepository(
           statusToReturn: const ChargedOperationStatusResult(
             status: 'completed',
-            capabilityVersion: '1.2.0',
             entityType: 'task',
             entityId: 'plan-lost',
             balance: 8,
@@ -318,7 +314,6 @@ void main() {
             _FakeMonetizationRepository(
                 statusToReturn: const ChargedOperationStatusResult(
                   status: 'not_found',
-                  capabilityVersion: '1.2.0',
                 ),
               )
               ..createTaskResult = const PointDebitResult(
@@ -474,7 +469,7 @@ void main() {
     );
 
     test(
-      'unqualified legacy journal entry fails closed without network work',
+      'unqualified journal entry fails closed without network work',
       () async {
         final store = TaskCreationOperationStore();
         final fakeSyncStore = _FakeLocalSyncStore();

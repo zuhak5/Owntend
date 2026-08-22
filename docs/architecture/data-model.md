@@ -39,7 +39,7 @@ Sensitive session data belongs in secure storage rather than ordinary settings r
 
 ## Search derived state
 
-Drift schema 2 introduced durable local generation metadata for the FTS5 search cache. The singleton `search_index_state` row stores:
+The production-v1 Drift baseline includes durable local generation metadata for the FTS5 search cache. The singleton `search_index_state` row stores:
 
 - `source_generation`: the generation of committed searchable authoritative data; and
 - `indexed_generation`: the generation represented by the current `search_index` snapshot.
@@ -87,16 +87,16 @@ For every new or changed field:
 
 1. Identify the local table and repository contract.
 2. Decide whether the field synchronizes.
-3. Define the cloud column, RPC, RLS, revision, and migration behavior if applicable.
-4. Define existing-row conversion and null/default semantics.
-5. Add Drift migration and migration tests.
+3. Define the cloud column, RPC, RLS, revision, and baseline behavior if applicable.
+4. Define null/default semantics and database invariants.
+5. While the lifecycle marker remains pre-launch, update the Drift schema-1 and single Supabase baseline directly; after launch, add forward migration coverage.
 6. Update serialization and generated code.
 7. Update outbox/pull/shadow handling.
 8. Update backup inclusion and compatibility.
 9. Update deletion and privacy inventories.
 10. Add focused repository, backend, synchronization, and UI tests.
 
-The current Drift schema version is 3. Schema 2 introduced local derived search-generation state and its invalidation triggers. Schema 3 removes the obsolete local Category table and `assets.category_id`, drops the Category search-generation triggers, and preserves generation-bound invalidation for the remaining searchable sources. The synchronized `asset` entity keeps the same identity/key contract; `category_id` is removed from its field shape rather than becoming a separate sync entity.
+The current Drift schema version is `1`. It directly contains the canonical domain, FTS generation/invalidation, sync/outbox/shadow/checkpoint, notification-reconciliation, and durable local-media-cleanup structures. There is no unpublished upgrade ladder, Category table, duplicate device-notification table, or compatibility field in the production-v1 baseline.
 
 ## Indexing and constraints
 

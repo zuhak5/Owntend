@@ -108,16 +108,17 @@ function verificationJson(policy, overrides = {}) {
   return JSON.stringify([verificationEntry(policy, overrides)]);
 }
 
-test("buildAndroidProvenancePolicy separates APK and AAB rails", () => {
+test("buildAndroidProvenancePolicy binds APK and AAB to the unified Shorebird rail", () => {
   const apk = policyFixture();
   const aab = buildAndroidProvenancePolicy({
     artifactType: "aab",
     repository: "zuhak5/Owntend",
     sourceDigest: SOURCE_SHA,
   });
-  assert.equal(apk.workflowPath, ".github/workflows/build-production-android.yml");
-  assert.equal(aab.workflowPath, ".github/workflows/build-play-android.yml");
-  assert.notEqual(apk.certIdentity, aab.certIdentity);
+  assert.equal(apk.workflowPath, ".github/workflows/shorebird-release-android.yml");
+  assert.equal(aab.workflowPath, ".github/workflows/shorebird-release-android.yml");
+  assert.equal(apk.certIdentity, aab.certIdentity);
+  assert.notEqual(apk.artifactType, aab.artifactType);
 });
 
 test("verifyAttestationVerificationJson accepts the exact tuple", () => {
@@ -224,7 +225,7 @@ test("formatGhAttestationVerifyCommand includes the exact tuple flags", () => {
   assert.match(command, /--source-ref refs\/heads\/main/);
   assert.match(
     command,
-    /--cert-identity https:\/\/github\.com\/zuhak5\/Owntend\/\.github\/workflows\/build-production-android\.yml@refs\/heads\/main/,
+    /--cert-identity https:\/\/github\.com\/zuhak5\/Owntend\/\.github\/workflows\/shorebird-release-android\.yml@refs\/heads\/main/,
   );
   assert.match(command, /--deny-self-hosted-runners/);
   assert.match(command, /--format json/);

@@ -12,6 +12,7 @@ This directory is the canonical entry point for product, architecture, developme
 - [`architecture/system-overview.md`](architecture/system-overview.md): major components and data flows.
 - [`architecture/data-model.md`](architecture/data-model.md): local and cloud data domains.
 - [`architecture/sync-protocol.md`](architecture/sync-protocol.md): offline-first synchronization model.
+- [`architecture/v1-contracts.md`](architecture/v1-contracts.md): canonical production-v1 data, sync, security, error, media, retention, version, and composition contracts.
 - [`architecture/auth-and-account-deletion.md`](architecture/auth-and-account-deletion.md): identity and deletion lifecycle.
 - [`architecture/monetization.md`](architecture/monetization.md): ads, points, charged creation, and SSV.
 - [`architecture/backup-and-restore.md`](architecture/backup-and-restore.md): archive format and restore safety.
@@ -23,15 +24,16 @@ This directory is the canonical entry point for product, architecture, developme
 - [`development/android-lint.md`](development/android-lint.md): blocking release lint gate, report generation, and evidence binding.
 - [`development/test-and-asset-inventory.md`](development/test-and-asset-inventory.md): canonical runtime asset and test inventory discovery.
 - [`development/testing.md`](development/testing.md): test strategy and commands.
-- [`development/dependency-integrity.md`](development/dependency-integrity.md): Gradle distribution checksum, pub lockfile enforcement, and Sentry CLI pin.
+- [`development/dependency-integrity.md`](development/dependency-integrity.md): Gradle distribution checksum, pub lockfile enforcement, exact Shorebird/Bundletool pins, and Sentry CLI pin.
 - [`development/dependency-security-and-notices.md`](development/dependency-security-and-notices.md): dependency review, license matrix, exception registry, SBOM (SPDX 2.3), and third-party notices.
 - [`development/localization-and-rtl.md`](development/localization-and-rtl.md): English/Arabic localization and RTL requirements.
 - [`development/transient-feedback.md`](development/transient-feedback.md): protected Undo, batching, ordering, accessibility, and layout contracts for transient feedback.
 
 ## Operations
 
-- [`operations/release-runbook.md`](operations/release-runbook.md): protected standalone APK and VersionDeck release process.
-- [`operations/google-play-release-runbook.md`](operations/google-play-release-runbook.md): verified AAB evidence and the separately authorized Google Play handoff.
+- [`operations/release-runbook.md`](operations/release-runbook.md): unified Shorebird AAB release and exact-AAB APK evidence process.
+- [`operations/shorebird-code-push.md`](operations/shorebird-code-push.md): account setup, app IDs, GitHub/KMS configuration, safe validation, patching, promotion, and rollback.
+- [`operations/google-play-release-runbook.md`](operations/google-play-release-runbook.md): canonical Shorebird AAB evidence and the separately authorized Google Play handoff.
 - [`operations/google-play-data-safety-evidence.md`](operations/google-play-data-safety-evidence.md): release-scoped Data safety evidence worksheet and operator-owned gaps.
 - [`SENTRY_OPERATIONS.md`](SENTRY_OPERATIONS.md): Sentry configuration and incident workflow.
 - [`versiondeck-release-runbook.md`](versiondeck-release-runbook.md): VersionDeck validation and deployment.
@@ -51,6 +53,7 @@ This directory is the canonical entry point for product, architecture, developme
 - [`adr/0001-offline-first-sync.md`](adr/0001-offline-first-sync.md)
 - [`adr/ADR-SENTRY-OBSERVABILITY.md`](adr/ADR-SENTRY-OBSERVABILITY.md)
 - [`adr/0002-versiondeck-release-verification.md`](adr/0002-versiondeck-release-verification.md)
+- [`adr/ADR-SHOREBIRD-CODE-PUSH.md`](adr/ADR-SHOREBIRD-CODE-PUSH.md)
 
 ## Agent workflows
 

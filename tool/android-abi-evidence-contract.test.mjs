@@ -23,14 +23,20 @@ function makeIndex() {
     x86_64: 'app.android-x64.symbols',
   };
   return {
-    schema_version: 1,
-    evidence_mode: 'protected-abi-apk-evidence',
+    schema_version: 2,
+    evidence_mode: 'protected-shorebird-aab-derived-apk-evidence',
+    derivation_mode: 'pinned-bundletool-universal-pruned-per-abi',
     source_sha: sourceSha,
     version_name: versionName,
     version_code: versionCode,
     package: 'app.owntend.mobile',
     expected_signer_sha256: signer,
     expected_abis: [...EXPECTED_ANDROID_APK_ABIS],
+    canonical_aab_sha256: 'a'.repeat(64),
+    bundletool_version: '1.18.3',
+    bundletool_sha256: 'a099cfa1543f55593bc2ed16a70a7c67fe54b1747bb7301f37fdfd6d91028e29',
+    universal_apk_file: `artifacts/Owntend-${versionName}-build-${versionCode}-universal.apk`,
+    universal_apk_sha256: 'b'.repeat(64),
     universal_apk_remains_authoritative: true,
     public_distribution_authorized: false,
     versiondeck_publication_authorized: false,
@@ -54,25 +60,24 @@ function makeIndex() {
       };
     }),
     r8_mapping_file: 'symbols/mapping.txt',
-    dart_obfuscation_map_file: 'symbols/obfuscation-map.json',
-    output_metadata_file: 'metadata/output-metadata-apk.json',
   };
 }
 
-test('ABI evidence builder preserves exact release identity and all supported ABIs', async () => {
-  const script = await read('tool/build_prod_abi_evidence.ps1');
+test('APK derivation preserves exact AAB identity and all supported ABIs without Flutter recompilation', async () => {
+  const script = await read('tool/derive_versiondeck_apks.ps1');
 
-  assert.match(script, /--split-per-abi/);
-  assert.match(script, /force-version-code-ignoring-abi=true/);
+  assert.match(script, /build-apks/);
+  assert.match(script, /--mode=universal/);
+  assert.match(script, /download_bundletool\.ps1/);
   assert.match(
     script,
     /\$expectedAbis = @\('arm64-v8a', 'armeabi-v7a', 'x86_64'\)/,
   );
-  assert.match(script, /Unexpected versionCode for \$\{abi\}/);
-  assert.doesNotMatch(script, /\$abi:/);
-  assert.match(script, /\$actualBuild -ne \$ExpectedBuild/);
+  assert.match(script, /Remove-OtherAbis/);
+  assert.match(script, /zipalign/);
+  assert.match(script, /apksigner sign/);
   assert.match(script, /\^lib\/\(\[\^\/\]\+\)\//);
-  assert.match(script, /\$libAbis\.Count -ne 1/);
+  assert.match(script, /\$abis\.Count -ne 1/);
   assert.match(script, /android_apk_size_report\.mjs/);
   assert.match(script, /app\.android-arm64\.symbols/);
   assert.match(script, /app\.android-arm\.symbols/);
@@ -81,6 +86,9 @@ test('ABI evidence builder preserves exact release identity and all supported AB
   assert.match(script, /universal_apk_remains_authoritative = \$true/);
   assert.match(script, /public_distribution_authorized = \$false/);
   assert.match(script, /versiondeck_publication_authorized = \$false/);
+  assert.match(script, /canonical_aab_sha256/);
+  assert.match(script, /pinned-bundletool-universal-pruned-per-abi/);
+  assert.doesNotMatch(script, /flutter (?:build|assemble)/);
   assert.doesNotMatch(script, /gh release (?:create|upload|edit)/);
 });
 
@@ -124,27 +132,15 @@ test('strict ABI artifact-set validator rejects incomplete, duplicate, unexpecte
   assert.match(validateAbiEvidenceIndex(duplicateHash).join(' '), /Duplicate ABI artifact SHA-256/u);
 });
 
-test('protected APK workflow stages ABI evidence after the universal handoff', async () => {
-  const workflow = await read('.github/workflows/build-production-android.yml');
-
-  const universalHandoff = workflow.indexOf('name: Upload production APK handoff');
-  const abiBuild = workflow.indexOf('name: Build and verify ABI-specific APK evidence');
-  const diagnostics = workflow.indexOf('name: Upload APK diagnostics');
-  assert.ok(universalHandoff >= 0, 'universal APK handoff step is required');
-  assert.ok(abiBuild > universalHandoff, 'ABI evidence must run only after the universal handoff is preserved');
-  assert.ok(diagnostics > abiBuild, 'ABI evidence must exist before diagnostics are uploaded');
-
-  assert.match(workflow, /\.\\tool\\build_prod_abi_evidence\.ps1/);
-  assert.match(workflow, /release\/abi-apk-evidence/);
-  assert.match(workflow, /strategy:\n\s+fail-fast: false\n\s+matrix:\n\s+variant:/);
-  for (const variant of ['universal', 'arm64-v8a', 'armeabi-v7a', 'x86_64']) {
-    assert.match(workflow, new RegExp(`- ${variant.replace('-', '\\-')}`));
-  }
-  assert.match(workflow, /steps\.subject\.outputs\.subject_path/);
-  assert.match(workflow, /gh attestation verify/);
-  assert.match(workflow, /--source-digest \$env:GITHUB_SHA/);
-  assert.match(workflow, /--source-ref refs\/heads\/main/);
-  assert.match(workflow, /--deny-self-hosted-runners/);
+test('protected Shorebird workflow derives APKs only after the canonical AAB job', async () => {
+  const workflow = await read('.github/workflows/shorebird-release-android.yml');
+  assert.match(workflow, /derive-versiondeck-apks:/);
+  assert.match(workflow, /needs: release/);
+  assert.match(workflow, /inputs\.flavor == 'prod' && inputs\.operation == 'publish'/);
+  assert.match(workflow, /download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7\.0\.0/);
+  assert.match(workflow, /derive_versiondeck_apks\.ps1/);
+  assert.match(workflow, /production-shorebird-apk-evidence/);
+  assert.match(workflow, /subject-path: release\/shorebird-apk-evidence\/artifacts\/\*\.apk/);
   assert.doesNotMatch(workflow, /gh release (?:create|upload|edit)/);
   assert.doesNotMatch(workflow, /deploy-download-site|publication_mode:\s*verified/);
 });
@@ -153,12 +149,13 @@ test('post-build artifact-set workflow independently verifies exactly the protec
   const workflow = await read('.github/workflows/verify-production-apk-artifact-set.yml');
 
   assert.match(workflow, /workflow_run:/);
-  assert.match(workflow, /- Build Production APK/);
+  assert.match(workflow, /- Shorebird Android Release/);
   assert.match(workflow, /workflow_run\.conclusion == 'success'/);
   assert.match(workflow, /workflow_run\.event == 'workflow_dispatch'/);
   assert.match(workflow, /workflow_run\.head_branch == 'main'/);
   assert.match(workflow, /Require triggering source to remain current main/);
-  assert.match(workflow, /Owntend-production-apk-evidence-\$SOURCE_RUN_NUMBER/);
+  assert.match(workflow, /Owntend-production-shorebird-apk-evidence-\$SOURCE_RUN_NUMBER/);
+  assert.match(workflow, /should_verify=false/);
   assert.match(workflow, /verify_android_apk_artifact_set\.mjs/);
   assert.match(workflow, /--source-sha "\$SOURCE_SHA"/);
   assert.match(workflow, /--version-name "\$EXPECTED_VERSION"/);

@@ -236,7 +236,7 @@ test("VersionDeck page permits and exposes live GitHub build status", async () =
   assert.match(html, /connect-src 'self' https:\/\/api\.github\.com/);
   assert.match(
     html,
-    /href="https:\/\/github\.com\/zuhak5\/Owntend\/actions\/workflows\/build-production-android\.yml"/,
+    /href="https:\/\/github\.com\/zuhak5\/Owntend\/actions\/workflows\/shorebird-release-android\.yml"/,
   );
 });
 

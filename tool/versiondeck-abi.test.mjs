@@ -69,15 +69,15 @@ function provenance(abi, sha) {
     sourceRepositoryIdentifier: "1334767666",
     sourceRepositoryOwnerUri: "https://github.com/zuhak5",
     sourceRepositoryOwnerIdentifier: "233116763",
-    signerWorkflow: `https://github.com/${VERSIONDECK_REPOSITORY}/.github/workflows/build-production-android.yml@refs/heads/main`,
+    signerWorkflow: `https://github.com/${VERSIONDECK_REPOSITORY}/.github/workflows/shorebird-release-android.yml@refs/heads/main`,
     signerDigest: COMMIT,
-    workflowName: "Build Production APK",
+    workflowName: "Shorebird Android Release",
     workflowTrigger: "workflow_dispatch",
     runnerEnvironment: "github-hosted",
     runInvocationUri: `https://github.com/${VERSIONDECK_REPOSITORY}/actions/runs/32373934674/attempts/1`,
     runId: "32373934674",
     runAttempt: "1",
-    buildConfigUri: `https://github.com/${VERSIONDECK_REPOSITORY}/.github/workflows/build-production-android.yml@refs/heads/main`,
+    buildConfigUri: `https://github.com/${VERSIONDECK_REPOSITORY}/.github/workflows/shorebird-release-android.yml@refs/heads/main`,
     buildConfigDigest: COMMIT,
     certificateIssuer: "CN=sigstore-intermediate,O=sigstore.dev",
     oidcIssuer: "https://token.actions.githubusercontent.com",
@@ -161,7 +161,7 @@ test("normalization verifies every ABI and aliases ARM64 for backward UI compati
 test("schema fails closed if primary alias or a variant is tampered", async () => {
   const normalized = await normalizeRelease(splitRelease(), normalizationOptions());
   const manifest = JSON.parse(JSON.stringify({
-    schemaVersion: 5,
+    schemaVersion: 1,
     generatedAt: "2026-08-20T13:56:00Z",
     leaseExpiresAt: "2026-08-21T13:56:00Z",
     generatorCommit: COMMIT,

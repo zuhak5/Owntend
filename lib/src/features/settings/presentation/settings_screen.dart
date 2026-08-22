@@ -1,4 +1,8 @@
-part of '../../../../main.dart';
+import '../../../ui/components.dart' as hk_ui;
+import '../../../ui/presentation_support.dart';
+import '../../dashboard/presentation/dashboard_presentation.dart';
+import '../../maintenance/presentation/task_actions.dart';
+import 'location_picker_sheet.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -52,7 +56,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     final localePreference =
         ref.watch(appLocalePreferenceProvider).value ??
         AppLocalePreference(
-          language: _supportedDeviceLanguage(
+          language: supportedDeviceLanguage(
             WidgetsBinding.instance.platformDispatcher.locale,
           ),
           isExplicit: false,
@@ -350,13 +354,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                     leading: _SettingsTileIcon(
                       icon: weather == null
                           ? Symbols.location_on_rounded
-                          : _weatherIcon(weather.weatherCode),
+                          : weatherIcon(weather.weatherCode),
                     ),
                     title: Text(context.l10n.weatherLocation),
                     subtitle: Text(
                       weather == null
                           ? context.l10n.setACityZipOrCurrentDeviceLocation
-                          : '${location?.label ?? context.l10n.home}\n${_localizedWeatherSummary(context, weather.weatherCode)} · ${_formatInteger(context, weather.temperature.round())}°C',
+                          : '${location?.label ?? context.l10n.home}\n${localizedWeatherSummary(context, weather.weatherCode)} · ${formatInteger(context, weather.temperature.round())}°C',
                     ),
                     trailing: Wrap(
                       spacing: 4,
@@ -835,7 +839,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                               ),
                               title: Text(context.l10n.defaultSnooze),
                               subtitle: Text(
-                                _durationLabel(
+                                durationLabel(
                                   context,
                                   Duration(
                                     minutes: notificationPreferences
@@ -851,7 +855,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                                     DropdownMenuItem(
                                       value: minutes,
                                       child: Text(
-                                        _durationLabel(
+                                        durationLabel(
                                           context,
                                           Duration(minutes: minutes),
                                         ),
@@ -901,7 +905,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                                     DropdownMenuItem(
                                       value: count,
                                       child: Text(
-                                        _formatInteger(context, count),
+                                        formatInteger(context, count),
                                       ),
                                     ),
                                 ],
@@ -929,7 +933,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                               ),
                               title: Text(context.l10n.reminderTime),
                               subtitle: Text(
-                                _hourLabel(
+                                hourLabel(
                                   context,
                                   notificationPreferences.reminderHour,
                                 ),
@@ -940,7 +944,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                                   for (final hour in reminderHours)
                                     DropdownMenuItem(
                                       value: hour,
-                                      child: Text(_hourLabel(context, hour)),
+                                      child: Text(hourLabel(context, hour)),
                                     ),
                                 ],
                                 onChanged: notificationPreferences.enabled
@@ -967,7 +971,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                               ),
                               title: Text(context.l10n.digestTime),
                               subtitle: Text(
-                                _hourLabel(
+                                hourLabel(
                                   context,
                                   notificationPreferences.digestHour,
                                 ),
@@ -978,7 +982,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                                   for (final hour in digestHours)
                                     DropdownMenuItem(
                                       value: hour,
-                                      child: Text(_hourLabel(context, hour)),
+                                      child: Text(hourLabel(context, hour)),
                                     ),
                                 ],
                                 onChanged: notificationPreferences.enabled
@@ -1032,7 +1036,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       hk_ui.showToast(
         context,
         content: Text(
-          _failureMessage(context, error, fallback: AppFailureCode.themeUpdate),
+          failureMessage(context, error, fallback: AppFailureCode.themeUpdate),
         ),
         severity: hk_ui.HkToastSeverity.error,
       );
@@ -1063,7 +1067,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   }
 
   Future<void> _searchLocation(BuildContext context, WidgetRef ref) async {
-    final location = await _showEditorModal<HomeLocation>(
+    final location = await showEditorModal<HomeLocation>(
       context,
       builder: (context) => const LocationPickerSheet(),
     );
@@ -1122,7 +1126,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
         hk_ui.showToast(
           context,
           content: Text(
-            _failureMessage(
+            failureMessage(
               context,
               error,
               fallback: AppFailureCode.locationUpdate,
@@ -1214,7 +1218,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
         hk_ui.showToast(
           context,
           content: Text(
-            _failureMessage(
+            failureMessage(
               context,
               error,
               fallback: AppFailureCode.notificationSetup,
@@ -1255,7 +1259,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       hk_ui.showToast(
         context,
         content: Text(
-          _failureMessage(
+          failureMessage(
             context,
             error,
             fallback: AppFailureCode.notificationSetup,
@@ -1291,7 +1295,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       hk_ui.showToast(
         context,
         content: Text(
-          _failureMessage(
+          failureMessage(
             context,
             error,
             fallback: AppFailureCode.notificationSetup,
@@ -1329,7 +1333,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
         hk_ui.showToast(
           context,
           content: Text(
-            _failureMessage(
+            failureMessage(
               context,
               error,
               fallback: AppFailureCode.testReminder,
@@ -1782,11 +1786,6 @@ String _effectiveCapabilityLabel(
   };
 }
 
-String _hourLabel(BuildContext context, int hour) {
-  return MaterialLocalizations.of(context)
-      .formatTimeOfDay(TimeOfDay(hour: hour, minute: 0));
-}
-
 String _minutesLabel(BuildContext context, int minutes) {
   final clamped = minutes.clamp(0, 1439).toInt();
   return MaterialLocalizations.of(context)
@@ -1799,97 +1798,3 @@ TimeOfDay _timeOfDayFromMinutes(int minutes) {
 }
 
 int _minutesFromTimeOfDay(TimeOfDay time) => time.hour * 60 + time.minute;
-
-class LocationPickerSheet extends ConsumerStatefulWidget {
-  const LocationPickerSheet({super.key});
-
-  @override
-  ConsumerState<LocationPickerSheet> createState() =>
-      _LocationPickerSheetState();
-}
-
-class _LocationPickerSheetState extends ConsumerState<LocationPickerSheet> {
-  final _controller = TextEditingController();
-  Future<List<HomeLocation>>? _results;
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return _EditorSheetFrame(
-      title: context.l10n.homeLocation,
-      saveLabel: context.l10n.close,
-      onCancel: () => Navigator.of(context).pop(),
-      onSave: () => Navigator.of(context).pop(),
-      child: Column(
-        children: [
-          TextField(
-            controller: _controller,
-            autofocus: true,
-            textInputAction: TextInputAction.search,
-            decoration: InputDecoration(
-              prefixIcon: const Icon(Symbols.search_rounded),
-              labelText: context.l10n.cityOrZip,
-            ),
-            onSubmitted: _search,
-          ),
-          const SizedBox(height: HkSpacing.sm),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: () => _search(_controller.text),
-              icon: const Icon(Symbols.search_rounded),
-              label: Text(context.l10n.search),
-            ),
-          ),
-          const SizedBox(height: HkSpacing.md),
-          FutureBuilder<List<HomeLocation>>(
-            future: _results,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Padding(
-                  padding: EdgeInsets.all(24),
-                  child: CircularProgressIndicator(),
-                );
-              }
-              final results = snapshot.data ?? const <HomeLocation>[];
-              if (results.isEmpty) {
-                return hk_ui.PremiumEmptyState(
-                  icon: Symbols.location_on_rounded,
-                  title: context.l10n.searchForALocation,
-                  body: context.l10n.weatherContextImprovesOutdoorTasks,
-                );
-              }
-              return Column(
-                children: [
-                  for (final location in results)
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Symbols.location_on_rounded),
-                      title: Text(location.label),
-                      subtitle: Text(
-                        '${location.latitude.toStringAsFixed(2)}, ${location.longitude.toStringAsFixed(2)}',
-                      ),
-                      onTap: () => Navigator.of(context).pop(location),
-                    ),
-                ],
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _search(String query) {
-    setState(() {
-      _results = ref.read(weatherRepositoryProvider).searchLocations(query);
-    });
-  }
-}
-
-enum _RestoreCloudChoice { localOnlyPause, updateCloud }

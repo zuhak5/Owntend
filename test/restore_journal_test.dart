@@ -46,7 +46,6 @@ class _FakeLocalSyncStore implements LocalSyncStore {
       deviceId: 'device-test',
       enabled: true,
       boundUserId: userId,
-      uploadProhibited: false,
       migrationState: 'active',
       restorePending: false,
       hydrationCompletedUnits: 0,

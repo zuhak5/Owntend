@@ -1,24 +1,22 @@
 import '../supabase/supabase_failure.dart';
 import 'sync_dtos.dart';
 
-const syncFeedContractVersion = '1.0.1';
+const syncFeedContractVersion = 1;
 const _syncFeedOperations = {'INSERT', 'UPDATE', 'DELETE'};
 
-class ParsedSyncFeedChange {
-  const ParsedSyncFeedChange({
-    required this.spec,
-    required this.recordKey,
+class ChangeFeedEntry {
+  const ChangeFeedEntry({
+    required this.changeSeq,
+    required this.record,
     required this.operation,
-    required this.keyValues,
   });
 
-  final SyncEntitySpec spec;
-  final String recordKey;
+  final int changeSeq;
+  final SyncRecord record;
   final String operation;
-  final Map<String, dynamic> keyValues;
 }
 
-void requireSyncFeedContractVersion(String version) {
+void requireSyncFeedContractVersion(Object? version) {
   if (version != syncFeedContractVersion) {
     throw syncFeedProtocolFailure();
   }
@@ -32,16 +30,25 @@ SyncEntitySpec syncFeedSpecForEntity(String entity) {
   return spec;
 }
 
-ParsedSyncFeedChange parseSyncFeedChange(Map<String, dynamic> change) {
+ChangeFeedEntry parseSyncFeedChange(Map<String, dynamic> change) {
+  requireSyncFeedContractVersion(change['contract_version']);
+  final changeSeq = change['change_seq'];
   final entity = change['entity_type'];
   final operation = change['op_type'];
   final rawKeyData = change['key_data'];
   final rawRecordId = change['record_id'];
-  if (entity is! String ||
+  final rawRevision = change['revision'];
+  final clientUpdatedAt = _parseRequiredUtc(change['client_updated_at']);
+  final serverCreatedAt = _parseRequiredUtc(change['created_at']);
+  if (changeSeq is! int ||
+      changeSeq <= 0 ||
+      entity is! String ||
       operation is! String ||
       !_syncFeedOperations.contains(operation) ||
       rawKeyData is! Map ||
-      rawRecordId is! String) {
+      rawRecordId is! String ||
+      rawRevision is! int ||
+      rawRevision < 1) {
     throw syncFeedProtocolFailure();
   }
 
@@ -74,12 +81,78 @@ ParsedSyncFeedChange parseSyncFeedChange(Map<String, dynamic> change) {
     throw syncFeedProtocolFailure();
   }
 
-  return ParsedSyncFeedChange(
-    spec: spec,
-    recordKey: recordKey,
+  late final SyncRecord record;
+  if (operation == 'DELETE') {
+    if (change['payload'] != null) {
+      throw syncFeedProtocolFailure();
+    }
+    record = SyncRecord(
+      spec: spec,
+      recordKey: recordKey,
+      values: Map.unmodifiable(keyValues),
+      clientModifiedAt: clientUpdatedAt,
+      revision: rawRevision,
+      serverUpdatedAt: serverCreatedAt,
+      deletedAt: serverCreatedAt,
+    );
+  } else {
+    final rawPayload = change['payload'];
+    if (rawPayload is! Map) {
+      throw syncFeedProtocolFailure();
+    }
+    late final Map<String, dynamic> payload;
+    try {
+      payload = Map<String, dynamic>.from(rawPayload);
+    } on Object {
+      throw syncFeedProtocolFailure();
+    }
+    if (!spec.remoteSelectColumns.every(payload.containsKey) ||
+        payload['revision'] != rawRevision) {
+      throw syncFeedProtocolFailure();
+    }
+    for (final entry in keyValues.entries) {
+      if (payload[spec.remoteColumnFor(entry.key)] != entry.value) {
+        throw syncFeedProtocolFailure();
+      }
+    }
+    try {
+      final canonical = SyncRecord.fromRemote(spec, payload);
+      if (canonical.recordKey != recordKey) {
+        throw syncFeedProtocolFailure();
+      }
+      record = SyncRecord(
+        spec: canonical.spec,
+        recordKey: canonical.recordKey,
+        values: canonical.values,
+        clientModifiedAt: canonical.clientModifiedAt,
+        originDeviceId: canonical.originDeviceId,
+        revision: rawRevision,
+        serverUpdatedAt: canonical.serverUpdatedAt ?? serverCreatedAt,
+        deletedAt: canonical.deletedAt,
+      );
+    } on SupabaseFailure {
+      rethrow;
+    } on Object {
+      throw syncFeedProtocolFailure();
+    }
+  }
+
+  return ChangeFeedEntry(
+    changeSeq: changeSeq,
+    record: record,
     operation: operation,
-    keyValues: Map.unmodifiable(keyValues),
   );
+}
+
+DateTime _parseRequiredUtc(Object? value) {
+  if (value is! String) {
+    throw syncFeedProtocolFailure();
+  }
+  final parsed = DateTime.tryParse(value);
+  if (parsed == null) {
+    throw syncFeedProtocolFailure();
+  }
+  return parsed.toUtc();
 }
 
 SupabaseFailure syncFeedProtocolFailure() {

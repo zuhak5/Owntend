@@ -2,10 +2,10 @@
 
 > **Scoped containment status:** VersionDeck itself may be deployed with an
 > explicit disabled manifest, but verified APK download publication remains
-> contained. A successful signed APK evidence build does not automatically
+> contained. A successful Shorebird release or exact-AAB APK evidence build does not automatically
 > authorize public downloads. The account-deletion surface is independent of
 > release publication. See the
-> [TASK-001 containment record](operations/production-containment.md).
+> [Production containment record](operations/production-containment.md).
 
 ## Purpose
 
@@ -35,6 +35,10 @@ A release is downloadable only when the pipeline can verify the expected propert
 - Release/non-debuggable status.
 - Signing certificate identity.
 - Source/release ancestry where required.
+- The unified `Shorebird Android Release` workflow identity and exact current-main source.
+- An APK derived from the canonical Shorebird AAB with pinned Bundletool, never an independent Flutter compile.
+
+The published production Shorebird job creates a universal APK and exactly `arm64-v8a`, `armeabi-v7a`, and `x86_64` variants from one AAB. `Verify Production APK Artifact Set` independently rechecks the protected set and provenance. VersionDeck's verifier and manifest schema bind APK and AAB evidence to `.github/workflows/shorebird-release-android.yml`. A validation/dry-run, non-production artifact, patch artifact, missing ABI, changed signer, or different source run is ineligible.
 
 Live build status is informational. It must not grant download trust to an in-progress artifact.
 
@@ -73,10 +77,11 @@ For changes affecting VersionDeck:
    ```
 3. Build a revisioned static artifact into a temporary directory:
    ```powershell
+   $SourceSha = (git rev-parse HEAD).Trim()
    node tool/build_versiondeck_site.mjs `
      --source download-site `
      --output .versiondeck-site `
-     --revision 0000000000000000000000000000000000000000 `
+     --revision $SourceSha `
      --allow-inert-account-deletion-config true
    ```
 4. Run `tool/validate_versiondeck.mjs` on the generated artifact:

@@ -1,5 +1,5 @@
 const REPOSITORY = "zuhak5/Owntend";
-const WORKFLOW_FILE = "build-production-android.yml";
+const WORKFLOW_FILE = "shorebird-release-android.yml";
 const JOB_NAME = "Build signed production APK";
 const API_BASE = `https://api.github.com/repos/${REPOSITORY}`;
 const ACTIVE_POLL_MS = 90_000;
@@ -12,10 +12,9 @@ const HISTORY_TTL_MS = 24 * 60 * 60 * 1000;
 const TERMINAL_VISIBLE_MS = 60_000;
 const TOAST_VISIBLE_MS = 8_000;
 const HISTORY_CACHE_KEY = "versiondeck-build-history-v1";
-const SPEECH_PREFERENCE_KEY = "versiondeck-build-speech-v2";
-const LEGACY_ALERT_PREFERENCE_KEY = "versiondeck-build-alerts-v1";
+const SPEECH_PREFERENCE_KEY = "versiondeck-build-speech-v1";
 const NOTIFICATION_PREFERENCE_KEY = "versiondeck-build-notifications-v1";
-const SNAPSHOT_CACHE_KEY = "versiondeck-build-snapshot-v2";
+const SNAPSHOT_CACHE_KEY = "versiondeck-build-snapshot-v1";
 const ACTIVE_STATUSES = new Set(["queued", "in_progress", "requested", "waiting", "pending"]);
 const HIDDEN_STEP_NAMES = new Set(["Set up job", "Complete job"]);
 const QUEUED_STATUSES = new Set(["queued", "requested", "waiting", "pending"]);
@@ -644,7 +643,6 @@ function initializeBuildStatus() {
   const toastDismiss = requiredElement("#build-toast-dismiss");
 
   const storage = browserStorage();
-  const legacyAlertEnabled = readStringStorage(storage, LEGACY_ALERT_PREFERENCE_KEY) === "true";
   let currentRun = null;
   let currentSnapshot = readJsonStorage(storage, SNAPSHOT_CACHE_KEY);
   let history = null;
@@ -654,7 +652,7 @@ function initializeBuildStatus() {
   let terminalUntil = 0;
   let consecutiveFailures = 0;
   let backoffUntil = 0;
-  let speechEnabled = readStringStorage(storage, SPEECH_PREFERENCE_KEY) === "true" || legacyAlertEnabled;
+  let speechEnabled = readStringStorage(storage, SPEECH_PREFERENCE_KEY) === "true";
   let notificationsEnabled = readStringStorage(storage, NOTIFICATION_PREFERENCE_KEY) === "true";
 
   function setSpeechButton() {

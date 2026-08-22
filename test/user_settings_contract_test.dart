@@ -5,7 +5,7 @@ import 'package:owntend/src/core/sync/local_sync_store.dart';
 import 'package:owntend/src/core/sync/sync_dtos.dart';
 
 void main() {
-  group('User Settings Contract Tests (P0-A)', () {
+  group('user setting contract', () {
     late AppDatabase db;
     late LocalSyncStore store;
 
@@ -26,19 +26,22 @@ void main() {
 
     test('Undeclared setting key is rejected before enqueueing', () {
       expect(
-        () => store.validateUserSettingKey('invalid_remote_key_v99'),
+        () => store.validateUserSettingKey('invalid_remote_key'),
         throwsArgumentError,
       );
     });
 
-    test(
-      'permission_education_seen_v2 is included in allowedRemoteSettingKeys',
-      () {
-        expect(
-          allowedRemoteSettingKeys.contains('permission_education_seen_v2'),
-          isTrue,
-        );
-      },
-    );
+    test('permission education state uses its canonical key', () {
+      expect(
+        allowedRemoteSettingKeys.contains('permission_education_seen'),
+        isTrue,
+      );
+      expect(
+        allowedRemoteSettingKeys.where(
+          (key) => key.startsWith('permission_education_seen'),
+        ),
+        const ['permission_education_seen'],
+      );
+    });
   });
 }

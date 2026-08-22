@@ -435,7 +435,6 @@ class SupabaseAuthRepository implements AuthRepository {
           'recovery_key': operation.recoveryKey,
           'expected_user_id': operation.expectedUserId,
           'action': 'acknowledge',
-          'capability_version': 'owntend-v1.0.0',
         },
       );
     } on Object catch (error) {

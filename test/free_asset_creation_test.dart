@@ -60,10 +60,7 @@ class _ZeroPointsMonetizationRepository implements MonetizationRepository {
     String operationId, {
     String? requestHash,
   }) async {
-    return const ChargedOperationStatusResult(
-      status: 'not_found',
-      capabilityVersion: '1.1.0',
-    );
+    return const ChargedOperationStatusResult(status: 'not_found');
   }
 
   @override

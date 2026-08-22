@@ -1,11 +1,11 @@
 # Sentry Operations
 
 > **Sentry release mutation remains contained.** Since 2026-08-11, no new
-> production Sentry release mutation is authorized. Exact-main signed APK and
-> AAB evidence builds may run without a Sentry auth token; their symbol and
+> production Sentry release mutation is authorized. Shorebird AAB and exact-AAB
+> APK evidence builds run without a Sentry auth token; their app, R8, and engine symbol
 > mapping artifacts are retained so a later separately authorized Sentry
 > publication can use the same verified build identity. See the
-> [TASK-001 containment record](operations/production-containment.md).
+> [Production containment record](operations/production-containment.md).
 
 ## Purpose
 
@@ -35,6 +35,7 @@ Use allowlisted technical context rather than trying to block an unbounded list 
 Examples of acceptable fields when non-identifying:
 
 - Application release and build.
+- Shorebird patch number as only `base` or a positive integer.
 - Environment/flavor.
 - Operating-system and device class data supplied safely by the SDK.
 - Screen or route identifiers that do not contain entity IDs or names.
@@ -81,13 +82,13 @@ Scrubber tests must include nested maps/lists and representative authentication,
 When separately authorized, Sentry release publication is handled through `tool/publish_sentry_release.ps1`. The signed APK/AAB evidence workflows do not invoke it during containment.
 The Sentry token must not be available to signing, Supabase, or public client jobs.
 
-The release identifier must correspond to the built application release and source commit. The current protected release format is `app.owntend.mobile@x.y.z+N`, where `N` is also the Sentry `dist`. Release publication should associate commits and upload only the symbol artifacts needed for symbolication without uploading user data or repository secrets.
+The release identifier must correspond to the built application release and source commit. The current protected release format is `app.owntend.mobile@x.y.z+N`, where `N` is also the Sentry `dist`. A Shorebird patch does not create a new Sentry release or dist; the scrubber permits only `shorebird_patch_number=base` or the integer returned by `ShorebirdUpdater.readCurrentPatch()`. Updater lookup failure falls back to `base` and cannot block startup. Release publication should associate commits and upload only the symbol artifacts needed for symbolication without uploading user data or repository secrets.
 
 Current source-backed symbolication expectations:
 
-- Production Flutter builds generate obfuscated Dart symbols with `--split-debug-info=build/sentry-debug/dart`.
-- Production Flutter builds also generate `build/sentry-debug/dart/mapping.json` via `--extra-gen-snapshot-options=--save-obfuscation-map=...`, and `pubspec.yaml` points `sentry.dart_symbol_map_path` to that exact file.
-- `tool/publish_sentry_release.ps1` uploads Dart debug symbols with `dart run sentry_dart_plugin` and uploads the Android R8 mapping file explicitly with `sentry-cli upload-proguard`.
+- Shorebird releases and patches retain obfuscated Dart symbols below `build/shorebird-symbols/<flavor>/`.
+- The production AAB evidence retains `build/app/outputs/mapping/prodRelease/mapping.txt` and exact-revision Android engine-symbol archives from `tool/download_shorebird_engine_symbols.ps1`. The downloader uses Shorebird's revision-aware official artifact proxy because Shorebird-owned engine artifacts are not guaranteed to exist in Flutter's upstream bucket.
+- `tool/publish_sentry_release.ps1` uploads Dart debug symbols and R8 mapping and, only when separately authorized with `-EngineSymbolsDirectory`, validates and uploads all three Shorebird engine-symbol archives.
 
 Do not run production Sentry release mutation as an ordinary local command.
 During active containment, do not run release mutation scripts either.

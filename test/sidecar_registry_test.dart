@@ -95,11 +95,11 @@ void main() {
       },
     );
 
-    test('discovers and sweeps unregistered legacy sidecars', () async {
-      final legacySidecar = Directory(
-        p.join(tempDir.path, 'cloud_media.restore-legacy999'),
+    test('discovers and sweeps unregistered orphan sidecars', () async {
+      final orphanSidecar = Directory(
+        p.join(tempDir.path, 'cloud_media.restore-orphan999'),
       );
-      await legacySidecar.create(recursive: true);
+      await orphanSidecar.create(recursive: true);
 
       await store.sweepOrphans(
         appDir: tempDir,
@@ -107,7 +107,7 @@ void main() {
         activeRestoreTokens: {},
       );
 
-      expect(await legacySidecar.exists(), isFalse);
+      expect(await orphanSidecar.exists(), isFalse);
     });
 
     test(

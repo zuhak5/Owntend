@@ -26,7 +26,7 @@ test('Canonical toolchain configuration is complete and valid', async () => {
   assert.equal(tc.flutter.version, '3.47.0');
   assert.equal(tc.flutter.channel, 'stable');
   assert.equal(tc.dart.sdkConstraint, '^3.13.0');
-  assert.equal(tc.java.version, '17');
+  assert.equal(tc.java.version, '21');
   assert.equal(tc.java.distribution, 'temurin');
   assert.equal(tc.node.version, '24');
   assert.equal(tc.deno.version, '2.9.3');
@@ -42,7 +42,17 @@ test('Canonical toolchain configuration is complete and valid', async () => {
     '9c0f7faeeb306cb14e4279a3e084ca6b596894089a0638e68a07c945a32c9e14'
   );
   assert.equal(tc.tools.sentryCli, '2.58.6');
-  assert.equal(tc.tools.supabaseCli, '2.114.0');
+  assert.equal(tc.tools.supabaseCli, '2.115.0');
+  assert.equal(tc.tools.shorebirdCli.version, '1.6.119');
+  assert.match(tc.tools.shorebirdCli.commit, /^[0-9a-f]{40}$/);
+  assert.match(tc.tools.shorebirdCli.bundledFlutterRevision, /^[0-9a-f]{40}$/);
+  assert.match(tc.tools.shorebirdCli.bundledEngineRevision, /^[0-9a-f]{40}$/);
+  assert.equal(tc.tools.shorebirdCli.releaseFlutterVersion, tc.flutter.version);
+  assert.match(tc.tools.shorebirdCli.releaseFlutterRevision, /^[0-9a-f]{40}$/);
+  assert.match(tc.tools.shorebirdCli.releaseEngineRevision, /^[0-9a-f]{40}$/);
+  assert.equal(tc.tools.bundletool.version, '1.18.3');
+  assert.match(tc.tools.bundletool.sha256, /^[0-9a-f]{64}$/);
+  assert.equal(tc.tools.gcloud, '581.0.0');
 });
 
 test('Repository configuration specifies matching canonical toolchain versions', async () => {
@@ -60,6 +70,13 @@ test('Repository configuration specifies matching canonical toolchain versions',
   const wrapperProps = await read('android/gradle/wrapper/gradle-wrapper.properties');
   assert.match(wrapperProps, new RegExp(`gradle-${tc.android.gradleDistribution}\\.zip`));
   assert.match(wrapperProps, new RegExp(`distributionSha256Sum=${tc.android.gradleDistributionSha256}`));
+
+  for (const workflow of [
+    '.github/workflows/shorebird-release-android.yml',
+    '.github/workflows/shorebird-patch-android.yml',
+  ]) {
+    assert.match(await read(workflow), /java-version:\s*"21"/);
+  }
 });
 
 test('Toolchain policy evaluation detects mismatches and fails closed', async () => {
@@ -102,6 +119,27 @@ test('Toolchain policy evaluation detects mismatches and fails closed', async ()
   const failGradle = evaluateToolchainPolicy(canonical, mismatchedGradleSha);
   assert.equal(failGradle.status, 'FAIL');
   assert.ok(failGradle.errors.some(e => e.includes('Gradle distribution checksum mismatch')));
+
+  const missingShorebird = evaluateToolchainPolicy(canonical, matchingResolved, {
+    requireShorebird: true,
+  });
+  assert.equal(missingShorebird.status, 'FAIL');
+  assert.ok(missingShorebird.errors.some((error) => error.includes('Shorebird CLI mismatch')));
+
+  const shorebirdPin = canonical.canonicalToolchain.tools.shorebirdCli;
+  const matchingShorebird = {
+    ...matchingResolved,
+    shorebird: {
+      version: shorebirdPin.version,
+      commit: shorebirdPin.commit,
+      flutterRevision: shorebirdPin.bundledFlutterRevision,
+      engineRevision: shorebirdPin.bundledEngineRevision,
+    },
+  };
+  const shorebirdPass = evaluateToolchainPolicy(canonical, matchingShorebird, {
+    requireShorebird: true,
+  });
+  assert.equal(shorebirdPass.status, 'PASS');
 });
 
 test('Sanitizer redacts personal usernames and sensitive path roots', () => {
@@ -122,4 +160,5 @@ test('Release evidence collector includes and verifies toolchain manifest', asyn
   assert.match(collector, /toolchain_manifest_file\s*=\s*'resolved-toolchain-manifest\.json'/);
   assert.match(collector, /toolchain_manifest_sha256\s*=\s*\$toolchainManifestHash/);
   assert.match(collector, /toolchain_policy_verified\s*=\s*\$true/);
+  assert.match(collector, /--require-shorebird/);
 });

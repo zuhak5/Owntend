@@ -3,9 +3,10 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../main.dart';
+import '../../../core/database/app_database.dart';
 import '../../../core/domain/contracts.dart';
 import '../../../core/domain/models.dart';
+import '../../../core/providers/app_providers.dart';
 import '../data/device_permission_gateway.dart';
 import '../data/permission_education_repository.dart';
 import '../domain/capability_snapshots.dart';

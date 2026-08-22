@@ -236,7 +236,7 @@ abstract interface class NotificationInboxRepository {
     required String kind,
     String? route,
     String? planId,
-    NotificationMessageCode? messageCode,
+    NotificationMessageCode messageCode = NotificationMessageCode.generic,
     Map<String, dynamic> messageArgs = const {},
   });
   Future<void> markRead(String id);
@@ -322,8 +322,7 @@ class BackupPreview {
   int get taskCount => counts['maintenance_plans'] ?? 0;
   int get thingCount => counts['assets'] ?? 0;
   int get historyCount => counts['maintenance_records'] ?? 0;
-  int get notificationCount =>
-      (counts['notifications'] ?? 0) + (counts['notification_inbox'] ?? 0);
+  int get notificationCount => counts['notification_inbox'] ?? 0;
 }
 
 abstract interface class SearchRepository {

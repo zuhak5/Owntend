@@ -9,12 +9,10 @@ on:
       - "tool/build_account_deletion_site.mjs"
       - "tool/build_versiondeck_site.mjs"
       - "tool/generate_versiondeck_manifest.mjs"
-      - "tool/generate_versiondeck_manifest_v5.mjs"
       - "tool/provenance_policy.mjs"
       - "tool/provenance_policy.test.mjs"
       - "tool/versiondeck-control.json"
       - "tool/versiondeck_apk_verifier.mjs"
-      - "tool/versiondeck_apk_verifier_v5.mjs"
       - "tool/versiondeck.test.mjs"
       - "tool/versiondeck-abi.test.mjs"
       - "tool/build-status.test.mjs"
@@ -67,17 +65,14 @@ jobs:
           node --check download-site/build-status-timeline.js
           node --check download-site/cache-policy.js
           node --check download-site/manifest-schema.js
-          node --check download-site/manifest-schema-v5.js
           node --check download-site/relative-time.js
           node --check download-site/sticky-download-fix.js
           node --check download-site/sw.js
           node --check tool/build_versiondeck_site.mjs
           node --check tool/build_account_deletion_site.mjs
           node --check tool/generate_versiondeck_manifest.mjs
-          node --check tool/generate_versiondeck_manifest_v5.mjs
           node --check tool/provenance_policy.mjs
           node --check tool/versiondeck_apk_verifier.mjs
-          node --check tool/versiondeck_apk_verifier_v5.mjs
           node --check tool/validate_versiondeck.mjs
           node --check tool/test_inventory.mjs
           node --check tool/account-deletion-site.test.mjs
@@ -197,17 +192,14 @@ jobs:
           node --check download-site/build-status-timeline.js
           node --check download-site/cache-policy.js
           node --check download-site/manifest-schema.js
-          node --check download-site/manifest-schema-v5.js
           node --check download-site/relative-time.js
           node --check download-site/sticky-download-fix.js
           node --check download-site/sw.js
           node --check tool/build_versiondeck_site.mjs
           node --check tool/build_account_deletion_site.mjs
           node --check tool/generate_versiondeck_manifest.mjs
-          node --check tool/generate_versiondeck_manifest_v5.mjs
           node --check tool/provenance_policy.mjs
           node --check tool/versiondeck_apk_verifier.mjs
-          node --check tool/versiondeck_apk_verifier_v5.mjs
           node --check tool/validate_versiondeck.mjs
           node --check tool/test_inventory.mjs
           node --check tool/account-deletion-site.test.mjs
@@ -328,7 +320,7 @@ jobs:
               if EXPECTED_SOURCE_SHA="$EXPECTED_SOURCE_SHA" node - <<'NODE'
           const fs = require("node:fs");
           const manifest = JSON.parse(fs.readFileSync("/tmp/releases.json", "utf8"));
-          if (manifest.schemaVersion !== 5) process.exit(1);
+          if (manifest.schemaVersion !== 1) process.exit(1);
           if (manifest.repository !== "zuhak5/Owntend") process.exit(1);
           if (manifest.generatorCommit !== process.env.EXPECTED_SOURCE_SHA) process.exit(1);
           if (manifest.publication?.status !== process.env.EXPECTED_PUBLICATION_STATUS) process.exit(1);

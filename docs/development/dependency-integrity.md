@@ -2,9 +2,9 @@
 
 ## Scope
 
-This document covers the supply-chain integrity contracts for three bootstrap
-surfaces: the Gradle distribution and wrapper, Dart/Flutter pub packages, and
-the Sentry CLI used in production release scripts.
+This document covers the Gradle distribution, Dart/Flutter packages, exact
+Shorebird/Flutter-engine checkout, Bundletool binary, immutable Actions, Google
+Cloud authentication, and Sentry CLI supply-chain surfaces.
 
 ## Gradle distribution checksum
 
@@ -75,8 +75,9 @@ Affected enforcement points:
 
 | Surface | Enforcement |
 | --- | --- |
-| `tool/build_prod.ps1` | `--enforce-lockfile` + unchanged check |
-| `tool/build_play_prod.ps1` | `--enforce-lockfile` + unchanged check |
+| `validate-flutter.yml` | `--enforce-lockfile` + unchanged check |
+| `shorebird-release-android.yml` | `--enforce-lockfile` + unchanged check before the one canonical AAB build |
+| `shorebird-patch-android.yml` | `--enforce-lockfile` + unchanged check before dry-run/publication |
 
 Local developer `flutter pub get` does not require the flag. See
 [Getting Started](getting-started.md) for the development workflow.
@@ -104,6 +105,28 @@ To update a dependency:
 
 Do not use `flutter pub upgrade --major-versions` in a production branch without
 a full review of breaking changes.
+
+## Shorebird, Bundletool, gcloud, and Actions integrity
+
+[`config/toolchain.json`](../../config/toolchain.json) pins the Shorebird CLI
+repository commit, reported CLI version, Flutter revision, engine revision,
+Bundletool URL/version/SHA-256, and gcloud version.
+[`tool/install_shorebird.ps1`](../../tool/install_shorebird.ps1) uses a detached
+exact-commit checkout and validates the revisions; the release evidence
+manifest uses `--require-shorebird`. No mutable `latest` setup action is used.
+[`tool/download_bundletool.ps1`](../../tool/download_bundletool.ps1) rejects a
+download whose SHA-256 differs before it can derive APKs.
+
+Google Cloud authentication uses short-lived GitHub OIDC through exact-commit
+`google-github-actions/auth` and `setup-gcloud` references. The repository
+action policy allowlists every external action commit and its reviewed release
+comment. KMS private keys are non-exportable and no service-account JSON is
+stored in GitHub.
+
+A Shorebird, Flutter-engine, Bundletool, gcloud, or action update must refresh
+the canonical config, official-source review, tests, workflows, release dry-run,
+dependency/notices evidence, and documentation together. It requires a new
+base release and is not patch-eligible.
 
 ## Sentry CLI integrity
 

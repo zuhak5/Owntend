@@ -1,4 +1,4 @@
-part of '../../../../main.dart';
+part of 'maintenance_presentation.dart';
 
 class MaintenanceScreen extends ConsumerStatefulWidget {
   const MaintenanceScreen({this.initialFilter, super.key});
@@ -183,7 +183,7 @@ class _MaintenanceScreenState extends ConsumerState<MaintenanceScreen> {
               );
             },
             error: (error, _) =>
-                ErrorPanel(message: _failureMessage(context, error)),
+                hk_ui.ErrorPanel(message: failureMessage(context, error)),
             loading: () => const Center(child: CircularProgressIndicator()),
           ),
         ),

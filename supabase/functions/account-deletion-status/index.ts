@@ -4,12 +4,14 @@ import {
   createEdgeExceptionReporter,
   type EdgeExceptionReporter,
 } from "../_shared/sentry.ts";
+import { readBoundedJsonObject } from "../_shared/request.ts";
 
 const jsonHeaders = {
   "Content-Type": "application/json",
   "Cache-Control": "no-store",
 };
 const recoveryKeyPattern = /^[A-Za-z0-9_-]{43}$/;
+const maxRecoveryBodyBytes = 768;
 const userIdPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const allowedBrowserOrigins = new Set([
@@ -41,7 +43,6 @@ export interface AccountDeletionStatusServices {
   acknowledgeOperation(
     operationId: string,
     subjectBinding: string,
-    capabilityVersion: string,
   ): Promise<void>;
 }
 
@@ -85,10 +86,17 @@ export async function handleAccountDeletionStatus(
     return respond(405, { error: "method_not_allowed" });
   }
 
-  const payload = await readRecoveryPayload(request);
-  if (payload == null) {
+  const payloadResult = await readRecoveryPayload(request);
+  if (!payloadResult.ok) {
+    if (payloadResult.reason === "too_large") {
+      return respond(413, { error: "request_too_large" });
+    }
+    if (payloadResult.reason === "unsupported_media_type") {
+      return respond(415, { error: "unsupported_media_type" });
+    }
     return respond(400, { error: "invalid_recovery_request" });
   }
+  const payload = payloadResult.value;
 
   const supabaseUrl = environment.get("SUPABASE_URL");
   const serviceRoleKey = environment.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -150,7 +158,6 @@ export async function handleAccountDeletionStatus(
       await services.acknowledgeOperation(
         operation.operationId,
         subjectBinding,
-        payload.capabilityVersion,
       );
       return respond(200, {
         deleted: true,
@@ -227,13 +234,12 @@ function createAccountDeletionStatusServices(
       );
       if (error) throw error;
     },
-    async acknowledgeOperation(operationId, subjectBinding, capabilityVersion) {
+    async acknowledgeOperation(operationId, subjectBinding) {
       const { error } = await admin.rpc(
         "acknowledge_owntend_account_deletion_operation",
         {
           p_operation_id: operationId,
           p_subject_binding: subjectBinding,
-          p_capability_version: capabilityVersion,
         },
       );
       if (error) throw error;
@@ -244,30 +250,33 @@ function createAccountDeletionStatusServices(
 async function readRecoveryPayload(
   request: Request,
 ): Promise<
-  {
-    recoveryKey: string;
-    expectedUserId: string;
-    acknowledge: boolean;
-    capabilityVersion: string;
-  } | null
+  | {
+    ok: true;
+    value: {
+      recoveryKey: string;
+      expectedUserId: string;
+      acknowledge: boolean;
+    };
+  }
+  | { ok: false; reason: "invalid" | "too_large" | "unsupported_media_type" }
 > {
   try {
-    const body: unknown = await request.json();
-    if (!isRecord(body)) return null;
+    const result = await readBoundedJsonObject(request, maxRecoveryBodyBytes);
+    if (!result.ok) return result;
+    const body = result.value;
+    const allowedKeys = new Set([
+      "recovery_key",
+      "expected_user_id",
+      "action",
+      "acknowledge",
+    ]);
+    if (Object.keys(body).some((key) => !allowedKeys.has(key))) {
+      return { ok: false, reason: "invalid" };
+    }
     const recoveryKey = body.recovery_key;
     const expectedUserId = body.expected_user_id;
     const acknowledge = body.action === "acknowledge" ||
       body.acknowledge === true;
-    const rawCapabilityVersion = typeof body.capability_version === "string"
-      ? body.capability_version
-      : typeof body.capabilityVersion === "string"
-      ? body.capabilityVersion
-      : "client-v1.0";
-    const capabilityVersion =
-      /^[A-Za-z0-9._-]{1,120}$/.test(rawCapabilityVersion)
-        ? rawCapabilityVersion
-        : "client-v1.0";
-
     if (
       typeof recoveryKey !== "string" ||
       !recoveryKeyPattern.test(recoveryKey) ||
@@ -275,11 +284,14 @@ async function readRecoveryPayload(
       typeof expectedUserId !== "string" ||
       !userIdPattern.test(expectedUserId)
     ) {
-      return null;
+      return { ok: false, reason: "invalid" };
     }
-    return { recoveryKey, expectedUserId, acknowledge, capabilityVersion };
+    return {
+      ok: true,
+      value: { recoveryKey, expectedUserId, acknowledge },
+    };
   } catch {
-    return null;
+    return { ok: false, reason: "invalid" };
   }
 }
 

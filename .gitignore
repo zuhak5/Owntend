@@ -32,12 +32,14 @@ migrate_working_dir/
 .pub/
 /build/
 /android/build/
+/android/app/build/
 /android/.kotlin/
 /coverage/
 /test/failures/
 /.tmp-owntend-build/
 /.tmp-*
 /artifacts/
+/release/
 /output/
 /dist/
 /*.zip
@@ -75,6 +77,7 @@ app.*.map.json
 !/config/*.example.json
 !/config/toolchain.json
 !/config/asset_provenance.json
+/shorebird.yaml
 /.env
 /.env.*
 /supabase/.env

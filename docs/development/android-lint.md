@@ -6,7 +6,7 @@ Android Lint provides static analysis for Android-specific bugs, correctness iss
 
 Prior to remediation, `checkReleaseBuilds = false` was set in [`android/app/build.gradle.kts`](../../android/app/build.gradle.kts), which disabled the Android Gradle Plugin's built-in release lint verification. This created a blind spot where Flutter static analysis (`flutter analyze`) and custom regex contracts could not detect native Android manifest, permission, lifecycle, or bytecode issues.
 
-Under Task 31, release lint is fully enabled, configured as a blocking gate with `abortOnError = true`, and emits comprehensive machine-readable and human-readable reports.
+Release lint is fully enabled, configured as a blocking gate with `abortOnError = true`, and emits comprehensive machine-readable and human-readable reports.
 
 ## Configuration Contract
 

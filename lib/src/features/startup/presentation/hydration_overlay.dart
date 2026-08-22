@@ -1,4 +1,4 @@
-part of '../../../../main.dart';
+part of 'startup_presentation.dart';
 
 class _InitialCloudHydrationOverlay extends StatefulWidget {
   const _InitialCloudHydrationOverlay({
@@ -42,7 +42,7 @@ class _InitialCloudHydrationOverlayState
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final reducedMotion = _prefersReducedMotion(context);
+    final reducedMotion = prefersReducedMotion(context);
     if (_reducedMotion == reducedMotion) {
       return;
     }
@@ -91,7 +91,7 @@ class _InitialCloudHydrationOverlayState
     InitialHydrationStage.finalizing => context.l10n.finalizingOwntend,
   };
 
-  String get _failureMessage {
+  String get failureMessage {
     final explicit = widget.failure?.message?.trim();
     if (explicit != null && explicit.isNotEmpty) return explicit;
     if (widget.failure?.timedOut == true) {
@@ -283,7 +283,7 @@ class _InitialCloudHydrationOverlayState
                                         child: _HydrationSubtitle(
                                           failed: failed,
                                           message: failed
-                                              ? _failureMessage
+                                              ? failureMessage
                                               : null,
                                           sizeScale: sizeScale,
                                         ),

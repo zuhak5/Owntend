@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  group('Task 25 - Primary Photo Dedupe & Constraint Tests', () {
+  group('primary photo uniqueness constraint', () {
     test('selects winner photo deterministically by updated_at and id', () {
       final duplicates = [
         {'id': 'p1', 'updated_at': '2026-01-01T10:00:00Z', 'is_primary': true},

@@ -1,0 +1,308 @@
+name: Shorebird Android Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      flavor:
+        description: "Owntend flavor and Shorebird app"
+        required: true
+        default: dev
+        type: choice
+        options: [dev, staging, prod]
+      operation:
+        description: "Validate is a Shorebird dry-run; publish creates the release"
+        required: true
+        default: validate
+        type: choice
+        options: [validate, publish]
+      source_sha:
+        description: "Exact 40-character commit SHA to build"
+        required: true
+        type: string
+
+concurrency:
+  group: shorebird-release-${{ inputs.flavor }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: ${{ inputs.operation == 'publish' && 'Publish' || 'Validate' }} ${{ inputs.flavor }} release
+    runs-on: windows-latest
+    timeout-minutes: 120
+    environment: ${{ fromJSON('{"dev":"development","staging":"staging","prod":"production"}')[inputs.flavor] }}
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+      attestations: write
+    outputs:
+      artifact_name: ${{ steps.metadata.outputs.artifact_name }}
+      version_name: ${{ steps.metadata.outputs.version_name }}
+      build_number: ${{ steps.metadata.outputs.build_number }}
+
+    steps:
+      - name: Check out exact source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 0
+
+      - name: Fail closed on source and publication authority
+        shell: pwsh
+        env:
+          NONPROD_ENABLED: ${{ vars.SHOREBIRD_NONPRODUCTION_RELEASES_ENABLED }}
+          PROD_ENABLED: ${{ vars.SHOREBIRD_PRODUCTION_RELEASES_ENABLED }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          if ("${{ inputs.source_sha }}" -notmatch '^[0-9a-f]{40}$') { throw "source_sha must be a lowercase full commit SHA." }
+          $Head = (git rev-parse HEAD).Trim()
+          if ($Head -ne "${{ inputs.source_sha }}") { throw "Checkout $Head differs from requested source." }
+          if ("${{ inputs.flavor }}" -eq "prod") {
+            git fetch origin main --no-tags
+            if ($LASTEXITCODE -ne 0) { throw "Could not refresh origin/main." }
+            $Main = (git rev-parse origin/main).Trim()
+            if ($env:GITHUB_REF -ne "refs/heads/main" -or $Head -ne $Main) { throw "Production releases require exact current origin/main." }
+            if ("${{ inputs.operation }}" -eq "publish" -and $env:PROD_ENABLED -cne "true") { throw "Production Shorebird release publication is disabled." }
+          } elseif ("${{ inputs.operation }}" -eq "publish" -and $env:NONPROD_ENABLED -cne "true") {
+            throw "Non-production Shorebird release publication is disabled."
+          }
+
+      - name: Require exact production backend gate
+        if: ${{ inputs.flavor == 'prod' }}
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $Runs = gh api "repos/$env:GITHUB_REPOSITORY/actions/workflows/validate-google-backend.yml/runs?head_sha=${{ inputs.source_sha }}&status=completed&per_page=20" | ConvertFrom-Json
+          $Passed = @($Runs.workflow_runs | Where-Object {
+            $_.path -eq ".github/workflows/validate-google-backend.yml" -and $_.head_sha -eq "${{ inputs.source_sha }}" -and
+            $_.head_branch -eq "main" -and $_.event -in @("push", "workflow_dispatch") -and $_.conclusion -eq "success"
+          })
+          if ($Passed.Count -eq 0) { throw "The exact Google/backend/database workflow has not passed for this production SHA." }
+
+      - name: Set up Java 21
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - name: Set up canonical Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: "3.47.0"
+          channel: stable
+          cache: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Authenticate to Google Cloud by OIDC
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up pinned Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@e427ad8a34f8676edf47cf7d7925499adf3eb74f # v2.2.1
+        with:
+          version: "581.0.0"
+
+      - name: Generate runtime and Shorebird configuration
+        shell: pwsh
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
+          GOOGLE_WEB_CLIENT_ID: ${{ vars.GOOGLE_WEB_CLIENT_ID }}
+          SENTRY_DSN: ${{ vars.SENTRY_DSN }}
+          SHOREBIRD_DEV_APP_ID: ${{ vars.SHOREBIRD_DEV_APP_ID }}
+          SHOREBIRD_STAGING_APP_ID: ${{ vars.SHOREBIRD_STAGING_APP_ID }}
+          SHOREBIRD_PROD_APP_ID: ${{ vars.SHOREBIRD_PROD_APP_ID }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          foreach ($Name in @("SUPABASE_URL", "SUPABASE_PUBLISHABLE_KEY", "GOOGLE_WEB_CLIENT_ID")) {
+            if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($Name))) { throw "Missing environment variable: $Name" }
+          }
+          if ("${{ inputs.flavor }}" -eq "prod" -and [string]::IsNullOrWhiteSpace($env:SENTRY_DSN)) { throw "Production SENTRY_DSN is required." }
+          $Config = [ordered]@{
+            APP_ENV = "${{ inputs.flavor }}"
+            SUPABASE_URL = $env:SUPABASE_URL
+            SUPABASE_PUBLISHABLE_KEY = $env:SUPABASE_PUBLISHABLE_KEY
+            GOOGLE_WEB_CLIENT_ID = $env:GOOGLE_WEB_CLIENT_ID
+            SENTRY_ENABLED = -not [string]::IsNullOrWhiteSpace($env:SENTRY_DSN)
+            SENTRY_DSN = $env:SENTRY_DSN
+            SENTRY_TRACES_SAMPLE_RATE = if ("${{ inputs.flavor }}" -eq "prod") { "0.05" } else { "0.0" }
+          }
+          $Config | ConvertTo-Json | Set-Content -LiteralPath "config\${{ inputs.flavor }}.json" -Encoding utf8NoBOM
+          .\tool\configure_shorebird.ps1 -EnsurePubspecAsset
+
+      - name: Restore Android release signing credentials
+        shell: pwsh
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ inputs.flavor == 'prod' && secrets.PLAY_UPLOAD_KEYSTORE_BASE64 || secrets.SHOREBIRD_ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEY_ALIAS: ${{ inputs.flavor == 'prod' && secrets.PLAY_UPLOAD_KEY_ALIAS || secrets.SHOREBIRD_ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ inputs.flavor == 'prod' && secrets.PLAY_UPLOAD_KEY_PASSWORD || secrets.SHOREBIRD_ANDROID_KEY_PASSWORD }}
+          ANDROID_STORE_PASSWORD: ${{ inputs.flavor == 'prod' && secrets.PLAY_UPLOAD_STORE_PASSWORD || secrets.SHOREBIRD_ANDROID_STORE_PASSWORD }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          foreach ($Name in @("ANDROID_KEYSTORE_BASE64", "ANDROID_KEY_ALIAS", "ANDROID_KEY_PASSWORD", "ANDROID_STORE_PASSWORD")) {
+            if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($Name))) { throw "Missing Android signing secret: $Name" }
+          }
+          [IO.File]::WriteAllBytes((Join-Path $PWD "android\app\owntend-release.jks"), [Convert]::FromBase64String($env:ANDROID_KEYSTORE_BASE64))
+          @("storePassword=$env:ANDROID_STORE_PASSWORD", "keyPassword=$env:ANDROID_KEY_PASSWORD", "keyAlias=$env:ANDROID_KEY_ALIAS", "storeFile=owntend-release.jks") |
+            Set-Content -LiteralPath "android\key.properties" -Encoding utf8NoBOM
+
+      - name: Install exact Shorebird CLI and validate dependencies
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          flutter clean
+          .\tool\verify_android_release_registrants.ps1 -RemoveGeneratedMain
+          .\tool\install_shorebird.ps1
+          npm ci
+          flutter pub get --enforce-lockfile
+          if (-not [string]::IsNullOrWhiteSpace((git status --porcelain pubspec.lock | Out-String).Trim())) { throw "pubspec.lock changed during enforced resolution." }
+          flutter gen-l10n
+          dart run build_runner build --only-check
+          flutter analyze --no-pub
+          flutter test --no-pub --concurrency=1 --timeout 3m --exclude-tags production-config
+          if ("${{ inputs.flavor }}" -eq "prod") {
+            flutter test --no-pub test/prod_build_config_test.dart --dart-define-from-file="config\prod.json" --dart-define=VERIFY_PRODUCTION_CONFIG=true
+          }
+          node tool/toolchain_manifest.mjs --enforce --require-shorebird
+          node --test tool/shorebird.test.mjs tool/toolchain.test.mjs
+
+      - name: Prepare release metadata
+        id: metadata
+        shell: pwsh
+        run: |
+          $Value = ((Get-Content pubspec.yaml | Where-Object { $_ -match '^version:\s*' } | Select-Object -First 1) -replace '^version:\s*', '').Trim()
+          if ($Value -notmatch '^(\d+\.\d+\.\d+)\+([1-9]\d*)$') { throw "Invalid pubspec version: $Value" }
+          "version_name=$($Matches[1])" >> $env:GITHUB_OUTPUT
+          "build_number=$($Matches[2])" >> $env:GITHUB_OUTPUT
+          "artifact_name=Owntend-shorebird-${{ inputs.flavor }}-${{ inputs.operation }}-${{ github.run_id }}" >> $env:GITHUB_OUTPUT
+
+      - name: Run Shorebird release validation or publication
+        shell: pwsh
+        env:
+          SHOREBIRD_TOKEN: ${{ secrets.SHOREBIRD_TOKEN }}
+          GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+          SHOREBIRD_KMS_LOCATION: ${{ vars.SHOREBIRD_KMS_LOCATION }}
+          SHOREBIRD_KMS_KEYRING: ${{ vars.SHOREBIRD_KMS_KEYRING }}
+          SHOREBIRD_KMS_KEY: ${{ vars.SHOREBIRD_KMS_KEY }}
+          SHOREBIRD_KMS_KEY_VERSION: ${{ vars.SHOREBIRD_KMS_KEY_VERSION }}
+        run: |
+          $Parameters = @{
+            Flavor = "${{ inputs.flavor }}"
+            BuildName = "${{ steps.metadata.outputs.version_name }}"
+            BuildNumber = "${{ steps.metadata.outputs.build_number }}"
+            ConfigPath = "config\${{ inputs.flavor }}.json"
+          }
+          .\tool\verify_android_release_registrants.ps1 -RemoveGeneratedMain
+          if ("${{ inputs.operation }}" -eq "validate") { .\tool\invoke_shorebird_release.ps1 @Parameters -DryRun }
+          else { .\tool\invoke_shorebird_release.ps1 @Parameters }
+          .\tool\verify_android_release_registrants.ps1
+
+      - name: Collect production AAB and symbol evidence
+        if: ${{ inputs.flavor == 'prod' }}
+        shell: pwsh
+        run: |
+          $Aab = "build\app\outputs\bundle\prodRelease\app-prod-release.aab"
+          .\tool\collect_android_release_evidence.ps1 -ArtifactType aab -ArtifactPath $Aab -OutputDirectory "release\aab-evidence" -ExpectedVersion "${{ steps.metadata.outputs.version_name }}" -ExpectedBuild "${{ steps.metadata.outputs.build_number }}"
+          .\tool\download_shorebird_engine_symbols.ps1
+
+      - name: Upload Shorebird release evidence
+        id: upload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ steps.metadata.outputs.artifact_name }}
+          path: |
+            build/app/outputs/bundle/${{ inputs.flavor }}Release/*.aab
+            build/shorebird-release-${{ inputs.flavor }}-*.json
+            build/shorebird-symbols/${{ inputs.flavor }}/base/**
+            build/shorebird/obfuscation_map.json
+            build/shorebird-engine-symbols/**
+            release/aab-evidence/**
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Attest published production AAB provenance
+        if: ${{ inputs.flavor == 'prod' && inputs.operation == 'publish' }}
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
+        with:
+          subject-path: build/app/outputs/bundle/prodRelease/app-prod-release.aab
+
+      - name: Remove ephemeral credentials
+        if: always()
+        shell: pwsh
+        run: |
+          Remove-Item -LiteralPath "android\key.properties", "android\app\owntend-release.jks", "shorebird.yaml" -Force -ErrorAction SilentlyContinue
+          Remove-Item -LiteralPath "config\${{ inputs.flavor }}.json" -Force -ErrorAction SilentlyContinue
+
+  derive-versiondeck-apks:
+    name: Derive protected VersionDeck APK set
+    if: ${{ inputs.flavor == 'prod' && inputs.operation == 'publish' }}
+    needs: release
+    runs-on: windows-latest
+    timeout-minutes: 45
+    environment: production-android-signing
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+      attestations: write
+    steps:
+      - name: Check out exact source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 0
+      - name: Set up Java 21
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Download canonical Shorebird AAB evidence
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: ${{ needs.release.outputs.artifact_name }}
+          path: canonical-release
+      - name: Restore standalone signer and derive APKs from the AAB
+        shell: pwsh
+        env:
+          ANDROID_APK_KEYSTORE_BASE64: ${{ secrets.ANDROID_APK_KEYSTORE_BASE64 }}
+          ANDROID_APK_KEY_ALIAS: ${{ secrets.ANDROID_APK_KEY_ALIAS }}
+          ANDROID_APK_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_APK_STORE_PASSWORD }}
+          ANDROID_APK_KEY_PASSWORD: ${{ secrets.ANDROID_APK_KEY_PASSWORD }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          foreach ($Name in @("ANDROID_APK_KEYSTORE_BASE64", "ANDROID_APK_KEY_ALIAS", "ANDROID_APK_KEYSTORE_PASSWORD", "ANDROID_APK_KEY_PASSWORD")) {
+            if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($Name))) { throw "Missing standalone signing secret: $Name" }
+          }
+          $Keystore = Join-Path $env:RUNNER_TEMP "owntend-standalone.jks"
+          [IO.File]::WriteAllBytes($Keystore, [Convert]::FromBase64String($env:ANDROID_APK_KEYSTORE_BASE64))
+          $Aab = @(Get-ChildItem canonical-release -Recurse -Filter app-prod-release.aab)
+          if ($Aab.Count -ne 1) { throw "Expected exactly one canonical AAB." }
+          $SymbolsSource = @(Get-ChildItem canonical-release -Directory -Recurse | Where-Object Name -eq base | Select-Object -First 1)
+          New-Item -ItemType Directory -Path "build\shorebird-symbols\prod" -Force | Out-Null
+          Copy-Item -LiteralPath $SymbolsSource.FullName -Destination "build\shorebird-symbols\prod\base" -Recurse -Force
+          $Mapping = @(Get-ChildItem canonical-release -Recurse -Filter mapping.txt | Select-Object -First 1)
+          New-Item -ItemType Directory -Path "build\app\outputs\mapping\prodRelease" -Force | Out-Null
+          Copy-Item -LiteralPath $Mapping.FullName -Destination "build\app\outputs\mapping\prodRelease\mapping.txt" -Force
+          .\tool\derive_versiondeck_apks.ps1 -AppBundle $Aab[0].FullName -ExpectedVersion "${{ needs.release.outputs.version_name }}" -ExpectedBuild "${{ needs.release.outputs.build_number }}" -KeystorePath $Keystore -KeyAlias $env:ANDROID_APK_KEY_ALIAS
+          Remove-Item -LiteralPath $Keystore -Force
+      - name: Upload derived APK evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: Owntend-production-shorebird-apk-evidence-${{ github.run_number }}
+          path: release/shorebird-apk-evidence/**
+          if-no-files-found: error
+          retention-days: 30
+      - name: Attest derived APK provenance
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
+        with:
+          subject-path: release/shorebird-apk-evidence/artifacts/*.apk

@@ -19,8 +19,12 @@ final databaseProvider = Provider<AppDatabase>((ref) {
 @DataClassName('AreaRow')
 class Areas extends Table {
   TextColumn get id => text()();
-  TextColumn get name => text().unique()();
-  TextColumn get kind => text()();
+  TextColumn get name => text().withLength(min: 1, max: 120)();
+  TextColumn get kind => text().check(
+    const CustomExpression<bool>(
+      "kind IN ('indoor', 'outdoor', 'utility', 'other')",
+    ),
+  )();
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
@@ -33,10 +37,13 @@ class Areas extends Table {
 @DataClassName('RoomRow')
 class Rooms extends Table {
   TextColumn get id => text()();
-  TextColumn get areaId => text().references(Areas, #id)();
-  TextColumn get name => text()();
-  TextColumn get roomType => text().withDefault(const Constant('other'))();
-  TextColumn get notes => text().nullable()();
+  TextColumn get areaId =>
+      text().references(Areas, #id, onDelete: KeyAction.cascade)();
+  TextColumn get name => text().withLength(min: 1, max: 120)();
+  TextColumn get roomType => text()
+      .withLength(min: 1, max: 120)
+      .withDefault(const Constant('other'))();
+  TextColumn get notes => text().withLength(max: 4000).nullable()();
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
@@ -44,21 +51,23 @@ class Rooms extends Table {
 
   @override
   Set<Column<Object>> get primaryKey => {id};
-
-  @override
-  List<Set<Column<Object>>> get uniqueKeys => [
-    {areaId, name},
-  ];
 }
 
 @DataClassName('AssetRow')
 class Assets extends Table {
   TextColumn get id => text()();
-  TextColumn get name => text()();
-  TextColumn get assetType => text().withDefault(const Constant('general'))();
-  TextColumn get roomId => text().references(Rooms, #id)();
-  TextColumn get placement => text().nullable()();
-  TextColumn get notes => text().nullable()();
+  TextColumn get name => text().withLength(min: 1, max: 200)();
+  TextColumn get assetType => text()
+      .check(
+        const CustomExpression<bool>(
+          "asset_type IN ('device', 'pet', 'plant', 'safety', 'general')",
+        ),
+      )
+      .withDefault(const Constant('general'))();
+  TextColumn get roomId =>
+      text().references(Rooms, #id, onDelete: KeyAction.cascade)();
+  TextColumn get placement => text().withLength(max: 300).nullable()();
+  TextColumn get notes => text().withLength(max: 10000).nullable()();
   DateTimeColumn get purchaseDate => dateTime().nullable()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
@@ -73,7 +82,8 @@ class DeviceDetailsTable extends Table {
   @override
   String get tableName => 'device_details';
 
-  TextColumn get assetId => text().references(Assets, #id)();
+  TextColumn get assetId =>
+      text().references(Assets, #id, onDelete: KeyAction.cascade)();
   TextColumn get brand => text().nullable()();
   TextColumn get model => text().nullable()();
   TextColumn get serialNumber => text().nullable()();
@@ -91,7 +101,8 @@ class PetDetailsTable extends Table {
   @override
   String get tableName => 'pet_details';
 
-  TextColumn get assetId => text().references(Assets, #id)();
+  TextColumn get assetId =>
+      text().references(Assets, #id, onDelete: KeyAction.cascade)();
   TextColumn get species => text().nullable()();
   TextColumn get breed => text().nullable()();
   DateTimeColumn get birthDate => dateTime().nullable()();
@@ -110,7 +121,8 @@ class PlantDetailsTable extends Table {
   @override
   String get tableName => 'plant_details';
 
-  TextColumn get assetId => text().references(Assets, #id)();
+  TextColumn get assetId =>
+      text().references(Assets, #id, onDelete: KeyAction.cascade)();
   TextColumn get species => text().nullable()();
   TextColumn get sunlight => text().nullable()();
   IntColumn get wateringIntervalDays => integer().nullable()();
@@ -127,7 +139,8 @@ class SafetyDetailsTable extends Table {
   @override
   String get tableName => 'safety_details';
 
-  TextColumn get assetId => text().references(Assets, #id)();
+  TextColumn get assetId =>
+      text().references(Assets, #id, onDelete: KeyAction.cascade)();
   TextColumn get safetyType => text().nullable()();
   DateTimeColumn get installedAt => dateTime().nullable()();
   DateTimeColumn get expiresAt => dateTime().nullable()();
@@ -141,7 +154,7 @@ class SafetyDetailsTable extends Table {
 @DataClassName('TagRow')
 class Tags extends Table {
   TextColumn get id => text()();
-  TextColumn get name => text().unique()();
+  TextColumn get name => text().withLength(min: 1, max: 120)();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 
   @override
@@ -150,8 +163,10 @@ class Tags extends Table {
 
 @DataClassName('AssetTagRow')
 class AssetTags extends Table {
-  TextColumn get assetId => text().references(Assets, #id)();
-  TextColumn get tagId => text().references(Tags, #id)();
+  TextColumn get assetId =>
+      text().references(Assets, #id, onDelete: KeyAction.cascade)();
+  TextColumn get tagId =>
+      text().references(Tags, #id, onDelete: KeyAction.cascade)();
 
   @override
   Set<Column<Object>> get primaryKey => {assetId, tagId};
@@ -160,9 +175,10 @@ class AssetTags extends Table {
 @DataClassName('AssetPhotoRow')
 class AssetPhotos extends Table {
   TextColumn get id => text()();
-  TextColumn get assetId => text().references(Assets, #id)();
+  TextColumn get assetId =>
+      text().references(Assets, #id, onDelete: KeyAction.cascade)();
   TextColumn get relativePath => text()();
-  TextColumn get caption => text().nullable()();
+  TextColumn get caption => text().withLength(max: 500).nullable()();
   BoolColumn get isPrimary => boolean().withDefault(const Constant(false))();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 
@@ -173,15 +189,27 @@ class AssetPhotos extends Table {
 @DataClassName('MaintenancePlanRow')
 class MaintenancePlans extends Table {
   TextColumn get id => text()();
-  TextColumn get assetId => text().references(Assets, #id)();
-  TextColumn get title => text()();
-  TextColumn get instructions => text().nullable()();
-  IntColumn get recurrenceInterval => integer()();
-  TextColumn get recurrenceUnit => text()();
-  TextColumn get priority => text()();
+  TextColumn get assetId =>
+      text().references(Assets, #id, onDelete: KeyAction.cascade)();
+  TextColumn get title => text().withLength(min: 1, max: 200)();
+  TextColumn get instructions => text().withLength(max: 4000).nullable()();
+  IntColumn get recurrenceInterval => integer().check(
+    const CustomExpression<bool>('recurrence_interval > 0'),
+  )();
+  TextColumn get recurrenceUnit => text().check(
+    const CustomExpression<bool>(
+      "recurrence_unit IN ('hours', 'days', 'weeks', 'months', 'years')",
+    ),
+  )();
+  TextColumn get priority => text().check(
+    const CustomExpression<bool>(
+      "priority IN ('low', 'medium', 'high', 'critical')",
+    ),
+  )();
   DateTimeColumn get nextDueDate => dateTime()();
-  IntColumn get reminderDaysBefore =>
-      integer().withDefault(const Constant(0))();
+  IntColumn get reminderDaysBefore => integer()
+      .check(const CustomExpression<bool>('reminder_days_before >= 0'))
+      .withDefault(const Constant(0))();
   BoolColumn get isEnabled => boolean().withDefault(const Constant(true))();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
@@ -193,7 +221,8 @@ class MaintenancePlans extends Table {
 
 @DataClassName('MaintenancePlanMetadataRow')
 class MaintenancePlanMetadata extends Table {
-  TextColumn get planId => text().references(MaintenancePlans, #id)();
+  TextColumn get planId =>
+      text().references(MaintenancePlans, #id, onDelete: KeyAction.cascade)();
   TextColumn get taskType => text().nullable()();
   TextColumn get locationLabel => text().nullable()();
   IntColumn get estimatedDurationMinutes => integer().nullable()();
@@ -211,27 +240,12 @@ class MaintenancePlanMetadata extends Table {
 @DataClassName('MaintenanceRecordRow')
 class MaintenanceRecords extends Table {
   TextColumn get id => text()();
-  TextColumn get planId => text().references(MaintenancePlans, #id)();
+  TextColumn get planId =>
+      text().references(MaintenancePlans, #id, onDelete: KeyAction.cascade)();
   DateTimeColumn get dueDate => dateTime()();
   DateTimeColumn get completedAt =>
       dateTime().withDefault(currentDateAndTime)();
-  TextColumn get notes => text().nullable()();
-
-  @override
-  Set<Column<Object>> get primaryKey => {id};
-}
-
-@DataClassName('NotificationRow')
-class AppNotifications extends Table {
-  @override
-  String get tableName => 'notifications';
-
-  TextColumn get id => text()();
-  TextColumn get planId => text().references(MaintenancePlans, #id)();
-  TextColumn get channel => text()();
-  DateTimeColumn get scheduledFor => dateTime()();
-  DateTimeColumn get deliveredAt => dateTime().nullable()();
-  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+  TextColumn get notes => text().withLength(max: 4000).nullable()();
 
   @override
   Set<Column<Object>> get primaryKey => {id};
@@ -243,15 +257,28 @@ class InboxNotifications extends Table {
   String get tableName => 'notification_inbox';
 
   TextColumn get id => text()();
-  TextColumn get title => text()();
-  TextColumn get body => text()();
-  TextColumn get kind => text()();
-  TextColumn get route => text().nullable()();
-  TextColumn get planId =>
-      text().nullable().references(MaintenancePlans, #id)();
-  TextColumn get messageCode => text().nullable()();
+  TextColumn get title => text().withLength(min: 1, max: 500)();
+  TextColumn get body => text().withLength(max: 20000)();
+  TextColumn get kind => text().withLength(min: 1, max: 80)();
+  TextColumn get route => text().withLength(max: 1000).nullable()();
+  TextColumn get planId => text().nullable().references(
+    MaintenancePlans,
+    #id,
+    onDelete: KeyAction.setNull,
+  )();
+  TextColumn get messageCode => text()
+      .withLength(min: 1, max: 120)
+      .withDefault(const Constant('generic'))
+      .check(
+        const CustomExpression<bool>(
+          "message_code IN ('generic', 'weather_alert', 'task_overdue', "
+          "'task_due_today', 'daily_digest', 'task_skipped', "
+          "'task_postponed')",
+        ),
+      )();
   TextColumn get messageArgs => text().withDefault(const Constant('{}'))();
-  TextColumn get dedupeKey => text().withDefault(const Constant(''))();
+  TextColumn get dedupeKey =>
+      text().withLength(max: 128).withDefault(const Constant(''))();
   DateTimeColumn get readAt => dateTime().nullable()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
@@ -402,6 +429,20 @@ class SyncMediaCleanup extends Table {
   Set<Column<Object>> get primaryKey => {objectPath};
 }
 
+class LocalMediaCleanup extends Table {
+  @override
+  String get tableName => 'local_media_cleanup';
+
+  TextColumn get relativePath => text()();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+  IntColumn get attempts => integer().withDefault(const Constant(0))();
+  DateTimeColumn get nextAttemptAt => dateTime().nullable()();
+  TextColumn get lastErrorCode => text().nullable()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {relativePath};
+}
+
 class SyncAccount extends Table {
   @override
   String get tableName => 'sync_account';
@@ -431,10 +472,6 @@ class SyncAccount extends Table {
   DateTimeColumn get hydrationStartedAt => dateTime().nullable()();
   DateTimeColumn get hydrationUpdatedAt => dateTime().nullable()();
   TextColumn get hydrationError => text().nullable()();
-  BoolColumn get uploadProhibited =>
-      boolean().withDefault(const Constant(false))();
-  TextColumn get quarantineReason => text().nullable()();
-  TextColumn get legacyOwnerId => text().nullable()();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
 
   @override
@@ -456,7 +493,6 @@ class SyncAccount extends Table {
     MaintenancePlans,
     MaintenancePlanMetadata,
     MaintenanceRecords,
-    AppNotifications,
     InboxNotifications,
     Settings,
     Streaks,
@@ -466,6 +502,7 @@ class SyncAccount extends Table {
     SyncShadows,
     SyncRuntime,
     SyncMediaCleanup,
+    LocalMediaCleanup,
     SyncAccount,
     NotificationReconciliationRequests,
   ],
@@ -476,7 +513,7 @@ class AppDatabase extends _$AppDatabase {
 
   static const databaseName = 'owntend';
   static const databaseFileName = '$databaseName.sqlite';
-  static const currentSchemaVersion = 4;
+  static const currentSchemaVersion = 1;
   static const _sqliteBusyTimeoutMs = 8000;
   static const _startupRecoveryAttempts = 5;
   static const _searchIndexSourceTables = <String>[
@@ -529,7 +566,6 @@ class AppDatabase extends _$AppDatabase {
       'maintenance_plans',
       'maintenance_plan_metadata',
       'maintenance_records',
-      'notifications',
       'notification_inbox',
       'settings',
       'streaks',
@@ -545,29 +581,6 @@ class AppDatabase extends _$AppDatabase {
     onCreate: (m) async {
       await m.createAll();
       await _createSearchIndexGenerationInfrastructure();
-    },
-    onUpgrade: (m, from, to) async {
-      if (from < 2 && to >= 2) {
-        await _createSearchIndexGenerationInfrastructure();
-      }
-      if (from < 3 && to >= 3) {
-        await customStatement('DROP INDEX IF EXISTS idx_assets_category');
-        await customStatement('DROP INDEX IF EXISTS idx_categories_group');
-        await customStatement(
-          'DROP TRIGGER IF EXISTS search_categories_insert',
-        );
-        await customStatement(
-          'DROP TRIGGER IF EXISTS search_categories_update',
-        );
-        await customStatement(
-          'DROP TRIGGER IF EXISTS search_categories_delete',
-        );
-        await m.alterTable(TableMigration(assets));
-        await customStatement('DROP TABLE IF EXISTS categories');
-      }
-      if (from < 4 && to >= 4) {
-        await m.alterTable(TableMigration(maintenancePlans));
-      }
     },
     beforeOpen: (details) async {
       await customStatement('PRAGMA busy_timeout = $_sqliteBusyTimeoutMs');
@@ -664,7 +677,6 @@ END
       ('maintenance_plans', 'maintenance_plan', 'id'),
       ('maintenance_plan_metadata', 'maintenance_plan_metadata', 'plan_id'),
       ('maintenance_records', 'maintenance_record', 'id'),
-      ('notifications', 'device_notification', 'id'),
       ('notification_inbox', 'notification_inbox', 'id'),
       ('streaks', 'streak', 'id'),
     ];
@@ -728,9 +740,8 @@ END
 
     const userSettingKeys =
         "'theme', 'app_language', 'app_language_explicit', 'theme_time_of_day_enabled', "
-        "'notifications_enabled', "
         "'notification_preferences', 'onboarding_completed', "
-        "'permission_education_seen', 'permission_education_seen_v2', "
+        "'permission_education_seen', "
         "'home_location'";
     const deviceSettingKeys = "'weather_cache'";
     for (final (entity, keys) in [
@@ -833,9 +844,13 @@ END
     final statements = [
       'CREATE INDEX IF NOT EXISTS idx_areas_sort ON areas(sort_order, name)',
       'CREATE INDEX IF NOT EXISTS idx_areas_archived ON areas(archived_at)',
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_areas_active_name_nocase '
+          'ON areas(name COLLATE NOCASE) WHERE archived_at IS NULL',
       'CREATE INDEX IF NOT EXISTS idx_rooms_area ON rooms(area_id)',
       'CREATE INDEX IF NOT EXISTS idx_rooms_name ON rooms(name)',
       'CREATE INDEX IF NOT EXISTS idx_rooms_archived ON rooms(archived_at)',
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_rooms_active_name_nocase '
+          'ON rooms(area_id, name COLLATE NOCASE) WHERE archived_at IS NULL',
       'CREATE INDEX IF NOT EXISTS idx_assets_room ON assets(room_id)',
       'CREATE INDEX IF NOT EXISTS idx_assets_type ON assets(asset_type)',
       'CREATE INDEX IF NOT EXISTS idx_assets_archived ON assets(archived_at)',
@@ -846,6 +861,8 @@ END
       'CREATE INDEX IF NOT EXISTS idx_asset_tags_tag ON asset_tags(tag_id)',
       'CREATE INDEX IF NOT EXISTS idx_asset_photos_asset ON asset_photos(asset_id)',
       'CREATE INDEX IF NOT EXISTS idx_asset_photos_primary ON asset_photos(asset_id, is_primary)',
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_asset_photos_single_primary '
+          'ON asset_photos(asset_id) WHERE is_primary = 1',
       'CREATE INDEX IF NOT EXISTS idx_plans_asset ON maintenance_plans(asset_id)',
       'CREATE INDEX IF NOT EXISTS idx_plans_enabled_due '
           'ON maintenance_plans(is_enabled, next_due_date)',
@@ -854,8 +871,6 @@ END
           'ON maintenance_plan_metadata(sort_order)',
       'CREATE INDEX IF NOT EXISTS idx_records_plan ON maintenance_records(plan_id)',
       'CREATE INDEX IF NOT EXISTS idx_records_completed ON maintenance_records(completed_at)',
-      'CREATE INDEX IF NOT EXISTS idx_notifications_plan ON notifications(plan_id)',
-      'CREATE INDEX IF NOT EXISTS idx_notifications_scheduled ON notifications(scheduled_for)',
       'CREATE INDEX IF NOT EXISTS idx_inbox_unread ON notification_inbox(read_at, created_at)',
       'CREATE INDEX IF NOT EXISTS idx_inbox_plan ON notification_inbox(plan_id)',
       'CREATE UNIQUE INDEX IF NOT EXISTS idx_inbox_dedupe '
@@ -911,8 +926,8 @@ END
       final definition = existing.read<String>('sql');
       if (!definition.contains('display_body') ||
           !definition.contains('search_terms')) {
-        // The FTS table is a derived cache. Recreate legacy layouts instead of
-        // carrying machine aliases in the user-visible snippet column.
+        // The FTS table is a derived cache and can be recreated when its
+        // source-owned column contract changes.
         await customStatement('DROP TABLE search_index');
       }
     }
@@ -948,8 +963,8 @@ END
           updatedAt: Value(now),
         ),
         SettingsCompanion.insert(
-          key: 'notifications_enabled',
-          value: 'true',
+          key: 'notification_preferences',
+          value: '{"enabled":true}',
           updatedAt: Value(now),
         ),
         SettingsCompanion.insert(
@@ -959,11 +974,6 @@ END
         ),
         SettingsCompanion.insert(
           key: 'permission_education_seen',
-          value: 'false',
-          updatedAt: Value(now),
-        ),
-        SettingsCompanion.insert(
-          key: 'permission_education_seen_v2',
           value: 'false',
           updatedAt: Value(now),
         ),

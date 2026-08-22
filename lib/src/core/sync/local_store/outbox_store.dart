@@ -1,0 +1,747 @@
+part of '../local_sync_store.dart';
+
+mixin _LocalSyncOutboxStore on _LocalSyncStoreBase {
+  Future<void> recordSyncSuccess(DateTime completedAt) async {
+    await (db.update(db.syncAccount)..where((row) => row.id.equals(1))).write(
+      SyncAccountCompanion(
+        lastSyncedAt: Value(completedAt),
+        lastSyncAttemptAt: Value(completedAt),
+        lastError: const Value(null),
+        blockedReason: const Value(null),
+        migrationState: const Value('active'),
+        updatedAt: Value(completedAt),
+      ),
+    );
+  }
+
+  Future<bool> shouldRunIntegrityCheck({
+    Duration maximumAge = const Duration(hours: 24),
+    DateTime? now,
+  }) async {
+    final lastCheck = (await account()).lastIntegrityCheckAt;
+    if (lastCheck == null) return true;
+    final elapsed = (now ?? DateTime.now()).difference(lastCheck);
+    return elapsed.isNegative || elapsed > maximumAge;
+  }
+
+  Future<void> recordIntegrityCheck(DateTime completedAt) {
+    return (db.update(db.syncAccount)..where((row) => row.id.equals(1))).write(
+      SyncAccountCompanion(
+        lastIntegrityCheckAt: Value(completedAt),
+        updatedAt: Value(completedAt),
+      ),
+    );
+  }
+
+  Future<int> reconcileAuthoritativeRecordKeys({
+    required SyncEntitySpec spec,
+    required Set<String> remoteKeys,
+  }) async {
+    if (spec.keyColumns.isEmpty) return 0;
+    final shadowRows = await (db.select(
+      db.syncShadows,
+    )..where((row) => row.entity.equals(spec.entity))).get();
+    if (shadowRows.isEmpty) return 0;
+    final pendingRows = await (db.select(
+      db.syncOutbox,
+    )..where((row) => row.entity.equals(spec.entity))).get();
+    final pendingKeys = {for (final row in pendingRows) row.recordKey};
+    final missing = [
+      for (final shadow in shadowRows)
+        if (!remoteKeys.contains(shadow.recordKey) &&
+            !pendingKeys.contains(shadow.recordKey))
+          shadow.recordKey,
+    ];
+    if (missing.isEmpty) return 0;
+
+    await db.transaction(() async {
+      await withOutboxSuppressed(() async {
+        for (final recordKey in missing) {
+          final parts = recordKey.split('|');
+          final values = <String, Object?>{
+            for (var index = 0; index < spec.keyColumns.length; index++)
+              spec.keyColumns[index]: parts[index],
+          };
+          await _deleteLocal(
+            SyncRecord(
+              spec: spec,
+              recordKey: recordKey,
+              values: values,
+              clientModifiedAt: DateTime.now().toUtc(),
+              originDeviceId: 'integrity-check',
+              deletedAt: DateTime.now().toUtc(),
+            ),
+          );
+          await (db.delete(db.syncShadows)..where(
+                (row) =>
+                    row.entity.equals(spec.entity) &
+                    row.recordKey.equals(recordKey),
+              ))
+              .go();
+        }
+      });
+    });
+    return missing.length;
+  }
+
+  Future<void> recordSyncAttempt(DateTime attemptedAt) async {
+    await account();
+    await (db.update(db.syncAccount)..where((row) => row.id.equals(1))).write(
+      SyncAccountCompanion(
+        lastSyncAttemptAt: Value(attemptedAt),
+        updatedAt: Value(attemptedAt),
+      ),
+    );
+  }
+
+  Future<void> recordMigrationState(String state) async {
+    await account();
+    await (db.update(db.syncAccount)..where((row) => row.id.equals(1))).write(
+      SyncAccountCompanion(
+        migrationState: Value(state),
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
+  }
+
+  Future<void> recordSyncFailure(String message) async {
+    await account();
+    final now = DateTime.now();
+    await (db.update(db.syncAccount)..where((row) => row.id.equals(1))).write(
+      SyncAccountCompanion(
+        lastError: Value(message),
+        lastSyncFailureAt: Value(now),
+        updatedAt: Value(now),
+      ),
+    );
+  }
+
+  Future<void> recordSyncBlocked(String reason) async {
+    await account();
+    final now = DateTime.now();
+    await (db.update(db.syncAccount)..where((row) => row.id.equals(1))).write(
+      SyncAccountCompanion(
+        lastError: Value(reason),
+        blockedReason: Value(reason),
+        lastSyncFailureAt: Value(now),
+        migrationState: const Value('blocked'),
+        updatedAt: Value(now),
+      ),
+    );
+  }
+
+  Future<void> recordBackgroundResult(String result) async {
+    await account();
+    await (db.update(db.syncAccount)..where((row) => row.id.equals(1))).write(
+      SyncAccountCompanion(
+        backgroundResult: Value(result),
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
+  }
+
+  Future<int> pendingCount() async {
+    final count = db.syncOutbox.entity.count();
+    final query = db.selectOnly(db.syncOutbox)
+      ..addColumns([count])
+      ..where(db.syncOutbox.attempts.isBiggerOrEqualValue(0));
+    return (await query.map((row) => row.read(count) ?? 0).getSingle());
+  }
+
+  Future<Map<SyncMutationState, int>> mutationStateCounts() async {
+    final rows = await db
+        .customSelect(
+          '''
+SELECT state, COUNT(*) AS item_count
+FROM offline_mutation_queue
+GROUP BY state
+''',
+          readsFrom: {db.syncOutbox},
+        )
+        .get();
+    final counts = {for (final state in SyncMutationState.values) state: 0};
+    for (final row in rows) {
+      counts[SyncMutationState.fromStorage(row.read<String>('state'))] = row
+          .read<int>('item_count');
+    }
+    return counts;
+  }
+
+  Stream<int> watchPendingCount() {
+    final count = db.syncOutbox.entity.count();
+    final query = db.selectOnly(db.syncOutbox)
+      ..addColumns([count])
+      ..where(db.syncOutbox.attempts.isBiggerOrEqualValue(0));
+    return query.map((row) => row.read(count) ?? 0).watchSingle().distinct();
+  }
+
+  Future<bool> hasReadyMutations() async {
+    final count = db.syncOutbox.entity.count();
+    final now = DateTime.now();
+    final query = db.selectOnly(db.syncOutbox)
+      ..addColumns([count])
+      ..where(
+        db.syncOutbox.attempts.isBiggerOrEqualValue(0) &
+            (db.syncOutbox.nextAttemptAt.isNull() |
+                db.syncOutbox.nextAttemptAt.isSmallerOrEqualValue(now)),
+      );
+    return (await query.map((row) => row.read(count) ?? 0).getSingle()) > 0;
+  }
+
+  Future<int> pendingMediaCleanupCount() async {
+    final cloudCount = db.syncMediaCleanup.objectPath.count();
+    final cloudQuery = db.selectOnly(db.syncMediaCleanup)
+      ..addColumns([cloudCount]);
+    final localCount = db.localMediaCleanup.relativePath.count();
+    final localQuery = db.selectOnly(db.localMediaCleanup)
+      ..addColumns([localCount]);
+    return (await cloudQuery
+            .map((row) => row.read(cloudCount) ?? 0)
+            .getSingle()) +
+        (await localQuery.map((row) => row.read(localCount) ?? 0).getSingle());
+  }
+
+  Future<bool> acquireLease(
+    String owner, {
+    Duration duration = const Duration(minutes: 5),
+  }) async {
+    await _seedRuntimeIfNeeded();
+    final now = DateTime.now();
+    final expiresAt = now.add(duration);
+    final updated = await db.customUpdate(
+      '''
+UPDATE sync_runtime
+SET lease_owner = ?, lease_expires_at = ?
+WHERE id = 1
+  AND (
+    lease_owner IS NULL
+    OR lease_owner = ?
+    OR lease_expires_at IS NULL
+    OR lease_expires_at <= ?
+  )
+''',
+      variables: [
+        Variable<String>(owner),
+        Variable<DateTime>(expiresAt),
+        Variable<String>(owner),
+        Variable<DateTime>(now),
+      ],
+      updates: {db.syncRuntime},
+      updateKind: UpdateKind.update,
+    );
+    return updated == 1;
+  }
+
+  Future<bool> hasActiveLease({DateTime? now}) async {
+    await _seedRuntimeIfNeeded();
+    final currentTime = now ?? DateTime.now();
+    final row = await (db.select(
+      db.syncRuntime,
+    )..where((runtime) => runtime.id.equals(1))).getSingleOrNull();
+    final expiresAt = row?.leaseExpiresAt;
+    return row?.leaseOwner != null &&
+        expiresAt != null &&
+        expiresAt.isAfter(currentTime);
+  }
+
+  Future<void> releaseLease(String owner) async {
+    await (db.update(
+      db.syncRuntime,
+    )..where((row) => row.id.equals(1) & row.leaseOwner.equals(owner))).write(
+      const SyncRuntimeCompanion(
+        leaseOwner: Value(null),
+        leaseExpiresAt: Value(null),
+      ),
+    );
+  }
+
+  Future<void> _seedRuntimeIfNeeded() async {
+    await db
+        .into(db.syncRuntime)
+        .insert(
+          SyncRuntimeCompanion.insert(id: const Value(1)),
+          mode: InsertMode.insertOrIgnore,
+        );
+  }
+
+  Future<DateTime?> nextRetryAt() async {
+    final outboxMinimum = db.syncOutbox.nextAttemptAt.min();
+    final outboxQuery = db.selectOnly(db.syncOutbox)
+      ..addColumns([outboxMinimum])
+      ..where(
+        db.syncOutbox.attempts.isBiggerOrEqualValue(0) &
+            db.syncOutbox.nextAttemptAt.isNotNull(),
+      );
+    final cleanupMinimum = db.syncMediaCleanup.nextAttemptAt.min();
+    final cleanupQuery = db.selectOnly(db.syncMediaCleanup)
+      ..addColumns([cleanupMinimum])
+      ..where(
+        db.syncMediaCleanup.nextAttemptAt.isNotNull() &
+            db.syncMediaCleanup.attempts.isBiggerOrEqualValue(0),
+      );
+    final candidates = <DateTime?>[
+      await outboxQuery.map((row) => row.read(outboxMinimum)).getSingle(),
+      await cleanupQuery.map((row) => row.read(cleanupMinimum)).getSingle(),
+    ].whereType<DateTime>().toList();
+    candidates.sort();
+    return candidates.firstOrNull;
+  }
+
+  Future<void> deferPendingAfterFailure(
+    String message, {
+    Duration delay = const Duration(seconds: 15),
+  }) async {
+    await db.customUpdate(
+      '''
+UPDATE offline_mutation_queue
+SET next_attempt_at = ?, last_error = ?
+WHERE next_attempt_at IS NULL OR next_attempt_at <= ?
+''',
+      variables: [
+        Variable<DateTime>(DateTime.now().add(delay)),
+        Variable<String>(message),
+        Variable<DateTime>(DateTime.now()),
+      ],
+      updates: {db.syncOutbox},
+      updateKind: UpdateKind.update,
+    );
+  }
+
+  Future<List<LocalSyncMutation>> pendingMutations({int limit = 200}) async {
+    final now = DateTime.now();
+    final allOutboxRows = await db.select(db.syncOutbox).get();
+    final allOutboxKeys = {for (final row in allOutboxRows) row.recordKey};
+
+    final query = db.select(db.syncOutbox)
+      ..where(
+        (row) =>
+            row.attempts.isBiggerOrEqualValue(0) &
+            (row.nextAttemptAt.isNull() |
+                row.nextAttemptAt.isSmallerOrEqualValue(now)),
+      )
+      ..orderBy([(row) => OrderingTerm.asc(row.changedAt)])
+      ..limit(limit);
+    final rows = await query.get();
+    final rawMutations = [
+      for (final row in rows)
+        LocalSyncMutation(
+          entity: row.entity,
+          recordKey: row.recordKey,
+          operation: row.operation,
+          changedAt: row.changedAt,
+          attempts: row.attempts,
+          generation: row.generation,
+          payloadJson: row.payloadJson,
+          userId: row.userId,
+          createdAt: row.createdAt,
+          state: SyncMutationState.fromStorage(row.state),
+          lastErrorCode: row.lastErrorCode,
+          lastError: row.lastError,
+          nextRetryAt: row.nextAttemptAt,
+        ),
+    ];
+
+    final mutations = <LocalSyncMutation>[];
+    for (final mutation in rawMutations) {
+      if (mutation.entity == 'maintenance_completion' &&
+          mutation.payloadJson != null) {
+        try {
+          final decoded =
+              jsonDecode(mutation.payloadJson!) as Map<String, dynamic>;
+          final dependsOn = decoded['depends_on_operation_id'] as String?;
+          if (dependsOn != null &&
+              dependsOn.isNotEmpty &&
+              allOutboxKeys.contains(dependsOn)) {
+            continue;
+          }
+        } catch (_) {}
+      }
+      mutations.add(mutation);
+    }
+
+    final dependencyOrder = {
+      for (var index = 0; index < syncEntitySpecs.length; index++)
+        syncEntitySpecs[index].entity: index,
+      profileSyncSpec.entity: syncEntitySpecs.length,
+    };
+
+    dependencyOrder['asset_photo_primary'] = syncEntitySpecs.length + 1;
+
+    final maintenancePlanOrder = dependencyOrder['maintenance_plan'];
+    if (maintenancePlanOrder != null) {
+      dependencyOrder['maintenance_completion'] = maintenancePlanOrder;
+      dependencyOrder['maintenance_undo'] = maintenancePlanOrder;
+    }
+
+    mutations.sort((a, b) {
+      if (a.entity == 'maintenance_undo' && b.entity != 'maintenance_undo') {
+        return -1;
+      }
+      if (b.entity == 'maintenance_undo' && a.entity != 'maintenance_undo') {
+        return 1;
+      }
+
+      final aDelete = a.operation == 'delete';
+      final bDelete = b.operation == 'delete';
+      if (aDelete != bDelete) {
+        return aDelete ? -1 : 1;
+      }
+
+      final aOrder = dependencyOrder[a.entity] ?? dependencyOrder.length;
+      final bOrder = dependencyOrder[b.entity] ?? dependencyOrder.length;
+      final dependencyComparison = aDelete
+          ? bOrder.compareTo(aOrder)
+          : aOrder.compareTo(bOrder);
+      if (dependencyComparison != 0) return dependencyComparison;
+
+      final changedComparison = a.changedAt.compareTo(b.changedAt);
+      if (changedComparison != 0) return changedComparison;
+
+      if (a.entity == b.entity) return 0;
+      if (a.entity == 'maintenance_completion') return -1;
+      if (b.entity == 'maintenance_completion') return 1;
+      return a.entity.compareTo(b.entity);
+    });
+    return mutations.take(limit).toList(growable: false);
+  }
+
+  Future<void> enqueueInitialSnapshot() async {
+    for (final spec in syncEntitySpecs) {
+      final keyExpression = spec.keyColumns
+          .map((column) => 'CAST($column AS TEXT)')
+          .join(" || '|' || ");
+      await db.customStatement('''
+INSERT OR IGNORE INTO offline_mutation_queue(
+  entity,
+  record_key,
+  operation,
+  changed_at,
+  attempts
+)
+SELECT
+  '${spec.entity}',
+  $keyExpression,
+  'upsert',
+  COALESCE(${spec.modifiedExpression}, CAST(strftime('%s', 'now') AS INTEGER)),
+  0
+FROM ${spec.localTable}
+${spec.localWhere == null ? '' : 'WHERE ${spec.localWhere}'}
+''');
+    }
+    await db.customStatement('''
+INSERT OR IGNORE INTO offline_mutation_queue(
+  entity,
+  record_key,
+  operation,
+  changed_at,
+  attempts
+)
+SELECT
+  'profile',
+  'profile',
+  'upsert',
+  updated_at,
+  0
+FROM settings
+WHERE key = 'profile'
+''');
+    db.markTablesUpdated([db.syncOutbox]);
+  }
+
+  Future<void> enqueueReconciliationSnapshot() async {
+    for (final spec in syncEntitySpecs) {
+      final keyExpression = spec.keyColumns
+          .map((column) => 'CAST($column AS TEXT)')
+          .join(" || '|' || ");
+      await db.customStatement('''
+INSERT OR IGNORE INTO offline_mutation_queue(
+  entity,
+  record_key,
+  operation,
+  changed_at,
+  attempts
+)
+SELECT
+  '${spec.entity}',
+  $keyExpression,
+  'upsert',
+  COALESCE(${spec.modifiedExpression}, CAST(strftime('%s', 'now') AS INTEGER)),
+  0
+FROM ${spec.localTable} AS local_row
+WHERE ${spec.localWhere ?? '1 = 1'}
+  AND (
+    NOT EXISTS (
+      SELECT 1
+      FROM sync_shadows AS shadow
+      WHERE shadow.entity = '${spec.entity}'
+        AND shadow.record_key = $keyExpression
+    )
+    OR COALESCE(${spec.modifiedExpression}, 0) > COALESCE((
+      SELECT shadow.remote_modified_at
+      FROM sync_shadows AS shadow
+      WHERE shadow.entity = '${spec.entity}'
+        AND shadow.record_key = $keyExpression
+    ), 0)
+  )
+''');
+      await db.customStatement('''
+INSERT OR IGNORE INTO offline_mutation_queue(
+  entity,
+  record_key,
+  operation,
+  changed_at,
+  attempts
+)
+SELECT
+  '${spec.entity}',
+  shadow.record_key,
+  'delete',
+  CAST(strftime('%s', 'now') AS INTEGER),
+  0
+FROM sync_shadows AS shadow
+WHERE shadow.entity = '${spec.entity}'
+  AND NOT EXISTS (
+    SELECT 1
+    FROM ${spec.localTable}
+    WHERE $keyExpression = shadow.record_key
+      ${spec.localWhere == null ? '' : 'AND ${spec.localWhere}'}
+  )
+''');
+    }
+    await db.customStatement('''
+INSERT OR IGNORE INTO offline_mutation_queue(
+  entity,
+  record_key,
+  operation,
+  changed_at,
+  attempts
+)
+SELECT
+  'profile',
+  'profile',
+  'upsert',
+  updated_at,
+  0
+FROM settings
+WHERE key = 'profile'
+  AND (
+    NOT EXISTS (
+      SELECT 1 FROM sync_shadows
+      WHERE entity = 'profile' AND record_key = 'profile'
+    )
+    OR updated_at > COALESCE((
+      SELECT remote_modified_at FROM sync_shadows
+      WHERE entity = 'profile' AND record_key = 'profile'
+    ), 0)
+  )
+''');
+    await db.customStatement('''
+INSERT OR IGNORE INTO offline_mutation_queue(
+  entity,
+  record_key,
+  operation,
+  changed_at,
+  attempts
+)
+SELECT
+  'profile',
+  'profile',
+  'delete',
+  CAST(strftime('%s', 'now') AS INTEGER),
+  0
+FROM sync_shadows
+WHERE entity = 'profile'
+  AND record_key = 'profile'
+  AND NOT EXISTS (SELECT 1 FROM settings WHERE key = 'profile')
+''');
+    db.markTablesUpdated([db.syncOutbox]);
+  }
+
+  Future<void> enqueueRestoreSnapshot(DateTime restoredAt) async {
+    await db.transaction(() async {
+      await enqueueInitialSnapshot();
+      await enqueueReconciliationSnapshot();
+      await db
+          .update(db.syncOutbox)
+          .write(
+            SyncOutboxCompanion(
+              changedAt: Value(restoredAt),
+              attempts: const Value(0),
+              nextAttemptAt: const Value(null),
+              lastError: const Value(null),
+            ),
+          );
+    });
+  }
+
+  Future<SyncRecord?> readMutation(
+    LocalSyncMutation mutation,
+    String deviceId,
+  ) async {
+    final spec = syncSpecByEntity[mutation.entity];
+    if (spec == null) {
+      throw SupabaseFailure(
+        kind: SupabaseFailureKind.incompatibleSchema,
+        message:
+            'The local sync queue contains an unsupported entity contract: '
+            '${mutation.entity}.',
+      );
+    }
+    if (mutation.operation == 'delete') {
+      final values = <String, dynamic>{};
+      if (spec.entity != 'profile') {
+        final keyParts = mutation.recordKey.split('|');
+        for (var index = 0; index < spec.keyColumns.length; index++) {
+          values[spec.keyColumns[index]] = keyParts[index];
+        }
+      }
+      if (spec.entity == 'asset_photo') {
+        final cleanupObjectPath = _photoDeleteCleanupObjectPath(mutation);
+        if (cleanupObjectPath != null) {
+          values['cleanup_object_path'] = cleanupObjectPath;
+        }
+      }
+      return SyncRecord(
+        spec: spec,
+        recordKey: mutation.recordKey,
+        values: values,
+        clientModifiedAt: mutation.changedAt.toUtc(),
+        originDeviceId: deviceId,
+        deletedAt: mutation.changedAt.toUtc(),
+      );
+    }
+    if (spec.entity == 'profile') {
+      return _readProfile(mutation, deviceId);
+    }
+
+    final parts = mutation.recordKey.split('|');
+    final where = <String>[];
+    final variables = <Variable<Object>>[];
+    for (var index = 0; index < spec.keyColumns.length; index++) {
+      where.add('${spec.keyColumns[index]} = ?');
+      variables.add(Variable<String>(parts[index]));
+    }
+    final result = await db
+        .customSelect(
+          'SELECT ${spec.localColumns.join(', ')} '
+          'FROM ${spec.localTable} WHERE ${where.join(' AND ')} LIMIT 1',
+          variables: variables,
+        )
+        .getSingleOrNull();
+    if (result == null) {
+      return SyncRecord(
+        spec: spec,
+        recordKey: mutation.recordKey,
+        values: {
+          for (var index = 0; index < spec.keyColumns.length; index++)
+            spec.keyColumns[index]: parts[index],
+        },
+        clientModifiedAt: mutation.changedAt.toUtc(),
+        originDeviceId: deviceId,
+        deletedAt: mutation.changedAt.toUtc(),
+      );
+    }
+    final values = _toRemoteCompatible(spec, result.data);
+    final semanticModifiedAt =
+        _semanticClientModifiedAt(spec, values) ?? mutation.changedAt.toUtc();
+    return SyncRecord(
+      spec: spec,
+      recordKey: mutation.recordKey,
+      values: values,
+      clientModifiedAt: semanticModifiedAt,
+      originDeviceId: deviceId,
+    );
+  }
+
+  String? _photoDeleteCleanupObjectPath(LocalSyncMutation mutation) {
+    final payloadJson = mutation.payloadJson;
+    if (payloadJson == null || payloadJson.trim().isEmpty) return null;
+    try {
+      final decoded = jsonDecode(payloadJson);
+      if (decoded is! Map) return null;
+      final path = decoded['cleanup_object_path'];
+      return path is String && path.trim().isNotEmpty ? path : null;
+    } on Object {
+      return null;
+    }
+  }
+
+  Future<SyncRecord?> _readProfile(
+    LocalSyncMutation mutation,
+    String deviceId,
+  ) async {
+    final row = await db
+        .customSelect(
+          "SELECT value, updated_at FROM settings WHERE key = 'profile' LIMIT 1",
+        )
+        .getSingleOrNull();
+    if (row == null) {
+      return SyncRecord(
+        spec: profileSyncSpec,
+        recordKey: 'profile',
+        values: const {},
+        clientModifiedAt: mutation.changedAt.toUtc(),
+        originDeviceId: deviceId,
+        deletedAt: mutation.changedAt.toUtc(),
+      );
+    }
+    final decoded =
+        jsonDecode(row.read<String>('value')) as Map<String, dynamic>;
+    return SyncRecord(
+      spec: profileSyncSpec,
+      recordKey: 'profile',
+      values: {'nickname': decoded['nickname'] as String?},
+      clientModifiedAt:
+          _dateTimeFromStorage(row.data['updated_at']) ??
+          mutation.changedAt.toUtc(),
+      originDeviceId: deviceId,
+    );
+  }
+
+  Future<SyncShadow?> shadow(String entity, String recordKey) {
+    return (db.select(db.syncShadows)..where(
+          (row) => row.entity.equals(entity) & row.recordKey.equals(recordKey),
+        ))
+        .getSingleOrNull();
+  }
+
+  Future<DateTime?> pendingChangedAt(String entity, String recordKey) async {
+    final row =
+        await (db.select(db.syncOutbox)..where(
+              (item) =>
+                  item.entity.equals(entity) & item.recordKey.equals(recordKey),
+            ))
+            .getSingleOrNull();
+    return row?.changedAt;
+  }
+
+  Future<bool> isUntouchedSeed(SyncRecord record) async {
+    final expected = _seedValues[record.spec.entity]?[record.recordKey];
+    if (expected == null) return false;
+    final where = <String>[];
+    final variables = <Variable<Object>>[];
+    final parts = record.recordKey.split('|');
+    for (var index = 0; index < record.spec.keyColumns.length; index++) {
+      where.add('${record.spec.keyColumns[index]} = ?');
+      variables.add(Variable<String>(parts[index]));
+    }
+    final row = await db
+        .customSelect(
+          'SELECT ${expected.keys.join(', ')} '
+          'FROM ${record.spec.localTable} '
+          'WHERE ${where.join(' AND ')} LIMIT 1',
+          variables: variables,
+        )
+        .getSingleOrNull();
+    if (row == null) return false;
+    for (final entry in expected.entries) {
+      final actual = row.data[entry.key];
+      if (entry.value is bool) {
+        if ((actual == true || actual == 1) != entry.value) return false;
+      } else if (actual != entry.value) {
+        return false;
+      }
+    }
+    return true;
+  }
+}

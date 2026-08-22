@@ -27,6 +27,9 @@ export const approvedActionReleases = Object.freeze({
   'actions/deploy-pages': Object.freeze({
     cd2ce8fcbc39b97be8ca5fce6e763baed58fa128: 'v5.0.0',
   }),
+  'actions/download-artifact': Object.freeze({
+    '37930b1c2abaa49bbe596cd826c3c89aef350131': 'v7.0.0',
+  }),
   'actions/setup-java': Object.freeze({
     b6effb05e454b25005698d916606bdc6ffcbf961: 'v5.7.0',
   }),
@@ -43,6 +46,12 @@ export const approvedActionReleases = Object.freeze({
   }),
   'denoland/setup-deno': Object.freeze({
     '22d081ff2d3a40755e97629de92e3bcbfa7cf2ed': 'v2.0.5',
+  }),
+  'google-github-actions/auth': Object.freeze({
+    '7c6bc770dae815cd3e89ee6cdf493a5fab2cc093': 'v3.0.0',
+  }),
+  'google-github-actions/setup-gcloud': Object.freeze({
+    e427ad8a34f8676edf47cf7d7925499adf3eb74f: 'v2.2.1',
   }),
   'subosito/flutter-action': Object.freeze({
     '1a449444c387b1966244ae4d4f8c696479add0b2': 'v2.23.0',

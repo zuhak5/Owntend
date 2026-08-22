@@ -15,27 +15,19 @@ class DriftPermissionEducationRepository
 
   final AppDatabase _database;
 
-  static const String keyV3 = 'permission_education_device_state_v3';
-  static const String keyV2 = 'permission_education_seen_v2';
+  static const String key = 'permission_education_device_state';
 
   @override
   Future<PermissionEducationDeviceState> loadDeviceState() async {
-    final v3Row = await (_database.select(
+    final row = await (_database.select(
       _database.settings,
-    )..where((s) => s.key.equals(keyV3))).getSingleOrNull();
+    )..where((setting) => setting.key.equals(key))).getSingleOrNull();
 
-    if (v3Row != null && v3Row.value.isNotEmpty) {
-      return PermissionEducationDeviceState.decode(v3Row.value);
+    if (row != null && row.value.isNotEmpty) {
+      return PermissionEducationDeviceState.decode(row.value);
     }
 
-    // Bootstrap from legacy v2 setting if present
-    final v2Row = await (_database.select(
-      _database.settings,
-    )..where((s) => s.key.equals(keyV2))).getSingleOrNull();
-
-    final v2Seen = v2Row?.value == 'true';
-    final initial = PermissionEducationDeviceState(
-      showCount: v2Seen ? 1 : 0,
+    const initial = PermissionEducationDeviceState(
       source: PermissionEducationSource.firstDashboardVisit,
     );
 
@@ -49,7 +41,7 @@ class DriftPermissionEducationRepository
         .into(_database.settings)
         .insertOnConflictUpdate(
           SettingsCompanion.insert(
-            key: keyV3,
+            key: key,
             value: state.encode(),
             updatedAt: Value(DateTime.now()),
           ),

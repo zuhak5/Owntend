@@ -1,4 +1,5 @@
-part of '../../../../main.dart';
+import '../../../ui/components.dart' as hk_ui;
+import '../../../ui/presentation_support.dart';
 
 class AreaEditorDialog extends ConsumerStatefulWidget {
   const AreaEditorDialog({this.area, super.key});
@@ -33,7 +34,7 @@ class _AreaEditorDialogState extends ConsumerState<AreaEditorDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return _EditorSheetFrame(
+    return EditorSheetFrame(
       title: widget.area == null ? context.l10n.addArea : context.l10n.editArea,
       saveLabel: widget.area == null
           ? context.l10n.createArea
@@ -57,7 +58,7 @@ class _AreaEditorDialogState extends ConsumerState<AreaEditorDialog> {
               for (final kind in AreaKind.values)
                 DropdownMenuItem(
                   value: kind,
-                  child: Text(_areaKindLabel(context, kind)),
+                  child: Text(areaKindLabel(context, kind)),
                 ),
             ],
             onChanged: (value) => setState(() => _kind = value ?? _kind),
@@ -98,7 +99,7 @@ class _AreaEditorDialogState extends ConsumerState<AreaEditorDialog> {
       if (mounted) {
         hk_ui.showToast(
           context,
-          content: Text(_failureMessage(context, error)),
+          content: Text(failureMessage(context, error)),
           severity: hk_ui.HkToastSeverity.error,
         );
       }
@@ -191,11 +192,11 @@ class _RoomEditorDialogState extends ConsumerState<RoomEditorDialog> {
     final selectedArea = areas.where((area) => area.id == _areaId).firstOrNull;
     final areaKind = selectedArea?.kind ?? AreaKind.indoor;
     final isOutdoor = areaKind == AreaKind.outdoor;
-    final typeItems = _roomTypesFor(areaKind);
+    final typeItems = roomTypesFor(areaKind);
     final selectedType = typeItems.contains(_roomType)
         ? _roomType
         : typeItems.first;
-    return _EditorSheetFrame(
+    return EditorSheetFrame(
       title: widget.room == null
           ? isOutdoor
                 ? context.l10n.addZone
@@ -237,7 +238,7 @@ class _RoomEditorDialogState extends ConsumerState<RoomEditorDialog> {
               for (final type in typeItems)
                 DropdownMenuItem(
                   value: type,
-                  child: Text(_roomTypeLabel(context, type)),
+                  child: Text(roomTypeLabel(context, type)),
                 ),
             ],
             onChanged: (value) =>
@@ -261,7 +262,7 @@ class _RoomEditorDialogState extends ConsumerState<RoomEditorDialog> {
                 final nextArea = areas
                     .where((area) => area.id == value)
                     .firstOrNull;
-                final nextTypes = _roomTypesFor(
+                final nextTypes = roomTypesFor(
                   nextArea?.kind ?? AreaKind.indoor,
                 );
                 setState(() {
@@ -292,7 +293,7 @@ class _RoomEditorDialogState extends ConsumerState<RoomEditorDialog> {
     final areaKind =
         areas.where((area) => area.id == _areaId).firstOrNull?.kind ??
         AreaKind.indoor;
-    final allowedTypes = _roomTypesFor(areaKind);
+    final allowedTypes = roomTypesFor(areaKind);
     setState(() => _saving = true);
     try {
       final roomId = await ref
@@ -313,7 +314,7 @@ class _RoomEditorDialogState extends ConsumerState<RoomEditorDialog> {
       if (mounted) {
         hk_ui.showToast(
           context,
-          content: Text(_failureMessage(context, error)),
+          content: Text(failureMessage(context, error)),
           severity: hk_ui.HkToastSeverity.error,
         );
       }

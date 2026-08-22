@@ -222,7 +222,7 @@ Deno.test("requires a recent reauthenticated session", async () => {
   ]);
 });
 
-Deno.test("deletes only the user derived from the verified JWT", async () => {
+Deno.test("rejects a client-supplied user identity", async () => {
   const services = new FakeAccountDeletionServices();
   services.objectListings.push(
     [`${userId}/assets/photo.jpg`],
@@ -241,32 +241,49 @@ Deno.test("deletes only the user derived from the verified JWT", async () => {
     factoryFor(services),
   );
 
-  assertEquals(response.status, 200);
-  assertEquals(await response.json(), {
-    deleted: true,
-    status: "deleted",
-    user_id: userId,
-  });
+  assertEquals(response.status, 400);
+  assertEquals(await response.json(), { error: "invalid_request" });
   assertEquals(
     response.headers.get("access-control-allow-origin"),
     productionOrigin,
   );
-  assertEquals(services.events, [
-    "get_user",
-    `recent_session:${userId}:${sessionId}`,
-    `begin_operation:${userId}`,
-    `list:${userId}`,
-    `begin:${userId}:1`,
-    "advance:storage_cleanup",
-    `list:${userId}`,
-    "remove:1",
-    `list:${userId}`,
-    "complete_cleanup",
-    "advance:storage_complete",
-    "advance:auth_delete_started",
-    `delete_user:${userId}`,
-    "complete_operation",
-  ]);
+  assertEquals(services.events, []);
+});
+
+Deno.test("rejects oversized and non-JSON deletion requests before services", async () => {
+  const oversized = await handleDeleteAccount(
+    new Request("http://localhost/delete-account", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${validToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        confirmation: "delete-my-account",
+        recovery_key: recoveryKey,
+        padding: "x".repeat(600),
+      }),
+    }),
+    emptyEnvironment,
+  );
+  assertEquals(oversized.status, 413);
+  assertEquals(await oversized.json(), { error: "request_too_large" });
+
+  const wrongMediaType = await handleDeleteAccount(
+    new Request("http://localhost/delete-account", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${validToken}`,
+        "Content-Type": "text/plain",
+      },
+      body: "not-json",
+    }),
+    emptyEnvironment,
+  );
+  assertEquals(wrongMediaType.status, 415);
+  assertEquals(await wrongMediaType.json(), {
+    error: "unsupported_media_type",
+  });
 });
 
 Deno.test("an already-completed operation returns the strict receipt", async () => {

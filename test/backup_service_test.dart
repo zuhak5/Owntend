@@ -15,7 +15,6 @@ import 'package:owntend/src/core/services/restore_journal.dart';
 import 'package:owntend/src/core/sync/local_sync_store.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
-import 'package:sqlite3/sqlite3.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -322,21 +321,6 @@ END
         throwsA(isA<BackupException>()),
       );
     });
-
-    test(
-      'previews old format backups as restorable with migration warning',
-      () async {
-        final db = await _openDatabase(docs, databases);
-        final service = ZipBackupService(db);
-        final oldBackup = await _createFormatOneBackup(root);
-
-        final preview = await service.inspectBackup(oldBackup.path);
-
-        expect(preview.formatVersion, 1);
-        expect(preview.schemaVersion, 1);
-        expect(preview.warnings.join(' '), contains('older backup format'));
-      },
-    );
   });
 }
 
@@ -414,10 +398,9 @@ Future<void> _seedRealisticData(AppDatabase db, Directory root) async {
   )..where((photo) => photo.assetId.equals(assetId))).write(
     AssetPhotosCompanion(relativePath: Value('photos/$assetId/seed-photo.jpg')),
   );
-  final legacyProfileDir = Directory(p.join((await _docs()).path, 'profile'));
-  await legacyProfileDir.create(recursive: true);
-  File(p.join(legacyProfileDir.path, 'avatar.jpg'))
-      .writeAsBytesSync([5, 6, 7, 8]);
+  final profileDir = Directory(p.join((await _docs()).path, 'profile'));
+  await profileDir.create(recursive: true);
+  File(p.join(profileDir.path, 'avatar.jpg')).writeAsBytesSync([5, 6, 7, 8]);
 }
 
 Future<Directory> _docs() async {
@@ -475,245 +458,6 @@ Future<File> _tamperBackup(
   final output = File(p.join(root.path, '${_uuid()}.zip'));
   await output.writeAsBytes(ZipEncoder().encode(next), flush: true);
   return output;
-}
-
-Future<File> _createFormatOneBackup(Directory root) async {
-  final dbFile = File(p.join(root.path, 'old-owntend.sqlite'));
-  final oldDb = sqlite3.open(dbFile.path);
-  try {
-    _createV1Schema(oldDb);
-  } finally {
-    oldDb.close();
-  }
-  final archive = Archive()
-    ..addFile(
-      ArchiveFile.string(
-        'manifest.json',
-        jsonEncode({
-          'app': 'Owntend',
-          'format': 1,
-          'schemaVersion': 1,
-          'createdAt': DateTime(2026, 1, 1).toUtc().toIso8601String(),
-          'database': AppDatabase.databaseFileName,
-          'secretsIncluded': false,
-        }),
-      ),
-    )
-    ..addFile(
-      ArchiveFile.bytes(
-        AppDatabase.databaseFileName,
-        await dbFile.readAsBytes(),
-      ),
-    );
-  final backup = File(p.join(root.path, 'old-owntend.zip'));
-  await backup.writeAsBytes(ZipEncoder().encode(archive), flush: true);
-  return backup;
-}
-
-void _createV1Schema(Database database) {
-  database
-    ..execute('PRAGMA foreign_keys = OFF')
-    ..execute('''
-CREATE TABLE areas (
-  id TEXT NOT NULL PRIMARY KEY,
-  name TEXT NOT NULL,
-  kind TEXT NOT NULL,
-  sort_order INTEGER NOT NULL,
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
-)
-''')
-    ..execute('''
-CREATE TABLE rooms (
-  id TEXT NOT NULL PRIMARY KEY,
-  area_id TEXT NOT NULL,
-  name TEXT NOT NULL UNIQUE,
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
-)
-''')
-    ..execute('''
-CREATE TABLE categories (
-  id TEXT NOT NULL PRIMARY KEY,
-  name TEXT NOT NULL UNIQUE,
-  health_group TEXT NOT NULL,
-  icon_name TEXT NOT NULL DEFAULT 'home',
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
-)
-''')
-    ..execute('''
-CREATE TABLE assets (
-  id TEXT NOT NULL PRIMARY KEY,
-  name TEXT NOT NULL,
-  category_id TEXT NOT NULL,
-  room_id TEXT NOT NULL,
-  asset_type TEXT NOT NULL DEFAULT 'general',
-  notes TEXT NULL,
-  purchase_date INTEGER NULL,
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL,
-  archived_at INTEGER NULL
-)
-''')
-    ..execute('''
-CREATE TABLE device_details (
-  asset_id TEXT NOT NULL PRIMARY KEY,
-  brand TEXT NULL,
-  model TEXT NULL,
-  serial_number TEXT NULL,
-  power_source TEXT NULL,
-  warranty_until INTEGER NULL,
-  manual_url TEXT NULL,
-  consumable INTEGER NOT NULL DEFAULT 0
-)
-''')
-    ..execute('''
-CREATE TABLE pet_details (
-  asset_id TEXT NOT NULL PRIMARY KEY,
-  species TEXT NULL,
-  breed TEXT NULL,
-  birth_date INTEGER NULL,
-  microchip_id TEXT NULL,
-  vet_name TEXT NULL,
-  vet_phone TEXT NULL,
-  feeding_notes TEXT NULL,
-  medical_notes TEXT NULL
-)
-''')
-    ..execute('''
-CREATE TABLE plant_details (
-  asset_id TEXT NOT NULL PRIMARY KEY,
-  species TEXT NULL,
-  sunlight TEXT NULL,
-  watering_interval_days INTEGER NULL,
-  pot_size TEXT NULL,
-  last_repotted_at INTEGER NULL,
-  toxicity_notes TEXT NULL
-)
-''')
-    ..execute('''
-CREATE TABLE safety_details (
-  asset_id TEXT NOT NULL PRIMARY KEY,
-  safety_type TEXT NULL,
-  installed_at INTEGER NULL,
-  expires_at INTEGER NULL,
-  battery_type TEXT NULL,
-  test_interval_days INTEGER NULL
-)
-''')
-    ..execute('''
-CREATE TABLE tags (
-  id TEXT NOT NULL PRIMARY KEY,
-  name TEXT NOT NULL UNIQUE,
-  created_at INTEGER NOT NULL
-)
-''')
-    ..execute('''
-CREATE TABLE asset_tags (
-  asset_id TEXT NOT NULL,
-  tag_id TEXT NOT NULL,
-  PRIMARY KEY(asset_id, tag_id)
-)
-''')
-    ..execute('''
-CREATE TABLE asset_photos (
-  id TEXT NOT NULL PRIMARY KEY,
-  asset_id TEXT NOT NULL,
-  relative_path TEXT NOT NULL,
-  caption TEXT NULL,
-  created_at INTEGER NOT NULL
-)
-''')
-    ..execute('''
-CREATE TABLE maintenance_plans (
-  id TEXT NOT NULL PRIMARY KEY,
-  asset_id TEXT NOT NULL,
-  title TEXT NOT NULL,
-  instructions TEXT NULL,
-  recurrence_interval INTEGER NOT NULL,
-  recurrence_unit TEXT NOT NULL,
-  priority TEXT NOT NULL,
-  next_due_date INTEGER NOT NULL,
-  reminder_days_before INTEGER NOT NULL DEFAULT 0,
-  health_group TEXT NOT NULL,
-  is_enabled INTEGER NOT NULL DEFAULT 1,
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL,
-  archived_at INTEGER NULL
-)
-''')
-    ..execute('''
-CREATE TABLE maintenance_plan_metadata (
-  plan_id TEXT NOT NULL PRIMARY KEY,
-  task_type TEXT NULL,
-  location_label TEXT NULL,
-  estimated_duration_minutes INTEGER NULL,
-  required_materials_json TEXT NOT NULL DEFAULT '[]',
-  reminder_recommendation TEXT NULL,
-  sort_order INTEGER NOT NULL DEFAULT 0
-)
-''')
-    ..execute('''
-CREATE TABLE maintenance_records (
-  id TEXT NOT NULL PRIMARY KEY,
-  plan_id TEXT NOT NULL,
-  due_date INTEGER NOT NULL,
-  completed_at INTEGER NOT NULL,
-  notes TEXT NULL
-)
-''')
-    ..execute('''
-CREATE TABLE notifications (
-  id TEXT NOT NULL PRIMARY KEY,
-  plan_id TEXT NOT NULL,
-  channel TEXT NOT NULL,
-  scheduled_for INTEGER NOT NULL,
-  delivered_at INTEGER NULL,
-  created_at INTEGER NOT NULL
-)
-''')
-    ..execute('''
-CREATE TABLE notification_inbox (
-  id TEXT NOT NULL PRIMARY KEY,
-  plan_id TEXT NULL,
-  title TEXT NOT NULL,
-  body TEXT NOT NULL,
-  payload_json TEXT NULL,
-  read_at INTEGER NULL,
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
-)
-''')
-    ..execute('''
-CREATE TABLE settings (
-  key TEXT NOT NULL PRIMARY KEY,
-  value TEXT NOT NULL,
-  updated_at INTEGER NOT NULL
-)
-''')
-    ..execute('''
-CREATE TABLE streaks (
-  id TEXT NOT NULL PRIMARY KEY,
-  current_streak INTEGER NOT NULL DEFAULT 0,
-  best_streak INTEGER NOT NULL DEFAULT 0,
-  last_completed_date INTEGER NULL,
-  updated_at INTEGER NOT NULL
-)
-''')
-    ..execute(
-      "INSERT INTO areas(id, name, kind, sort_order, created_at, updated_at) VALUES "
-      "('area_first_floor', 'First Floor', 'indoor', 0, 0, 0)",
-    )
-    ..execute(
-      "INSERT INTO rooms(id, area_id, name, created_at, updated_at) VALUES "
-      "('room_general', 'area_first_floor', 'General', 0, 0)",
-    )
-    ..execute(
-      "INSERT INTO categories(id, name, health_group, icon_name, created_at, updated_at) VALUES "
-      "('category_general', 'General', 'other', 'home', 0, 0)",
-    )
-    ..execute('PRAGMA user_version = 1');
 }
 
 String _uuid() => DateTime.now().microsecondsSinceEpoch.toString();

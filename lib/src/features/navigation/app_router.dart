@@ -1,4 +1,4 @@
-part of '../../../../main.dart';
+part of 'navigation_presentation.dart';
 
 class _AppRouteBackdrop extends StatelessWidget {
   const _AppRouteBackdrop({required this.child});
@@ -17,9 +17,52 @@ class _AppRouteBackdrop extends StatelessWidget {
   }
 }
 
+Page<void> _appRoutePage(
+  BuildContext context,
+  GoRouterState state,
+  Widget child, {
+  bool bodyHasBackdrop = false,
+}) {
+  final routeChild = bodyHasBackdrop ? child : _AppRouteBackdrop(child: child);
+  if (prefersReducedMotion(context)) {
+    return NoTransitionPage<void>(
+      key: state.pageKey,
+      name: normalizeSentryRoute(state.fullPath ?? state.uri.path),
+      child: routeChild,
+    );
+  }
+  return CustomTransitionPage<void>(
+    key: state.pageKey,
+    name: normalizeSentryRoute(state.fullPath ?? state.uri.path),
+    child: routeChild,
+    transitionDuration: routeTransitionDuration,
+    reverseTransitionDuration: routeTransitionReverseDuration,
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      final curved = CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeOutCubic,
+        reverseCurve: Curves.easeInCubic,
+      );
+      return FadeTransition(
+        opacity: curved,
+        child: SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0, 0.018),
+            end: Offset.zero,
+          ).animate(curved),
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.992, end: 1).animate(curved),
+            child: child,
+          ),
+        ),
+      );
+    },
+  );
+}
+
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
-    navigatorKey: _rootNavigatorKey,
+    navigatorKey: rootNavigatorKey,
     observers: [owntendSentryNavigatorObserver()],
     routes: [
       ShellRoute(
@@ -167,5 +210,5 @@ class AccountScreenHost extends ConsumerWidget {
 Future<void> _saveAccountNickname(WidgetRef ref, String? nickname) async {
   await ref.read(settingsRepositoryProvider).setProfile(nickname: nickname);
   ref.invalidate(profileProvider);
-  unawaited(_syncProfileIfEnabled(ref));
+  unawaited(syncProfileIfEnabled(ref));
 }

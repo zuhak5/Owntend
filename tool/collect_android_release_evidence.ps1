@@ -250,7 +250,8 @@ $toolchainScript = Join-Path $PSScriptRoot 'toolchain_manifest.mjs'
 $toolchainArgs = @(
     $toolchainScript,
     '--output-directory', $resolvedOutput,
-    '--enforce'
+    '--enforce',
+    '--require-shorebird'
 )
 if (-not [string]::IsNullOrWhiteSpace($sourceSha)) {
     $toolchainArgs += @('--source-sha', $sourceSha)

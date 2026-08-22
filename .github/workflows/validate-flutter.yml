@@ -38,12 +38,24 @@ jobs:
         run: npm run test:release-workflows
 
       - name: Validate dependency security and license policy
-        run: npm run test:dependency-security
+        run: |
+          npm audit --audit-level=high
+          npm run test:dependency-security
+          npm run validate:dependency-policy
+
+      - name: Scan tracked sources for committed secrets
+        run: npm run validate:secrets
+
+      - name: Validate repository documentation links
+        run: npm run validate:docs-links
 
       - name: Validate canonical toolchain contracts and manifest
         run: |
           npm run test:toolchain
           npm run validate:toolchain
+
+      - name: Validate Shorebird integration and fail-closed patch policy
+        run: npm run test:shorebird
 
       - name: Validate Android release lint gate
         run: npm run test:android-lint
@@ -88,8 +100,11 @@ jobs:
       - name: Generate localization files
         run: flutter gen-l10n
 
-      - name: Generate source files
-        run: dart run build_runner build
+      - name: Verify generated source files
+        run: dart run build_runner build --only-check
+
+      - name: Verify generated localization is committed
+        run: git diff --exit-code -- lib/l10n
 
       - name: Verify formatting
         run: dart format --output=none --set-exit-if-changed lib test
@@ -99,9 +114,16 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           foreach ($Script in @(
-            "tool/build_prod.ps1",
-            "tool/build_play_prod.ps1",
+            "tool/configure_shorebird.ps1",
             "tool/collect_android_release_evidence.ps1",
+            "tool/derive_versiondeck_apks.ps1",
+            "tool/download_bundletool.ps1",
+            "tool/download_shorebird_engine_symbols.ps1",
+            "tool/install_shorebird.ps1",
+            "tool/invoke_shorebird_patch.ps1",
+            "tool/invoke_shorebird_release.ps1",
+            "tool/promote_shorebird_patch.ps1",
+            "tool/verify_android_release_registrants.ps1",
             "tool/publish_sentry_release.ps1"
           )) {
             $Tokens = $null

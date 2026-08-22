@@ -3661,30 +3661,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get fix => 'Fix';
 
   @override
-  String get quarantinedDataTitle => 'Local Data Quarantine';
-
-  @override
-  String get quarantinedDataDescription =>
-      'Preserved data from a previous account or offline session was found on this device. To protect your data privacy, this local data cannot be uploaded to your account automatically.';
-
-  @override
-  String get exportSafetyBackup => 'Export Safety Backup';
-
-  @override
-  String get resetLocalData => 'Reset Local Data';
-
-  @override
-  String get importLocalData => 'Import Data into My Account';
-
-  @override
-  String get importLocalDataConfirmation =>
-      'Are you sure you want to merge and import all local items, rooms, and tasks into your account?';
-
-  @override
-  String get resetLocalDataConfirmation =>
-      'Are you sure you want to wipe local data? This will clear all un-synced items on this device. Create a backup first if you want to save them.';
-
-  @override
   String reminderDaysBeforeDue(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,

@@ -59,7 +59,7 @@ class StepEducationState {
 @immutable
 class PermissionEducationDeviceState {
   const PermissionEducationDeviceState({
-    this.schema = 3,
+    this.schema = 1,
     this.lastShownAt,
     this.completedAt,
     this.dismissedUntil,
@@ -131,7 +131,7 @@ class PermissionEducationDeviceState {
       }
     }
     return PermissionEducationDeviceState(
-      schema: json['schema'] as int? ?? 3,
+      schema: json['schema'] as int? ?? 1,
       lastShownAt: json['lastShownAt'] != null
           ? DateTime.tryParse(json['lastShownAt'] as String)
           : null,

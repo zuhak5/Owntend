@@ -4,15 +4,14 @@
 
 Owntend uses Google Mobile Ads for native, interstitial, rewarded, and rewarded-interstitial presentation, while Supabase remains authoritative for points, charged creation, reward claims, and reward settlement. Ads can become unavailable without making core asset or maintenance data inconsistent.
 
-This document describes the behavior present in the repository as of 2026-08-17. The executable sources are:
+This document describes the production-v1 baseline. The executable sources are:
 
 - [`monetization.dart`](../../lib/src/features/monetization/monetization.dart) for consent, lifecycle integration, format orchestration, placement policy, and reward preflight.
 - [`ad_runtime.dart`](../../lib/src/features/monetization/ad_runtime.dart), [`ad_retry_policy.dart`](../../lib/src/features/monetization/ad_retry_policy.dart), and [`ad_cache.dart`](../../lib/src/features/monetization/ad_cache.dart) for eligibility generations, retry budgets, freshness, and ownership leases.
-- [`OwntendNativeAdFactory.kt`](../../android/app/src/main/kotlin/app/zuhak5/Owntend/OwntendNativeAdFactory.kt) and [`owntend_native_ad.xml`](../../android/app/src/main/res/layout/owntend_native_ad.xml) for Android native-ad presentation.
+- [`OwntendNativeAdFactory.kt`](../../android/app/src/main/kotlin/app/owntend/mobile/OwntendNativeAdFactory.kt) and [`owntend_native_ad.xml`](../../android/app/src/main/res/layout/owntend_native_ad.xml) for Android native-ad presentation.
 - [`proguard-rules.pro`](../../android/app/proguard-rules.pro) for Google Mobile Ads and native ad factory release retention.
 - [`app-ads.txt`](../../download-site/app-ads.txt) for developer root-domain publisher authorization.
-- The [points and monetization baseline migration](../../supabase/migrations/20260815000003_points_monetization.sql) for backend authority.
-- The [hash-qualified charged-operation recovery migration](../../supabase/migrations/20260815000009_charged_operation_recovery.sql) for immutable recovery identity.
+- The [canonical initial migration](../../supabase/migrations/20260821124930_initial_schema.sql) for backend authority and immutable charged-operation recovery identity.
 - [`admob-ssv-handler`](../../supabase/functions/admob-ssv-handler/index.ts) for signed callback validation.
 
 The operational disclosure worksheet is [`google-play-data-safety-evidence.md`](../operations/google-play-data-safety-evidence.md). It separates repository facts from Play Console, AdMob, hosted-service, and device evidence.
@@ -111,11 +110,11 @@ After the final due-today task is completed, the optional daily reward decision 
 
 Pending claims expire after the database-defined interval and remain visible for recovery while still valid. An ad dismissal, SDK reward callback, or client event is never settlement authority. Service-role credentials remain in the Edge Function environment and are not distributed in Flutter configuration.
 
-## Native-ad schema version 2
+## Native-ad bridge contract 1
 
 Flutter owns native-ad lifetime, eligibility, placement, event callbacks, and app-theme selection. Android owns the actual `NativeAdView`, registered provider assets, AdChoices surface, and app-owned chrome.
 
-For schema version 2, Flutter emits an entire `#RRGGBB` palette in one request:
+For bridge contract 1, Flutter emits an entire `#RRGGBB` palette in one request:
 
 | Surface | Keys |
 | --- | --- |
@@ -149,7 +148,7 @@ A wallet below the required charge during task creation is an expected business 
 
 When the server cannot confirm a charged operation, the client must not present it as completed or enqueue a blind wallet mutation. User input may be preserved only as an explicitly unfinished draft in a workflow that supports it. Every creation operation uses a durable pre-RPC journal write (`TaskCreationOperationStore` / `ChargedOperationJournal`) before invoking backend RPCs. If durable write to secure storage fails, the RPC is not executed. New charged-creation payloads include a client-generated SHA-256 `request_hash`; the same value is retained in the durable journal. The backend keeps this client recovery identity separately as `creation_point_operations.client_request_hash`, while the existing `request_hash` remains the server-computed digest of canonical JSONB used to reject altered create-RPC replays.
 
-Ambiguous operations (`outcomeUnknown` or interrupted `submitting`) are considered during authenticated startup before the cached-ready shortcut and again before a new charged task can mint another operation ID. `ChargedOperationResolver` calls `get_charged_operation_status(p_operation_id, p_request_hash)` with both immutable values; the public status RPC has no operation-ID-only default. Capability `1.2.0` returns the exact committed result only when both values match, returns `not_found` for an unknown operation in the authenticated account, and raises `OPERATION_ID_REUSED` for a known operation with a different hash. A `not_found` operation is resubmitted using the exact retained payload and operation ID; no replacement UUID is minted. Account scope is rechecked before applying remote recovery results. The canonical server result is reconciled into local state before the journal becomes terminal. Upon reaching terminal states (`reconciled` or `permanentRejected`), user-entered payloads are purged (`purgeTerminalPayloads`) to prevent unbounded content retention.
+Ambiguous operations (`outcomeUnknown` or interrupted `submitting`) are considered during authenticated startup before the cached-ready shortcut and again before a new charged task can mint another operation ID. `ChargedOperationResolver` calls `get_charged_operation_status(p_operation_id, p_request_hash)` with both immutable values; the public status RPC has no operation-ID-only default. The contract-1 result returns the exact committed result only when both values match, returns `not_found` for an unknown operation in the authenticated account, and raises `OPERATION_ID_REUSED` for a known operation with a different hash. A `not_found` operation is resubmitted using the exact retained payload and operation ID; no replacement UUID is minted. Account scope is rechecked before applying remote recovery results. The canonical server result is reconciled into local state before the journal becomes terminal. Upon reaching terminal states (`reconciled` or `permanentRejected`), user-entered payloads are purged (`purgeTerminalPayloads`) to prevent unbounded content retention.
 
 ## Privacy and diagnostics boundaries
 
@@ -165,8 +164,8 @@ See the [Google Play data-safety evidence worksheet](../operations/google-play-d
 Repository coverage includes:
 
 - [`monetization_test.dart`](../../test/monetization_test.dart) for eligibility gates and per-format switches, generation changes, retry budgets and jitter bounds, 55-minute freshness, exact-once leases, fullscreen serialization, placement policy, and native slot states.
-- [`native_ad_factory_contract_test.dart`](../../test/native_ad_factory_contract_test.dart) for schema-v2 parity, atomic fallback, registered assets, absent-asset hiding, rounded/stroked chrome, light/dark resources, and single native-constructor ownership.
-- [`0012_points_monetization.test.sql`](../../supabase/tests/database/0012_points_monetization.test.sql) and [`0013_admob_ssv_hardening.test.sql`](../../supabase/tests/database/0013_admob_ssv_hardening.test.sql) for authorization, wallet conservation, reward limits, replay, and idempotency.
+- [`native_ad_factory_contract_test.dart`](../../test/native_ad_factory_contract_test.dart) for bridge-contract parity, atomic fallback, registered assets, absent-asset hiding, rounded/stroked chrome, light/dark resources, and single native-constructor ownership.
+- [`0012_points_monetization.test.sql`](../../supabase/tests/database/0012_points_monetization.test.sql) and [`0013_admob_ssv_security.test.sql`](../../supabase/tests/database/0013_admob_ssv_security.test.sql) for authorization, wallet conservation, reward limits, replay, and idempotency.
 - [`admob-ssv-handler/index_test.ts`](../../supabase/functions/admob-ssv-handler/index_test.ts) for callback parsing, signatures, setup probes, production validation, retry responses, duplicate settlement, and log redaction.
 
 These checks do not prove:

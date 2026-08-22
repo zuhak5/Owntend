@@ -4,10 +4,9 @@ create extension if not exists pgtap with schema extensions;
 set local role postgres;
 set search_path = public, extensions, pg_catalog;
 
-select extensions.plan(15);
+select extensions.plan(16);
 
 -- 1. Check RPC Existence & Function Grants
-select extensions.has_function('public', 'get_sync_feed_capability', ARRAY[]::text[], 'get_sync_feed_capability RPC exists');
 select extensions.has_function('public', 'fetch_user_change_feed', ARRAY['bigint', 'integer'], 'fetch_user_change_feed RPC exists');
 select extensions.has_function('public', 'validate_change_feed_parity', ARRAY[]::text[], 'owner-scoped validate_change_feed_parity RPC exists');
 select extensions.hasnt_function('public', 'validate_change_feed_parity', ARRAY['uuid'], 'caller-selected parity RPC was removed');
@@ -63,6 +62,18 @@ select extensions.is(
 );
 
 select extensions.is(
+  (public.fetch_user_change_feed(0, 2)->>'contract_version')::integer,
+  1,
+  'the feed page declares the final v1 contract'
+);
+
+select extensions.is(
+  public.fetch_user_change_feed(0, 2)->'changes'->0->'payload'->>'name',
+  'Area A1',
+  'an upsert feed item carries its authoritative payload'
+);
+
+select extensions.is(
   (public.fetch_user_change_feed(2, 50)->>'next_seq')::bigint,
   3::bigint,
   'fetching since_seq = 2 returns remaining item with next_seq = 3'
@@ -84,29 +95,29 @@ select extensions.is(
   'User B sees empty high_water_seq and no User A changes'
 );
 
--- 5. Dark Parity Validator Test
-set local role authenticated;
+-- 5. Protected Parity Validator Test
+set local role service_role;
 set local "request.jwt.claims" = '{"sub": "00000000-0000-0000-0000-00000000000a"}';
 
 select extensions.results_eq(
   $$ select is_parity from public.validate_change_feed_parity() where entity_type = 'area' $$,
   $$ values (true) $$,
-  'Dark parity validator derives User A from auth.uid and matches change feed net count'
+  'protected parity validator derives User A and matches change feed net count'
 );
 
 -- 6. Resnapshot Required Test
 set local role postgres;
-update public.sync_feed_capabilities set min_retained_seq = 10 where id = 'global';
+delete from public.server_change_feed where change_seq <= 2;
 
 set local role authenticated;
 set local "request.jwt.claims" = '{"sub": "00000000-0000-0000-0000-00000000000a"}';
 
 select extensions.is(
-  (public.fetch_user_change_feed(5, 50)->>'resnapshot_required')::boolean,
+  (public.fetch_user_change_feed(1, 50)->>'resnapshot_required')::boolean,
   true,
-  'fetch_user_change_feed returns resnapshot_required = true when requested sequence predates min_retained_seq'
+  'fetch_user_change_feed requests a resnapshot when the cursor predates retained rows'
 );
 
-select extensions.pass('Task 18 Server Change-Feed API tests complete');
+select extensions.pass('server change-feed API invariants complete');
 
 rollback;

@@ -22,7 +22,7 @@ void main() {
     }
 
     final coreSchema = File(
-      'supabase/migrations/20260815000001_core_schema.sql',
+      'supabase/migrations/20260821124930_initial_schema.sql',
     ).readAsStringSync();
     expect(coreSchema, isNot(contains('dependency_plan_ids_json')));
 

@@ -1,4 +1,7 @@
-part of '../../../../main.dart';
+import '../../../ui/components.dart' as hk_ui;
+import '../../../ui/presentation_support.dart';
+import '../../maintenance/presentation/task_actions.dart';
+import 'trash_actions.dart';
 
 class TrashScreen extends ConsumerWidget {
   const TrashScreen({super.key});
@@ -77,7 +80,7 @@ class TrashScreen extends ConsumerWidget {
                       icon: Symbols.home_work_rounded,
                       title: area.name,
                       subtitle: context.l10n.trashAreaType(
-                        _areaKindLabel(context, area.kind),
+                        areaKindLabel(context, area.kind),
                       ),
                       onRestore: () => _restoreArea(context, ref, area),
                       onDeleteForever: () =>
@@ -94,7 +97,7 @@ class TrashScreen extends ConsumerWidget {
                       icon: Symbols.meeting_room_rounded,
                       title: room.name,
                       subtitle: context.l10n.trashRoomType(
-                        _roomTypeLabel(context, room.roomType),
+                        roomTypeLabel(context, room.roomType),
                       ),
                       onRestore: () => _restoreRoom(context, ref, room),
                       onDeleteForever: () =>
@@ -108,10 +111,10 @@ class TrashScreen extends ConsumerWidget {
                 children: [
                   for (final asset in assetItems)
                     _TrashRow(
-                      icon: _iconForAssetType(asset.assetType),
+                      icon: iconForAssetType(asset.assetType),
                       title: asset.name,
                       subtitle: context.l10n.trashItemType(
-                        _assetTypeLabel(context, asset.assetType),
+                        assetTypeLabel(context, asset.assetType),
                       ),
                       onRestore: () => _restoreAsset(context, ref, asset),
                       onDeleteForever: () =>

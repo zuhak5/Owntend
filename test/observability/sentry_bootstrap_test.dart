@@ -15,6 +15,7 @@ void main() {
     release: 'app.owntend.mobile@1.3.4+19',
     dist: '19',
     appVersion: '1.3.4',
+    shorebirdPatchNumber: 'base',
     tracesSampleRate: 0.05,
   );
 

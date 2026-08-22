@@ -101,6 +101,45 @@ export async function collectResolvedToolchain(rootDir = repositoryRoot) {
     if (tMatch) targetSdk = parseInt(tMatch[1], 10);
   } catch {}
 
+  const shorebirdHome = process.env.SHOREBIRD_HOME;
+  let shorebirdVersion = null;
+  let shorebirdCommit = null;
+  let shorebirdFlutterRevision = null;
+  let shorebirdEngineRevision = null;
+  if (shorebirdHome) {
+    shorebirdCommit = safeExec('git', ['-C', shorebirdHome, 'rev-parse', 'HEAD']);
+    try {
+      const shorebirdPubspec = await fs.readFile(
+        path.join(shorebirdHome, 'packages', 'shorebird_cli', 'pubspec.yaml'),
+        'utf8',
+      );
+      const versionMatch = shorebirdPubspec.match(/^version:\s*([0-9.]+)\s*$/m);
+      if (versionMatch) shorebirdVersion = versionMatch[1];
+    } catch {}
+    try {
+      shorebirdFlutterRevision = (
+        await fs.readFile(path.join(shorebirdHome, 'bin', 'internal', 'flutter.version'), 'utf8')
+      ).trim();
+    } catch {}
+    try {
+      shorebirdEngineRevision = (
+        await fs.readFile(
+          path.join(
+            shorebirdHome,
+            'bin',
+            'cache',
+            'flutter',
+            shorebirdFlutterRevision || '',
+            'bin',
+            'internal',
+            'engine.version',
+          ),
+          'utf8',
+        )
+      ).trim();
+    } catch {}
+  }
+
   return {
     runner: {
       platform: os.platform(),
@@ -133,10 +172,16 @@ export async function collectResolvedToolchain(rootDir = repositoryRoot) {
       gradleDistribution,
       gradleDistributionSha256: gradleChecksum,
     },
+    shorebird: {
+      version: shorebirdVersion,
+      commit: shorebirdCommit,
+      flutterRevision: shorebirdFlutterRevision,
+      engineRevision: shorebirdEngineRevision,
+    },
   };
 }
 
-export function evaluateToolchainPolicy(canonical, resolved) {
+export function evaluateToolchainPolicy(canonical, resolved, { requireShorebird = false } = {}) {
   const checks = [];
   const errors = [];
 
@@ -200,6 +245,23 @@ export function evaluateToolchainPolicy(canonical, resolved) {
     if (!pass) errors.push(`Flutter version mismatch: expected ${cFlutter}, got ${resolved.flutter.version}`);
   }
 
+  if (requireShorebird) {
+    const expected = canonical.canonicalToolchain?.tools?.shorebirdCli || {};
+    const actual = resolved.shorebird || {};
+    for (const [actualField, expectedField, name] of [
+      ['version', 'version', 'Shorebird CLI'],
+      ['commit', 'commit', 'Shorebird CLI commit'],
+      ['flutterRevision', 'bundledFlutterRevision', 'Shorebird bundled Flutter revision'],
+      ['engineRevision', 'bundledEngineRevision', 'Shorebird bundled engine revision'],
+    ]) {
+      const pass = Boolean(expected[expectedField]) && actual[actualField] === expected[expectedField];
+      checks.push({ name, expected: expected[expectedField], actual: actual[actualField], pass });
+      if (!pass) {
+        errors.push(`${name} mismatch: expected ${expected[expectedField]}, got ${actual[actualField]}`);
+      }
+    }
+  }
+
   return {
     status: errors.length === 0 ? 'PASS' : 'FAIL',
     checks,
@@ -211,10 +273,11 @@ export async function generateToolchainManifest({
   outputDirectory = null,
   sourceSha = process.env.GITHUB_SHA || 'HEAD',
   rootDir = repositoryRoot,
+  requireShorebird = false,
 } = {}) {
   const canonical = await loadCanonicalToolchain(rootDir);
   const resolved = await collectResolvedToolchain(rootDir);
-  const policy = evaluateToolchainPolicy(canonical, resolved);
+  const policy = evaluateToolchainPolicy(canonical, resolved, { requireShorebird });
 
   const manifest = {
     schemaVersion: 1,
@@ -248,6 +311,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   let outputDirectory = null;
   let sourceSha = process.env.GITHUB_SHA || 'HEAD';
   let enforce = false;
+  let requireShorebird = false;
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--output-directory' && args[i + 1]) {
@@ -256,10 +320,16 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       sourceSha = args[++i];
     } else if (args[i] === '--enforce') {
       enforce = true;
+    } else if (args[i] === '--require-shorebird') {
+      requireShorebird = true;
     }
   }
 
-  const result = await generateToolchainManifest({ outputDirectory, sourceSha });
+  const result = await generateToolchainManifest({
+    outputDirectory,
+    sourceSha,
+    requireShorebird,
+  });
 
   if (result.manifestPath) {
     console.log(`Generated Toolchain Manifest: ${result.manifestPath} (SHA256: ${result.manifestSha256})`);

@@ -1,4 +1,12 @@
-part of '../../../../main.dart';
+import 'dart:math' as math;
+
+import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
+import 'package:owntend/l10n/app_localizations_ext.dart';
+
+import '../../../ui/app_theme.dart';
+import '../../../ui/motion.dart';
+import '../../monetization/monetization.dart';
 
 String dailyCompletionRewardResultMessage(
   BuildContext context,
@@ -14,7 +22,7 @@ String dailyCompletionRewardResultMessage(
 }
 
 Future<bool?> showDailyCompletionRewardSheet(BuildContext context) {
-  final reducedMotion = _prefersReducedMotion(context);
+  final reducedMotion = prefersReducedMotion(context);
   return runWithNativeAdsSuspended(
     context,
     () => showModalBottomSheet<bool>(

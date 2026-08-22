@@ -4,7 +4,7 @@ create extension if not exists pgtap with schema extensions;
 set local role postgres;
 set search_path = public, extensions, pg_catalog;
 
-select extensions.plan(26);
+select extensions.plan(25);
 
 select extensions.has_function(
   'public',
@@ -45,8 +45,11 @@ where user_id in (
   '00000000-0000-0000-0000-00000000000b'
 );
 
-insert into public.rooms (user_id, id, name, sort_order)
-values ('00000000-0000-0000-0000-00000000000a', 'room-main', 'Main Room', 1);
+insert into public.areas (user_id, id, name, sort_order)
+values ('00000000-0000-0000-0000-00000000000a', 'area-main', 'Main Area', 1);
+
+insert into public.rooms (user_id, id, area_id, name, sort_order)
+values ('00000000-0000-0000-0000-00000000000a', 'room-main', 'area-main', 'Main Room', 1);
 
 set local role anon;
 select extensions.throws_ok(
@@ -69,15 +72,6 @@ select extensions.is(
   )->>'status'),
   'not_found',
   'non-existent operation returns status not_found'
-);
-
-select extensions.is(
-  (select public.get_charged_operation_status(
-    '11111111-1111-1111-1111-111111111111'::uuid,
-    'cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc'
-  )->>'capability_version'),
-  '1.2.0',
-  'hash-qualified capability version is returned'
 );
 
 select extensions.is(

@@ -6,18 +6,6 @@ set search_path = public, extensions, pg_catalog;
 
 select extensions.plan(8);
 
-select extensions.is(
-  (select capability_version from public.sync_feed_capabilities where id = 'global'),
-  '1.0.1'::text,
-  'change-feed capability advertises the launch protocol'
-);
-
-select extensions.is(
-  (select enabled from public.sync_feed_capabilities where id = 'global'),
-  false,
-  'change-feed capability remains disabled in the pre-launch baseline'
-);
-
 with fixtures(table_name, row_data) as (
   values
     ('profiles', '{"user_id":"user-1"}'::jsonb),
@@ -104,6 +92,18 @@ select extensions.is(
   'trigger persists typed key_data'
 );
 
+select extensions.is(
+  (select contract_version::integer from public.server_change_feed where record_id = 'area-contract'),
+  1,
+  'a feed row declares contract version 1'
+);
+
+select extensions.is(
+  (select payload ->> 'name' from public.server_change_feed where record_id = 'area-contract'),
+  'Area Contract',
+  'an upsert feed row includes its authoritative payload'
+);
+
 set local role authenticated;
 set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-00000000002a"}';
 
@@ -114,9 +114,9 @@ select extensions.is(
 );
 
 select extensions.is(
-  public.fetch_user_change_feed(0, 50)->>'capability_version',
-  '1.0.1'::text,
-  'feed page carries the same launch protocol version as capability discovery'
+  (public.fetch_user_change_feed(0, 50)->>'contract_version')::integer,
+  1,
+  'a feed page declares contract version 1'
 );
 
 rollback;

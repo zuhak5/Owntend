@@ -17,7 +17,6 @@ const APP_SHELL = [
   "./build-status-timeline.js",
   "./sticky-download-fix.js",
   "./manifest-schema.js",
-  "./manifest-schema-v5.js",
   "./cache-policy.js",
   "./relative-time.js",
   "./manifest.webmanifest",

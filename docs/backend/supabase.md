@@ -44,7 +44,12 @@ This operation destroys disposable hosted Auth/test data and user-created databa
 
 ## Authentication
 
-The local configuration enables Google as the external provider and disables email sign-up. Production authentication behavior depends on correctly configured Google OAuth clients, package identity, redirect behavior, and protected Supabase environment values.
+The shipped application uses Google-backed Supabase authentication. The local
+Supabase configuration also enables disposable email sign-up solely so the
+loopback integration suite can create two isolated test identities without
+external OAuth. Production authentication behavior still depends on correctly
+configured Google OAuth clients, package identity, redirects, and protected
+Supabase environment values; the email test path is not exposed by Flutter.
 
 Backend authorization must derive ownership from the authenticated JWT identity rather than trusting a user ID supplied by Flutter.
 
@@ -81,7 +86,7 @@ RPC contracts should define:
 - Authentication and ownership.
 - Input schema and limits.
 - Idempotency key behavior and advisory-lock (`pg_advisory_xact_lock`) parity.
-- Success and duplicate-success responses (including `get_charged_operation_status` capability version `1.2.0` for lost-response recovery).
+- Success and duplicate-success responses, including the contract-1 `get_charged_operation_status` result used for lost-response recovery.
 - Conflict and stale-revision responses.
 - Retryable versus terminal errors.
 - Server timestamp/revision semantics.
@@ -89,7 +94,7 @@ RPC contracts should define:
 
 `get_charged_operation_status(p_operation_id uuid, p_request_hash text)` enables client journal reconciliation following transport failure. Lookups are strictly same-account and operation-bound; querying another user's operation returns `status: 'not_found'` without revealing operation existence, while reuse with a mismatched request hash is rejected. The public function is `SECURITY INVOKER`; its elevated journal lookup lives in `owntend_monetization_private` and still derives the caller from `auth.uid()`.
 
-The media RPCs `stage_media_upload`, `finalize_asset_photo_upload`, and `set_primary_asset_photo` follow the same boundary. Their public functions are authenticated `SECURITY INVOKER` wrappers, while privileged implementations live in the non-exposed `owntend_media_private` schema with explicit execution grants and safe search paths. This preserves server-authoritative mutation without exposing an authenticated-callable `SECURITY DEFINER` function in the Data API schema.
+The media RPCs `prepare_asset_photo_upload`, `finalize_asset_photo_upload`, and `set_primary_asset_photo` follow the same boundary. Their public functions are authenticated `SECURITY INVOKER` wrappers, while privileged implementations live in the non-exposed `owntend_media_private` schema with explicit execution grants and safe search paths. This preserves server-authoritative mutation without exposing an authenticated-callable `SECURITY DEFINER` function in the Data API schema.
 
 ## Storage
 
@@ -97,17 +102,17 @@ The `user-media` bucket is private and limited to supported image MIME types and
 
 Media metadata, object creation, replacement, and cleanup should tolerate partial failure and retry without exposing or deleting another user's data.
 
-Asset and photo identifiers are text throughout the synced tables and media RPC boundary. The Flutter client always executes `stage_media_upload` and `finalize_asset_photo_upload` after uploading bytes to the deterministic owner path; there is no direct-upload compatibility fallback.
+Asset and photo identifiers are text throughout the synced tables and media RPC boundary. Before any bytes are uploaded, Flutter calls `prepare_asset_photo_upload` with an idempotency key and expected object facts. The server creates the durable staging record and returns the exact owner-scoped path; Flutter uploads only there and then calls `finalize_asset_photo_upload`. A failed upload or lost response is therefore recoverable through the staging and cleanup ledgers, with no direct-upload fallback.
 
 ## Realtime
 
 Realtime is an invalidation mechanism, not a replacement for authenticated pull and revision checks. The client must tolerate dropped, duplicated, delayed, and out-of-order events.
 
-The launch baseline adds the 17 synchronized app tables to `supabase_realtime` and uses `REPLICA IDENTITY FULL`. The only shipped change-feed contract starts at protocol `1.0.1`; it maps those same tables one-to-one to canonical client entity identifiers and persists typed `key_data` for each row, including both columns of the `asset_tag` composite key. `sync_feed_capabilities.enabled` remains `false` in the baseline, so a hosted reset does not itself enable the feature. Realtime payloads remain hints; durable insert, update, and delete authority comes from authenticated pulls and the owner-scoped change feed.
+The launch baseline adds the 17 synchronized app tables to `supabase_realtime` and uses `REPLICA IDENTITY FULL`. The one shipped incremental contract has integer boundary version `1`; it maps those tables one-to-one to canonical client entity identifiers and stores typed delete keys plus canonical upsert payloads, including both columns of the `asset_tag` composite key. Realtime payloads remain hints; durable insert, update, and delete authority comes from an authenticated snapshot followed by the owner-scoped change feed.
 
-Change-feed Data API privileges are fail closed. `get_sync_feed_capability()`, `fetch_user_change_feed(...)`, `validate_change_feed_parity()`, and `get_user_change_feed_watermark()` are authenticated-only `SECURITY INVOKER` functions. The parity and watermark RPCs accept no user identifier and derive ownership exclusively from `auth.uid()`. Cross-account operational inspection belongs to protected SQL tooling rather than a client-callable definer function. `fn_log_server_change_feed()` remains `SECURITY DEFINER` because authenticated clients cannot insert into the feed table, but direct execution is revoked from all Data API roles; it is reached only through the table triggers.
+Change-feed Data API privileges are fail closed. `fetch_user_change_feed(...)` and `get_user_change_feed_watermark()` are authenticated-only `SECURITY INVOKER` functions and derive ownership exclusively from `auth.uid()`. `validate_change_feed_parity()` is service-role-only; the application has no rollout-discovery or parity/healing RPC. Cross-account operational inspection belongs to protected tooling. `fn_log_server_change_feed()` remains `SECURITY DEFINER` because authenticated clients cannot insert into the feed table, but direct execution is revoked from all Data API roles and it is reached only through table triggers.
 
-After a hosted pre-launch reset or migration deployment, the feed may be enabled only after the exact-main baseline is proven hosted: no pending migration drift, protocol `1.0.1`, zero malformed feed rows, correct effective RPC ACLs, no unresolved blocking feed/security Advisor findings, and parity success for every hosted account (or verified zero accounts).
+After a hosted pre-launch reset or migration deployment, a release may depend on the feed only after the exact-main baseline is proven hosted: no pending migration drift, contract `1`, zero malformed feed rows, correct effective RPC ACLs, no unresolved blocking feed/security Advisor findings, and service-side parity success for every hosted account (or verified zero accounts).
 
 ## Hosted Advisor audit
 
@@ -158,5 +163,5 @@ a running client. This is a monetization state channel, separate from the
 Authenticated clients may select only their own wallet row and retain no
 direct INSERT/UPDATE/DELETE privilege. Charges, rewards, refunds, and
 adjustments stay behind server-authoritative RPC/service-role paths.
-`0023_problem_007_wallet_realtime.test.sql` locks the publication,
+[`0026_wallet_realtime.test.sql`](../../supabase/tests/database/0026_wallet_realtime.test.sql) locks the publication,
 replica-identity, owner-read, and no-client-write contract.

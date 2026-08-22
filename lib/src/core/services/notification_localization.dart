@@ -9,17 +9,15 @@ LocalizedNotificationContent localizeInboxNotification(
   AppLocalizations l10n,
   InboxNotification notification,
 ) {
-  final code =
-      NotificationMessageCode.fromWireValue(notification.messageCode) ??
-      _legacyCode(notification);
-  final args = _messageArgs(notification, code);
-  if (notification.messageCode != null && code == null) {
-    return (
-      title: l10n.notificationGenericTitle,
-      body: l10n.notificationGenericBody,
-    );
-  }
+  final code = notification.messageCode;
+  final args = notification.messageArgs;
   return switch (code) {
+    NotificationMessageCode.generic => (
+      title: notification.title.trim().isEmpty
+          ? l10n.notificationGenericTitle
+          : notification.title,
+      body: notification.body,
+    ),
     NotificationMessageCode.weatherAlert => (
       title: l10n.notificationWeatherAlertTitle,
       body: l10n.notificationWeatherAlertBody(
@@ -61,74 +59,13 @@ LocalizedNotificationContent localizeInboxNotification(
         _localizedDate(l10n, _stringArg(args, 'date')),
       ),
     ),
-    null => (
-      title: notification.title.trim().isEmpty
-          ? l10n.notificationGenericTitle
-          : notification.title,
-      body: notification.body,
-    ),
   };
-}
-
-NotificationMessageCode? _legacyCode(InboxNotification notification) {
-  if (notification.kind == 'digest' ||
-      notification.title == 'Daily maintenance digest') {
-    return NotificationMessageCode.dailyDigest;
-  }
-  if (notification.kind == 'task') {
-    if (notification.title == 'Task skipped') {
-      return NotificationMessageCode.taskSkipped;
-    }
-    if (notification.title == 'Task postponed') {
-      return NotificationMessageCode.taskPostponed;
-    }
-    if (notification.title.endsWith(' is overdue')) {
-      return NotificationMessageCode.taskOverdue;
-    }
-    if (notification.title.endsWith(' is due today')) {
-      return NotificationMessageCode.taskDueToday;
-    }
-  }
-  return null;
-}
-
-Map<String, dynamic> _messageArgs(
-  InboxNotification notification,
-  NotificationMessageCode? code,
-) {
-  if (notification.messageArgs.isNotEmpty || code == null) {
-    return notification.messageArgs;
-  }
-  final body = notification.body;
-  if (code == NotificationMessageCode.taskSkipped) {
-    final withReason = RegExp(r'^(.+) was skipped: (.+)$').firstMatch(body);
-    if (withReason != null) {
-      return {'task': withReason.group(1)!, 'reason': withReason.group(2)!};
-    }
-    final withoutReason = RegExp(r'^(.+) was skipped for this occurrence\.$')
-        .firstMatch(body);
-    if (withoutReason != null) return {'task': withoutReason.group(1)!};
-  }
-  if (code == NotificationMessageCode.taskPostponed) {
-    final withReason = RegExp(r'^(.+) was postponed: (.+)$').firstMatch(body);
-    if (withReason != null) {
-      return {'task': withReason.group(1)!, 'reason': withReason.group(2)!};
-    }
-    final withoutReason = RegExp(r'^(.+) was postponed to (.+)\.$')
-        .firstMatch(body);
-    if (withoutReason != null) {
-      return {'task': withoutReason.group(1)!, 'date': withoutReason.group(2)!};
-    }
-  }
-  return notification.messageArgs;
 }
 
 String _taskName(InboxNotification notification) {
   final value = _stringArg(notification.messageArgs, 'task');
   if (value.isNotEmpty) return value;
-  return notification.title
-      .replaceFirst(RegExp(r' is (overdue|due today)$'), '')
-      .trim();
+  return notification.title;
 }
 
 String _stringArg(Map<String, dynamic> args, String key) =>

@@ -47,7 +47,8 @@ class DriftNotificationInboxRepository implements NotificationInboxRepository {
     required String kind,
     String? route,
     String? planId,
-    domain.NotificationMessageCode? messageCode,
+    domain.NotificationMessageCode messageCode =
+        domain.NotificationMessageCode.generic,
     Map<String, dynamic> messageArgs = const {},
   }) async {
     final cleanTitle = title.trim();
@@ -94,7 +95,7 @@ class DriftNotificationInboxRepository implements NotificationInboxRepository {
     if (duplicate != null) {
       final contentChanged =
           duplicate.body != cleanBody ||
-          duplicate.messageCode != messageCode?.wireValue ||
+          duplicate.messageCode != messageCode.wireValue ||
           duplicate.messageArgs != jsonEncode(messageArgs);
       final shouldReopen =
           normalizedKind == 'task' && duplicate.readAt != null ||
@@ -106,7 +107,7 @@ class DriftNotificationInboxRepository implements NotificationInboxRepository {
           InboxNotificationsCompanion(
             title: Value(cleanTitle.isEmpty ? 'Owntend update' : cleanTitle),
             body: Value(cleanBody),
-            messageCode: Value(messageCode?.wireValue),
+            messageCode: Value(messageCode.wireValue),
             messageArgs: Value(jsonEncode(messageArgs)),
             readAt: shouldReopen ? const Value(null) : Value(duplicate.readAt),
             updatedAt: Value(now),
@@ -125,7 +126,7 @@ class DriftNotificationInboxRepository implements NotificationInboxRepository {
             kind: normalizedKind,
             route: Value(routeValue),
             planId: Value(planValue),
-            messageCode: Value(messageCode?.wireValue),
+            messageCode: Value(messageCode.wireValue),
             messageArgs: Value(jsonEncode(messageArgs)),
             dedupeKey: Value(dedupeKey),
             createdAt: Value(now),

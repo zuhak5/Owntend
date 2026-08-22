@@ -1,4 +1,4 @@
-part of '../../../../main.dart';
+part of 'navigation_presentation.dart';
 
 class HomeShell extends ConsumerStatefulWidget {
   const HomeShell({required this.child, super.key});

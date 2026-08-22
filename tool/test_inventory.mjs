@@ -18,6 +18,7 @@ export const CANONICAL_NODE_TESTS = [
   'tool/dependency-security-and-notices.test.mjs',
   'tool/provenance_policy.test.mjs',
   'tool/release-workflows.test.mjs',
+  'tool/shorebird.test.mjs',
   'tool/sticky-download-fix.test.mjs',
   'tool/supabase-advisors.test.mjs',
   'tool/supabase-migration-contracts.test.mjs',

@@ -8,7 +8,7 @@ class WeightedHealthScoreCalculator implements HealthScoreCalculator {
 
   /// Weighted health classification is derived from the linked item's Item Type.
   ///
-  /// AssetType.general is intentionally excluded: before the Problem #5 cutover,
+  /// AssetType.general is intentionally excluded: before item-type-derived scoring,
   /// HealthGroup.other was outside the weighted map. This preserves that
   /// normalization behavior. Cleaning remains task/activity semantics and does
   /// not receive its former standalone classifier weight.

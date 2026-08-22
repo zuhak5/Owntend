@@ -124,7 +124,7 @@ class SyncEntitySpec {
   }
 }
 
-/// Device-scoped permission state (permission_education_device_state_v3) is
+/// Device-scoped permission state (`permission_education_device_state`) is
 /// deliberately unsynced and excluded from allowedRemoteSettingKeys because OS
 /// permissions are device-specific.
 const allowedRemoteSettingKeys = <String>{
@@ -132,11 +132,9 @@ const allowedRemoteSettingKeys = <String>{
   'app_language',
   'app_language_explicit',
   'theme_time_of_day_enabled',
-  'notifications_enabled',
   'notification_preferences',
   'onboarding_completed',
   'permission_education_seen',
-  'permission_education_seen_v2',
   'home_location',
 };
 
@@ -150,9 +148,8 @@ const userSettingSyncSpec = SyncEntitySpec(
   modifiedExpression: 'updated_at',
   localWhere:
       "key IN ('theme', 'app_language', 'app_language_explicit', 'theme_time_of_day_enabled', "
-      "'notifications_enabled', "
       "'notification_preferences', 'onboarding_completed', "
-      "'permission_education_seen', 'permission_education_seen_v2', "
+      "'permission_education_seen', "
       "'home_location')",
 );
 
@@ -347,11 +344,7 @@ const syncEntitySpecs = <SyncEntitySpec>[
     dateColumns: {'next_due_date', 'created_at', 'updated_at', 'archived_at'},
     boolColumns: {'is_enabled'},
     modifiedExpression: 'updated_at',
-    remoteRenames: {
-      'instructions': 'description',
-      'recurrence_interval': 'interval_count',
-      'recurrence_unit': 'interval_unit',
-    },
+    remoteRenames: {},
   ),
   SyncEntitySpec(
     entity: 'maintenance_plan_metadata',
@@ -481,9 +474,8 @@ class SyncRecord {
     required this.recordKey,
     required this.values,
     required this.clientModifiedAt,
-    required this.originDeviceId,
+    this.originDeviceId,
     this.revision,
-    this.syncSeq,
     this.serverUpdatedAt,
     this.deletedAt,
   });
@@ -492,9 +484,8 @@ class SyncRecord {
   final String recordKey;
   final Map<String, dynamic> values;
   final DateTime clientModifiedAt;
-  final String originDeviceId;
+  final String? originDeviceId;
   final int? revision;
-  final int? syncSeq;
   final DateTime? serverUpdatedAt;
   final DateTime? deletedAt;
 
@@ -537,11 +528,8 @@ class SyncRecord {
       ),
       values: values,
       clientModifiedAt: updatedAt,
-      originDeviceId: row['origin_device_id'] as String? ?? '',
+      originDeviceId: row['origin_device_id'] as String?,
       revision: revision,
-      syncSeq: row['sync_seq'] is num
-          ? (row['sync_seq'] as num).toInt()
-          : updatedAt.microsecondsSinceEpoch,
       serverUpdatedAt: row['server_updated_at'] == null
           ? updatedAt
           : DateTime.parse(row['server_updated_at'] as String).toUtc(),

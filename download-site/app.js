@@ -16,9 +16,7 @@ import {
 } from "./cache-policy.js";
 
 const MANIFEST_URL = "./releases.json";
-const CACHE_KEY = "versiondeck-release-manifest-v6";
-const LEGACY_CACHE_KEYS = [1, 2, 3, 4, 5].map((version) =>
-  `versiondeck-release-manifest-v${version}`);
+const CACHE_KEY = "versiondeck-release-manifest-v1";
 const REQUEST_TIMEOUT_MS = 12_000;
 const numberFormat = new Intl.NumberFormat();
 
@@ -531,7 +529,6 @@ function saveCache(manifest) {
       fetchedAt: new Date().toISOString(),
       manifest,
     }));
-    LEGACY_CACHE_KEYS.forEach((key) => localStorage.removeItem(key));
   } catch {
     // Live verified data remains usable when storage is blocked.
   }

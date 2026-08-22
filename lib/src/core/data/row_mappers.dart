@@ -108,7 +108,9 @@ domain.InboxNotification _inboxFromRow(InboxNotificationRow row) =>
       kind: row.kind,
       route: row.route,
       planId: row.planId,
-      messageCode: row.messageCode,
+      messageCode: domain.NotificationMessageCode.fromWireValue(
+        row.messageCode,
+      )!,
       messageArgs: _notificationMessageArgs(row.messageArgs),
       readAt: row.readAt,
       createdAt: row.createdAt,
@@ -284,12 +286,9 @@ domain.AppLocalePreference _appLocalePreference(List<SettingRow> rows) {
 bool _boolSetting(String? value) => value == 'true';
 
 domain.NotificationPreferences _notificationPreferencesFromValue(
-  String? value, {
-  bool? legacyEnabled,
-}) {
-  final defaults = domain.NotificationPreferences(
-    enabled: legacyEnabled ?? true,
-  );
+  String? value,
+) {
+  const defaults = domain.NotificationPreferences();
   if (value == null || value.trim().isEmpty) {
     return defaults;
   }

@@ -10,6 +10,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../supabase/supabase_failure.dart';
 import '../utils/redacting_logger.dart';
+import 'change_feed_contract.dart';
 import 'media_download_cache.dart';
 import 'sync_dtos.dart';
 
@@ -27,36 +28,20 @@ class RemoteWriteResult {
   final List<String> cleanupObjectPaths;
 }
 
-class SyncFeedCapability {
-  const SyncFeedCapability({
-    required this.enabled,
-    required this.capabilityVersion,
-    required this.minRetainedSeq,
-  });
-
-  final bool enabled;
-  final String capabilityVersion;
-  final int minRetainedSeq;
-}
-
 class UserChangeFeedPage {
   const UserChangeFeedPage({
-    required this.changes,
+    required this.entries,
     required this.highWaterSeq,
     required this.nextSeq,
     required this.hasMore,
     required this.resnapshotRequired,
-    required this.capabilityVersion,
-    required this.capabilityEnabled,
   });
 
-  final List<Map<String, dynamic>> changes;
+  final List<ChangeFeedEntry> entries;
   final int highWaterSeq;
   final int nextSeq;
   final bool hasMore;
   final bool resnapshotRequired;
-  final String capabilityVersion;
-  final bool capabilityEnabled;
 }
 
 enum MaintenanceCompletionStatus {
@@ -279,11 +264,10 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
     return updatedAt?.microsecondsSinceEpoch ?? 0;
   }
 
-  Future<List<SyncRecord>> pullChanges({
+  Future<List<SyncRecord>> pullAuthoritativeSnapshotPage({
     required SyncEntitySpec spec,
     required String userId,
     required String deviceId,
-    required int afterSyncSeq,
     String? afterRecordKey,
     void Function(int exactCount)? onExactCount,
     bool materializeMedia = true,
@@ -296,23 +280,17 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
       if (spec.scope == SyncScope.deviceScoped) {
         query = query.eq('device_id', deviceId);
       }
-      final updatedAfter = DateTime.fromMicrosecondsSinceEpoch(
-        afterSyncSeq,
-        isUtc: true,
-      ).toIso8601String();
-      if (afterRecordKey == null || afterRecordKey.isEmpty) {
-        query = query.gt('updated_at', updatedAfter);
-      } else {
-        query = query.or(
-          _stableKeysetFilter(spec, updatedAfter, afterRecordKey),
-        );
+      if (afterRecordKey != null && afterRecordKey.isNotEmpty) {
+        query = query.or(_keyOnlyFilter(spec, afterRecordKey));
       }
-      final ordered = query.order('updated_at');
-      final transformed = spec.keyColumns
-          .fold(ordered, (builder, column) {
-            return builder.order(column);
-          })
-          .limit(pageSize);
+      final firstOrderColumn = spec.keyColumns.isEmpty
+          ? 'user_id'
+          : spec.keyColumns.first;
+      var ordered = query.order(firstOrderColumn);
+      for (final column in spec.keyColumns.skip(1)) {
+        ordered = ordered.order(column);
+      }
+      final transformed = ordered.limit(pageSize);
       late final List<dynamic> response;
       if (onExactCount != null) {
         final counted = await _withDataTimeout(
@@ -345,11 +323,7 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
           ]),
         );
       }
-      records.sort((a, b) {
-        final timestamp = a.syncSeq!.compareTo(b.syncSeq!);
-        return timestamp != 0 ? timestamp : a.recordKey.compareTo(b.recordKey);
-      });
-      return records.take(pageSize).toList(growable: false);
+      return records;
     } on Object catch (error) {
       throw SupabaseFailure.from(error);
     }
@@ -419,28 +393,6 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
       branches.add(
         terms.length == 1 ? terms.single : 'and(${terms.join(',')})',
       );
-    }
-    return branches.join(',');
-  }
-
-  String _stableKeysetFilter(
-    SyncEntitySpec spec,
-    String updatedAfter,
-    String afterRecordKey,
-  ) {
-    final values = afterRecordKey.split('|');
-    final branches = <String>['updated_at.gt.$updatedAfter'];
-    for (
-      var keyIndex = 0;
-      keyIndex < spec.keyColumns.length && keyIndex < values.length;
-      keyIndex++
-    ) {
-      final terms = <String>['updated_at.eq.$updatedAfter'];
-      for (var previous = 0; previous < keyIndex; previous++) {
-        terms.add('${spec.keyColumns[previous]}.eq.${values[previous]}');
-      }
-      terms.add('${spec.keyColumns[keyIndex]}.gt.${values[keyIndex]}');
-      branches.add('and(${terms.join(',')})');
     }
     return branches.join(',');
   }
@@ -825,8 +777,6 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
         final upload = await _uploadMedia(
           userId: userId,
           localRelativePath: localPath,
-          remoteDirectory: '$userId/assets/$assetId',
-          remoteBaseName: photoId,
           assetId: assetId,
           photoId: photoId,
           revision: record.revision,
@@ -862,7 +812,7 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
     final version =
         record.serverUpdatedAt?.toUtc().toIso8601String() ??
         record.revision?.toString() ??
-        record.syncSeq.toString();
+        record.clientModifiedAt.toUtc().toIso8601String();
     final cached = await _mediaDownloadCache.materialize(
       objectPath: objectPath,
       version: version,
@@ -875,7 +825,6 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
       clientModifiedAt: record.clientModifiedAt,
       originDeviceId: record.originDeviceId,
       revision: record.revision,
-      syncSeq: record.syncSeq,
       serverUpdatedAt: record.serverUpdatedAt,
       deletedAt: record.deletedAt,
     );
@@ -903,8 +852,6 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
   Future<_MediaUpload> _uploadMedia({
     required String userId,
     required String localRelativePath,
-    required String remoteDirectory,
-    required String remoteBaseName,
     required String assetId,
     required String photoId,
     required int? revision,
@@ -936,31 +883,52 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
         message: 'Only JPEG, PNG, and WebP images can be uploaded.',
       ),
     };
-    final extName = extension == '.jpeg' ? '.jpg' : extension;
-    final objectPath = '$remoteDirectory/$remoteBaseName$extName';
-
     final bytes = await file.readAsBytes();
     final digestHex = sha256.convert(bytes).toString();
-    final stagingPath = objectPath;
-    await _client.storage
-        .from(_bucket)
-        .upload(
-          stagingPath,
-          file,
-          fileOptions: FileOptions(upsert: true, contentType: mimeType),
-        );
-    final stageRes = await _withDataTimeout(
+    final idempotencyKey = sha256
+        .convert(
+          utf8.encode('$userId|$assetId|$photoId|${revision ?? 1}|$digestHex'),
+        )
+        .toString();
+    final prepareResponse = await _withDataTimeout(
       () => _client.rpc<Map<String, dynamic>>(
-        'stage_media_upload',
+        'prepare_asset_photo_upload',
         params: {
-          'p_staging_path': stagingPath,
+          'p_asset_id': assetId,
+          'p_photo_id': photoId,
           'p_object_size': byteSize,
           'p_mime_type': mimeType,
-          'p_sha256_digest': digestHex,
+          'p_client_sha256_digest': digestHex,
+          'p_idempotency_key': idempotencyKey,
         },
       ),
     );
-    final stagingId = stageRes['staging_id'] as String;
+    final stagingId = prepareResponse['staging_id'];
+    final stagingPath = prepareResponse['staging_path'];
+    final stagingStatus = prepareResponse['status'];
+    if (stagingId is! String ||
+        stagingId.isEmpty ||
+        stagingPath is! String ||
+        !stagingPath.startsWith('$userId/staging/') ||
+        (stagingStatus != 'staged' && stagingStatus != 'finalized')) {
+      throw const SupabaseFailure(
+        kind: SupabaseFailureKind.incompatibleSchema,
+        message: 'The cloud returned an invalid media staging contract.',
+      );
+    }
+    if (stagingStatus == 'staged') {
+      try {
+        await _client.storage
+            .from(_bucket)
+            .upload(
+              stagingPath,
+              file,
+              fileOptions: FileOptions(upsert: false, contentType: mimeType),
+            );
+      } on StorageException catch (error) {
+        if (error.statusCode != '409') rethrow;
+      }
+    }
     final finalizeRes = await _withDataTimeout(
       () => _client.rpc<Map<String, dynamic>>(
         'finalize_asset_photo_upload',
@@ -972,32 +940,14 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
         },
       ),
     );
-    return _MediaUpload(
-      objectPath: finalizeRes['object_path'] as String? ?? objectPath,
-    );
-  }
-
-  Future<SyncFeedCapability> getSyncFeedCapability() async {
-    try {
-      final res = await _withDataTimeout(
-        () => _client.rpc<List<dynamic>>('get_sync_feed_capability'),
+    final finalizedPath = finalizeRes['object_path'];
+    if (finalizeRes['success'] != true || finalizedPath != stagingPath) {
+      throw const SupabaseFailure(
+        kind: SupabaseFailureKind.incompatibleSchema,
+        message: 'The cloud returned an invalid media finalization contract.',
       );
-      if (res.isNotEmpty) {
-        final row = res.first as Map<String, dynamic>;
-        return SyncFeedCapability(
-          enabled: row['enabled'] as bool? ?? false,
-          capabilityVersion: row['capability_version'] as String? ?? '1.0.0',
-          minRetainedSeq: (row['min_retained_seq'] as num?)?.toInt() ?? 0,
-        );
-      }
-    } catch (e) {
-      AppLogger.warning('get_sync_feed_capability_failed', error: e);
     }
-    return const SyncFeedCapability(
-      enabled: false,
-      capabilityVersion: 'none',
-      minRetainedSeq: 0,
-    );
+    return _MediaUpload(objectPath: finalizedPath as String);
   }
 
   Future<UserChangeFeedPage> fetchUserChangeFeed({
@@ -1010,54 +960,68 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
         params: {'p_since_seq': sinceSeq, 'p_limit': limit},
       ),
     );
-    final changesList = (response['changes'] as List<dynamic>? ?? [])
-        .cast<Map<String, dynamic>>();
+    requireSyncFeedContractVersion(response['contract_version']);
+    final rawChanges = response['changes'];
+    final highWaterSeq = response['high_water_seq'];
+    final nextSeq = response['next_seq'];
+    final hasMore = response['has_more'];
+    final resnapshotRequired = response['resnapshot_required'];
+    if (rawChanges is! List ||
+        highWaterSeq is! int ||
+        nextSeq is! int ||
+        hasMore is! bool ||
+        resnapshotRequired is! bool ||
+        highWaterSeq < 0 ||
+        nextSeq < sinceSeq ||
+        nextSeq > highWaterSeq ||
+        hasMore != (nextSeq < highWaterSeq)) {
+      throw syncFeedProtocolFailure();
+    }
+    final entries = <ChangeFeedEntry>[];
+    var previousSeq = sinceSeq;
+    for (final rawChange in rawChanges) {
+      if (rawChange is! Map) {
+        throw syncFeedProtocolFailure();
+      }
+      late final ChangeFeedEntry parsed;
+      try {
+        parsed = parseSyncFeedChange(Map<String, dynamic>.from(rawChange));
+      } on SupabaseFailure {
+        rethrow;
+      } on Object {
+        throw syncFeedProtocolFailure();
+      }
+      if (parsed.changeSeq <= previousSeq || parsed.changeSeq > nextSeq) {
+        throw syncFeedProtocolFailure();
+      }
+      previousSeq = parsed.changeSeq;
+      entries.add(parsed);
+    }
+    if ((entries.isEmpty && nextSeq != sinceSeq) ||
+        (entries.isNotEmpty && previousSeq != nextSeq)) {
+      throw syncFeedProtocolFailure();
+    }
     return UserChangeFeedPage(
-      changes: changesList,
-      highWaterSeq: (response['high_water_seq'] as num?)?.toInt() ?? 0,
-      nextSeq: (response['next_seq'] as num?)?.toInt() ?? sinceSeq,
-      hasMore: response['has_more'] as bool? ?? false,
-      resnapshotRequired: response['resnapshot_required'] as bool? ?? false,
-      capabilityVersion: response['capability_version'] as String? ?? '1.0.0',
-      capabilityEnabled: response['capability_enabled'] as bool? ?? false,
+      entries: List.unmodifiable(entries),
+      highWaterSeq: highWaterSeq,
+      nextSeq: nextSeq,
+      hasMore: hasMore,
+      resnapshotRequired: resnapshotRequired,
     );
   }
 
-  Future<List<Map<String, dynamic>>> validateChangeFeedParity() async {
-    try {
-      final res = await _withDataTimeout(
-        () => _client.rpc<List<dynamic>>('validate_change_feed_parity'),
-      );
-      return res.cast<Map<String, dynamic>>();
-    } catch (e) {
-      AppLogger.warning('validate_change_feed_parity_failed', error: e);
-      return [];
+  Future<int> fetchUserChangeFeedHighWater() async {
+    final rows = await _withDataTimeout(
+      () => _client.rpc<List<dynamic>>('get_user_change_feed_watermark'),
+    );
+    if (rows.length != 1 || rows.single is! Map) {
+      throw syncFeedProtocolFailure();
     }
-  }
-
-  Future<SyncRecord?> fetchRecordByKey({
-    required SyncEntitySpec spec,
-    required String recordKey,
-    required String userId,
-  }) async {
-    try {
-      var query = _client
-          .from(spec.remoteTable)
-          .select(spec.selectClause)
-          .eq('user_id', userId);
-      final keyVals = _keyValues(spec, recordKey);
-      for (final entry in keyVals.entries) {
-        query = query.eq(entry.key, entry.value);
-      }
-      final response = await _withDataTimeout(() => query);
-      if (response.isNotEmpty) {
-        final row = Map<String, dynamic>.from(response.first as Map);
-        return SyncRecord.fromRemote(spec, row);
-      }
-    } catch (e) {
-      AppLogger.warning('fetch_record_by_key_failed', error: e);
+    final highWater = (rows.single as Map)['max_change_seq'];
+    if (highWater is! int || highWater < 0) {
+      throw syncFeedProtocolFailure();
     }
-    return null;
+    return highWater;
   }
 
   Future<Map<String, dynamic>> setPrimaryAssetPhoto({

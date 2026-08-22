@@ -139,7 +139,7 @@ void main() {
   });
 
   test('first runApp child owns the process splash above startup branches', () {
-    final source = File('lib/main.dart').readAsStringSync();
+    final source = File('lib/src/app/owntend_app.dart').readAsStringSync();
     expect(source, contains('runApp(OwntendProcessSplash(child: child))'));
     expect(
       source,
@@ -149,10 +149,10 @@ void main() {
     expect(source, contains('RestoreRecoveryCoordinator('));
     expect(
       source.indexOf('_RestoreRecoveryGate('),
-      lessThan(source.indexOf('_DeferredOwntendBootstrap(')),
+      lessThan(source.indexOf('DeferredOwntendBootstrap(')),
     );
     expect(source, contains("'startup_restore_recovery_blocked'"));
-    expect(source, contains('_DeferredOwntendBootstrap('));
+    expect(source, contains('DeferredOwntendBootstrap('));
     expect(source, isNot(contains('startup-theme-placeholder')));
     expect(source, isNot(contains('return OwntendSplashOverlay(')));
   });
@@ -309,8 +309,7 @@ void main() {
 
   test('popup menus use the root navigator for touch ownership', () {
     final sources = [
-      File('lib/main.dart').readAsStringSync(),
-      File('lib/src/ui/components.dart').readAsStringSync(),
+      File('lib/src/ui/components/task_status.dart').readAsStringSync(),
     ].join('\n');
     final menuCount = RegExp(r'PopupMenuButton<').allMatches(sources).length;
     final rootNavigatorCount = RegExp(

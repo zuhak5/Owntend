@@ -14,18 +14,22 @@
     "report:android-apk-size": "node tool/android_apk_size_report.mjs",
     "validate:asset-provenance": "node tool/validate_asset_provenance.mjs",
     "validate:dependency-policy": "node tool/dependency_review_policy.mjs",
+    "validate:docs-links": "node tool/validate_docs_links.mjs",
     "validate:google-contracts": "node tool/validate_google_release_contracts.mjs",
+    "validate:secrets": "node tool/scan_repository_secrets.mjs",
     "validate:test-inventory": "node tool/test_inventory.mjs",
     "validate:toolchain": "node tool/toolchain_manifest.mjs --enforce",
     "generate:sbom-and-notices": "node tool/generate_sbom_and_notices.mjs",
     "supabase:lint": "supabase db lint --local --level error --fail-on error",
     "supabase:test": "supabase test db --local supabase/tests/database",
-    "test:release-workflows": "node --test tool/release-workflows.test.mjs"
+    "test:release-workflows": "node --test tool/release-workflows.test.mjs",
+    "test:shorebird": "node --test tool/shorebird.test.mjs",
+    "validate:shorebird-patch": "node tool/shorebird_patch_eligibility.mjs"
   },
   "devDependencies": {
     "@supabase/supabase-js": "^2.112.3",
     "esbuild": "^0.28.2",
-    "supabase": "^2.114.0",
+    "supabase": "^2.115.0",
     "yaml": "^2.9.0"
   }
 }

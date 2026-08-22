@@ -31,10 +31,9 @@ On sign-in or account transition, the coordinator must:
 1. Resolve the current Supabase user.
 2. Compare it with the locally bound identity.
 3. Prevent pending work from a previous account being pushed under the new account.
-4. Place non-pristine local data from an unsupported provider or unbound session in durable upload-prohibited quarantine (`uploadProhibited = true`, `migrationState = 'quarantined'`).
-5. Reject automatic binding and outbox push while data is quarantined.
-6. Present explicit resolution paths: Export Safety Backup, Reset Local Data, or Explicit Import/Merge into the authenticated account.
-7. Initialize or hydrate the correct account state after explicit resolution.
+4. Require the canonical merge decision when a non-pristine, unbound local working set and existing cloud data could collide.
+5. Clear stale sync cursors, shadows, leases, and cleanup work before binding a previously unbound installation.
+6. Initialize or hydrate only the correctly bound account state.
 
 Never silently reassign local records between accounts.
 
@@ -87,12 +86,12 @@ The local mutations, shadows, and matching checkpoint for a completed pull page
 must commit in the same Drift transaction. Any failure rolls back both data
 application and checkpoint advancement so retry replays the page safely.
 
-## Client Pull-Only Cursors and Healing Scan
+## Feed checkpoint and retention recovery
 
 - **Change Feed Checkpoint Namespace**: The Change Feed cursor (`server_change_feed` in local SQLite `sync_cursors`) advances strictly during completed, ordered pull scans (`fetch_user_change_feed`).
-- **Push & Point-Fetch Isolation**: Push acknowledgements (`markMutationSucceeded`), maintenance RPC completions, conflict point-fetches, and Realtime hints may update canonical entity shadows but **never** advance either the change-feed cursor or legacy per-entity pull cursors. Only completed pull transactions own inbound checkpoints.
-- **Retention Gap Resnapshot**: When `fetch_user_change_feed` returns `resnapshot_required == true`, the client atomically resets only the feed cursor and persists the server high-water boundary in the existing `sync_cursors` table. A restart while that marker exists repeats an authoritative full legacy snapshot plus delete reconciliation. Only after that succeeds does the client advance the feed cursor to the captured high-water and clear the marker; the ordinary feed setter remains monotonic.
-- **Healing Scan Path**: The `runHealingScan` worker calls `validate_change_feed_parity()` RPC to discover remote rows absent locally or omitted by legacy cursors, pulling missing records without overwriting newer local outbox intent.
+- **Push & Point-Fetch Isolation**: Push acknowledgements, maintenance RPC completions, conflict point-fetches, and Realtime hints may update canonical entity shadows but never advance the change-feed cursor. Only a completed feed transaction owns the inbound checkpoint.
+- **Retention Gap Resnapshot**: When `fetch_user_change_feed` returns `resnapshot_required == true`, the client persists a resnapshot marker and the captured high-water boundary. A restart while that marker exists repeats an authoritative snapshot plus delete reconciliation. Only after that succeeds does the client advance the feed cursor to the captured high-water and clear the marker.
+- **No client parity API**: Cross-account feed parity is a service/CI concern. The application has no capability-discovery, dark-validation, or client healing RPC.
 
 ## Initial hydration
 
@@ -114,9 +113,9 @@ Realtime events (insert, update, delete) are strictly non-authoritative invalida
 
 Foreground resume and network restoration are correctness boundaries, not freshness optimizations. When cloud sync is enabled for the currently authenticated bound account, the coordinator first ensures Realtime and then requires a pull-capable broad convergence pass even when `lastSyncedAt` is only minutes old. That pass also pushes eligible local mutations.
 
-A broad convergence request has precedence over queued targeted or push-only work. If a targeted or push-only operation is already active, one broad follow-up remains pending. If a broad pull is already active, the resume/reconnect request coalesces into that operation rather than scheduling a duplicate. The broad pull uses change-feed protocol `1.0.1` only when the server capability is enabled; otherwise it uses the existing legacy pull fallback. Problem #8 does not enable the checked-in disabled feed capability.
+A broad convergence request has precedence over queued targeted or push-only work. If a targeted or push-only operation is already active, one broad follow-up remains pending. If a broad pull is already active, the resume/reconnect request coalesces into that operation. The only incremental protocol is integer contract `1`; an unsupported contract is a visible incompatible-schema failure.
 
-This recovery path is what repairs a remote change whose Realtime notification was missed while the app was suspended or disconnected. Realtime payloads remain hints: canonical app-domain state still enters Drift through targeted fetch, capability-gated feed, or legacy pull before Riverpod exposes it to widgets.
+This recovery path repairs a remote change whose Realtime notification was missed while the app was suspended or disconnected. Realtime payloads remain hints: canonical app-domain state enters Drift through an authoritative snapshot, targeted fetch, or the change feed before Riverpod exposes it to widgets.
 
 ## Conflict handling
 
@@ -140,15 +139,14 @@ Device clocks are not a sole source of truth for global ordering. Prefer server 
 
 The database includes a server-assigned, monotonic, owner-scoped change feed (`server_change_feed` table, `change_seq` identity column).
 - Every INSERT, UPDATE, or DELETE on the 17 synchronized tables (`profiles`, `areas`, `rooms`, `assets`, `device_details`, `pet_details`, `plant_details`, `safety_details`, `tags`, `asset_tags`, `asset_photos`, `maintenance_plans`, `maintenance_plan_metadata`, `maintenance_records`, `notification_inbox`, `user_settings`, `streaks`) atomically writes a change log entry via the `fn_log_server_change_feed()` trigger.
-- The launch protocol `1.0.1` uses the exact canonical `SyncEntitySpec.entity` identifier for each of the 17 synchronized entities. Every feed row also carries typed `key_data` with exactly the key columns required by that entity; `record_id` is the deterministic canonical encoding of those values (and `profile` for the keyless profile entity). Unknown entities, malformed keys, key mismatches, or unsupported enabled protocol versions are incompatible-schema failures and do not advance the feed cursor.
+- Contract `1` uses the exact canonical `SyncEntitySpec.entity` identifier for each of the 17 synchronized entities. Every feed row carries typed `key_data`, a bounded canonical payload for upserts, and the exact key for deletes. Unknown entities, malformed keys, key mismatches, extra fields, or unsupported contract versions are incompatible-schema failures and do not advance the feed cursor.
 - The `change_seq` is server-generated and independent of client clocks or backdated/future-dated `updated_at` business timestamps.
 - Hard deletes write durable `DELETE` records into `server_change_feed`, recording the entity type and deleted record ID.
 - Row Level Security (RLS) restricts SELECT access to the authenticated user owning the records (`user_id = auth.uid()`), while direct client INSERT/UPDATE/DELETE access to `server_change_feed` is strictly revoked.
-- Monotonic change sequences support owner-scoped keyset pagination (`user_id`, `change_seq`) and feed status verification (`get_user_change_feed_watermark`).
+- Monotonic change sequences support owner-scoped keyset pagination (`user_id`, `change_seq`).
 - The `fetch_user_change_feed(p_since_seq, p_limit)` RPC exposes the feed to authenticated clients. It captures an owner-scoped high-water sequence at scan start and pages only changes `change_seq <= high_water_seq` in strict monotonic order.
-- `fetch_user_change_feed` returns opaque paging metadata (`next_seq`, `has_more`, `high_water_seq`), capability flags (`capability_version`, `capability_enabled`), and `resnapshot_required = true` when requested `p_since_seq` predates the minimum retained sequence (`min_retained_seq`).
-- Capability discovery (`get_sync_feed_capability()`) allows server-controlled feature flagging and instant withdrawal without destroying historical change log entries. The checked-in launch capability remains disabled; enabling it requires separate hosted compatibility and parity evidence.
-- Dark validation (`validate_change_feed_parity()`) compares entity counts between canonical tables and net change feed records to verify zero omission/duplicate discrepancies under load before client adoption.
+- `fetch_user_change_feed` returns contract version, `next_seq`, `has_more`, `high_water_seq`, and `resnapshot_required = true` when the requested cursor predates retained history.
+- There is no rollout flag, capability table, fallback pull protocol, or authenticated parity function in production v1. A service-role-only parity function remains available to protected validation.
 
 The cloud uses deliberate aliases for maintenance plan recurrence (`description`, `interval_count`, `interval_unit`) and streak summaries (`longest_streak`, `last_completion_date`). `SyncEntitySpec.remoteRenames` translates those names in both directions. Specialized detail and maintenance metadata columns otherwise match the Flutter/Drift payload names directly, preventing silent field loss during RPC creation or ordinary synchronization.
 
@@ -160,10 +158,11 @@ Maintenance completion affects history, recurrence, due state, reminders, statis
 
 Media requires coordination between local metadata, file availability, Storage objects, upload state, and deletion cleanup.
 
-- **Upload Ledger & Finalize Saga**: Media uploads use an owner-scoped upload ledger (`media_staging_objects` table, `stage_media_upload` RPC) bound to deterministic private Storage paths under `{user_id}/assets/{asset_id}/{photo_id}.{ext}`. Finalization (`finalize_asset_photo_upload` RPC) validates owner, expected row revision, MIME type (`image/jpeg`, `image/png`, `image/webp`), size (<=10 MiB), SHA-256 digest, and Storage object existence before exposing the metadata row.
-- **Required Client Saga**: The client (`SupabaseSyncGateway`) computes local file SHA-256 digests and uploads to deterministic owner paths under `{user_id}/assets/{asset_id}/{photo_id}.{ext}` before executing `stage_media_upload` and `finalize_asset_photo_upload`. The pre-launch backend cutover is mandatory; failure at any stage remains a retryable/visible sync failure and never falls back to an untracked direct upload. Asset and photo IDs stay text across Drift, Postgres, and the RPC boundary.
+- **Prepare-first ledger**: `prepare_asset_photo_upload` creates an owner-scoped immutable stage before any Storage mutation and returns a server-issued `{user_id}/staging/{uuid}.{ext}` path. The preparation binds asset, photo, expected size/MIME, an idempotency key, and the client digest (explicitly advisory).
+- **Required client saga**: The client prepares, uploads once with `upsert: false`, then calls `finalize_asset_photo_upload`. Finalization reads trusted Storage metadata and validates owner, row revision, MIME type, size (<=10 MiB), and object existence before exposing photo metadata. Failure remains retryable or visible; there is no direct-upload fallback.
 - **Server Durable Cleanup Ledger**: Upload finalization and server-side replacement flows enqueue superseded object paths into `media_cleanup_queue` transactionally before database mutation acknowledgement.
 - **Client Delete Tombstone & Cleanup Handoff**: A local `asset_photo` DELETE preserves the exact canonical Storage path in the durable outbox tombstone before the local row disappears. If the remote metadata row was already deleted (including response-loss retry), `SupabaseSyncGateway.write()` returns that same tombstone path as cleanup work. The coordinator acknowledges the exact outbox generation and inserts `sync_media_cleanup` in one Drift transaction, so the object path is always represented by either pending mutation intent or durable cleanup work. Storage object-not-found is successful idempotent cleanup; duplicate cleanup attempts are safe.
+- **Local file cleanup**: Replaced or remotely deleted local photo paths enter `local_media_cleanup`. Filesystem failures persist bounded retry/backoff; paths escaping the application documents root become visible terminal records instead of being executed.
 - **Transactional Primary Photo Selection & Unique Constraint**: Primary asset photo selection uses the owner-authoritative `set_primary_asset_photo` RPC. The RPC sets `is_primary = true` on the target photo and clears peer photos (`is_primary = false`) for that asset in a single transaction. Partial unique index `idx_asset_photos_single_primary` on `asset_photos(user_id, asset_id) WHERE is_primary = true` enforces at most one primary photo per asset at the database level.
 - Uploads and deletes must be retryable and idempotent.
 - Metadata must not claim cloud availability before verification.

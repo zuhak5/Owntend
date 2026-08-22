@@ -6196,48 +6196,6 @@ abstract class AppLocalizations {
   /// **'Fix'**
   String get fix;
 
-  /// No description provided for @quarantinedDataTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Local Data Quarantine'**
-  String get quarantinedDataTitle;
-
-  /// No description provided for @quarantinedDataDescription.
-  ///
-  /// In en, this message translates to:
-  /// **'Preserved data from a previous account or offline session was found on this device. To protect your data privacy, this local data cannot be uploaded to your account automatically.'**
-  String get quarantinedDataDescription;
-
-  /// No description provided for @exportSafetyBackup.
-  ///
-  /// In en, this message translates to:
-  /// **'Export Safety Backup'**
-  String get exportSafetyBackup;
-
-  /// No description provided for @resetLocalData.
-  ///
-  /// In en, this message translates to:
-  /// **'Reset Local Data'**
-  String get resetLocalData;
-
-  /// No description provided for @importLocalData.
-  ///
-  /// In en, this message translates to:
-  /// **'Import Data into My Account'**
-  String get importLocalData;
-
-  /// No description provided for @importLocalDataConfirmation.
-  ///
-  /// In en, this message translates to:
-  /// **'Are you sure you want to merge and import all local items, rooms, and tasks into your account?'**
-  String get importLocalDataConfirmation;
-
-  /// No description provided for @resetLocalDataConfirmation.
-  ///
-  /// In en, this message translates to:
-  /// **'Are you sure you want to wipe local data? This will clear all un-synced items on this device. Create a backup first if you want to save them.'**
-  String get resetLocalDataConfirmation;
-
   /// No description provided for @reminderDaysBeforeDue.
   ///
   /// In en, this message translates to:

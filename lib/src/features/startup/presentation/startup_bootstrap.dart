@@ -1,4 +1,4 @@
-part of '../../../../main.dart';
+part of 'startup_presentation.dart';
 
 class _OwntendBootstrapState extends State<OwntendBootstrap> {
   @override
@@ -89,9 +89,7 @@ class _OwntendBootstrapState extends State<OwntendBootstrap> {
             ],
       child: _HomeStartupGate(
         startupThemeLoader: startupThemeLoader!,
-        appBuilder:
-            appBuilder ??
-            (startupTheme) => OwntendApp(startupTheme: startupTheme),
+        appBuilder: appBuilder,
       ),
     );
   }
@@ -162,49 +160,6 @@ class _HomeStartupGateState extends ConsumerState<_HomeStartupGate> {
   }
 }
 
-void _openNotificationPayload(String payload) {
-  final route = _validatedNotificationRoute(payload);
-  if (route == null) {
-    return;
-  }
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    final context = _rootNavigatorKey.currentContext;
-    if (context == null || !context.mounted) {
-      return;
-    }
-    context.push(route);
-  });
-}
-
-String? _validatedNotificationRoute(String payload) {
-  final route = payload.trim();
-  if (route.isEmpty || !route.startsWith('/')) {
-    return null;
-  }
-  final uri = Uri.tryParse(route);
-  if (uri == null || uri.hasFragment) {
-    return null;
-  }
-  const allowedPrefixes = [
-    '/maintenance',
-    '/notifications',
-    '/assets',
-    '/calendar',
-    '/search',
-    '/settings',
-    '/account',
-    '/backup',
-    '/trash',
-    '/statistics',
-    '/more',
-    '/permissions/setup',
-  ];
-  if (!allowedPrefixes.any((prefix) => uri.path.startsWith(prefix))) {
-    return null;
-  }
-  return uri.toString();
-}
-
 Future<void> _removeUnsupportedCloudSession(
   SupabaseClient? client,
   AppDatabase database,
@@ -228,23 +183,26 @@ Future<void> _removeUnsupportedCloudSession(
   await store.clearBinding();
 }
 
-class _DeferredOwntendBootstrap extends StatefulWidget {
-  const _DeferredOwntendBootstrap({
+class DeferredOwntendBootstrap extends StatefulWidget {
+  const DeferredOwntendBootstrap({
     required this.database,
     required this.config,
     required this.elapsedBeforeFirstFrame,
+    required this.appBuilder,
+    super.key,
   });
 
   final AppDatabase database;
   final AppConfig config;
   final Duration elapsedBeforeFirstFrame;
+  final BootstrappedAppBuilder appBuilder;
 
   @override
-  State<_DeferredOwntendBootstrap> createState() =>
+  State<DeferredOwntendBootstrap> createState() =>
       _DeferredOwntendBootstrapState();
 }
 
-class _DeferredOwntendBootstrapState extends State<_DeferredOwntendBootstrap> {
+class _DeferredOwntendBootstrapState extends State<DeferredOwntendBootstrap> {
   SupabaseClient? _supabaseClient;
   Object? _accountCleanupRecoveryFailure;
   bool _accountCleanupRetrying = false;
@@ -306,7 +264,7 @@ class _DeferredOwntendBootstrapState extends State<_DeferredOwntendBootstrap> {
   }
 
   Future<void> _initializeAfterFirstFrame() async {
-    final deviceLanguage = _supportedDeviceLanguage(
+    final deviceLanguage = supportedDeviceLanguage(
       WidgetsBinding.instance.platformDispatcher.locale,
     );
     initializeRestoreForegroundService(localeCode: deviceLanguage.name);
@@ -380,6 +338,7 @@ class _DeferredOwntendBootstrapState extends State<_DeferredOwntendBootstrap> {
       database: widget.database,
       appConfig: widget.config,
       supabaseClient: _supabaseClient,
+      appBuilder: widget.appBuilder,
     );
   }
 }
@@ -402,7 +361,7 @@ class OwntendStartupFailure extends StatelessWidget {
       title: 'Owntend',
       debugShowCheckedModeBanner: false,
       locale: Locale(
-        _supportedDeviceLanguage(
+        supportedDeviceLanguage(
           WidgetsBinding.instance.platformDispatcher.locale,
         ).name,
       ),
@@ -452,45 +411,6 @@ class OwntendStartupFailure extends StatelessWidget {
     );
   }
 }
-
-final databaseProvider = Provider<AppDatabase>((ref) {
-  final db = AppDatabase();
-  ref.onDispose(db.close);
-  return db;
-});
-
-final assetRepositoryProvider = Provider<AssetRepository>(
-  (ref) => DriftAssetRepository(ref.watch(databaseProvider)),
-);
-
-final calendarRepositoryProvider = Provider<CalendarRepository>(
-  (ref) => ref.watch(maintenanceRepositoryProvider) as CalendarRepository,
-);
-
-final streakServiceProvider = Provider<StreakService>(
-  (ref) => DatabaseStreakService(ref.watch(databaseProvider)),
-);
-
-final statisticsRepositoryProvider = Provider<StatisticsRepository>(
-  (ref) => DriftStatisticsRepository(
-    ref.watch(databaseProvider),
-    ref.watch(maintenanceRepositoryProvider),
-    ref.watch(streakServiceProvider),
-    healthScoreCalculator: const WeightedHealthScoreCalculator(),
-  ),
-);
-
-final settingsRepositoryProvider = Provider<SettingsRepository>(
-  (ref) => DriftSettingsRepository(ref.watch(databaseProvider)),
-);
-
-final permissionCoordinatorProvider = Provider<AppPermissionGateway>(
-  (ref) => AppPermissionCoordinator(ref.watch(databaseProvider)),
-);
-
-final permissionEducationSeenProvider = StreamProvider<bool>((ref) {
-  return ref.watch(settingsRepositoryProvider).watchPermissionEducationSeen();
-});
 
 class StartupFailure {
   const StartupFailure({
@@ -608,56 +528,6 @@ class StartupBootstrapState {
       ),
       _ => this,
     };
-  }
-}
-
-class InitialHomeSnapshot {
-  const InitialHomeSnapshot({
-    required this.session,
-    required this.profile,
-    required this.tasks,
-    required this.assets,
-    required this.rooms,
-    required this.backupState,
-    required this.unreadNotifications,
-    required this.syncStatus,
-    required this.loadedAt,
-    this.homeLocation,
-    this.weather,
-    this.avatarProvider,
-    this.offline = false,
-  });
-
-  final AuthSession session;
-  final AppProfile profile;
-  final List<TaskItem> tasks;
-  final List<Asset> assets;
-  final List<Room> rooms;
-  final BackupState backupState;
-  final int unreadNotifications;
-  final HomeLocation? homeLocation;
-  final WeatherSnapshot? weather;
-  final SyncStatus syncStatus;
-  final ImageProvider<Object>? avatarProvider;
-  final DateTime loadedAt;
-  final bool offline;
-
-  InitialHomeSnapshot copyWithOffline(bool value) {
-    return InitialHomeSnapshot(
-      session: session,
-      profile: profile,
-      tasks: tasks,
-      assets: assets,
-      rooms: rooms,
-      backupState: backupState,
-      unreadNotifications: unreadNotifications,
-      homeLocation: homeLocation,
-      weather: weather,
-      syncStatus: syncStatus,
-      avatarProvider: avatarProvider,
-      loadedAt: loadedAt,
-      offline: value,
-    );
   }
 }
 
@@ -919,7 +789,7 @@ class StartupBootstrapController {
 
     final startingStatus = _hydrationStatusFor(
       _ref.read(syncStatusProvider).value,
-      _syntheticStartupStatus(RestoreRunState.running),
+      syntheticStartupStatus(RestoreRunState.running),
     );
     _publishStartupState(
       StartupBootstrapState.authenticatedHydrating(
@@ -956,7 +826,7 @@ class StartupBootstrapController {
           ? _state.value.status
           : _mergeStartupSyncStatus(_state.value.status, observedFailureStatus);
       final failure = _startupFailureFor(error, failureContextStatus);
-      final fallback = _syntheticStartupStatus(
+      final fallback = syntheticStartupStatus(
         RestoreRunState.failed,
         phase: failure.allowConnectionCheck
             ? SyncPhase.offline

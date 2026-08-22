@@ -5,18 +5,6 @@ Future<void> _deletePlansCascade(AppDatabase db, List<String> planIds) async {
     return;
   }
   await (db.delete(
-    db.inboxNotifications,
-  )..where((row) => row.planId.isIn(planIds))).go();
-  await (db.delete(
-    db.appNotifications,
-  )..where((row) => row.planId.isIn(planIds))).go();
-  await (db.delete(
-    db.maintenanceRecords,
-  )..where((row) => row.planId.isIn(planIds))).go();
-  await (db.delete(
-    db.maintenancePlanMetadata,
-  )..where((row) => row.planId.isIn(planIds))).go();
-  await (db.delete(
     db.notificationReconciliationRequests,
   )..where((row) => row.planId.isIn(planIds))).go();
   await (db.delete(

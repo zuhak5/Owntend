@@ -1,4 +1,4 @@
-part of '../../../../main.dart';
+part of 'assets_presentation.dart';
 
 class ThingDetailScreen extends ConsumerStatefulWidget {
   const ThingDetailScreen({required this.assetId, super.key});
@@ -128,19 +128,19 @@ class _ItemHealthCard extends StatelessWidget {
               ),
               hk_ui.StatusPill(
                 compact: true,
-                label: _healthStateLabel(context, score.state),
+                label: healthStateLabel(context, score.state),
                 color: color,
               ),
             ],
           ),
           const SizedBox(height: HkSpacing.xs),
           for (final reason in score.reasons)
-            Text('- ${_localizedFeatureMessage(context, reason)}'),
+            Text('- ${localizedFeatureMessage(context, reason)}'),
           if (score.nextBestAction != null) ...[
             const SizedBox(height: HkSpacing.space4),
             Text(
               context.l10n.nextValue(
-                _localizedFeatureMessage(context, score.nextBestAction!),
+                localizedFeatureMessage(context, score.nextBestAction!),
               ),
             ),
           ],
@@ -148,7 +148,7 @@ class _ItemHealthCard extends StatelessWidget {
             const SizedBox(height: HkSpacing.xs),
             Text(
               context.l10n.warrantyUntilDate(
-                _formatShortDate(context, warrantyUntil!),
+                formatShortDate(context, warrantyUntil!),
               ),
             ),
           ],
@@ -158,37 +158,37 @@ class _ItemHealthCard extends StatelessWidget {
   }
 }
 
-List<Widget> _taskMetadataRows(BuildContext context, TaskMetadata? metadata) {
+List<Widget> taskMetadataRows(BuildContext context, TaskMetadata? metadata) {
   if (metadata == null) {
     return const [];
   }
   return [
     if (metadata.taskType?.trim().isNotEmpty ?? false)
-      _DetailRow(
+      DetailRow(
         icon: Symbols.build_circle_rounded,
         label: context.l10n.taskType,
         value: metadata.taskType!.trim(),
       ),
     if (metadata.locationLabel?.trim().isNotEmpty ?? false)
-      _DetailRow(
+      DetailRow(
         icon: Symbols.place_rounded,
         label: context.l10n.location,
         value: metadata.locationLabel!.trim(),
       ),
     if (metadata.estimatedDurationMinutes != null)
-      _DetailRow(
+      DetailRow(
         icon: Symbols.timer_rounded,
         label: context.l10n.duration,
         value: context.l10n.durationMinutes(metadata.estimatedDurationMinutes!),
       ),
     if (metadata.requiredMaterials.isNotEmpty)
-      _DetailRow(
+      DetailRow(
         icon: Symbols.construction_rounded,
         label: context.l10n.materials,
         value: metadata.requiredMaterials.join(', '),
       ),
     if (metadata.reminderRecommendation?.trim().isNotEmpty ?? false)
-      _DetailRow(
+      DetailRow(
         icon: Symbols.notification_important_rounded,
         label: context.l10n.reminder,
         value: metadata.reminderRecommendation!.trim(),
@@ -257,14 +257,14 @@ class _ThingDetailScreenState extends ConsumerState<ThingDetailScreen> {
                 itemBuilder: (context) => [
                   PopupMenuItem(
                     value: 'move_copy',
-                    child: _PopupActionLabel(
+                    child: hk_ui.PopupActionLabel(
                       icon: Symbols.drive_file_move_rounded,
                       label: context.l10n.moveOrCopy,
                     ),
                   ),
                   PopupMenuItem(
                     value: 'delete',
-                    child: _PopupActionLabel(
+                    child: hk_ui.PopupActionLabel(
                       icon: Symbols.delete_rounded,
                       label: context.l10n.moveItemToTrash,
                       destructive: true,
@@ -318,7 +318,7 @@ class _ThingDetailScreenState extends ConsumerState<ThingDetailScreen> {
                                     ),
                                     Text(
                                       [
-                                        _assetTypeLabel(
+                                        assetTypeLabel(
                                           context,
                                           asset.assetType,
                                         ),
@@ -453,8 +453,9 @@ class _ThingDetailScreenState extends ConsumerState<ThingDetailScreen> {
                           ],
                         );
                       },
-                      error: (error, _) =>
-                          ErrorPanel(message: _failureMessage(context, error)),
+                      error: (error, _) => hk_ui.ErrorPanel(
+                        message: failureMessage(context, error),
+                      ),
                       loading: () =>
                           const Center(child: CircularProgressIndicator()),
                     ),
@@ -509,7 +510,7 @@ class _ThingDetailScreenState extends ConsumerState<ThingDetailScreen> {
       },
       error: (error, _) => Scaffold(
         appBar: AppBar(title: Text(context.l10n.item)),
-        body: ErrorPanel(message: _failureMessage(context, error)),
+        body: hk_ui.ErrorPanel(message: failureMessage(context, error)),
       ),
       loading: () =>
           const Scaffold(body: Center(child: CircularProgressIndicator())),
@@ -554,17 +555,17 @@ class _ThingDetailFields extends StatelessWidget {
   Widget build(BuildContext context) {
     final rows = <Widget>[
       if (asset.notes?.trim().isNotEmpty ?? false)
-        _DetailRow(
+        DetailRow(
           icon: Symbols.notes_rounded,
           label: context.l10n.notes,
           value: asset.notes!,
           contentType: 'asset.notes',
         ),
       if (asset.purchaseDate != null)
-        _DetailRow(
+        DetailRow(
           icon: Symbols.shopping_bag_rounded,
           label: context.l10n.purchased,
-          value: _formatShortDate(context, asset.purchaseDate!),
+          value: formatShortDate(context, asset.purchaseDate!),
         ),
       ..._typedRows(context),
     ];
@@ -599,47 +600,47 @@ class _ThingDetailFields extends StatelessWidget {
     final safety = asset.safetyDetails;
     return [
       if (device?.brand != null)
-        _DetailRow(
+        DetailRow(
           icon: Symbols.memory_rounded,
           label: context.l10n.brand,
           value: device!.brand!,
         ),
       if (device?.model != null)
-        _DetailRow(
+        DetailRow(
           icon: Symbols.info_rounded,
           label: context.l10n.model,
           value: device!.model!,
         ),
       if (device?.consumable != null)
-        _DetailRow(
+        DetailRow(
           icon: Symbols.inventory_2_rounded,
           label: context.l10n.consumable,
           value: device!.consumable!,
           contentType: 'asset.device.consumable',
         ),
       if (pet?.species != null)
-        _DetailRow(
+        DetailRow(
           icon: Symbols.pets_rounded,
           label: context.l10n.species,
-          value: _petSpeciesLabel(context, pet!.species!),
+          value: petSpeciesLabel(context, pet!.species!),
           contentType: 'asset.pet.species',
         ),
       if (pet?.feedingNotes != null)
-        _DetailRow(
+        DetailRow(
           icon: Symbols.restaurant_rounded,
           label: context.l10n.feeding,
           value: pet!.feedingNotes!,
           contentType: 'asset.pet.feeding_notes',
         ),
       if (plant?.species != null)
-        _DetailRow(
+        DetailRow(
           icon: Symbols.yard_rounded,
           label: context.l10n.species,
           value: plant!.species!,
           contentType: 'asset.plant.species',
         ),
       if (plant?.wateringIntervalDays != null)
-        _DetailRow(
+        DetailRow(
           icon: Symbols.water_drop_rounded,
           label: context.l10n.watering,
           value: context.l10n.recurrenceEveryMany(
@@ -648,14 +649,14 @@ class _ThingDetailFields extends StatelessWidget {
           ),
         ),
       if (safety?.safetyType != null)
-        _DetailRow(
+        DetailRow(
           icon: Symbols.health_and_safety_rounded,
           label: context.l10n.safetyType,
           value: safety!.safetyType!,
           contentType: 'asset.safety.type',
         ),
       if (safety?.testIntervalDays != null)
-        _DetailRow(
+        DetailRow(
           icon: Symbols.fact_check_rounded,
           label: context.l10n.testInterval,
           value: context.l10n.recurrenceEveryMany(
@@ -683,23 +684,25 @@ class _ThingTimeline extends StatelessWidget {
       );
     }
     return records.when(
-      data: (items) => _MaintenanceTimeline(
+      data: (items) => MaintenanceTimeline(
         records: items,
         taskTitleByPlanId: {
           for (final task in tasks) task.plan.id: task.plan.title,
         },
       ),
-      error: (error, _) => ErrorPanel(message: _failureMessage(context, error)),
+      error: (error, _) =>
+          hk_ui.ErrorPanel(message: failureMessage(context, error)),
       loading: () => const Center(child: CircularProgressIndicator()),
     );
   }
 }
 
-class _MaintenanceTimeline extends StatelessWidget {
-  const _MaintenanceTimeline({
+class MaintenanceTimeline extends StatelessWidget {
+  const MaintenanceTimeline({
     required this.records,
     this.taskTitle,
     this.taskTitleByPlanId = const {},
+    super.key,
   });
 
   final List<MaintenanceRecord> records;
@@ -774,7 +777,7 @@ class _TimelineDateHeader extends StatelessWidget {
           const SizedBox(width: HkSpacing.xs),
           Expanded(
             child: Text(
-              _formatLongDate(context, date),
+              formatLongDate(context, date),
               style: Theme.of(context).textTheme.labelLarge?.copyWith(
                 color: scheme.onSurfaceVariant,
                 fontWeight: FontWeight.w800,
@@ -857,7 +860,7 @@ class _TimelineRecordTile extends StatelessWidget {
                       ),
                     ),
                     hk_ui.StatusPill(
-                      label: _formatShortTime(context, record.completedAt),
+                      label: formatShortTime(context, record.completedAt),
                       color: HkColors.green,
                       compact: true,
                     ),
@@ -866,7 +869,7 @@ class _TimelineRecordTile extends StatelessWidget {
                 const SizedBox(height: HkSpacing.space4),
                 Text(
                   context.l10n.dueDateTimeLabel(
-                    _formatShortDateTime(context, record.dueDate),
+                    formatShortDateTime(context, record.dueDate),
                   ),
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: scheme.onSurfaceVariant,
@@ -897,12 +900,13 @@ class _TimelineRecordTile extends StatelessWidget {
   }
 }
 
-class _DetailRow extends StatelessWidget {
-  const _DetailRow({
+class DetailRow extends StatelessWidget {
+  const DetailRow({
     required this.icon,
     required this.label,
     required this.value,
     this.contentType,
+    super.key,
   });
 
   final IconData icon;
@@ -956,7 +960,7 @@ class _ThingAvatar extends StatelessWidget {
         photos.where((photo) => photo.isPrimary).firstOrNull ??
         photos.firstOrNull;
     return FutureBuilder<File?>(
-      future: _localFile(primary?.relativePath),
+      future: localMediaFile(primary?.relativePath),
       builder: (context, snapshot) {
         final file = snapshot.data;
         final hasImage = file != null && file.existsSync();
@@ -969,7 +973,7 @@ class _ThingAvatar extends StatelessWidget {
             child: hasImage
                 ? Image.file(file, fit: BoxFit.cover)
                 : Icon(
-                    _iconForAssetType(asset.assetType),
+                    iconForAssetType(asset.assetType),
                     color: scheme.primary,
                   ),
           ),
@@ -1000,7 +1004,7 @@ class _ThingPhotoTile extends StatelessWidget {
         children: [
           Expanded(
             child: FutureBuilder<File?>(
-              future: _localFile(photo.relativePath),
+              future: localMediaFile(photo.relativePath),
               builder: (context, snapshot) {
                 final file = snapshot.data;
                 final hasImage = file != null && file.existsSync();
@@ -1026,7 +1030,7 @@ class _ThingPhotoTile extends StatelessWidget {
                   child: Text(
                     photo.isPrimary
                         ? context.l10n.primary
-                        : _formatMonthDay(context, photo.createdAt),
+                        : formatMonthDay(context, photo.createdAt),
                     style: Theme.of(context).textTheme.labelMedium?.copyWith(
                       color: photo.isPrimary ? scheme.primary : null,
                       fontWeight: FontWeight.w700,
@@ -1047,14 +1051,14 @@ class _ThingPhotoTile extends StatelessWidget {
                     PopupMenuItem(
                       value: 'primary',
                       enabled: !photo.isPrimary,
-                      child: _PopupActionLabel(
+                      child: hk_ui.PopupActionLabel(
                         icon: Symbols.account_circle_rounded,
                         label: context.l10n.setPrimary,
                       ),
                     ),
                     PopupMenuItem(
                       value: 'delete',
-                      child: _PopupActionLabel(
+                      child: hk_ui.PopupActionLabel(
                         icon: Symbols.delete_rounded,
                         label: context.l10n.delete,
                         destructive: true,
@@ -1099,7 +1103,7 @@ class ThingCard extends ConsumerWidget {
         ? null
         : hk_ui.itemDueAccentColor(context, status.status);
     final subtitle = [
-      _assetTypeLabel(context, asset.assetType),
+      assetTypeLabel(context, asset.assetType),
       if (asset.placement != null) asset.placement!,
     ].join(' · ');
     final card = hk_ui.PremiumCard(
@@ -1217,7 +1221,7 @@ class ThingCard extends ConsumerWidget {
   }
 }
 
-String _healthStateLabel(BuildContext context, features.HealthState state) {
+String healthStateLabel(BuildContext context, features.HealthState state) {
   return switch (state) {
     features.HealthState.excellent => context.l10n.excellent,
     features.HealthState.good => context.l10n.good,

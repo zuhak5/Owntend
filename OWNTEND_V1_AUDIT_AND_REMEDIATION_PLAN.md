@@ -11,14 +11,51 @@
 | Commit timestamp/subject | 2026-08-21 02:30:25 +03:00, `perf(android): deduplicate Android 12 splash resources (#61)` |
 | Audit date | 2026-08-21, Asia/Baghdad |
 | Initial working tree | Clean; `main...origin/main`; 539 tracked files; no pre-existing user changes |
-| Deliverable constraint | Audit and plan only. No product, schema, test, configuration, documentation, or release fix was implemented. This file is the only intentional tracked change. |
+| Deliverable state | The original audit was followed by an end-to-end local remediation implementation from 2026-08-21 through 2026-08-22. This document preserves the audit baseline and now also serves as the finding ledger. Protected publication, hosted-production mutation, signing, and physical-device work remain evidence gates rather than locally authorized implementation steps. |
 | Target release | App `1.0.0`, Android build `1`, Drift schema `1`, one canonical initial Supabase migration representing cloud baseline `1` |
-| Local toolchain | Flutter 3.47.0 stable; Dart 3.13.0; Java 17.0.17; Node 24.11.1; npm 11.7.0; Deno 2.9.3; Supabase CLI 2.114.0 |
-| Declared Android/toolchain | compile SDK 37; target SDK 36; minimum SDK 24; AGP 9.3; Kotlin 2.4.10; Gradle 9.6.1; Java 17 in `config/toolchain.json`, while release workflows install Java 21 |
+| Local toolchain | Flutter 3.47.0 stable; Dart 3.13.0; Node 24.11.1; npm 11.7.0; Deno 2.9.3; Supabase CLI 2.115.0; Flutter Android JDK 21.0.9 |
+| Declared Android/toolchain | compile SDK 37; target SDK 36; minimum SDK 24; AGP 9.3; Kotlin 2.4.10; Gradle 9.6.1; Java 21 consistently enforced by repository policy and workflows |
 
-The audit followed `AGENTS.md` and `docs/governance/documentation-maintenance.md`. Documentation impact for this audit-only change is limited to this plan: it records future documentation changes but does not claim that current behavior changed. No remote branch was fetched during the audit, so “origin/main” means the locally recorded remote-tracking ref at the audited SHA.
+The original audit followed `AGENTS.md` and `docs/governance/documentation-maintenance.md`. The implementation subsequently applied the plan across source, schema, tests, workflows, tooling, and affected documentation. No remote branch was fetched, no commit was created, and no protected or public environment was mutated.
 
-## 2. Executive summary
+## Implementation status ledger — 2026-08-22
+
+Status meanings: **implemented** means the repository change and its local automated evidence are complete; **implemented, external evidence pending** means the local contract is complete but the plan deliberately requires protected, hosted, browser, or physical-device evidence; **in progress** means repository work remains and the finding must not be treated as closed.
+
+| Finding | Status | Implementation evidence |
+|---|---|---|
+| REL-001 | Implemented | App/build, Drift, backup, feed, native-ad, and VersionDeck project-owned boundaries are normalized to baseline 1; `pubspec.yaml` is `1.0.0+1`. |
+| REL-002 | Implemented, external evidence pending | VersionDeck generation, disabled state, validation, workflow SHA binding, cache policy, and service-worker contracts reject placeholder/stale identity. Protected signed-artifact publication remains gated. |
+| REL-003 | Implemented | Versioned VersionDeck implementation filenames and wrappers were removed; generic schema/generator/verifier files are canonical and cache keys are baseline 1. |
+| DB-001 | Implemented | Twelve unpublished patch migrations were replaced by one `20260821124930_initial_schema.sql`; archive and superseded objects/tests were removed. |
+| DB-002 | Implemented | Canonical v1 domain decisions are documented and enforced across Drift, DTO/mappers, PostgreSQL, RPCs, and tests. |
+| DB-003 | Implemented | Drift schema and backup format are baseline 1 with no pre-v1 upgrade/read compatibility path. |
+| DB-004 | Implemented | Local containment, uniqueness, primary-photo, enum, and required-field invariants are enforced and covered by schema/repository tests. |
+| SYNC-001 | Implemented | One contract-1 payload-bearing change feed plus authoritative snapshot/resnapshot replaced capability discovery, parity, and the second incremental path. |
+| SYNC-002 | Implemented | Feed, point-read, push, and unknown-outbox failures fail closed; checkpoint/high-water transitions are atomic and retry intent remains durable. |
+| SYNC-003 | Implemented | The unsupported synchronized device-notification table/mutation path was removed; local schedule snapshots and the cloud notification inbox have distinct ownership. |
+| SYNC-004 | Implemented | Typed feed/mutation envelopes and explicit mappers own transport metadata; canonical sequence/revision facts are no longer synthesized from timestamps. |
+| SYNC-005 | Implemented | Local media deletion uses a durable cleanup queue with retry, terminal diagnostics, account isolation, and restart coverage. |
+| ARCH-001 | Implemented | `main.dart` is bootstrap-only; `owntend_app.dart` owns startup/application composition; feature presentation is grouped into explicit domain libraries outside application-root private scope; and exactly one `databaseProvider` remains. Analyzer, startup, provider-lifecycle, and full widget evidence verify the wiring. |
+| ARCH-002 | Implemented | Shared UI, monetization, backup, dashboard, presentation support, local sync storage, and sync coordination were decomposed into focused modules behind stable facades. No non-generated production Dart source remains above 2,000 lines; sync/store and coordinator behavior suites pass after extraction. |
+| CLEAN-001 | Implemented | Quarantine, capability rollout, old notification/settings/permission paths, Build-44 behavior, schema wrappers, and obsolete compatibility implementations were removed rather than layered. |
+| CLEAN-002 | Implemented | Bug/problem/task/environment-era test and migration names were replaced with behavioral names; deleted-history assertions were removed. |
+| SEC-001 | Implemented, external evidence pending | Edge Sentry now deeply scrubs exceptions, contexts, frames, request data, and nested values with adversarial shared tests. Hosted non-production canary inspection remains gated. |
+| SEC-002 | Implemented, external evidence pending | Shared bounded body/JSON parsing, method/content-type/field allowlists, replay/idempotency limits, and database privilege tests are in place. Hosted gateway/WAF/rate-limit evidence remains gated. |
+| PRIV-001 | Implemented, external evidence pending | Deletion receipts and cleanup operations have finite 90-day pruning semantics reflected in SQL, Edge behavior, tests, privacy, and deletion docs. Hosted cron observation remains gated. |
+| MEDIA-001 | Implemented | The client/server flow is prepare-before-upload with immutable server-issued paths, stored-object verification, idempotent finalization, and durable cloud/local cleanup; real local Storage integration passed. |
+| TEST-001 | Implemented | A gated real local-Supabase test exercises two users, two independent app databases/coordinators, RLS, convergence, and Storage prepare/upload/finalize; CI owns the disposable-stack invocation. |
+| TEST-002 | Implemented, external evidence pending | Obsolete-contract tests were rewritten/renamed, focused fault suites were added, and all automated inventories are canonical. Physical-device Google/ads/permission/background/restore coverage remains a release gate. |
+| CODEGEN-001 | Implemented | Localization and Drift outputs were regenerated from sources; CI checks generation and repository cleanliness. |
+| DEP-001 | Implemented, upstream warning tracked | Reviewed Dart, Flutter plugin, Deno, Node, and Supabase CLI updates were applied with lockfiles, audit, policy, SBOM/notices, and build evidence. Flutter still reports upstream Built-in-Kotlin migration warnings for `sentry_flutter` and `workmanager_android`; no newer compatible release is available in the reviewed graph. |
+| TOOL-001 | Implemented | Java 21, AGP 9.3, Kotlin 2.4.10, Gradle 9.6.1, SDKs, Node, and workflow/toolchain assertions are aligned; a clean dev debug APK builds on Flutter's JDK 21. |
+| DOC-001 | Implemented | Broken Kotlin/migration links were repaired and a repository-wide local Markdown link validator is now a CI gate. |
+| DOC-002 | Implemented | Architecture, data, sync, backend, privacy, monetization, testing, release, containment, configuration, and product documentation describe the clean v1 contracts and label protected evidence. |
+| PERF-001 | Implemented, device evidence pending | Feed payloads eliminate per-change point fetches; feed/call-count, startup, size, backup, search, and deterministic tool budgets are automated. Named-device percentile, battery, and soak evidence remains gated. |
+
+The detailed sections below retain the pre-remediation evidence and reasoning as the historical audit baseline. Current implementation proof and remaining external gates are summarized here and in `OWNTEND_V1_IMPLEMENTATION_REPORT.md`.
+
+## 2. Executive summary (historical audit baseline)
 
 Owntend is **not ready for a production-v1 release**. Its test baseline is unusually strong—Flutter analysis, 718 Flutter tests, 121 Node tests, 53 Deno tests, 481 pgTAP assertions, database lint, localization generation, production configuration validation, and a dev debug APK build all passed. The release is blocked by contract and source-of-truth problems that passing tests currently encode rather than expose: artificial unpublished version and migration history, divergent local/cloud models, a disabled canonical change feed with a second legacy pull protocol, a discarded local notification mutation type, stale Drift generated output, incomplete Edge telemetry scrubbing, an unsafe media staging order, and VersionDeck validation tied to an all-zero placeholder commit.
 

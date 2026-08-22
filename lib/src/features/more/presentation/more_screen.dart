@@ -1,4 +1,13 @@
-part of '../../../../main.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:material_symbols_icons/symbols.dart';
+import 'package:owntend/l10n/app_localizations_ext.dart';
+
+import '../../../ui/app_theme.dart';
+import '../../../ui/components.dart' as hk_ui;
+import '../../monetization/monetization.dart';
+import '../../monetization/presentation/earn_points_flow.dart';
 
 class MoreScreen extends ConsumerWidget {
   const MoreScreen({super.key});

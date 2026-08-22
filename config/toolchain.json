@@ -2,9 +2,9 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Owntend Canonical Toolchain Specification",
   "schemaVersion": 1,
-  "lastReviewedUtc": "2026-08-15T00:00:00Z",
+  "lastReviewedUtc": "2026-08-22T00:00:00Z",
   "reviewedBy": "zuhak5",
-  "description": "Authoritative machine-readable canonical toolchain specification for Owntend validation, APK, AAB, and VersionDeck release rails. All workflows, build scripts, and verification tools consume or validate against this specification to guarantee deterministic, reproducible release builds.",
+  "description": "Authoritative machine-readable canonical toolchain specification for Owntend validation, Shorebird Android releases and patches, exact-AAB VersionDeck derivation, and release evidence. Workflows and verification tools consume or validate this specification to guarantee deterministic, reproducible release builds.",
   "canonicalToolchain": {
     "flutter": {
       "version": "3.47.0",
@@ -14,7 +14,7 @@
       "sdkConstraint": "^3.13.0"
     },
     "java": {
-      "version": "17",
+      "version": "21",
       "distribution": "temurin"
     },
     "node": {
@@ -34,8 +34,24 @@
       "gradleDistributionSha256": "9c0f7faeeb306cb14e4279a3e084ca6b596894089a0638e68a07c945a32c9e14"
     },
     "tools": {
+      "shorebirdCli": {
+        "version": "1.6.119",
+        "repository": "https://github.com/shorebirdtech/shorebird.git",
+        "commit": "cdd0edf0e04ab94ac1a25d1be3ab0c375257e4f9",
+        "bundledFlutterRevision": "91f8bd75076e9c740aa13cf67eb9ec1a093f68f5",
+        "bundledEngineRevision": "03e67977a7ff5893d96ac97f22c6a795530c0040",
+        "releaseFlutterVersion": "3.47.0",
+        "releaseFlutterRevision": "cac7b89dba52c1b8086d211de9a86ad2219ea8ac",
+        "releaseEngineRevision": "5a91274d10582c35d6df695511e327879664e35c"
+      },
+      "bundletool": {
+        "version": "1.18.3",
+        "url": "https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar",
+        "sha256": "a099cfa1543f55593bc2ed16a70a7c67fe54b1747bb7301f37fdfd6d91028e29"
+      },
+      "gcloud": "581.0.0",
       "sentryCli": "2.58.6",
-      "supabaseCli": "2.114.0"
+      "supabaseCli": "2.115.0"
     },
     "runner": {
       "os": "windows-latest",

@@ -14,6 +14,7 @@ const allowedSentryTags = <String>{
   'app_environment',
   'app_version',
   'build_number',
+  'shorebird_patch_number',
   'locale',
   'operation',
   'sync_mode',

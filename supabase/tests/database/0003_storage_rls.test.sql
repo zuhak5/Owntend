@@ -35,8 +35,8 @@ select is(
    where schemaname = 'storage'
      and tablename = 'objects'
      and policyname = 'user_media_update_own'),
-  1,
-  'private media update policy exists'
+  0,
+  'staged media is immutable because no update policy exists'
 );
 select is(
   (select count(*)::integer from pg_policies

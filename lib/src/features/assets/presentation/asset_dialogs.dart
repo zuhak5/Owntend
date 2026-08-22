@@ -1,4 +1,4 @@
-part of '../../../../main.dart';
+part of 'assets_presentation.dart';
 
 class MoveCopyItemDialog extends ConsumerStatefulWidget {
   const MoveCopyItemDialog({required this.asset, super.key});
@@ -26,7 +26,7 @@ class _MoveCopyItemDialogState extends ConsumerState<MoveCopyItemDialog> {
   @override
   Widget build(BuildContext context) {
     final rooms = ref.watch(roomsProvider);
-    return _EditorSheetFrame(
+    return EditorSheetFrame(
       title: context.l10n.moveOrCopyItem,
       saveLabel: _saving
           ? context.l10n.saving
@@ -58,7 +58,7 @@ class _MoveCopyItemDialogState extends ConsumerState<MoveCopyItemDialog> {
                 padding: const EdgeInsets.all(14),
                 child: Row(
                   children: [
-                    Icon(_iconForAssetType(widget.asset.assetType)),
+                    Icon(iconForAssetType(widget.asset.assetType)),
                     const SizedBox(width: HkSpacing.xs),
                     Expanded(
                       child: DynamicText(
@@ -122,7 +122,7 @@ class _MoveCopyItemDialogState extends ConsumerState<MoveCopyItemDialog> {
           );
         },
         error: (error, _) =>
-            ErrorPanel(message: _failureMessage(context, error)),
+            hk_ui.ErrorPanel(message: failureMessage(context, error)),
         loading: () => const LinearProgressIndicator(),
       ),
     );
@@ -238,13 +238,13 @@ class _MoveCopyItemDialogState extends ConsumerState<MoveCopyItemDialog> {
       }
     } catch (error) {
       if (mounted) {
-        if (_isInsufficientPointsError(error)) {
+        if (isInsufficientPointsError(error)) {
           await showPointShortageDialog(context, ref, attemptedAction: 'asset');
           return;
         }
         hk_ui.showToast(
           context,
-          content: Text(_failureMessage(context, error)),
+          content: Text(failureMessage(context, error)),
           severity: hk_ui.HkToastSeverity.error,
         );
       }
@@ -313,21 +313,8 @@ Map<String, dynamic> _taskMetadataPayload(TaskMetadata? metadata) =>
         'sort_order': metadata.sortOrder,
       };
 
-String? _nullableEditText(String value) {
-  final trimmed = value.trim();
-  return trimmed.isEmpty ? null : trimmed;
-}
-
-List<String> _commaList(String value) {
-  return value
-      .split(',')
-      .map((item) => item.trim())
-      .where((item) => item.isNotEmpty)
-      .toList(growable: false);
-}
-
 Future<String?> showAreaEditorSheet(BuildContext context, {Area? area}) {
-  return _showEditorModal<String>(
+  return showEditorModal<String>(
     context,
     builder: (context) => AreaEditorDialog(area: area),
   );
@@ -338,7 +325,7 @@ Future<String?> showRoomEditorSheet(
   required String areaId,
   Room? room,
 }) {
-  return _showEditorModal<String>(
+  return showEditorModal<String>(
     context,
     builder: (context) => RoomEditorDialog(areaId: areaId, room: room),
   );
@@ -349,14 +336,14 @@ Future<void> showAssetEditorSheet(
   Asset? asset,
   String? roomId,
 }) {
-  return _showEditorModal<void>(
+  return showEditorModal<void>(
     context,
     builder: (context) => AssetEditorDialog(asset: asset, roomId: roomId),
   );
 }
 
 Future<void> showMoveCopyItemSheet(BuildContext context, Asset asset) {
-  return _showEditorModal<void>(
+  return showEditorModal<void>(
     context,
     builder: (context) => MoveCopyItemDialog(asset: asset),
   );
@@ -389,7 +376,7 @@ Future<void> showPlanEditorSheet(
   TaskItem? task,
   String? assetId,
 }) {
-  return _showEditorModal<void>(
+  return showEditorModal<void>(
     context,
     builder: (context) => PlanEditorDialog(task: task, assetId: assetId),
   );
@@ -493,12 +480,12 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
       text: safety?.testIntervalDays?.toString() ?? '',
     );
     _powerSource = device?.powerSource ?? PowerSource.mains;
-    _petType = _petTypeOptions.contains(pet?.species)
+    _petType = petTypeOptions.contains(pet?.species)
         ? pet!.species!
         : (pet?.species?.trim().isNotEmpty ?? false)
         ? 'Other'
         : 'Dog';
-    _fishType = _fishTypeOptions.contains(pet?.breed)
+    _fishType = fishTypeOptions.contains(pet?.breed)
         ? pet!.breed!
         : (pet?.breed?.trim().isNotEmpty ?? false)
         ? 'Other'
@@ -689,7 +676,7 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
         !_saving &&
         _nameController.text.trim().isNotEmpty &&
         selectedRoomId != null;
-    return _EditorSheetFrame(
+    return EditorSheetFrame(
       title: widget.asset == null
           ? context.l10n.addItem
           : context.l10n.editItem,
@@ -708,7 +695,7 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
             child: Row(
               children: [
                 Icon(
-                  _iconForAssetType(_assetType),
+                  iconForAssetType(_assetType),
                   color: HkColors.appPrimaryDark,
                 ),
                 const SizedBox(width: 12),
@@ -743,7 +730,7 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
               for (final type in AssetType.values)
                 DropdownMenuItem(
                   value: type,
-                  child: Text(_assetTypeLabel(context, type)),
+                  child: Text(assetTypeLabel(context, type)),
                 ),
             ],
             onChanged: (value) {
@@ -799,7 +786,7 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
                 onChanged: (value) => setState(() => _roomId = value),
               );
             },
-            error: (error, _) => Text(_failureMessage(context, error)),
+            error: (error, _) => Text(failureMessage(context, error)),
             loading: () => const LinearProgressIndicator(),
           ),
           const SizedBox(height: 12),
@@ -825,7 +812,7 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
               _purchaseDate == null
                   ? context.l10n.purchaseDate
                   : context.l10n.purchasedDate(
-                      _formatShortDate(context, _purchaseDate!),
+                      formatShortDate(context, _purchaseDate!),
                     ),
             ),
           ),
@@ -889,7 +876,7 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
             for (final source in PowerSource.values)
               DropdownMenuItem(
                 value: source,
-                child: Text(_powerSourceLabel(context, source)),
+                child: Text(powerSourceLabel(context, source)),
               ),
           ],
           onChanged: (value) =>
@@ -905,7 +892,7 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
             _warrantyUntil == null
                 ? context.l10n.warrantyDate
                 : context.l10n.warrantyUntilDate(
-                    _formatShortDate(context, _warrantyUntil!),
+                    formatShortDate(context, _warrantyUntil!),
                   ),
           ),
         ),
@@ -937,10 +924,10 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
           initialValue: _petType,
           decoration: InputDecoration(labelText: context.l10n.petType),
           items: [
-            for (final item in _petTypeOptions)
+            for (final item in petTypeOptions)
               DropdownMenuItem(
                 value: item,
-                child: Text(_petTypeLabel(context, item)),
+                child: Text(petTypeLabel(context, item)),
               ),
           ],
           onChanged: (value) {
@@ -956,10 +943,10 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
             initialValue: _fishType,
             decoration: InputDecoration(labelText: context.l10n.fishType),
             items: [
-              for (final item in _fishTypeOptions)
+              for (final item in fishTypeOptions)
                 DropdownMenuItem(
                   value: item,
-                  child: Text(_fishTypeLabel(context, item)),
+                  child: Text(fishTypeLabel(context, item)),
                 ),
             ],
             onChanged: (value) =>
@@ -1002,7 +989,7 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
             _petBirthDate == null
                 ? context.l10n.birthDate
                 : context.l10n.bornDate(
-                    _formatShortDate(context, _petBirthDate!),
+                    formatShortDate(context, _petBirthDate!),
                   ),
           ),
         ),
@@ -1057,7 +1044,7 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
             for (final item in Sunlight.values)
               DropdownMenuItem(
                 value: item,
-                child: Text(_sunlightLabel(context, item)),
+                child: Text(sunlightLabel(context, item)),
               ),
           ],
           onChanged: (value) => setState(() => _sunlight = value ?? _sunlight),
@@ -1086,7 +1073,7 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
             _lastRepottedAt == null
                 ? context.l10n.lastRepotted
                 : context.l10n.repottedDate(
-                    _formatShortDate(context, _lastRepottedAt!),
+                    formatShortDate(context, _lastRepottedAt!),
                   ),
           ),
         ),
@@ -1120,7 +1107,7 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
             _installedAt == null
                 ? context.l10n.installedDate
                 : context.l10n.installedDateValue(
-                    _formatShortDate(context, _installedAt!),
+                    formatShortDate(context, _installedAt!),
                   ),
           ),
         ),
@@ -1134,7 +1121,7 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
             _expiresAt == null
                 ? context.l10n.expirationDate
                 : context.l10n.expiresDate(
-                    _formatShortDate(context, _expiresAt!),
+                    formatShortDate(context, _expiresAt!),
                   ),
           ),
         ),
@@ -1392,13 +1379,13 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
       }
     } catch (error) {
       if (mounted) {
-        if (_isInsufficientPointsError(error)) {
+        if (isInsufficientPointsError(error)) {
           await showPointShortageDialog(context, ref, attemptedAction: 'asset');
           return;
         }
         hk_ui.showToast(
           context,
-          content: Text(_failureMessage(context, error)),
+          content: Text(failureMessage(context, error)),
           severity: hk_ui.HkToastSeverity.error,
         );
       }

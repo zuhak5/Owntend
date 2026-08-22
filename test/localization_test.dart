@@ -76,10 +76,10 @@ void main() {
       InboxNotification(
         id: 'notification-1',
         title: 'Water the basil is overdue',
-        body: 'Legacy snapshot',
+        body: 'Canonical snapshot',
         kind: 'task',
         createdAt: DateTime.utc(2026, 7, 22),
-        messageCode: NotificationMessageCode.taskOverdue.wireValue,
+        messageCode: NotificationMessageCode.taskOverdue,
         messageArgs: const {'task': 'Water the basil'},
       ),
     );
@@ -105,13 +105,13 @@ void main() {
       ).readAsStringSync();
       expect(thingDetail, isNot(contains('_categoryLabel')));
       expect(thingDetail, contains('durationMinutes'));
-      expect(thingDetail, contains('_petSpeciesLabel(context, pet!.species!)'));
+      expect(thingDetail, contains('petSpeciesLabel(context, pet!.species!)'));
       expect(thingDetail, isNot(contains("'minute' : 'minutes'")));
 
       final assetDialogs = File(
         'lib/src/features/assets/presentation/asset_dialogs.dart',
       ).readAsStringSync();
-      expect(assetDialogs, contains('_assetTypeLabel(context, type)'));
+      expect(assetDialogs, contains('assetTypeLabel(context, type)'));
 
       final domainLocalization = File('lib/src/ui/domain_localization.dart')
           .readAsStringSync();
@@ -121,7 +121,10 @@ void main() {
       expect(domainLocalization, contains('recurrenceMonths(rule.interval)'));
       expect(domainLocalization, contains('recurrenceYears(rule.interval)'));
 
-      final components = File('lib/src/ui/components.dart').readAsStringSync();
+      final components = [
+        File('lib/src/ui/components/task_status.dart').readAsStringSync(),
+        File('lib/src/ui/components/navigation.dart').readAsStringSync(),
+      ].join('\n');
       expect(components, isNot(contains(" in \${task.room.name}")));
       expect(
         components,
@@ -139,26 +142,23 @@ void main() {
     },
   );
 
-  test(
-    'unknown controlled notifications use the localized generic fallback',
-    () {
-      final english = lookupAppLocalizations(const Locale('en'));
-      final content = localizeInboxNotification(
-        english,
-        InboxNotification(
-          id: 'notification-2',
-          title: 'Backend details must not be shown',
-          body: 'Raw payload',
-          kind: 'system',
-          createdAt: DateTime.utc(2026, 7, 22),
-          messageCode: 'future_message_code',
-        ),
-      );
+  test('generic notifications retain their explicit snapshot content', () {
+    final english = lookupAppLocalizations(const Locale('en'));
+    final content = localizeInboxNotification(
+      english,
+      InboxNotification(
+        id: 'notification-2',
+        title: 'Owntend update',
+        body: 'A general update is available.',
+        kind: 'system',
+        createdAt: DateTime.utc(2026, 7, 22),
+        messageCode: NotificationMessageCode.generic,
+      ),
+    );
 
-      expect(content.title, english.notificationGenericTitle);
-      expect(content.body, english.notificationGenericBody);
-    },
-  );
+    expect(content.title, 'Owntend update');
+    expect(content.body, 'A general update is available.');
+  });
 }
 
 Map<String, dynamic> _arb(String path) =>

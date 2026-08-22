@@ -1,4 +1,56 @@
-part of '../../../main.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../data/reactive_stream.dart';
+import '../data/repositories.dart';
+import '../database/app_database.dart';
+import '../domain/contracts.dart';
+import '../domain/models.dart';
+import '../domain/render_fingerprints.dart';
+import '../services/app_permission_coordinator.dart';
+import '../services/backup_service.dart';
+import '../services/health_score_calculator.dart';
+import '../services/notification_service.dart';
+import '../services/reminder_schedule_reconciler.dart';
+import '../services/restore_journal.dart';
+import '../services/weather_service.dart';
+import '../sync/sync_providers.dart';
+import '../../features/auth/presentation/auth_providers.dart';
+import '../../features/navigation/app_navigation.dart';
+import '../../features/startup/domain/initial_home_snapshot.dart';
+
+final assetRepositoryProvider = Provider<AssetRepository>(
+  (ref) => DriftAssetRepository(ref.watch(databaseProvider)),
+);
+
+final calendarRepositoryProvider = Provider<CalendarRepository>(
+  (ref) => ref.watch(maintenanceRepositoryProvider) as CalendarRepository,
+);
+
+final streakServiceProvider = Provider<StreakService>(
+  (ref) => DatabaseStreakService(ref.watch(databaseProvider)),
+);
+
+final statisticsRepositoryProvider = Provider<StatisticsRepository>(
+  (ref) => DriftStatisticsRepository(
+    ref.watch(databaseProvider),
+    ref.watch(maintenanceRepositoryProvider),
+    ref.watch(streakServiceProvider),
+    healthScoreCalculator: const WeightedHealthScoreCalculator(),
+  ),
+);
+
+final settingsRepositoryProvider = Provider<SettingsRepository>(
+  (ref) => DriftSettingsRepository(ref.watch(databaseProvider)),
+);
+
+final permissionCoordinatorProvider = Provider<AppPermissionGateway>(
+  (ref) => AppPermissionCoordinator(ref.watch(databaseProvider)),
+);
+
+final permissionEducationSeenProvider = StreamProvider<bool>((ref) {
+  return ref.watch(settingsRepositoryProvider).watchPermissionEducationSeen();
+});
 
 class ThemeStartupSettings {
   const ThemeStartupSettings({
@@ -78,7 +130,7 @@ final notificationSchedulerProvider = Provider<NotificationScheduler>(
     permissionGateway: ref.watch(permissionCoordinatorProvider),
     supabaseClient: ref.watch(supabaseClientProvider),
     localSyncStore: ref.watch(localSyncStoreProvider),
-    onNotificationPayload: _openNotificationPayload,
+    onNotificationPayload: openNotificationPayload,
   ),
 );
 
@@ -100,8 +152,6 @@ final notificationReconciliationConsumerProvider =
                 sessionUserId: session?.user.id,
                 boundUserId: account?.boundUserId,
                 accountEnabled: account?.enabled ?? false,
-                uploadProhibited: account?.uploadProhibited ?? false,
-                migrationState: account?.migrationState,
               );
         },
       );
@@ -310,46 +360,3 @@ final streakRefreshProvider = FutureProvider.autoDispose<StreakState>((
 ) async {
   return ref.watch(streakServiceProvider).refresh(DateTime.now());
 });
-
-Page<void> _appRoutePage(
-  BuildContext context,
-  GoRouterState state,
-  Widget child, {
-  bool bodyHasBackdrop = false,
-}) {
-  final routeChild = bodyHasBackdrop ? child : _AppRouteBackdrop(child: child);
-  if (_prefersReducedMotion(context)) {
-    return NoTransitionPage<void>(
-      key: state.pageKey,
-      name: normalizeSentryRoute(state.fullPath ?? state.uri.path),
-      child: routeChild,
-    );
-  }
-  return CustomTransitionPage<void>(
-    key: state.pageKey,
-    name: normalizeSentryRoute(state.fullPath ?? state.uri.path),
-    child: routeChild,
-    transitionDuration: _routeTransitionDuration,
-    reverseTransitionDuration: _routeTransitionReverseDuration,
-    transitionsBuilder: (context, animation, secondaryAnimation, child) {
-      final curved = CurvedAnimation(
-        parent: animation,
-        curve: Curves.easeOutCubic,
-        reverseCurve: Curves.easeInCubic,
-      );
-      return FadeTransition(
-        opacity: curved,
-        child: SlideTransition(
-          position: Tween<Offset>(
-            begin: const Offset(0, 0.018),
-            end: Offset.zero,
-          ).animate(curved),
-          child: ScaleTransition(
-            scale: Tween<double>(begin: 0.992, end: 1).animate(curved),
-            child: child,
-          ),
-        ),
-      );
-    },
-  );
-}

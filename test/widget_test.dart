@@ -20,13 +20,10 @@ import 'package:owntend/src/core/services/app_permission_coordinator.dart';
 import 'package:owntend/src/core/sync/local_sync_store.dart';
 import 'package:owntend/src/core/sync/sync_connectivity.dart';
 import 'package:owntend/src/core/sync/sync_contracts.dart';
-import 'package:owntend/src/core/sync/sync_providers.dart';
 import 'package:owntend/src/features/auth/domain/auth_repository.dart';
-import 'package:owntend/src/features/auth/presentation/auth_providers.dart';
 import 'package:owntend/src/features/maintenance/application/task_creation_controller.dart';
 import 'package:owntend/src/features/maintenance/data/task_creation_operation_store.dart';
 import 'package:owntend/src/features/monetization/monetization.dart';
-import 'package:owntend/src/features/permissions/application/permission_education_controller.dart';
 import 'package:owntend/src/features/permissions/data/device_permission_gateway.dart';
 import 'package:owntend/src/features/permissions/data/permission_education_repository.dart';
 import 'package:owntend/src/features/permissions/domain/permission_capability.dart';
@@ -2213,10 +2210,10 @@ void main() {
       final notification = InboxNotification(
         id: 'golden-notification',
         title: 'Replace water filter is overdue',
-        body: 'Legacy platform snapshot',
+        body: 'Canonical platform snapshot',
         kind: 'task',
         createdAt: DateTime.utc(2026, 7, 22, 9, 30),
-        messageCode: NotificationMessageCode.taskOverdue.wireValue,
+        messageCode: NotificationMessageCode.taskOverdue,
         messageArgs: const {'task': 'Replace water filter'},
         planId: task.plan.id,
       );

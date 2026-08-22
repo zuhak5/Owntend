@@ -44,27 +44,27 @@ insert into public.notification_inbox (
 )
 values (
   '33333333-3333-3333-3333-333333333333',
-  'legacy-notification', 'Legacy title', 'Legacy body', 'task',
-  'legacy-localization-test', now(), now()
+  'generic-notification', 'Generic title', 'Generic body', 'task',
+  'generic-localization-test', now(), now()
 );
 
 select is(
   (
     select message_args
     from public.notification_inbox
-    where id = 'legacy-notification'
+    where id = 'generic-notification'
   ),
   '{}'::jsonb,
-  'legacy notification writes receive an empty argument object'
+  'generic notification writes receive an empty argument object'
 );
 select is(
   (
     select message_code
     from public.notification_inbox
-    where id = 'legacy-notification'
+    where id = 'generic-notification'
   ),
-  null,
-  'legacy notification writes retain a null message code'
+  'generic',
+  'generic notification writes receive the canonical generic code'
 );
 
 select throws_ok(
@@ -91,7 +91,7 @@ select lives_ok(
     ) values (
       '33333333-3333-3333-3333-333333333333',
       'localized-notification', 'Snapshot title', 'Snapshot body', 'task',
-      'localized-notification-test', 'task_due',
+      'localized-notification-test', 'task_due_today',
       '{"task":"Replace filter"}'::jsonb, now(), now()
     )
   $$,
@@ -151,7 +151,7 @@ select is(
     from public.notification_inbox
     where id = 'localized-notification'
   ),
-  'task_due',
+  'task_due_today',
   'another user cannot alter localized notification content'
 );
 select ok(

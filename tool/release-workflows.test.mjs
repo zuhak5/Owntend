@@ -16,9 +16,9 @@ const read = async (path) =>
 test('GitHub Actions use only reviewed immutable references', async () => {
   const result = await validateRepositoryActionReferences();
   assert.deepEqual(result.errors, []);
-  assert.equal(result.externalReferences, 52);
+  assert.equal(result.externalReferences, 57);
   assert.equal(result.localReferences, 0);
-  assert.equal(result.files.length, 8);
+  assert.equal(result.files.length, 9);
 });
 
 test('GitHub Actions policy rejects mutable, shortened, and unowned references', () => {
@@ -117,148 +117,65 @@ test('GitHub Actions policy rejects mutable, shortened, and unowned references',
   assert.equal(unusualButOwned.externalReferences, 1);
 });
 
-test('Play AAB rail uses protected production names and verifiable evidence', async () => {
-  const workflow = await read('.github/workflows/build-play-android.yml');
-  assert.match(workflow, /name: Require current main release source/);
-  assert.match(workflow, /Reject a non-main dispatch/);
-  assert.match(workflow, /source_sha" != "\$remote_sha/);
-  assert.match(workflow, /needs: validate-release-source/);
-  assert.match(workflow, /environment: production-play-signing/);
-  assert.doesNotMatch(workflow, /if: github\.ref == 'refs\/heads\/main'/);
-  assert.match(workflow, /SUPABASE_URL: \$\{\{ vars\.SUPABASE_URL \}\}/);
-  assert.match(
-    workflow,
-    /ANDROID_KEYSTORE_BASE64: \$\{\{ secrets\.PLAY_UPLOAD_KEYSTORE_BASE64 \}\}/,
-  );
-  assert.match(
-    workflow,
-    /ANDROID_STORE_PASSWORD: \$\{\{ secrets\.PLAY_UPLOAD_STORE_PASSWORD \}\}/,
-  );
-  assert.doesNotMatch(
-    workflow,
-    /PROD_SUPABASE_URL|ANDROID_KEYSTORE_PASSWORD|ANDROID_APK_|SENTRY_AUTH_TOKEN|SUPABASE_(?:ADVISOR|MIGRATION)_/,
-  );
-  assert.match(workflow, /contents: read/);
-  assert.match(workflow, /actions: read/);
-  assert.match(workflow, /jarsigner -verify/);
-  assert.match(workflow, /keytool -printcert -jarfile/);
-  assert.match(workflow, /collect_android_release_evidence\.ps1/);
-  assert.match(workflow, /node \.\\tool\\provenance_policy\.mjs/);
-  assert.match(
-    workflow,
-    /attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3\.0\.0/,
-  );
+test('Shorebird release rail is dry-run by default and preserves production gates', async () => {
+  const workflow = await read('.github/workflows/shorebird-release-android.yml');
+  assert.match(workflow, /name: Shorebird Android Release/);
+  assert.match(workflow, /default: validate/);
+  assert.match(workflow, /SHOREBIRD_PRODUCTION_RELEASES_ENABLED/);
+  assert.match(workflow, /exact current origin\/main/);
   assert.match(workflow, /validate-google-backend\.yml\/runs\?head_sha=/);
-  assert.match(workflow, /\.path -eq "\.github\/workflows\/validate-google-backend\.yml"/);
-  assert.match(workflow, /\.head_branch -eq "main"/);
-  assert.match(workflow, /backend_gate_run_url = "\$\{\{ steps\.backend_gate\.outputs\.run_url \}\}"/);
-  assert.match(workflow, /name: Upload AAB evidence\n\s+if: always\(\)/);
-  assert.match(
-    workflow,
-    /path: \|\n\s+release\/aab-evidence\n\s+build\/sentry-debug\/dart\n\s+build\/app\/outputs\/mapping\/prodRelease/,
-  );
-  assert.match(workflow, /repository_id = \$env:GITHUB_REPOSITORY_ID/);
-  assert.match(workflow, /source_ref = \$env:GITHUB_REF/);
-  assert.match(workflow, /source_repository_visibility = "public"/);
-  assert.match(workflow, /--attestation-output \(Join-Path \$PWD "release\\aab-evidence\\provenance-attestation\.json"\)/);
-  assert.match(workflow, /--verification-output \(Join-Path \$PWD "release\\aab-evidence\\provenance-verification\.json"\)/);
-  assert.ok(
-    workflow.indexOf('Initialize AAB diagnostics') <
-      workflow.indexOf('Build and test production AAB'),
-    'AAB diagnostics must exist before the build can fail',
-  );
-  assert.doesNotMatch(
-    workflow,
-    /googleapis|service_account|supply|edits\.(?:insert|bundles|tracks)|publish.*play/i,
-  );
+  assert.match(workflow, /secrets\.SHOREBIRD_TOKEN/);
+  assert.match(workflow, /vars\.SHOREBIRD_(?:DEV|STAGING|PROD)_APP_ID/);
+  assert.match(workflow, /google-github-actions\/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3\.0\.0/);
+  assert.match(workflow, /setup-gcloud@e427ad8a34f8676edf47cf7d7925499adf3eb74f # v2\.2\.1/);
+  assert.match(workflow, /version: "581\.0\.0"/);
+  assert.match(workflow, /invoke_shorebird_release\.ps1 @Parameters -DryRun/);
+  assert.ok(workflow.lastIndexOf('verify_android_release_registrants.ps1 -RemoveGeneratedMain') < workflow.indexOf('invoke_shorebird_release.ps1 @Parameters -DryRun'));
+  assert.match(workflow, /shorebird-release-\$\{\{ inputs\.flavor \}\}-\*\.json/);
+  assert.match(await read('tool/invoke_shorebird_release.ps1'), /--flutter-version=\$\(\$shorebirdPin\.releaseFlutterVersion\)/);
+  assert.match(await read('tool/invoke_shorebird_release.ps1'), /releaseFlutterRevision/);
+  assert.match(workflow, /collect_android_release_evidence\.ps1/);
+  assert.match(workflow, /download_shorebird_engine_symbols\.ps1/);
+  assert.match(workflow, /derive_versiondeck_apks\.ps1/);
+  assert.match(workflow, /environment: production-android-signing/);
+  assert.match(workflow, /attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3\.0\.0/);
+  assert.doesNotMatch(workflow, /gh release (?:create|upload|edit)|SENTRY_AUTH_TOKEN|edits\.(?:insert|bundles|tracks)/);
 });
 
-test('APK rail builds, verifies, and attests without public release mutation', async () => {
-  const workflow = await read('.github/workflows/build-production-android.yml');
-
-  assert.match(workflow, /name: Require current main release source/);
-  assert.match(workflow, /Reject a non-main dispatch/);
-  assert.match(workflow, /needs: validate-release-source/);
-  assert.match(workflow, /environment: production-android-signing/);
-
-  assert.doesNotMatch(
-    workflow,
-    /environment: production-sentry|environment: production-github-release|SENTRY_AUTH_TOKEN/,
-  );
-
-  assert.doesNotMatch(
-    workflow,
-    /gh release (?:create|upload|edit)/,
-  );
-
-  assert.match(
-    workflow,
-    /ANDROID_KEYSTORE_BASE64: \$\{\{ secrets\.ANDROID_APK_KEYSTORE_BASE64 \}\}/,
-  );
-
-  assert.match(workflow, /validate_google_release_contracts\.mjs/);
+test('Shorebird patch rail rejects unsafe diffs and publishes only to staging track', async () => {
+  const workflow = await read('.github/workflows/shorebird-patch-android.yml');
+  const patchScript = await read('tool/invoke_shorebird_patch.ps1');
+  assert.match(workflow, /default: validate/);
+  assert.match(workflow, /shorebird_patch_eligibility\.mjs/);
+  assert.match(workflow, /refs\/heads\/release\//);
+  assert.match(workflow, /candidate must be the exact release-branch tip/);
+  assert.match(workflow, /SHOREBIRD_PRODUCTION_PATCHES_ENABLED/);
   assert.match(workflow, /validate-google-backend\.yml\/runs\?head_sha=/);
-  assert.match(workflow, /collect_android_release_evidence\.ps1/);
-  assert.match(workflow, /name: Upload APK diagnostics\n\s+if: always\(\)/);
-  assert.match(workflow, /name: Upload production APK handoff/);
-  assert.match(workflow, /apk-signature-verification\.txt/);
-  assert.match(workflow, /apk-badging\.txt/);
+  assert.ok(workflow.indexOf('invoke_shorebird_patch.ps1 @Parameters -DryRun') < workflow.indexOf('invoke_shorebird_patch.ps1 @Parameters }'));
+  assert.match(patchScript, /--track=staging/);
+  assert.match(patchScript, /--public-key-cmd=bash tool\/shorebird_kms_public_key\.sh/);
+  assert.match(patchScript, /--sign-cmd=bash tool\/shorebird_kms_sign\.sh/);
+  assert.match(patchScript, /'--',\s*'--no-pub'/);
+  assert.match(patchScript, /release_base_sha = \$ReleaseBaseSha/);
+  assert.match(patchScript, /releaseEngineRevision/);
+  assert.match(patchScript, /Expected exactly one newly published patch/);
+  assert.match(patchScript, /shorebird-patch-\$Flavor-\$mode\.json/);
+  assert.doesNotMatch(patchScript, /allow-native-diffs|allow-asset-diffs|--confirm/);
+});
 
-  assert.match(workflow, /attest-production-apk:/);
-  assert.match(workflow, /name: Attest production APK evidence/);
-  assert.match(workflow, /needs: build-production-apk/);
-  assert.match(workflow, /id-token: write/);
-  assert.match(workflow, /attestations: write/);
-  assert.match(workflow, /name: Attest production APK provenance/);
-  assert.match(workflow, /name: Verify and record APK provenance tuple/);
-
-  assert.match(
-    workflow,
-    /attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3\.0\.0/,
-  );
-
-  assert.match(
-    workflow,
-    /\$EvidencePath = Join-Path \$PWD "release\\apk-evidence"/,
-  );
-  assert.match(
-    workflow,
-    /--attestation-output \(Join-Path \$env:EVIDENCE_PATH "provenance-attestation\.json"\)/,
-  );
-  assert.match(workflow, /--verification-output \$VerificationPath/);
-
-  assert.match(workflow, /--source-digest \$env:GITHUB_SHA/);
-  assert.match(workflow, /--source-ref refs\/heads\/main/);
-  assert.match(workflow, /--deny-self-hosted-runners/);
-
-  assert.ok(
-    workflow.indexOf('Collect APK manifest and dependency evidence') <
-      workflow.indexOf('Upload production APK handoff'),
-    'artifact evidence must pass before handoff',
-  );
-
-  const signingJob = workflow.slice(
-    workflow.indexOf('build-production-apk:'),
-    workflow.indexOf('attest-production-apk:'),
-  );
-
-  assert.doesNotMatch(
-    signingJob,
-    /SENTRY_AUTH_TOKEN|contents: write|attestations: write/,
-  );
-
-  const attestationJob = workflow.slice(
-    workflow.indexOf('attest-production-apk:'),
-  );
-
-  assert.match(attestationJob, /contents: read/);
-  assert.match(attestationJob, /actions: read/);
-  assert.match(attestationJob, /attestations: write/);
-
-  assert.doesNotMatch(
-    attestationJob,
-    /ANDROID_APK_|PLAY_UPLOAD_|SENTRY_AUTH_TOKEN|contents: write|gh release (?:create|upload|edit)/,
-  );
+test('promotion is exact, protected, and requires device-preview confirmation', async () => {
+  const workflow = await read('.github/workflows/shorebird-promote-patch.yml');
+  const script = await read('tool/promote_shorebird_patch.ps1');
+  assert.match(workflow, /environment: production/);
+  assert.match(workflow, /SHOREBIRD_PRODUCTION_PROMOTIONS_ENABLED/);
+  assert.match(workflow, /secrets\.SHOREBIRD_TOKEN/);
+  assert.match(script, /PREVIEWED PATCH \$ReleaseVersion#\$PatchNumber/);
+  assert.match(script, /is_rolled_back/);
+  assert.match(script, /channel -ne 'staging'/);
+  assert.match(script, /patches set-track --release \$ReleaseVersion --patch \$PatchNumber --track stable/);
+  assert.match(script, /shorebird-promotion-evidence\.json/);
+  assert.match(workflow, /Upload immutable promotion evidence/);
+  assert.doesNotMatch(script, /patches promote|rollback/);
 });
 test('backend gate covers formatting, type safety, functions, and database', async () => {
   const workflow = await read('.github/workflows/validate-google-backend.yml');
@@ -406,7 +323,7 @@ test('VersionDeck exposes only reviewed disabled and verified publication modes'
   assert.match(workflow, /--publication-mode/);
   assert.match(workflow, /steps\.source\.outputs\.publication_mode/);
   assert.doesNotMatch(workflow, /test "\$run_name" = "Build Production APK"/);
-  assert.match(workflow, /manifest\.schemaVersion !== 5/);
+  assert.match(workflow, /manifest\.schemaVersion !== 1/);
 });
 test('Gradle distribution checksum is present and correctly formatted', async () => {
   const props = await read(
@@ -435,7 +352,7 @@ test('Gradle distribution checksum is present and correctly formatted', async ()
   );
 });
 
-test('flutter pub get uses --enforce-lockfile in CI and production scripts', async () => {
+test('flutter pub get uses --enforce-lockfile in validation and Shorebird workflows', async () => {
   const validateWorkflow = await read('.github/workflows/validate-flutter.yml');
   // All pub get invocations in CI must enforce the lockfile.
   assert.doesNotMatch(
@@ -460,37 +377,12 @@ test('flutter pub get uses --enforce-lockfile in CI and production scripts', asy
     'enforced pub get must precede the lockfile-unchanged check',
   );
 
-  const buildProd = await read('tool/build_prod.ps1');
-  assert.doesNotMatch(
-    buildProd,
-    /pub', 'get'\)/,
-    'build_prod.ps1 must not call flutter pub get without --enforce-lockfile',
-  );
-  assert.match(
-    buildProd,
-    /pub', 'get', '--enforce-lockfile'\)/,
-    'build_prod.ps1 must use --enforce-lockfile',
-  );
-  assert.match(
-    buildProd,
-    /git status --porcelain pubspec\.lock/,
-    'build_prod.ps1 must verify pubspec.lock is unchanged',
-  );
-
-  const buildPlayProd = await read('tool/build_play_prod.ps1');
-  assert.doesNotMatch(
-    buildPlayProd,
-    /pub', 'get'\)/,
-    'build_play_prod.ps1 must not call flutter pub get without --enforce-lockfile',
-  );
-  assert.match(
-    buildPlayProd,
-    /pub', 'get', '--enforce-lockfile'\)/,
-    'build_play_prod.ps1 must use --enforce-lockfile',
-  );
-  assert.match(
-    buildPlayProd,
-    /git status --porcelain pubspec\.lock/,
-    'build_play_prod.ps1 must verify pubspec.lock is unchanged',
-  );
+  for (const file of [
+    '.github/workflows/shorebird-release-android.yml',
+    '.github/workflows/shorebird-patch-android.yml',
+  ]) {
+    const workflow = await read(file);
+    assert.match(workflow, /flutter pub get --enforce-lockfile/, file);
+    assert.doesNotMatch(workflow, /flutter pub get(?! --enforce-lockfile)/, file);
+  }
 });

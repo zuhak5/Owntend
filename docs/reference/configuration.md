@@ -42,9 +42,15 @@ Android application IDs, flavors, build types, signing configuration, and produc
 
 Signing material includes keystores, aliases, passwords, expected fingerprints, and `android/key.properties`. It belongs only in protected secret storage and is ignored by Git.
 
+## Shorebird
+
+[`shorebird.yaml.template`](../../shorebird.yaml.template) contains only non-secret placeholders. The three app IDs are repository-level GitHub Variables named `SHOREBIRD_DEV_APP_ID`, `SHOREBIRD_STAGING_APP_ID`, and `SHOREBIRD_PROD_APP_ID`. [`tool/configure_shorebird.ps1`](../../tool/configure_shorebird.ps1) validates and writes ignored `shorebird.yaml`; the generated file must not be committed.
+
+`SHOREBIRD_TOKEN` is an environment Secret, not Flutter configuration. Google Workload Identity and KMS resource names are environment Variables. The non-exportable KMS private key remains in Google Cloud. Android signing values remain environment Secrets. The exact classification, names, kill switches, and setup procedure are in [`../operations/shorebird-code-push.md`](../operations/shorebird-code-push.md).
+
 ## Sentry
 
-Client runtime uses enabled state, DSN, environment, release/build, and sampling configuration. Production Flutter builds also emit Dart symbol files under `build/sentry-debug/dart` plus `build/sentry-debug/dart/mapping.json` for Sentry symbolication. Production release publication additionally requires protected Sentry credentials and the Android R8 mapping file at `build/app/outputs/mapping/prodRelease/mapping.txt`. Do not put Sentry auth tokens in Flutter config.
+Client runtime uses enabled state, DSN, environment, release/build, patch number, and sampling configuration. Shorebird release builds retain Dart obfuscation symbols under `build/shorebird-symbols`, the Android R8 mapping, and exact-engine symbol archives. Production Sentry publication additionally requires protected Sentry credentials and remains separately authorized. Do not put Sentry or Shorebird auth tokens in Flutter config.
 
 Supabase Edge Functions may optionally read `SENTRY_DSN` from their hosted function environment for request-scoped server-failure reporting. Keep that value in Supabase secret storage rather than Flutter config, static assets, or committed examples.
 
@@ -70,7 +76,7 @@ The VersionDeck build generates `account-deletion-config.js` from three public c
 | Variable | Required production value | Exposure and validation |
 | --- | --- | --- |
 | `PUBLIC_SUPABASE_URL` | `https://qvdccazlbpvsrzkxunxo.supabase.co` | Public project URL. Any other URL is rejected. |
-| `PUBLIC_SUPABASE_PUBLISHABLE_KEY` | The hosted project's public publishable key, or legacy anonymous JWT | Intentionally browser-distributed. It must validate as a public `sb_publishable_...` key or an anonymous-role JWT; a privileged key is rejected because it does not satisfy that shape. Never substitute a service-role credential. |
+| `PUBLIC_SUPABASE_PUBLISHABLE_KEY` | The hosted project's public publishable key or anonymous-role JWT | Intentionally browser-distributed. It must validate as a public `sb_publishable_...` key or an anonymous-role JWT; a privileged key is rejected because it does not satisfy that shape. Never substitute a service-role credential. |
 | `ACCOUNT_DELETION_SITE_URL` | `https://owntend.app/account-deletion.html` | Exact Google OAuth callback and canonical public page. Any other URL is rejected. |
 
 [`tool/build_account_deletion_site.mjs`](../../tool/build_account_deletion_site.mjs) is authoritative for this schema and its fixed endpoints. [`tool/build_versiondeck_site.mjs`](../../tool/build_versiondeck_site.mjs) validates the configuration before replacing or emitting the site output, writes only the known public fields, and includes the generated file in the hashed asset inventory. There is no production fallback: missing, empty, malformed, disabled, or mismatched values fail the build.

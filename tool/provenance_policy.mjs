@@ -21,13 +21,13 @@ const SOURCE_REF_PATTERN = /^refs\/heads\/[A-Za-z0-9._/-]+$/;
 const ARTIFACT_POLICIES = Object.freeze({
   apk: Object.freeze({
     artifactType: "apk",
-    workflowName: "Build Production APK",
-    workflowPath: ".github/workflows/build-production-android.yml",
+    workflowName: "Shorebird Android Release",
+    workflowPath: ".github/workflows/shorebird-release-android.yml",
   }),
   aab: Object.freeze({
     artifactType: "aab",
-    workflowName: "Build Play Store AAB",
-    workflowPath: ".github/workflows/build-play-android.yml",
+    workflowName: "Shorebird Android Release",
+    workflowPath: ".github/workflows/shorebird-release-android.yml",
   }),
 });
 

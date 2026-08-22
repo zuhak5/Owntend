@@ -5,7 +5,13 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$Dist,
 
-    [string]$Environment = 'prod'
+    [string]$Environment = 'prod',
+
+    [string]$DartSymbolsDirectory = 'build\shorebird-symbols\prod\base',
+
+    [string]$ObfuscationMapPath = 'build\shorebird\obfuscation_map.json',
+
+    [string]$EngineSymbolsDirectory = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -124,7 +130,23 @@ Invoke-WithRetry -Label 'Sentry commit association' -Operation {
     )
 }
 
-Invoke-WithRetry -Label 'Sentry debug symbol upload' -Operation {
+$resolvedDartSymbols = [System.IO.Path]::GetFullPath($DartSymbolsDirectory)
+$resolvedObfuscationMap = [System.IO.Path]::GetFullPath($ObfuscationMapPath)
+if (-not (Test-Path -LiteralPath $resolvedDartSymbols -PathType Container)) {
+    throw "Shorebird Dart symbols were not found: $resolvedDartSymbols"
+}
+if (-not (Test-Path -LiteralPath $resolvedObfuscationMap -PathType Leaf)) {
+    throw "Shorebird obfuscation map was not found: $resolvedObfuscationMap"
+}
+$sentryDartSymbols = [System.IO.Path]::GetFullPath((Join-Path $PWD 'build\sentry-debug\dart'))
+if (Test-Path -LiteralPath $sentryDartSymbols) {
+    Remove-Item -LiteralPath $sentryDartSymbols -Recurse -Force
+}
+New-Item -ItemType Directory -Path $sentryDartSymbols -Force | Out-Null
+Copy-Item -Path (Join-Path $resolvedDartSymbols '*') -Destination $sentryDartSymbols -Force
+Copy-Item -LiteralPath $resolvedObfuscationMap -Destination (Join-Path $sentryDartSymbols 'mapping.json') -Force
+
+Invoke-WithRetry -Label 'Sentry Shorebird Dart debug symbol upload' -Operation {
     Invoke-NativeCommand -FilePath 'dart' -Arguments @(
         'run',
         'sentry_dart_plugin'
@@ -139,6 +161,32 @@ Invoke-WithRetry -Label 'Sentry Android mapping upload' -Operation {
     Invoke-NativeCommand -FilePath 'npx' -Arguments (
         $sentryCli + @('upload-proguard', $proguardMappingPath)
     )
+}
+
+if (-not [string]::IsNullOrWhiteSpace($EngineSymbolsDirectory)) {
+    $resolvedEngineSymbols = [System.IO.Path]::GetFullPath($EngineSymbolsDirectory)
+    $manifestPath = Join-Path $resolvedEngineSymbols 'manifest.json'
+    if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
+        throw "Shorebird engine-symbol manifest is missing: $manifestPath"
+    }
+    $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+    $canonical = Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\config\toolchain.json') -Raw | ConvertFrom-Json
+    if ([string]$manifest.engine_revision -ne [string]$canonical.canonicalToolchain.tools.shorebirdCli.releaseEngineRevision) {
+        throw 'Shorebird engine-symbol revision differs from the canonical release engine.'
+    }
+    $engineArchives = @($manifest.artifacts | ForEach-Object {
+        $archive = Join-Path $resolvedEngineSymbols ([string]$_.file)
+        if (-not (Test-Path -LiteralPath $archive -PathType Leaf)) { throw "Engine symbol archive is missing: $archive" }
+        $hash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($hash -ne [string]$_.sha256) { throw "Engine symbol archive hash mismatch: $archive" }
+        $archive
+    })
+    if ($engineArchives.Count -ne 3) { throw 'Exactly three Shorebird Android engine-symbol archives are required.' }
+    foreach ($archive in $engineArchives) {
+        Invoke-WithRetry -Label "Sentry Shorebird engine symbol upload" -Operation {
+            Invoke-NativeCommand -FilePath 'npx' -Arguments ($sentryCli + @('debug-files', 'upload', $archive))
+        }
+    }
 }
 
 Invoke-WithRetry -Label 'Sentry release finalization' -Operation {

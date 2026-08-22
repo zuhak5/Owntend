@@ -1,4 +1,7 @@
-part of '../../../../main.dart';
+import '../../../core/utils/date_utils.dart' as hk_dates;
+import '../../../ui/components.dart' as hk_ui;
+import '../../../ui/presentation_support.dart';
+import '../../maintenance/presentation/task_actions.dart';
 
 class NotificationsScreen extends ConsumerStatefulWidget {
   const NotificationsScreen({super.key});
@@ -141,7 +144,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
           );
         },
         error: (error, _) =>
-            ErrorPanel(message: _failureMessage(context, error)),
+            hk_ui.ErrorPanel(message: failureMessage(context, error)),
         loading: () => const Center(child: CircularProgressIndicator()),
       ),
     );
@@ -206,7 +209,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     final route = item.route;
     final destination = route == null
         ? null
-        : _validatedNotificationRoute(route);
+        : validatedNotificationRoute(route);
     if (destination != null) {
       context.push(destination);
     }
@@ -860,7 +863,7 @@ class NotificationCard extends StatelessWidget {
                       ),
                       const SizedBox(width: HkSpacing.xs),
                       Text(
-                        _formatShortTime(context, notification.createdAt),
+                        formatShortTime(context, notification.createdAt),
                         style: Theme.of(context).textTheme.labelSmall,
                       ),
                     ],

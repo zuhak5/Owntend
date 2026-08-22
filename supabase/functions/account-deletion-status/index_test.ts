@@ -54,7 +54,7 @@ Deno.test("status endpoint has exact CORS allowlist", async () => {
   assertEquals(await denied.json(), { error: "origin_not_allowed" });
 });
 
-Deno.test("status endpoint rejects malformed capabilities and identifiers", async () => {
+Deno.test("status endpoint rejects malformed recovery requests and identifiers", async () => {
   for (
     const body of [
       {},
@@ -69,6 +69,36 @@ Deno.test("status endpoint rejects malformed capabilities and identifiers", asyn
     assertEquals(response.status, 400);
     assertEquals(await response.json(), { error: "invalid_recovery_request" });
   }
+});
+
+Deno.test("status endpoint bounds request bytes and media type", async () => {
+  const oversized = await handleAccountDeletionStatus(
+    new Request("http://localhost/account-deletion-status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        recovery_key: recoveryKey,
+        expected_user_id: userId,
+        padding: "x".repeat(800),
+      }),
+    }),
+    emptyEnvironment,
+  );
+  assertEquals(oversized.status, 413);
+  assertEquals(await oversized.json(), { error: "request_too_large" });
+
+  const wrongMediaType = await handleAccountDeletionStatus(
+    new Request("http://localhost/account-deletion-status", {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: "invalid",
+    }),
+    emptyEnvironment,
+  );
+  assertEquals(wrongMediaType.status, 415);
+  assertEquals(await wrongMediaType.json(), {
+    error: "unsupported_media_type",
+  });
 });
 
 Deno.test("missing backend credentials report configuration failures", async () => {
@@ -90,7 +120,7 @@ Deno.test("missing backend credentials report configuration failures", async () 
   assertEquals(reports, ["configuration"]);
 });
 
-Deno.test("unknown or mismatched capability reveals no operation", async () => {
+Deno.test("unknown or mismatched recovery key reveals no operation", async () => {
   const services = new FakeStatusServices();
   services.operation = null;
   const response = await handleAccountDeletionStatus(
@@ -104,7 +134,7 @@ Deno.test("unknown or mismatched capability reveals no operation", async () => {
   assertMatch(services.events[0], /^lookup:[0-9a-f]{64}:[0-9a-f]{64}$/);
 });
 
-Deno.test("completed capability returns strict same-user receipt", async () => {
+Deno.test("completed recovery operation returns strict same-user receipt", async () => {
   const services = new FakeStatusServices();
   services.operation = {
     operationId: "33333333-3333-4333-8333-333333333333",
@@ -209,7 +239,7 @@ Deno.test("lost response is finalized only after Auth user is absent", async () 
   assertEquals(services.events.includes(`complete:${userId}`), true);
 });
 
-Deno.test("acknowledging completed operation records capability version and returns acknowledged receipt", async () => {
+Deno.test("acknowledging completed operation returns an acknowledged receipt", async () => {
   const services = new FakeStatusServices();
   services.operation = {
     operationId: "33333333-3333-4333-8333-333333333333",
@@ -223,7 +253,6 @@ Deno.test("acknowledging completed operation records capability version and retu
         recovery_key: recoveryKey,
         expected_user_id: userId,
         action: "acknowledge",
-        capability_version: "owntend-v1.0.0",
       },
     }),
     configuredEnvironment,
@@ -237,7 +266,7 @@ Deno.test("acknowledging completed operation records capability version and retu
   });
   assertEquals(
     services.events.includes(
-      "acknowledge:33333333-3333-4333-8333-333333333333:owntend-v1.0.0",
+      "acknowledge:33333333-3333-4333-8333-333333333333",
     ),
     true,
   );
@@ -299,9 +328,8 @@ class FakeStatusServices implements AccountDeletionStatusServices {
   acknowledgeOperation(
     operationId: string,
     _subjectBinding: string,
-    capabilityVersion: string,
   ): Promise<void> {
-    this.events.push(`acknowledge:${operationId}:${capabilityVersion}`);
+    this.events.push(`acknowledge:${operationId}`);
     return Promise.resolve();
   }
 }

@@ -23,9 +23,12 @@ class $AreasTable extends Areas with TableInfo<$AreasTable, AreaRow> {
     'name',
     aliasedName,
     false,
+    additionalChecks: GeneratedColumn.checkTextLength(
+      minTextLength: 1,
+      maxTextLength: 120,
+    ),
     type: DriftSqlType.string,
     requiredDuringInsert: true,
-    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
   );
   static const VerificationMeta _kindMeta = const VerificationMeta('kind');
   @override
@@ -33,6 +36,9 @@ class $AreasTable extends Areas with TableInfo<$AreasTable, AreaRow> {
     'kind',
     aliasedName,
     false,
+    check: () => const CustomExpression<bool>(
+      "kind IN ('indoor', 'outdoor', 'utility', 'other')",
+    ),
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
@@ -476,7 +482,7 @@ class $RoomsTable extends Rooms with TableInfo<$RoomsTable, RoomRow> {
     type: DriftSqlType.string,
     requiredDuringInsert: true,
     defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'REFERENCES areas (id)',
+      'REFERENCES areas (id) ON DELETE CASCADE',
     ),
   );
   static const VerificationMeta _nameMeta = const VerificationMeta('name');
@@ -485,6 +491,10 @@ class $RoomsTable extends Rooms with TableInfo<$RoomsTable, RoomRow> {
     'name',
     aliasedName,
     false,
+    additionalChecks: GeneratedColumn.checkTextLength(
+      minTextLength: 1,
+      maxTextLength: 120,
+    ),
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
@@ -496,6 +506,10 @@ class $RoomsTable extends Rooms with TableInfo<$RoomsTable, RoomRow> {
     'room_type',
     aliasedName,
     false,
+    additionalChecks: GeneratedColumn.checkTextLength(
+      minTextLength: 1,
+      maxTextLength: 120,
+    ),
     type: DriftSqlType.string,
     requiredDuringInsert: false,
     defaultValue: const Constant('other'),
@@ -506,6 +520,7 @@ class $RoomsTable extends Rooms with TableInfo<$RoomsTable, RoomRow> {
     'notes',
     aliasedName,
     true,
+    additionalChecks: GeneratedColumn.checkTextLength(maxTextLength: 4000),
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
@@ -642,10 +657,6 @@ class $RoomsTable extends Rooms with TableInfo<$RoomsTable, RoomRow> {
 
   @override
   Set<GeneratedColumn> get $primaryKey => {id};
-  @override
-  List<Set<GeneratedColumn>> get uniqueKeys => [
-    {areaId, name},
-  ];
   @override
   RoomRow map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
@@ -1029,6 +1040,10 @@ class $AssetsTable extends Assets with TableInfo<$AssetsTable, AssetRow> {
     'name',
     aliasedName,
     false,
+    additionalChecks: GeneratedColumn.checkTextLength(
+      minTextLength: 1,
+      maxTextLength: 200,
+    ),
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
@@ -1040,6 +1055,9 @@ class $AssetsTable extends Assets with TableInfo<$AssetsTable, AssetRow> {
     'asset_type',
     aliasedName,
     false,
+    check: () => const CustomExpression<bool>(
+      "asset_type IN ('device', 'pet', 'plant', 'safety', 'general')",
+    ),
     type: DriftSqlType.string,
     requiredDuringInsert: false,
     defaultValue: const Constant('general'),
@@ -1053,7 +1071,7 @@ class $AssetsTable extends Assets with TableInfo<$AssetsTable, AssetRow> {
     type: DriftSqlType.string,
     requiredDuringInsert: true,
     defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'REFERENCES rooms (id)',
+      'REFERENCES rooms (id) ON DELETE CASCADE',
     ),
   );
   static const VerificationMeta _placementMeta = const VerificationMeta(
@@ -1064,6 +1082,7 @@ class $AssetsTable extends Assets with TableInfo<$AssetsTable, AssetRow> {
     'placement',
     aliasedName,
     true,
+    additionalChecks: GeneratedColumn.checkTextLength(maxTextLength: 300),
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
@@ -1073,6 +1092,7 @@ class $AssetsTable extends Assets with TableInfo<$AssetsTable, AssetRow> {
     'notes',
     aliasedName,
     true,
+    additionalChecks: GeneratedColumn.checkTextLength(maxTextLength: 10000),
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
@@ -1635,7 +1655,7 @@ class $DeviceDetailsTableTable extends DeviceDetailsTable
     type: DriftSqlType.string,
     requiredDuringInsert: true,
     defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'REFERENCES assets (id)',
+      'REFERENCES assets (id) ON DELETE CASCADE',
     ),
   );
   static const VerificationMeta _brandMeta = const VerificationMeta('brand');
@@ -2178,7 +2198,7 @@ class $PetDetailsTableTable extends PetDetailsTable
     type: DriftSqlType.string,
     requiredDuringInsert: true,
     defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'REFERENCES assets (id)',
+      'REFERENCES assets (id) ON DELETE CASCADE',
     ),
   );
   static const VerificationMeta _speciesMeta = const VerificationMeta(
@@ -2767,7 +2787,7 @@ class $PlantDetailsTableTable extends PlantDetailsTable
     type: DriftSqlType.string,
     requiredDuringInsert: true,
     defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'REFERENCES assets (id)',
+      'REFERENCES assets (id) ON DELETE CASCADE',
     ),
   );
   static const VerificationMeta _speciesMeta = const VerificationMeta(
@@ -3269,7 +3289,7 @@ class $SafetyDetailsTableTable extends SafetyDetailsTable
     type: DriftSqlType.string,
     requiredDuringInsert: true,
     defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'REFERENCES assets (id)',
+      'REFERENCES assets (id) ON DELETE CASCADE',
     ),
   );
   static const VerificationMeta _safetyTypeMeta = const VerificationMeta(
@@ -3720,9 +3740,12 @@ class $TagsTable extends Tags with TableInfo<$TagsTable, TagRow> {
     'name',
     aliasedName,
     false,
+    additionalChecks: GeneratedColumn.checkTextLength(
+      minTextLength: 1,
+      maxTextLength: 120,
+    ),
     type: DriftSqlType.string,
     requiredDuringInsert: true,
-    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
   );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
@@ -3969,7 +3992,7 @@ class $AssetTagsTable extends AssetTags
     type: DriftSqlType.string,
     requiredDuringInsert: true,
     defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'REFERENCES assets (id)',
+      'REFERENCES assets (id) ON DELETE CASCADE',
     ),
   );
   static const VerificationMeta _tagIdMeta = const VerificationMeta('tagId');
@@ -3981,7 +4004,7 @@ class $AssetTagsTable extends AssetTags
     type: DriftSqlType.string,
     requiredDuringInsert: true,
     defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'REFERENCES tags (id)',
+      'REFERENCES tags (id) ON DELETE CASCADE',
     ),
   );
   @override
@@ -4194,7 +4217,7 @@ class $AssetPhotosTable extends AssetPhotos
     type: DriftSqlType.string,
     requiredDuringInsert: true,
     defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'REFERENCES assets (id)',
+      'REFERENCES assets (id) ON DELETE CASCADE',
     ),
   );
   static const VerificationMeta _relativePathMeta = const VerificationMeta(
@@ -4216,6 +4239,7 @@ class $AssetPhotosTable extends AssetPhotos
     'caption',
     aliasedName,
     true,
+    additionalChecks: GeneratedColumn.checkTextLength(maxTextLength: 500),
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
@@ -4612,7 +4636,7 @@ class $MaintenancePlansTable extends MaintenancePlans
     type: DriftSqlType.string,
     requiredDuringInsert: true,
     defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'REFERENCES assets (id)',
+      'REFERENCES assets (id) ON DELETE CASCADE',
     ),
   );
   static const VerificationMeta _titleMeta = const VerificationMeta('title');
@@ -4621,6 +4645,10 @@ class $MaintenancePlansTable extends MaintenancePlans
     'title',
     aliasedName,
     false,
+    additionalChecks: GeneratedColumn.checkTextLength(
+      minTextLength: 1,
+      maxTextLength: 200,
+    ),
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
@@ -4632,6 +4660,7 @@ class $MaintenancePlansTable extends MaintenancePlans
     'instructions',
     aliasedName,
     true,
+    additionalChecks: GeneratedColumn.checkTextLength(maxTextLength: 4000),
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
@@ -4642,6 +4671,7 @@ class $MaintenancePlansTable extends MaintenancePlans
     'recurrence_interval',
     aliasedName,
     false,
+    check: () => const CustomExpression<bool>('recurrence_interval > 0'),
     type: DriftSqlType.int,
     requiredDuringInsert: true,
   );
@@ -4653,6 +4683,9 @@ class $MaintenancePlansTable extends MaintenancePlans
     'recurrence_unit',
     aliasedName,
     false,
+    check: () => const CustomExpression<bool>(
+      "recurrence_unit IN ('hours', 'days', 'weeks', 'months', 'years')",
+    ),
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
@@ -4664,6 +4697,9 @@ class $MaintenancePlansTable extends MaintenancePlans
     'priority',
     aliasedName,
     false,
+    check: () => const CustomExpression<bool>(
+      "priority IN ('low', 'medium', 'high', 'critical')",
+    ),
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
@@ -4685,6 +4721,7 @@ class $MaintenancePlansTable extends MaintenancePlans
     'reminder_days_before',
     aliasedName,
     false,
+    check: () => const CustomExpression<bool>('reminder_days_before >= 0'),
     type: DriftSqlType.int,
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
@@ -5378,7 +5415,7 @@ class $MaintenancePlanMetadataTable extends MaintenancePlanMetadata
     type: DriftSqlType.string,
     requiredDuringInsert: true,
     defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'REFERENCES maintenance_plans (id)',
+      'REFERENCES maintenance_plans (id) ON DELETE CASCADE',
     ),
   );
   static const VerificationMeta _taskTypeMeta = const VerificationMeta(
@@ -6009,7 +6046,7 @@ class $MaintenanceRecordsTable extends MaintenanceRecords
     type: DriftSqlType.string,
     requiredDuringInsert: true,
     defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'REFERENCES maintenance_plans (id)',
+      'REFERENCES maintenance_plans (id) ON DELETE CASCADE',
     ),
   );
   static const VerificationMeta _dueDateMeta = const VerificationMeta(
@@ -6041,6 +6078,7 @@ class $MaintenanceRecordsTable extends MaintenanceRecords
     'notes',
     aliasedName,
     true,
+    additionalChecks: GeneratedColumn.checkTextLength(maxTextLength: 4000),
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
@@ -6352,426 +6390,6 @@ class MaintenanceRecordsCompanion
   }
 }
 
-class $AppNotificationsTable extends AppNotifications
-    with TableInfo<$AppNotificationsTable, NotificationRow> {
-  @override
-  final GeneratedDatabase attachedDatabase;
-  final String? _alias;
-  $AppNotificationsTable(this.attachedDatabase, [this._alias]);
-  static const VerificationMeta _idMeta = const VerificationMeta('id');
-  @override
-  late final GeneratedColumn<String> id = GeneratedColumn<String>(
-    'id',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _planIdMeta = const VerificationMeta('planId');
-  @override
-  late final GeneratedColumn<String> planId = GeneratedColumn<String>(
-    'plan_id',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'REFERENCES maintenance_plans (id)',
-    ),
-  );
-  static const VerificationMeta _channelMeta = const VerificationMeta(
-    'channel',
-  );
-  @override
-  late final GeneratedColumn<String> channel = GeneratedColumn<String>(
-    'channel',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _scheduledForMeta = const VerificationMeta(
-    'scheduledFor',
-  );
-  @override
-  late final GeneratedColumn<DateTime> scheduledFor = GeneratedColumn<DateTime>(
-    'scheduled_for',
-    aliasedName,
-    false,
-    type: DriftSqlType.dateTime,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _deliveredAtMeta = const VerificationMeta(
-    'deliveredAt',
-  );
-  @override
-  late final GeneratedColumn<DateTime> deliveredAt = GeneratedColumn<DateTime>(
-    'delivered_at',
-    aliasedName,
-    true,
-    type: DriftSqlType.dateTime,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _createdAtMeta = const VerificationMeta(
-    'createdAt',
-  );
-  @override
-  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
-    'created_at',
-    aliasedName,
-    false,
-    type: DriftSqlType.dateTime,
-    requiredDuringInsert: false,
-    defaultValue: currentDateAndTime,
-  );
-  @override
-  List<GeneratedColumn> get $columns => [
-    id,
-    planId,
-    channel,
-    scheduledFor,
-    deliveredAt,
-    createdAt,
-  ];
-  @override
-  String get aliasedName => _alias ?? actualTableName;
-  @override
-  String get actualTableName => $name;
-  static const String $name = 'notifications';
-  @override
-  VerificationContext validateIntegrity(
-    Insertable<NotificationRow> instance, {
-    bool isInserting = false,
-  }) {
-    final context = VerificationContext();
-    final data = instance.toColumns(true);
-    if (data.containsKey('id')) {
-      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
-    } else if (isInserting) {
-      context.missing(_idMeta);
-    }
-    if (data.containsKey('plan_id')) {
-      context.handle(
-        _planIdMeta,
-        planId.isAcceptableOrUnknown(data['plan_id']!, _planIdMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_planIdMeta);
-    }
-    if (data.containsKey('channel')) {
-      context.handle(
-        _channelMeta,
-        channel.isAcceptableOrUnknown(data['channel']!, _channelMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_channelMeta);
-    }
-    if (data.containsKey('scheduled_for')) {
-      context.handle(
-        _scheduledForMeta,
-        scheduledFor.isAcceptableOrUnknown(
-          data['scheduled_for']!,
-          _scheduledForMeta,
-        ),
-      );
-    } else if (isInserting) {
-      context.missing(_scheduledForMeta);
-    }
-    if (data.containsKey('delivered_at')) {
-      context.handle(
-        _deliveredAtMeta,
-        deliveredAt.isAcceptableOrUnknown(
-          data['delivered_at']!,
-          _deliveredAtMeta,
-        ),
-      );
-    }
-    if (data.containsKey('created_at')) {
-      context.handle(
-        _createdAtMeta,
-        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
-      );
-    }
-    return context;
-  }
-
-  @override
-  Set<GeneratedColumn> get $primaryKey => {id};
-  @override
-  NotificationRow map(Map<String, dynamic> data, {String? tablePrefix}) {
-    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return NotificationRow(
-      id: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}id'],
-      )!,
-      planId: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}plan_id'],
-      )!,
-      channel: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}channel'],
-      )!,
-      scheduledFor: attachedDatabase.typeMapping.read(
-        DriftSqlType.dateTime,
-        data['${effectivePrefix}scheduled_for'],
-      )!,
-      deliveredAt: attachedDatabase.typeMapping.read(
-        DriftSqlType.dateTime,
-        data['${effectivePrefix}delivered_at'],
-      ),
-      createdAt: attachedDatabase.typeMapping.read(
-        DriftSqlType.dateTime,
-        data['${effectivePrefix}created_at'],
-      )!,
-    );
-  }
-
-  @override
-  $AppNotificationsTable createAlias(String alias) {
-    return $AppNotificationsTable(attachedDatabase, alias);
-  }
-}
-
-class NotificationRow extends DataClass implements Insertable<NotificationRow> {
-  final String id;
-  final String planId;
-  final String channel;
-  final DateTime scheduledFor;
-  final DateTime? deliveredAt;
-  final DateTime createdAt;
-  const NotificationRow({
-    required this.id,
-    required this.planId,
-    required this.channel,
-    required this.scheduledFor,
-    this.deliveredAt,
-    required this.createdAt,
-  });
-  @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{};
-    map['id'] = Variable<String>(id);
-    map['plan_id'] = Variable<String>(planId);
-    map['channel'] = Variable<String>(channel);
-    map['scheduled_for'] = Variable<DateTime>(scheduledFor);
-    if (!nullToAbsent || deliveredAt != null) {
-      map['delivered_at'] = Variable<DateTime>(deliveredAt);
-    }
-    map['created_at'] = Variable<DateTime>(createdAt);
-    return map;
-  }
-
-  AppNotificationsCompanion toCompanion(bool nullToAbsent) {
-    return AppNotificationsCompanion(
-      id: Value(id),
-      planId: Value(planId),
-      channel: Value(channel),
-      scheduledFor: Value(scheduledFor),
-      deliveredAt: deliveredAt == null && nullToAbsent
-          ? const Value.absent()
-          : Value(deliveredAt),
-      createdAt: Value(createdAt),
-    );
-  }
-
-  factory NotificationRow.fromJson(
-    Map<String, dynamic> json, {
-    ValueSerializer? serializer,
-  }) {
-    serializer ??= driftRuntimeOptions.defaultSerializer;
-    return NotificationRow(
-      id: serializer.fromJson<String>(json['id']),
-      planId: serializer.fromJson<String>(json['planId']),
-      channel: serializer.fromJson<String>(json['channel']),
-      scheduledFor: serializer.fromJson<DateTime>(json['scheduledFor']),
-      deliveredAt: serializer.fromJson<DateTime?>(json['deliveredAt']),
-      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
-    );
-  }
-  @override
-  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
-    serializer ??= driftRuntimeOptions.defaultSerializer;
-    return <String, dynamic>{
-      'id': serializer.toJson<String>(id),
-      'planId': serializer.toJson<String>(planId),
-      'channel': serializer.toJson<String>(channel),
-      'scheduledFor': serializer.toJson<DateTime>(scheduledFor),
-      'deliveredAt': serializer.toJson<DateTime?>(deliveredAt),
-      'createdAt': serializer.toJson<DateTime>(createdAt),
-    };
-  }
-
-  NotificationRow copyWith({
-    String? id,
-    String? planId,
-    String? channel,
-    DateTime? scheduledFor,
-    Value<DateTime?> deliveredAt = const Value.absent(),
-    DateTime? createdAt,
-  }) => NotificationRow(
-    id: id ?? this.id,
-    planId: planId ?? this.planId,
-    channel: channel ?? this.channel,
-    scheduledFor: scheduledFor ?? this.scheduledFor,
-    deliveredAt: deliveredAt.present ? deliveredAt.value : this.deliveredAt,
-    createdAt: createdAt ?? this.createdAt,
-  );
-  NotificationRow copyWithCompanion(AppNotificationsCompanion data) {
-    return NotificationRow(
-      id: data.id.present ? data.id.value : this.id,
-      planId: data.planId.present ? data.planId.value : this.planId,
-      channel: data.channel.present ? data.channel.value : this.channel,
-      scheduledFor: data.scheduledFor.present
-          ? data.scheduledFor.value
-          : this.scheduledFor,
-      deliveredAt: data.deliveredAt.present
-          ? data.deliveredAt.value
-          : this.deliveredAt,
-      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
-    );
-  }
-
-  @override
-  String toString() {
-    return (StringBuffer('NotificationRow(')
-          ..write('id: $id, ')
-          ..write('planId: $planId, ')
-          ..write('channel: $channel, ')
-          ..write('scheduledFor: $scheduledFor, ')
-          ..write('deliveredAt: $deliveredAt, ')
-          ..write('createdAt: $createdAt')
-          ..write(')'))
-        .toString();
-  }
-
-  @override
-  int get hashCode =>
-      Object.hash(id, planId, channel, scheduledFor, deliveredAt, createdAt);
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      (other is NotificationRow &&
-          other.id == this.id &&
-          other.planId == this.planId &&
-          other.channel == this.channel &&
-          other.scheduledFor == this.scheduledFor &&
-          other.deliveredAt == this.deliveredAt &&
-          other.createdAt == this.createdAt);
-}
-
-class AppNotificationsCompanion extends UpdateCompanion<NotificationRow> {
-  final Value<String> id;
-  final Value<String> planId;
-  final Value<String> channel;
-  final Value<DateTime> scheduledFor;
-  final Value<DateTime?> deliveredAt;
-  final Value<DateTime> createdAt;
-  final Value<int> rowid;
-  const AppNotificationsCompanion({
-    this.id = const Value.absent(),
-    this.planId = const Value.absent(),
-    this.channel = const Value.absent(),
-    this.scheduledFor = const Value.absent(),
-    this.deliveredAt = const Value.absent(),
-    this.createdAt = const Value.absent(),
-    this.rowid = const Value.absent(),
-  });
-  AppNotificationsCompanion.insert({
-    required String id,
-    required String planId,
-    required String channel,
-    required DateTime scheduledFor,
-    this.deliveredAt = const Value.absent(),
-    this.createdAt = const Value.absent(),
-    this.rowid = const Value.absent(),
-  }) : id = Value(id),
-       planId = Value(planId),
-       channel = Value(channel),
-       scheduledFor = Value(scheduledFor);
-  static Insertable<NotificationRow> custom({
-    Expression<String>? id,
-    Expression<String>? planId,
-    Expression<String>? channel,
-    Expression<DateTime>? scheduledFor,
-    Expression<DateTime>? deliveredAt,
-    Expression<DateTime>? createdAt,
-    Expression<int>? rowid,
-  }) {
-    return RawValuesInsertable({
-      if (id != null) 'id': id,
-      if (planId != null) 'plan_id': planId,
-      if (channel != null) 'channel': channel,
-      if (scheduledFor != null) 'scheduled_for': scheduledFor,
-      if (deliveredAt != null) 'delivered_at': deliveredAt,
-      if (createdAt != null) 'created_at': createdAt,
-      if (rowid != null) 'rowid': rowid,
-    });
-  }
-
-  AppNotificationsCompanion copyWith({
-    Value<String>? id,
-    Value<String>? planId,
-    Value<String>? channel,
-    Value<DateTime>? scheduledFor,
-    Value<DateTime?>? deliveredAt,
-    Value<DateTime>? createdAt,
-    Value<int>? rowid,
-  }) {
-    return AppNotificationsCompanion(
-      id: id ?? this.id,
-      planId: planId ?? this.planId,
-      channel: channel ?? this.channel,
-      scheduledFor: scheduledFor ?? this.scheduledFor,
-      deliveredAt: deliveredAt ?? this.deliveredAt,
-      createdAt: createdAt ?? this.createdAt,
-      rowid: rowid ?? this.rowid,
-    );
-  }
-
-  @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{};
-    if (id.present) {
-      map['id'] = Variable<String>(id.value);
-    }
-    if (planId.present) {
-      map['plan_id'] = Variable<String>(planId.value);
-    }
-    if (channel.present) {
-      map['channel'] = Variable<String>(channel.value);
-    }
-    if (scheduledFor.present) {
-      map['scheduled_for'] = Variable<DateTime>(scheduledFor.value);
-    }
-    if (deliveredAt.present) {
-      map['delivered_at'] = Variable<DateTime>(deliveredAt.value);
-    }
-    if (createdAt.present) {
-      map['created_at'] = Variable<DateTime>(createdAt.value);
-    }
-    if (rowid.present) {
-      map['rowid'] = Variable<int>(rowid.value);
-    }
-    return map;
-  }
-
-  @override
-  String toString() {
-    return (StringBuffer('AppNotificationsCompanion(')
-          ..write('id: $id, ')
-          ..write('planId: $planId, ')
-          ..write('channel: $channel, ')
-          ..write('scheduledFor: $scheduledFor, ')
-          ..write('deliveredAt: $deliveredAt, ')
-          ..write('createdAt: $createdAt, ')
-          ..write('rowid: $rowid')
-          ..write(')'))
-        .toString();
-  }
-}
-
 class $InboxNotificationsTable extends InboxNotifications
     with TableInfo<$InboxNotificationsTable, InboxNotificationRow> {
   @override
@@ -6793,6 +6411,10 @@ class $InboxNotificationsTable extends InboxNotifications
     'title',
     aliasedName,
     false,
+    additionalChecks: GeneratedColumn.checkTextLength(
+      minTextLength: 1,
+      maxTextLength: 500,
+    ),
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
@@ -6802,6 +6424,7 @@ class $InboxNotificationsTable extends InboxNotifications
     'body',
     aliasedName,
     false,
+    additionalChecks: GeneratedColumn.checkTextLength(maxTextLength: 20000),
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
@@ -6811,6 +6434,10 @@ class $InboxNotificationsTable extends InboxNotifications
     'kind',
     aliasedName,
     false,
+    additionalChecks: GeneratedColumn.checkTextLength(
+      minTextLength: 1,
+      maxTextLength: 80,
+    ),
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
@@ -6820,6 +6447,7 @@ class $InboxNotificationsTable extends InboxNotifications
     'route',
     aliasedName,
     true,
+    additionalChecks: GeneratedColumn.checkTextLength(maxTextLength: 1000),
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
@@ -6832,7 +6460,7 @@ class $InboxNotificationsTable extends InboxNotifications
     type: DriftSqlType.string,
     requiredDuringInsert: false,
     defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'REFERENCES maintenance_plans (id)',
+      'REFERENCES maintenance_plans (id) ON DELETE SET NULL',
     ),
   );
   static const VerificationMeta _messageCodeMeta = const VerificationMeta(
@@ -6842,9 +6470,19 @@ class $InboxNotificationsTable extends InboxNotifications
   late final GeneratedColumn<String> messageCode = GeneratedColumn<String>(
     'message_code',
     aliasedName,
-    true,
+    false,
+    check: () => const CustomExpression<bool>(
+      "message_code IN ('generic', 'weather_alert', 'task_overdue', "
+      "'task_due_today', 'daily_digest', 'task_skipped', "
+      "'task_postponed')",
+    ),
+    additionalChecks: GeneratedColumn.checkTextLength(
+      minTextLength: 1,
+      maxTextLength: 120,
+    ),
     type: DriftSqlType.string,
     requiredDuringInsert: false,
+    defaultValue: const Constant('generic'),
   );
   static const VerificationMeta _messageArgsMeta = const VerificationMeta(
     'messageArgs',
@@ -6866,6 +6504,7 @@ class $InboxNotificationsTable extends InboxNotifications
     'dedupe_key',
     aliasedName,
     false,
+    additionalChecks: GeneratedColumn.checkTextLength(maxTextLength: 128),
     type: DriftSqlType.string,
     requiredDuringInsert: false,
     defaultValue: const Constant(''),
@@ -7049,7 +6688,7 @@ class $InboxNotificationsTable extends InboxNotifications
       messageCode: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}message_code'],
-      ),
+      )!,
       messageArgs: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}message_args'],
@@ -7087,7 +6726,7 @@ class InboxNotificationRow extends DataClass
   final String kind;
   final String? route;
   final String? planId;
-  final String? messageCode;
+  final String messageCode;
   final String messageArgs;
   final String dedupeKey;
   final DateTime? readAt;
@@ -7100,7 +6739,7 @@ class InboxNotificationRow extends DataClass
     required this.kind,
     this.route,
     this.planId,
-    this.messageCode,
+    required this.messageCode,
     required this.messageArgs,
     required this.dedupeKey,
     this.readAt,
@@ -7120,9 +6759,7 @@ class InboxNotificationRow extends DataClass
     if (!nullToAbsent || planId != null) {
       map['plan_id'] = Variable<String>(planId);
     }
-    if (!nullToAbsent || messageCode != null) {
-      map['message_code'] = Variable<String>(messageCode);
-    }
+    map['message_code'] = Variable<String>(messageCode);
     map['message_args'] = Variable<String>(messageArgs);
     map['dedupe_key'] = Variable<String>(dedupeKey);
     if (!nullToAbsent || readAt != null) {
@@ -7145,9 +6782,7 @@ class InboxNotificationRow extends DataClass
       planId: planId == null && nullToAbsent
           ? const Value.absent()
           : Value(planId),
-      messageCode: messageCode == null && nullToAbsent
-          ? const Value.absent()
-          : Value(messageCode),
+      messageCode: Value(messageCode),
       messageArgs: Value(messageArgs),
       dedupeKey: Value(dedupeKey),
       readAt: readAt == null && nullToAbsent
@@ -7170,7 +6805,7 @@ class InboxNotificationRow extends DataClass
       kind: serializer.fromJson<String>(json['kind']),
       route: serializer.fromJson<String?>(json['route']),
       planId: serializer.fromJson<String?>(json['planId']),
-      messageCode: serializer.fromJson<String?>(json['messageCode']),
+      messageCode: serializer.fromJson<String>(json['messageCode']),
       messageArgs: serializer.fromJson<String>(json['messageArgs']),
       dedupeKey: serializer.fromJson<String>(json['dedupeKey']),
       readAt: serializer.fromJson<DateTime?>(json['readAt']),
@@ -7188,7 +6823,7 @@ class InboxNotificationRow extends DataClass
       'kind': serializer.toJson<String>(kind),
       'route': serializer.toJson<String?>(route),
       'planId': serializer.toJson<String?>(planId),
-      'messageCode': serializer.toJson<String?>(messageCode),
+      'messageCode': serializer.toJson<String>(messageCode),
       'messageArgs': serializer.toJson<String>(messageArgs),
       'dedupeKey': serializer.toJson<String>(dedupeKey),
       'readAt': serializer.toJson<DateTime?>(readAt),
@@ -7204,7 +6839,7 @@ class InboxNotificationRow extends DataClass
     String? kind,
     Value<String?> route = const Value.absent(),
     Value<String?> planId = const Value.absent(),
-    Value<String?> messageCode = const Value.absent(),
+    String? messageCode,
     String? messageArgs,
     String? dedupeKey,
     Value<DateTime?> readAt = const Value.absent(),
@@ -7217,7 +6852,7 @@ class InboxNotificationRow extends DataClass
     kind: kind ?? this.kind,
     route: route.present ? route.value : this.route,
     planId: planId.present ? planId.value : this.planId,
-    messageCode: messageCode.present ? messageCode.value : this.messageCode,
+    messageCode: messageCode ?? this.messageCode,
     messageArgs: messageArgs ?? this.messageArgs,
     dedupeKey: dedupeKey ?? this.dedupeKey,
     readAt: readAt.present ? readAt.value : this.readAt,
@@ -7305,7 +6940,7 @@ class InboxNotificationsCompanion
   final Value<String> kind;
   final Value<String?> route;
   final Value<String?> planId;
-  final Value<String?> messageCode;
+  final Value<String> messageCode;
   final Value<String> messageArgs;
   final Value<String> dedupeKey;
   final Value<DateTime?> readAt;
@@ -7384,7 +7019,7 @@ class InboxNotificationsCompanion
     Value<String>? kind,
     Value<String?>? route,
     Value<String?>? planId,
-    Value<String?>? messageCode,
+    Value<String>? messageCode,
     Value<String>? messageArgs,
     Value<String>? dedupeKey,
     Value<DateTime?>? readAt,
@@ -11046,6 +10681,399 @@ class SyncMediaCleanupCompanion extends UpdateCompanion<SyncMediaCleanupData> {
   }
 }
 
+class $LocalMediaCleanupTable extends LocalMediaCleanup
+    with TableInfo<$LocalMediaCleanupTable, LocalMediaCleanupData> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $LocalMediaCleanupTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _relativePathMeta = const VerificationMeta(
+    'relativePath',
+  );
+  @override
+  late final GeneratedColumn<String> relativePath = GeneratedColumn<String>(
+    'relative_path',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  static const VerificationMeta _attemptsMeta = const VerificationMeta(
+    'attempts',
+  );
+  @override
+  late final GeneratedColumn<int> attempts = GeneratedColumn<int>(
+    'attempts',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _nextAttemptAtMeta = const VerificationMeta(
+    'nextAttemptAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> nextAttemptAt =
+      GeneratedColumn<DateTime>(
+        'next_attempt_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _lastErrorCodeMeta = const VerificationMeta(
+    'lastErrorCode',
+  );
+  @override
+  late final GeneratedColumn<String> lastErrorCode = GeneratedColumn<String>(
+    'last_error_code',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    relativePath,
+    createdAt,
+    attempts,
+    nextAttemptAt,
+    lastErrorCode,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'local_media_cleanup';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<LocalMediaCleanupData> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('relative_path')) {
+      context.handle(
+        _relativePathMeta,
+        relativePath.isAcceptableOrUnknown(
+          data['relative_path']!,
+          _relativePathMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_relativePathMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    if (data.containsKey('attempts')) {
+      context.handle(
+        _attemptsMeta,
+        attempts.isAcceptableOrUnknown(data['attempts']!, _attemptsMeta),
+      );
+    }
+    if (data.containsKey('next_attempt_at')) {
+      context.handle(
+        _nextAttemptAtMeta,
+        nextAttemptAt.isAcceptableOrUnknown(
+          data['next_attempt_at']!,
+          _nextAttemptAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('last_error_code')) {
+      context.handle(
+        _lastErrorCodeMeta,
+        lastErrorCode.isAcceptableOrUnknown(
+          data['last_error_code']!,
+          _lastErrorCodeMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {relativePath};
+  @override
+  LocalMediaCleanupData map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return LocalMediaCleanupData(
+      relativePath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}relative_path'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      attempts: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}attempts'],
+      )!,
+      nextAttemptAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}next_attempt_at'],
+      ),
+      lastErrorCode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}last_error_code'],
+      ),
+    );
+  }
+
+  @override
+  $LocalMediaCleanupTable createAlias(String alias) {
+    return $LocalMediaCleanupTable(attachedDatabase, alias);
+  }
+}
+
+class LocalMediaCleanupData extends DataClass
+    implements Insertable<LocalMediaCleanupData> {
+  final String relativePath;
+  final DateTime createdAt;
+  final int attempts;
+  final DateTime? nextAttemptAt;
+  final String? lastErrorCode;
+  const LocalMediaCleanupData({
+    required this.relativePath,
+    required this.createdAt,
+    required this.attempts,
+    this.nextAttemptAt,
+    this.lastErrorCode,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['relative_path'] = Variable<String>(relativePath);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['attempts'] = Variable<int>(attempts);
+    if (!nullToAbsent || nextAttemptAt != null) {
+      map['next_attempt_at'] = Variable<DateTime>(nextAttemptAt);
+    }
+    if (!nullToAbsent || lastErrorCode != null) {
+      map['last_error_code'] = Variable<String>(lastErrorCode);
+    }
+    return map;
+  }
+
+  LocalMediaCleanupCompanion toCompanion(bool nullToAbsent) {
+    return LocalMediaCleanupCompanion(
+      relativePath: Value(relativePath),
+      createdAt: Value(createdAt),
+      attempts: Value(attempts),
+      nextAttemptAt: nextAttemptAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(nextAttemptAt),
+      lastErrorCode: lastErrorCode == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastErrorCode),
+    );
+  }
+
+  factory LocalMediaCleanupData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return LocalMediaCleanupData(
+      relativePath: serializer.fromJson<String>(json['relativePath']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      attempts: serializer.fromJson<int>(json['attempts']),
+      nextAttemptAt: serializer.fromJson<DateTime?>(json['nextAttemptAt']),
+      lastErrorCode: serializer.fromJson<String?>(json['lastErrorCode']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'relativePath': serializer.toJson<String>(relativePath),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'attempts': serializer.toJson<int>(attempts),
+      'nextAttemptAt': serializer.toJson<DateTime?>(nextAttemptAt),
+      'lastErrorCode': serializer.toJson<String?>(lastErrorCode),
+    };
+  }
+
+  LocalMediaCleanupData copyWith({
+    String? relativePath,
+    DateTime? createdAt,
+    int? attempts,
+    Value<DateTime?> nextAttemptAt = const Value.absent(),
+    Value<String?> lastErrorCode = const Value.absent(),
+  }) => LocalMediaCleanupData(
+    relativePath: relativePath ?? this.relativePath,
+    createdAt: createdAt ?? this.createdAt,
+    attempts: attempts ?? this.attempts,
+    nextAttemptAt: nextAttemptAt.present
+        ? nextAttemptAt.value
+        : this.nextAttemptAt,
+    lastErrorCode: lastErrorCode.present
+        ? lastErrorCode.value
+        : this.lastErrorCode,
+  );
+  LocalMediaCleanupData copyWithCompanion(LocalMediaCleanupCompanion data) {
+    return LocalMediaCleanupData(
+      relativePath: data.relativePath.present
+          ? data.relativePath.value
+          : this.relativePath,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      attempts: data.attempts.present ? data.attempts.value : this.attempts,
+      nextAttemptAt: data.nextAttemptAt.present
+          ? data.nextAttemptAt.value
+          : this.nextAttemptAt,
+      lastErrorCode: data.lastErrorCode.present
+          ? data.lastErrorCode.value
+          : this.lastErrorCode,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LocalMediaCleanupData(')
+          ..write('relativePath: $relativePath, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('attempts: $attempts, ')
+          ..write('nextAttemptAt: $nextAttemptAt, ')
+          ..write('lastErrorCode: $lastErrorCode')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    relativePath,
+    createdAt,
+    attempts,
+    nextAttemptAt,
+    lastErrorCode,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is LocalMediaCleanupData &&
+          other.relativePath == this.relativePath &&
+          other.createdAt == this.createdAt &&
+          other.attempts == this.attempts &&
+          other.nextAttemptAt == this.nextAttemptAt &&
+          other.lastErrorCode == this.lastErrorCode);
+}
+
+class LocalMediaCleanupCompanion
+    extends UpdateCompanion<LocalMediaCleanupData> {
+  final Value<String> relativePath;
+  final Value<DateTime> createdAt;
+  final Value<int> attempts;
+  final Value<DateTime?> nextAttemptAt;
+  final Value<String?> lastErrorCode;
+  final Value<int> rowid;
+  const LocalMediaCleanupCompanion({
+    this.relativePath = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.attempts = const Value.absent(),
+    this.nextAttemptAt = const Value.absent(),
+    this.lastErrorCode = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  LocalMediaCleanupCompanion.insert({
+    required String relativePath,
+    this.createdAt = const Value.absent(),
+    this.attempts = const Value.absent(),
+    this.nextAttemptAt = const Value.absent(),
+    this.lastErrorCode = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : relativePath = Value(relativePath);
+  static Insertable<LocalMediaCleanupData> custom({
+    Expression<String>? relativePath,
+    Expression<DateTime>? createdAt,
+    Expression<int>? attempts,
+    Expression<DateTime>? nextAttemptAt,
+    Expression<String>? lastErrorCode,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (relativePath != null) 'relative_path': relativePath,
+      if (createdAt != null) 'created_at': createdAt,
+      if (attempts != null) 'attempts': attempts,
+      if (nextAttemptAt != null) 'next_attempt_at': nextAttemptAt,
+      if (lastErrorCode != null) 'last_error_code': lastErrorCode,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  LocalMediaCleanupCompanion copyWith({
+    Value<String>? relativePath,
+    Value<DateTime>? createdAt,
+    Value<int>? attempts,
+    Value<DateTime?>? nextAttemptAt,
+    Value<String?>? lastErrorCode,
+    Value<int>? rowid,
+  }) {
+    return LocalMediaCleanupCompanion(
+      relativePath: relativePath ?? this.relativePath,
+      createdAt: createdAt ?? this.createdAt,
+      attempts: attempts ?? this.attempts,
+      nextAttemptAt: nextAttemptAt ?? this.nextAttemptAt,
+      lastErrorCode: lastErrorCode ?? this.lastErrorCode,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (relativePath.present) {
+      map['relative_path'] = Variable<String>(relativePath.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (attempts.present) {
+      map['attempts'] = Variable<int>(attempts.value);
+    }
+    if (nextAttemptAt.present) {
+      map['next_attempt_at'] = Variable<DateTime>(nextAttemptAt.value);
+    }
+    if (lastErrorCode.present) {
+      map['last_error_code'] = Variable<String>(lastErrorCode.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LocalMediaCleanupCompanion(')
+          ..write('relativePath: $relativePath, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('attempts: $attempts, ')
+          ..write('nextAttemptAt: $nextAttemptAt, ')
+          ..write('lastErrorCode: $lastErrorCode, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $SyncAccountTable extends SyncAccount
     with TableInfo<$SyncAccountTable, SyncAccountData> {
   @override
@@ -11293,43 +11321,6 @@ class $SyncAccountTable extends SyncAccount
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
-  static const VerificationMeta _uploadProhibitedMeta = const VerificationMeta(
-    'uploadProhibited',
-  );
-  @override
-  late final GeneratedColumn<bool> uploadProhibited = GeneratedColumn<bool>(
-    'upload_prohibited',
-    aliasedName,
-    false,
-    type: DriftSqlType.bool,
-    requiredDuringInsert: false,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'CHECK ("upload_prohibited" IN (0, 1))',
-    ),
-    defaultValue: const Constant(false),
-  );
-  static const VerificationMeta _quarantineReasonMeta = const VerificationMeta(
-    'quarantineReason',
-  );
-  @override
-  late final GeneratedColumn<String> quarantineReason = GeneratedColumn<String>(
-    'quarantine_reason',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _legacyOwnerIdMeta = const VerificationMeta(
-    'legacyOwnerId',
-  );
-  @override
-  late final GeneratedColumn<String> legacyOwnerId = GeneratedColumn<String>(
-    'legacy_owner_id',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
   static const VerificationMeta _updatedAtMeta = const VerificationMeta(
     'updatedAt',
   );
@@ -11365,9 +11356,6 @@ class $SyncAccountTable extends SyncAccount
     hydrationStartedAt,
     hydrationUpdatedAt,
     hydrationError,
-    uploadProhibited,
-    quarantineReason,
-    legacyOwnerId,
     updatedAt,
   ];
   @override
@@ -11558,33 +11546,6 @@ class $SyncAccountTable extends SyncAccount
         ),
       );
     }
-    if (data.containsKey('upload_prohibited')) {
-      context.handle(
-        _uploadProhibitedMeta,
-        uploadProhibited.isAcceptableOrUnknown(
-          data['upload_prohibited']!,
-          _uploadProhibitedMeta,
-        ),
-      );
-    }
-    if (data.containsKey('quarantine_reason')) {
-      context.handle(
-        _quarantineReasonMeta,
-        quarantineReason.isAcceptableOrUnknown(
-          data['quarantine_reason']!,
-          _quarantineReasonMeta,
-        ),
-      );
-    }
-    if (data.containsKey('legacy_owner_id')) {
-      context.handle(
-        _legacyOwnerIdMeta,
-        legacyOwnerId.isAcceptableOrUnknown(
-          data['legacy_owner_id']!,
-          _legacyOwnerIdMeta,
-        ),
-      );
-    }
     if (data.containsKey('updated_at')) {
       context.handle(
         _updatedAtMeta,
@@ -11684,18 +11645,6 @@ class $SyncAccountTable extends SyncAccount
         DriftSqlType.string,
         data['${effectivePrefix}hydration_error'],
       ),
-      uploadProhibited: attachedDatabase.typeMapping.read(
-        DriftSqlType.bool,
-        data['${effectivePrefix}upload_prohibited'],
-      )!,
-      quarantineReason: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}quarantine_reason'],
-      ),
-      legacyOwnerId: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}legacy_owner_id'],
-      ),
       updatedAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}updated_at'],
@@ -11731,9 +11680,6 @@ class SyncAccountData extends DataClass implements Insertable<SyncAccountData> {
   final DateTime? hydrationStartedAt;
   final DateTime? hydrationUpdatedAt;
   final String? hydrationError;
-  final bool uploadProhibited;
-  final String? quarantineReason;
-  final String? legacyOwnerId;
   final DateTime updatedAt;
   const SyncAccountData({
     required this.id,
@@ -11757,9 +11703,6 @@ class SyncAccountData extends DataClass implements Insertable<SyncAccountData> {
     this.hydrationStartedAt,
     this.hydrationUpdatedAt,
     this.hydrationError,
-    required this.uploadProhibited,
-    this.quarantineReason,
-    this.legacyOwnerId,
     required this.updatedAt,
   });
   @override
@@ -11813,13 +11756,6 @@ class SyncAccountData extends DataClass implements Insertable<SyncAccountData> {
     }
     if (!nullToAbsent || hydrationError != null) {
       map['hydration_error'] = Variable<String>(hydrationError);
-    }
-    map['upload_prohibited'] = Variable<bool>(uploadProhibited);
-    if (!nullToAbsent || quarantineReason != null) {
-      map['quarantine_reason'] = Variable<String>(quarantineReason);
-    }
-    if (!nullToAbsent || legacyOwnerId != null) {
-      map['legacy_owner_id'] = Variable<String>(legacyOwnerId);
     }
     map['updated_at'] = Variable<DateTime>(updatedAt);
     return map;
@@ -11876,13 +11812,6 @@ class SyncAccountData extends DataClass implements Insertable<SyncAccountData> {
       hydrationError: hydrationError == null && nullToAbsent
           ? const Value.absent()
           : Value(hydrationError),
-      uploadProhibited: Value(uploadProhibited),
-      quarantineReason: quarantineReason == null && nullToAbsent
-          ? const Value.absent()
-          : Value(quarantineReason),
-      legacyOwnerId: legacyOwnerId == null && nullToAbsent
-          ? const Value.absent()
-          : Value(legacyOwnerId),
       updatedAt: Value(updatedAt),
     );
   }
@@ -11928,9 +11857,6 @@ class SyncAccountData extends DataClass implements Insertable<SyncAccountData> {
         json['hydrationUpdatedAt'],
       ),
       hydrationError: serializer.fromJson<String?>(json['hydrationError']),
-      uploadProhibited: serializer.fromJson<bool>(json['uploadProhibited']),
-      quarantineReason: serializer.fromJson<String?>(json['quarantineReason']),
-      legacyOwnerId: serializer.fromJson<String?>(json['legacyOwnerId']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
     );
   }
@@ -11963,9 +11889,6 @@ class SyncAccountData extends DataClass implements Insertable<SyncAccountData> {
       'hydrationStartedAt': serializer.toJson<DateTime?>(hydrationStartedAt),
       'hydrationUpdatedAt': serializer.toJson<DateTime?>(hydrationUpdatedAt),
       'hydrationError': serializer.toJson<String?>(hydrationError),
-      'uploadProhibited': serializer.toJson<bool>(uploadProhibited),
-      'quarantineReason': serializer.toJson<String?>(quarantineReason),
-      'legacyOwnerId': serializer.toJson<String?>(legacyOwnerId),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
     };
   }
@@ -11992,9 +11915,6 @@ class SyncAccountData extends DataClass implements Insertable<SyncAccountData> {
     Value<DateTime?> hydrationStartedAt = const Value.absent(),
     Value<DateTime?> hydrationUpdatedAt = const Value.absent(),
     Value<String?> hydrationError = const Value.absent(),
-    bool? uploadProhibited,
-    Value<String?> quarantineReason = const Value.absent(),
-    Value<String?> legacyOwnerId = const Value.absent(),
     DateTime? updatedAt,
   }) => SyncAccountData(
     id: id ?? this.id,
@@ -12041,13 +11961,6 @@ class SyncAccountData extends DataClass implements Insertable<SyncAccountData> {
     hydrationError: hydrationError.present
         ? hydrationError.value
         : this.hydrationError,
-    uploadProhibited: uploadProhibited ?? this.uploadProhibited,
-    quarantineReason: quarantineReason.present
-        ? quarantineReason.value
-        : this.quarantineReason,
-    legacyOwnerId: legacyOwnerId.present
-        ? legacyOwnerId.value
-        : this.legacyOwnerId,
     updatedAt: updatedAt ?? this.updatedAt,
   );
   SyncAccountData copyWithCompanion(SyncAccountCompanion data) {
@@ -12107,15 +12020,6 @@ class SyncAccountData extends DataClass implements Insertable<SyncAccountData> {
       hydrationError: data.hydrationError.present
           ? data.hydrationError.value
           : this.hydrationError,
-      uploadProhibited: data.uploadProhibited.present
-          ? data.uploadProhibited.value
-          : this.uploadProhibited,
-      quarantineReason: data.quarantineReason.present
-          ? data.quarantineReason.value
-          : this.quarantineReason,
-      legacyOwnerId: data.legacyOwnerId.present
-          ? data.legacyOwnerId.value
-          : this.legacyOwnerId,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
   }
@@ -12144,9 +12048,6 @@ class SyncAccountData extends DataClass implements Insertable<SyncAccountData> {
           ..write('hydrationStartedAt: $hydrationStartedAt, ')
           ..write('hydrationUpdatedAt: $hydrationUpdatedAt, ')
           ..write('hydrationError: $hydrationError, ')
-          ..write('uploadProhibited: $uploadProhibited, ')
-          ..write('quarantineReason: $quarantineReason, ')
-          ..write('legacyOwnerId: $legacyOwnerId, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
         .toString();
@@ -12175,9 +12076,6 @@ class SyncAccountData extends DataClass implements Insertable<SyncAccountData> {
     hydrationStartedAt,
     hydrationUpdatedAt,
     hydrationError,
-    uploadProhibited,
-    quarantineReason,
-    legacyOwnerId,
     updatedAt,
   ]);
   @override
@@ -12205,9 +12103,6 @@ class SyncAccountData extends DataClass implements Insertable<SyncAccountData> {
           other.hydrationStartedAt == this.hydrationStartedAt &&
           other.hydrationUpdatedAt == this.hydrationUpdatedAt &&
           other.hydrationError == this.hydrationError &&
-          other.uploadProhibited == this.uploadProhibited &&
-          other.quarantineReason == this.quarantineReason &&
-          other.legacyOwnerId == this.legacyOwnerId &&
           other.updatedAt == this.updatedAt);
 }
 
@@ -12233,9 +12128,6 @@ class SyncAccountCompanion extends UpdateCompanion<SyncAccountData> {
   final Value<DateTime?> hydrationStartedAt;
   final Value<DateTime?> hydrationUpdatedAt;
   final Value<String?> hydrationError;
-  final Value<bool> uploadProhibited;
-  final Value<String?> quarantineReason;
-  final Value<String?> legacyOwnerId;
   final Value<DateTime> updatedAt;
   const SyncAccountCompanion({
     this.id = const Value.absent(),
@@ -12259,9 +12151,6 @@ class SyncAccountCompanion extends UpdateCompanion<SyncAccountData> {
     this.hydrationStartedAt = const Value.absent(),
     this.hydrationUpdatedAt = const Value.absent(),
     this.hydrationError = const Value.absent(),
-    this.uploadProhibited = const Value.absent(),
-    this.quarantineReason = const Value.absent(),
-    this.legacyOwnerId = const Value.absent(),
     this.updatedAt = const Value.absent(),
   });
   SyncAccountCompanion.insert({
@@ -12286,9 +12175,6 @@ class SyncAccountCompanion extends UpdateCompanion<SyncAccountData> {
     this.hydrationStartedAt = const Value.absent(),
     this.hydrationUpdatedAt = const Value.absent(),
     this.hydrationError = const Value.absent(),
-    this.uploadProhibited = const Value.absent(),
-    this.quarantineReason = const Value.absent(),
-    this.legacyOwnerId = const Value.absent(),
     this.updatedAt = const Value.absent(),
   }) : deviceId = Value(deviceId);
   static Insertable<SyncAccountData> custom({
@@ -12313,9 +12199,6 @@ class SyncAccountCompanion extends UpdateCompanion<SyncAccountData> {
     Expression<DateTime>? hydrationStartedAt,
     Expression<DateTime>? hydrationUpdatedAt,
     Expression<String>? hydrationError,
-    Expression<bool>? uploadProhibited,
-    Expression<String>? quarantineReason,
-    Expression<String>? legacyOwnerId,
     Expression<DateTime>? updatedAt,
   }) {
     return RawValuesInsertable({
@@ -12345,9 +12228,6 @@ class SyncAccountCompanion extends UpdateCompanion<SyncAccountData> {
       if (hydrationUpdatedAt != null)
         'hydration_updated_at': hydrationUpdatedAt,
       if (hydrationError != null) 'hydration_error': hydrationError,
-      if (uploadProhibited != null) 'upload_prohibited': uploadProhibited,
-      if (quarantineReason != null) 'quarantine_reason': quarantineReason,
-      if (legacyOwnerId != null) 'legacy_owner_id': legacyOwnerId,
       if (updatedAt != null) 'updated_at': updatedAt,
     });
   }
@@ -12374,9 +12254,6 @@ class SyncAccountCompanion extends UpdateCompanion<SyncAccountData> {
     Value<DateTime?>? hydrationStartedAt,
     Value<DateTime?>? hydrationUpdatedAt,
     Value<String?>? hydrationError,
-    Value<bool>? uploadProhibited,
-    Value<String?>? quarantineReason,
-    Value<String?>? legacyOwnerId,
     Value<DateTime>? updatedAt,
   }) {
     return SyncAccountCompanion(
@@ -12402,9 +12279,6 @@ class SyncAccountCompanion extends UpdateCompanion<SyncAccountData> {
       hydrationStartedAt: hydrationStartedAt ?? this.hydrationStartedAt,
       hydrationUpdatedAt: hydrationUpdatedAt ?? this.hydrationUpdatedAt,
       hydrationError: hydrationError ?? this.hydrationError,
-      uploadProhibited: uploadProhibited ?? this.uploadProhibited,
-      quarantineReason: quarantineReason ?? this.quarantineReason,
-      legacyOwnerId: legacyOwnerId ?? this.legacyOwnerId,
       updatedAt: updatedAt ?? this.updatedAt,
     );
   }
@@ -12483,15 +12357,6 @@ class SyncAccountCompanion extends UpdateCompanion<SyncAccountData> {
     if (hydrationError.present) {
       map['hydration_error'] = Variable<String>(hydrationError.value);
     }
-    if (uploadProhibited.present) {
-      map['upload_prohibited'] = Variable<bool>(uploadProhibited.value);
-    }
-    if (quarantineReason.present) {
-      map['quarantine_reason'] = Variable<String>(quarantineReason.value);
-    }
-    if (legacyOwnerId.present) {
-      map['legacy_owner_id'] = Variable<String>(legacyOwnerId.value);
-    }
     if (updatedAt.present) {
       map['updated_at'] = Variable<DateTime>(updatedAt.value);
     }
@@ -12522,9 +12387,6 @@ class SyncAccountCompanion extends UpdateCompanion<SyncAccountData> {
           ..write('hydrationStartedAt: $hydrationStartedAt, ')
           ..write('hydrationUpdatedAt: $hydrationUpdatedAt, ')
           ..write('hydrationError: $hydrationError, ')
-          ..write('uploadProhibited: $uploadProhibited, ')
-          ..write('quarantineReason: $quarantineReason, ')
-          ..write('legacyOwnerId: $legacyOwnerId, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
         .toString();
@@ -13208,9 +13070,6 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       $MaintenancePlanMetadataTable(this);
   late final $MaintenanceRecordsTable maintenanceRecords =
       $MaintenanceRecordsTable(this);
-  late final $AppNotificationsTable appNotifications = $AppNotificationsTable(
-    this,
-  );
   late final $InboxNotificationsTable inboxNotifications =
       $InboxNotificationsTable(this);
   late final $SettingsTable settings = $SettingsTable(this);
@@ -13224,6 +13083,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $SyncMediaCleanupTable syncMediaCleanup = $SyncMediaCleanupTable(
     this,
   );
+  late final $LocalMediaCleanupTable localMediaCleanup =
+      $LocalMediaCleanupTable(this);
   late final $SyncAccountTable syncAccount = $SyncAccountTable(this);
   late final $NotificationReconciliationRequestsTable
   notificationReconciliationRequests = $NotificationReconciliationRequestsTable(
@@ -13247,7 +13108,6 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     maintenancePlans,
     maintenancePlanMetadata,
     maintenanceRecords,
-    appNotifications,
     inboxNotifications,
     settings,
     streaks,
@@ -13257,9 +13117,106 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     syncShadows,
     syncRuntime,
     syncMediaCleanup,
+    localMediaCleanup,
     syncAccount,
     notificationReconciliationRequests,
   ];
+  @override
+  StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'areas',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('rooms', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'rooms',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('assets', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'assets',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('device_details', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'assets',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('pet_details', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'assets',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('plant_details', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'assets',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('safety_details', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'assets',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('asset_tags', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'tags',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('asset_tags', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'assets',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('asset_photos', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'assets',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('maintenance_plans', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'maintenance_plans',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [
+        TableUpdate('maintenance_plan_metadata', kind: UpdateKind.delete),
+      ],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'maintenance_plans',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('maintenance_records', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'maintenance_plans',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('notification_inbox', kind: UpdateKind.update)],
+    ),
+  ]);
 }
 
 typedef $$AreasTableCreateCompanionBuilder = AreasCompanion Function({
@@ -17711,26 +17668,6 @@ final class $$MaintenancePlansTableReferences
     );
   }
 
-  static MultiTypedResultKey<$AppNotificationsTable, List<NotificationRow>>
-  _appNotificationsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
-    db.appNotifications,
-    aliasName: 'maintenance_plans__id__notifications__plan_id',
-  );
-
-  $$AppNotificationsTableProcessedTableManager get appNotificationsRefs {
-    final manager = $$AppNotificationsTableTableManager(
-      $_db,
-      $_db.appNotifications,
-    ).filter((f) => f.planId.id.sqlEquals($_itemColumn<String>('id')!));
-
-    final cache = $_typedResult.readTableOrNull(
-      _appNotificationsRefsTable($_db),
-    );
-    return ProcessedTableManager(
-      manager.$state.copyWith(prefetchedData: cache),
-    );
-  }
-
   static MultiTypedResultKey<
     $InboxNotificationsTable,
     List<InboxNotificationRow>
@@ -17890,31 +17827,6 @@ class $$MaintenancePlansTableFilterComposer
           }) => $$MaintenanceRecordsTableFilterComposer(
             $db: $db,
             $table: $db.maintenanceRecords,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return f(composer);
-  }
-
-  Expression<bool> appNotificationsRefs(
-    Expression<bool> Function($$AppNotificationsTableFilterComposer f) f,
-  ) {
-    final $$AppNotificationsTableFilterComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.id,
-      referencedTable: $db.appNotifications,
-      getReferencedColumn: (t) => t.planId,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$AppNotificationsTableFilterComposer(
-            $db: $db,
-            $table: $db.appNotifications,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -18176,31 +18088,6 @@ class $$MaintenancePlansTableAnnotationComposer
     return f(composer);
   }
 
-  Expression<T> appNotificationsRefs<T extends Object>(
-    Expression<T> Function($$AppNotificationsTableAnnotationComposer a) f,
-  ) {
-    final $$AppNotificationsTableAnnotationComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.id,
-      referencedTable: $db.appNotifications,
-      getReferencedColumn: (t) => t.planId,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$AppNotificationsTableAnnotationComposer(
-            $db: $db,
-            $table: $db.appNotifications,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return f(composer);
-  }
-
   Expression<T> inboxNotificationsRefs<T extends Object>(
     Expression<T> Function($$InboxNotificationsTableAnnotationComposer a) f,
   ) {
@@ -18245,7 +18132,6 @@ class $$MaintenancePlansTableTableManager
             bool assetId,
             bool maintenancePlanMetadataRefs,
             bool maintenanceRecordsRefs,
-            bool appNotificationsRefs,
             bool inboxNotificationsRefs,
           })
         > {
@@ -18339,7 +18225,6 @@ class $$MaintenancePlansTableTableManager
                 assetId = false,
                 maintenancePlanMetadataRefs = false,
                 maintenanceRecordsRefs = false,
-                appNotificationsRefs = false,
                 inboxNotificationsRefs = false,
               }) {
                 return PrefetchHooks(
@@ -18347,7 +18232,6 @@ class $$MaintenancePlansTableTableManager
                   explicitlyWatchedTables: [
                     if (maintenancePlanMetadataRefs) db.maintenancePlanMetadata,
                     if (maintenanceRecordsRefs) db.maintenanceRecords,
-                    if (appNotificationsRefs) db.appNotifications,
                     if (inboxNotificationsRefs) db.inboxNotifications,
                   ],
                   addJoins:
@@ -18424,27 +18308,6 @@ class $$MaintenancePlansTableTableManager
                               ),
                           typedResults: items,
                         ),
-                      if (appNotificationsRefs)
-                        await $_getPrefetchedData<
-                          MaintenancePlanRow,
-                          $MaintenancePlansTable,
-                          NotificationRow
-                        >(
-                          currentTable: table,
-                          referencedTable: $$MaintenancePlansTableReferences
-                              ._appNotificationsRefsTable(db),
-                          managerFromTypedResult: (p0) =>
-                              $$MaintenancePlansTableReferences(
-                                db,
-                                table,
-                                p0,
-                              ).appNotificationsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.planId == item.id,
-                              ),
-                          typedResults: items,
-                        ),
                       if (inboxNotificationsRefs)
                         await $_getPrefetchedData<
                           MaintenancePlanRow,
@@ -18490,7 +18353,6 @@ typedef $$MaintenancePlansTableProcessedTableManager =
         bool assetId,
         bool maintenancePlanMetadataRefs,
         bool maintenanceRecordsRefs,
-        bool appNotificationsRefs,
         bool inboxNotificationsRefs,
       })
     >;
@@ -19251,352 +19113,6 @@ typedef $$MaintenanceRecordsTableProcessedTableManager =
       MaintenanceRecordRow,
       PrefetchHooks Function({bool planId})
     >;
-typedef $$AppNotificationsTableCreateCompanionBuilder =
-    AppNotificationsCompanion Function({
-      required String id,
-      required String planId,
-      required String channel,
-      required DateTime scheduledFor,
-      Value<DateTime?> deliveredAt,
-      Value<DateTime> createdAt,
-      Value<int> rowid,
-    });
-typedef $$AppNotificationsTableUpdateCompanionBuilder =
-    AppNotificationsCompanion Function({
-      Value<String> id,
-      Value<String> planId,
-      Value<String> channel,
-      Value<DateTime> scheduledFor,
-      Value<DateTime?> deliveredAt,
-      Value<DateTime> createdAt,
-      Value<int> rowid,
-    });
-
-final class $$AppNotificationsTableReferences
-    extends
-        BaseReferences<_$AppDatabase, $AppNotificationsTable, NotificationRow> {
-  $$AppNotificationsTableReferences(
-    super.$_db,
-    super.$_table,
-    super.$_typedResult,
-  );
-
-  static $MaintenancePlansTable _planIdTable(_$AppDatabase db) => db
-      .maintenancePlans
-      .createAlias('notifications__plan_id__maintenance_plans__id');
-
-  $$MaintenancePlansTableProcessedTableManager get planId {
-    final $_column = $_itemColumn<String>('plan_id')!;
-
-    final manager = $$MaintenancePlansTableTableManager(
-      $_db,
-      $_db.maintenancePlans,
-    ).filter((f) => f.id.sqlEquals($_column));
-    final item = $_typedResult.readTableOrNull(_planIdTable($_db));
-    if (item == null) return manager;
-    return ProcessedTableManager(
-      manager.$state.copyWith(prefetchedData: [item]),
-    );
-  }
-}
-
-class $$AppNotificationsTableFilterComposer
-    extends Composer<_$AppDatabase, $AppNotificationsTable> {
-  $$AppNotificationsTableFilterComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  ColumnFilters<String> get id => $composableBuilder(
-    column: $table.id,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get channel => $composableBuilder(
-    column: $table.channel,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<DateTime> get scheduledFor => $composableBuilder(
-    column: $table.scheduledFor,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<DateTime> get deliveredAt => $composableBuilder(
-    column: $table.deliveredAt,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<DateTime> get createdAt => $composableBuilder(
-    column: $table.createdAt,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  $$MaintenancePlansTableFilterComposer get planId {
-    final $$MaintenancePlansTableFilterComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.planId,
-      referencedTable: $db.maintenancePlans,
-      getReferencedColumn: (t) => t.id,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$MaintenancePlansTableFilterComposer(
-            $db: $db,
-            $table: $db.maintenancePlans,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return composer;
-  }
-}
-
-class $$AppNotificationsTableOrderingComposer
-    extends Composer<_$AppDatabase, $AppNotificationsTable> {
-  $$AppNotificationsTableOrderingComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  ColumnOrderings<String> get id => $composableBuilder(
-    column: $table.id,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get channel => $composableBuilder(
-    column: $table.channel,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<DateTime> get scheduledFor => $composableBuilder(
-    column: $table.scheduledFor,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<DateTime> get deliveredAt => $composableBuilder(
-    column: $table.deliveredAt,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
-    column: $table.createdAt,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  $$MaintenancePlansTableOrderingComposer get planId {
-    final $$MaintenancePlansTableOrderingComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.planId,
-      referencedTable: $db.maintenancePlans,
-      getReferencedColumn: (t) => t.id,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$MaintenancePlansTableOrderingComposer(
-            $db: $db,
-            $table: $db.maintenancePlans,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return composer;
-  }
-}
-
-class $$AppNotificationsTableAnnotationComposer
-    extends Composer<_$AppDatabase, $AppNotificationsTable> {
-  $$AppNotificationsTableAnnotationComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  GeneratedColumn<String> get id =>
-      $composableBuilder(column: $table.id, builder: (column) => column);
-
-  GeneratedColumn<String> get channel =>
-      $composableBuilder(column: $table.channel, builder: (column) => column);
-
-  GeneratedColumn<DateTime> get scheduledFor => $composableBuilder(
-    column: $table.scheduledFor,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<DateTime> get deliveredAt => $composableBuilder(
-    column: $table.deliveredAt,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<DateTime> get createdAt =>
-      $composableBuilder(column: $table.createdAt, builder: (column) => column);
-
-  $$MaintenancePlansTableAnnotationComposer get planId {
-    final $$MaintenancePlansTableAnnotationComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.planId,
-      referencedTable: $db.maintenancePlans,
-      getReferencedColumn: (t) => t.id,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$MaintenancePlansTableAnnotationComposer(
-            $db: $db,
-            $table: $db.maintenancePlans,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return composer;
-  }
-}
-
-class $$AppNotificationsTableTableManager
-    extends
-        RootTableManager<
-          _$AppDatabase,
-          $AppNotificationsTable,
-          NotificationRow,
-          $$AppNotificationsTableFilterComposer,
-          $$AppNotificationsTableOrderingComposer,
-          $$AppNotificationsTableAnnotationComposer,
-          $$AppNotificationsTableCreateCompanionBuilder,
-          $$AppNotificationsTableUpdateCompanionBuilder,
-          (NotificationRow, $$AppNotificationsTableReferences),
-          NotificationRow,
-          PrefetchHooks Function({bool planId})
-        > {
-  $$AppNotificationsTableTableManager(
-    _$AppDatabase db,
-    $AppNotificationsTable table,
-  ) : super(
-        TableManagerState(
-          db: db,
-          table: table,
-          createFilteringComposer: () =>
-              $$AppNotificationsTableFilterComposer($db: db, $table: table),
-          createOrderingComposer: () =>
-              $$AppNotificationsTableOrderingComposer($db: db, $table: table),
-          createComputedFieldComposer: () =>
-              $$AppNotificationsTableAnnotationComposer($db: db, $table: table),
-          updateCompanionCallback:
-              ({
-                Value<String> id = const Value.absent(),
-                Value<String> planId = const Value.absent(),
-                Value<String> channel = const Value.absent(),
-                Value<DateTime> scheduledFor = const Value.absent(),
-                Value<DateTime?> deliveredAt = const Value.absent(),
-                Value<DateTime> createdAt = const Value.absent(),
-                Value<int> rowid = const Value.absent(),
-              }) => AppNotificationsCompanion(
-                id: id,
-                planId: planId,
-                channel: channel,
-                scheduledFor: scheduledFor,
-                deliveredAt: deliveredAt,
-                createdAt: createdAt,
-                rowid: rowid,
-              ),
-          createCompanionCallback:
-              ({
-                required String id,
-                required String planId,
-                required String channel,
-                required DateTime scheduledFor,
-                Value<DateTime?> deliveredAt = const Value.absent(),
-                Value<DateTime> createdAt = const Value.absent(),
-                Value<int> rowid = const Value.absent(),
-              }) => AppNotificationsCompanion.insert(
-                id: id,
-                planId: planId,
-                channel: channel,
-                scheduledFor: scheduledFor,
-                deliveredAt: deliveredAt,
-                createdAt: createdAt,
-                rowid: rowid,
-              ),
-          withReferenceMapper: (p0) => p0
-              .map(
-                (e) => (
-                  e.readTable(table),
-                  $$AppNotificationsTableReferences(db, table, e),
-                ),
-              )
-              .toList(),
-          prefetchHooksCallback: ({planId = false}) {
-            return PrefetchHooks(
-              db: db,
-              explicitlyWatchedTables: [],
-              addJoins:
-                  <
-                    T extends TableManagerState<
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic
-                    >
-                  >(state) {
-                    if (planId) {
-                      state = state.withJoin(
-                        currentTable: table,
-                        currentColumn: table.planId,
-                        referencedTable: $$AppNotificationsTableReferences
-                            ._planIdTable(db),
-                        referencedColumn: $$AppNotificationsTableReferences
-                            ._planIdTable(db)
-                            .id,
-                      ) as T;
-                    }
-
-                    return state;
-                  },
-              getPrefetchedDataCallback: (items) async {
-                return [];
-              },
-            );
-          },
-        ),
-      );
-}
-
-typedef $$AppNotificationsTableProcessedTableManager =
-    ProcessedTableManager<
-      _$AppDatabase,
-      $AppNotificationsTable,
-      NotificationRow,
-      $$AppNotificationsTableFilterComposer,
-      $$AppNotificationsTableOrderingComposer,
-      $$AppNotificationsTableAnnotationComposer,
-      $$AppNotificationsTableCreateCompanionBuilder,
-      $$AppNotificationsTableUpdateCompanionBuilder,
-      (NotificationRow, $$AppNotificationsTableReferences),
-      NotificationRow,
-      PrefetchHooks Function({bool planId})
-    >;
 typedef $$InboxNotificationsTableCreateCompanionBuilder =
     InboxNotificationsCompanion Function({
       required String id,
@@ -19605,7 +19121,7 @@ typedef $$InboxNotificationsTableCreateCompanionBuilder =
       required String kind,
       Value<String?> route,
       Value<String?> planId,
-      Value<String?> messageCode,
+      Value<String> messageCode,
       Value<String> messageArgs,
       Value<String> dedupeKey,
       Value<DateTime?> readAt,
@@ -19621,7 +19137,7 @@ typedef $$InboxNotificationsTableUpdateCompanionBuilder =
       Value<String> kind,
       Value<String?> route,
       Value<String?> planId,
-      Value<String?> messageCode,
+      Value<String> messageCode,
       Value<String> messageArgs,
       Value<String> dedupeKey,
       Value<DateTime?> readAt,
@@ -19947,7 +19463,7 @@ class $$InboxNotificationsTableTableManager
                 Value<String> kind = const Value.absent(),
                 Value<String?> route = const Value.absent(),
                 Value<String?> planId = const Value.absent(),
-                Value<String?> messageCode = const Value.absent(),
+                Value<String> messageCode = const Value.absent(),
                 Value<String> messageArgs = const Value.absent(),
                 Value<String> dedupeKey = const Value.absent(),
                 Value<DateTime?> readAt = const Value.absent(),
@@ -19977,7 +19493,7 @@ class $$InboxNotificationsTableTableManager
                 required String kind,
                 Value<String?> route = const Value.absent(),
                 Value<String?> planId = const Value.absent(),
-                Value<String?> messageCode = const Value.absent(),
+                Value<String> messageCode = const Value.absent(),
                 Value<String> messageArgs = const Value.absent(),
                 Value<String> dedupeKey = const Value.absent(),
                 Value<DateTime?> readAt = const Value.absent(),
@@ -21929,6 +21445,225 @@ typedef $$SyncMediaCleanupTableProcessedTableManager =
       SyncMediaCleanupData,
       PrefetchHooks Function()
     >;
+typedef $$LocalMediaCleanupTableCreateCompanionBuilder =
+    LocalMediaCleanupCompanion Function({
+      required String relativePath,
+      Value<DateTime> createdAt,
+      Value<int> attempts,
+      Value<DateTime?> nextAttemptAt,
+      Value<String?> lastErrorCode,
+      Value<int> rowid,
+    });
+typedef $$LocalMediaCleanupTableUpdateCompanionBuilder =
+    LocalMediaCleanupCompanion Function({
+      Value<String> relativePath,
+      Value<DateTime> createdAt,
+      Value<int> attempts,
+      Value<DateTime?> nextAttemptAt,
+      Value<String?> lastErrorCode,
+      Value<int> rowid,
+    });
+
+class $$LocalMediaCleanupTableFilterComposer
+    extends Composer<_$AppDatabase, $LocalMediaCleanupTable> {
+  $$LocalMediaCleanupTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get relativePath => $composableBuilder(
+    column: $table.relativePath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get attempts => $composableBuilder(
+    column: $table.attempts,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get nextAttemptAt => $composableBuilder(
+    column: $table.nextAttemptAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get lastErrorCode => $composableBuilder(
+    column: $table.lastErrorCode,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$LocalMediaCleanupTableOrderingComposer
+    extends Composer<_$AppDatabase, $LocalMediaCleanupTable> {
+  $$LocalMediaCleanupTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get relativePath => $composableBuilder(
+    column: $table.relativePath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get attempts => $composableBuilder(
+    column: $table.attempts,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get nextAttemptAt => $composableBuilder(
+    column: $table.nextAttemptAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get lastErrorCode => $composableBuilder(
+    column: $table.lastErrorCode,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$LocalMediaCleanupTableAnnotationComposer
+    extends Composer<_$AppDatabase, $LocalMediaCleanupTable> {
+  $$LocalMediaCleanupTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get relativePath => $composableBuilder(
+    column: $table.relativePath,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<int> get attempts =>
+      $composableBuilder(column: $table.attempts, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get nextAttemptAt => $composableBuilder(
+    column: $table.nextAttemptAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get lastErrorCode => $composableBuilder(
+    column: $table.lastErrorCode,
+    builder: (column) => column,
+  );
+}
+
+class $$LocalMediaCleanupTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $LocalMediaCleanupTable,
+          LocalMediaCleanupData,
+          $$LocalMediaCleanupTableFilterComposer,
+          $$LocalMediaCleanupTableOrderingComposer,
+          $$LocalMediaCleanupTableAnnotationComposer,
+          $$LocalMediaCleanupTableCreateCompanionBuilder,
+          $$LocalMediaCleanupTableUpdateCompanionBuilder,
+          (
+            LocalMediaCleanupData,
+            BaseReferences<
+              _$AppDatabase,
+              $LocalMediaCleanupTable,
+              LocalMediaCleanupData
+            >,
+          ),
+          LocalMediaCleanupData,
+          PrefetchHooks Function()
+        > {
+  $$LocalMediaCleanupTableTableManager(
+    _$AppDatabase db,
+    $LocalMediaCleanupTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$LocalMediaCleanupTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$LocalMediaCleanupTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$LocalMediaCleanupTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> relativePath = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<int> attempts = const Value.absent(),
+                Value<DateTime?> nextAttemptAt = const Value.absent(),
+                Value<String?> lastErrorCode = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => LocalMediaCleanupCompanion(
+                relativePath: relativePath,
+                createdAt: createdAt,
+                attempts: attempts,
+                nextAttemptAt: nextAttemptAt,
+                lastErrorCode: lastErrorCode,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String relativePath,
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<int> attempts = const Value.absent(),
+                Value<DateTime?> nextAttemptAt = const Value.absent(),
+                Value<String?> lastErrorCode = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => LocalMediaCleanupCompanion.insert(
+                relativePath: relativePath,
+                createdAt: createdAt,
+                attempts: attempts,
+                nextAttemptAt: nextAttemptAt,
+                lastErrorCode: lastErrorCode,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$LocalMediaCleanupTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $LocalMediaCleanupTable,
+      LocalMediaCleanupData,
+      $$LocalMediaCleanupTableFilterComposer,
+      $$LocalMediaCleanupTableOrderingComposer,
+      $$LocalMediaCleanupTableAnnotationComposer,
+      $$LocalMediaCleanupTableCreateCompanionBuilder,
+      $$LocalMediaCleanupTableUpdateCompanionBuilder,
+      (
+        LocalMediaCleanupData,
+        BaseReferences<
+          _$AppDatabase,
+          $LocalMediaCleanupTable,
+          LocalMediaCleanupData
+        >,
+      ),
+      LocalMediaCleanupData,
+      PrefetchHooks Function()
+    >;
 typedef $$SyncAccountTableCreateCompanionBuilder =
     SyncAccountCompanion Function({
       Value<int> id,
@@ -21952,9 +21687,6 @@ typedef $$SyncAccountTableCreateCompanionBuilder =
       Value<DateTime?> hydrationStartedAt,
       Value<DateTime?> hydrationUpdatedAt,
       Value<String?> hydrationError,
-      Value<bool> uploadProhibited,
-      Value<String?> quarantineReason,
-      Value<String?> legacyOwnerId,
       Value<DateTime> updatedAt,
     });
 typedef $$SyncAccountTableUpdateCompanionBuilder =
@@ -21980,9 +21712,6 @@ typedef $$SyncAccountTableUpdateCompanionBuilder =
       Value<DateTime?> hydrationStartedAt,
       Value<DateTime?> hydrationUpdatedAt,
       Value<String?> hydrationError,
-      Value<bool> uploadProhibited,
-      Value<String?> quarantineReason,
-      Value<String?> legacyOwnerId,
       Value<DateTime> updatedAt,
     });
 
@@ -22097,21 +21826,6 @@ class $$SyncAccountTableFilterComposer
 
   ColumnFilters<String> get hydrationError => $composableBuilder(
     column: $table.hydrationError,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<bool> get uploadProhibited => $composableBuilder(
-    column: $table.uploadProhibited,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get quarantineReason => $composableBuilder(
-    column: $table.quarantineReason,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get legacyOwnerId => $composableBuilder(
-    column: $table.legacyOwnerId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -22235,21 +21949,6 @@ class $$SyncAccountTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<bool> get uploadProhibited => $composableBuilder(
-    column: $table.uploadProhibited,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get quarantineReason => $composableBuilder(
-    column: $table.quarantineReason,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get legacyOwnerId => $composableBuilder(
-    column: $table.legacyOwnerId,
-    builder: (column) => ColumnOrderings(column),
-  );
-
   ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
     column: $table.updatedAt,
     builder: (column) => ColumnOrderings(column),
@@ -22362,21 +22061,6 @@ class $$SyncAccountTableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumn<bool> get uploadProhibited => $composableBuilder(
-    column: $table.uploadProhibited,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get quarantineReason => $composableBuilder(
-    column: $table.quarantineReason,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get legacyOwnerId => $composableBuilder(
-    column: $table.legacyOwnerId,
-    builder: (column) => column,
-  );
-
   GeneratedColumn<DateTime> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
 }
@@ -22433,9 +22117,6 @@ class $$SyncAccountTableTableManager
                 Value<DateTime?> hydrationStartedAt = const Value.absent(),
                 Value<DateTime?> hydrationUpdatedAt = const Value.absent(),
                 Value<String?> hydrationError = const Value.absent(),
-                Value<bool> uploadProhibited = const Value.absent(),
-                Value<String?> quarantineReason = const Value.absent(),
-                Value<String?> legacyOwnerId = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
               }) => SyncAccountCompanion(
                 id: id,
@@ -22459,9 +22140,6 @@ class $$SyncAccountTableTableManager
                 hydrationStartedAt: hydrationStartedAt,
                 hydrationUpdatedAt: hydrationUpdatedAt,
                 hydrationError: hydrationError,
-                uploadProhibited: uploadProhibited,
-                quarantineReason: quarantineReason,
-                legacyOwnerId: legacyOwnerId,
                 updatedAt: updatedAt,
               ),
           createCompanionCallback:
@@ -22487,9 +22165,6 @@ class $$SyncAccountTableTableManager
                 Value<DateTime?> hydrationStartedAt = const Value.absent(),
                 Value<DateTime?> hydrationUpdatedAt = const Value.absent(),
                 Value<String?> hydrationError = const Value.absent(),
-                Value<bool> uploadProhibited = const Value.absent(),
-                Value<String?> quarantineReason = const Value.absent(),
-                Value<String?> legacyOwnerId = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
               }) => SyncAccountCompanion.insert(
                 id: id,
@@ -22513,9 +22188,6 @@ class $$SyncAccountTableTableManager
                 hydrationStartedAt: hydrationStartedAt,
                 hydrationUpdatedAt: hydrationUpdatedAt,
                 hydrationError: hydrationError,
-                uploadProhibited: uploadProhibited,
-                quarantineReason: quarantineReason,
-                legacyOwnerId: legacyOwnerId,
                 updatedAt: updatedAt,
               ),
           withReferenceMapper: (p0) => p0
@@ -22897,8 +22569,6 @@ class $AppDatabaseManager {
       );
   $$MaintenanceRecordsTableTableManager get maintenanceRecords =>
       $$MaintenanceRecordsTableTableManager(_db, _db.maintenanceRecords);
-  $$AppNotificationsTableTableManager get appNotifications =>
-      $$AppNotificationsTableTableManager(_db, _db.appNotifications);
   $$InboxNotificationsTableTableManager get inboxNotifications =>
       $$InboxNotificationsTableTableManager(_db, _db.inboxNotifications);
   $$SettingsTableTableManager get settings =>
@@ -22920,6 +22590,8 @@ class $AppDatabaseManager {
       $$SyncRuntimeTableTableManager(_db, _db.syncRuntime);
   $$SyncMediaCleanupTableTableManager get syncMediaCleanup =>
       $$SyncMediaCleanupTableTableManager(_db, _db.syncMediaCleanup);
+  $$LocalMediaCleanupTableTableManager get localMediaCleanup =>
+      $$LocalMediaCleanupTableTableManager(_db, _db.localMediaCleanup);
   $$SyncAccountTableTableManager get syncAccount =>
       $$SyncAccountTableTableManager(_db, _db.syncAccount);
   $$NotificationReconciliationRequestsTableTableManager

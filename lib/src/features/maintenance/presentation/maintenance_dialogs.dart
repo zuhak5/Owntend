@@ -1,227 +1,7 @@
-part of '../../../../main.dart';
-
-class CompleteTaskDialog extends StatefulWidget {
-  const CompleteTaskDialog({required this.task, super.key});
-
-  final TaskItem task;
-
-  @override
-  State<CompleteTaskDialog> createState() => _CompleteTaskDialogState();
-}
-
-class _CompleteTaskDialogState extends State<CompleteTaskDialog> {
-  final _notesController = TextEditingController();
-
-  @override
-  void dispose() {
-    _notesController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return _EditorSheetFrame(
-      title: context.l10n.completeTaskTitleCase,
-      saveLabel: context.l10n.completeAction,
-      onCancel: () => Navigator.of(context).pop(),
-      onSave: () => Navigator.of(context).pop(_notesController.text),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          hk_ui.PremiumCard(
-            padding: const EdgeInsets.all(14),
-            backgroundColor: Theme.of(context).colorScheme.primary,
-            child: Text(
-              '${widget.task.plan.title} - ${widget.task.asset.name}',
-              style: Theme.of(context).textTheme.bodyMedium
-                  ?.copyWith(color: Theme.of(context).colorScheme.onPrimary),
-            ),
-          ),
-          const SizedBox(height: HkSpacing.sm),
-          TextField(
-            controller: _notesController,
-            maxLines: 3,
-            decoration: InputDecoration(
-              labelText: context.l10n.completionNotes,
-              hintText:
-                  context.l10n.whatChangedWhatWasReplacedOrWhatNeedsFollowUp,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-Future<T?> _showEditorModal<T>(
-  BuildContext context, {
-  required WidgetBuilder builder,
-}) {
-  return runWithNativeAdsSuspended(
-    context,
-    () => showModalBottomSheet<T>(
-      context: context,
-      useRootNavigator: true,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Colors.transparent,
-      showDragHandle: false,
-      builder: (sheetContext) {
-        final keyboardInset = MediaQuery.viewInsetsOf(sheetContext).bottom;
-        return SizedBox(
-          key: const ValueKey('editor-modal-hit-surface'),
-          height: MediaQuery.sizeOf(sheetContext).height,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => Navigator.of(sheetContext).pop(),
-              ),
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: keyboardInset,
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 640),
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () {},
-                      child: builder(sheetContext),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    ),
-  );
-}
-
-class _EditorSheetFrame extends StatelessWidget {
-  const _EditorSheetFrame({
-    required this.title,
-    required this.saveLabel,
-    required this.onCancel,
-    required this.onSave,
-    required this.child,
-    this.saveEnabled = true,
-    this.secondarySaveLabel,
-    this.onSecondarySave,
-  });
-
-  final String title;
-  final String saveLabel;
-  final bool saveEnabled;
-  final VoidCallback onCancel;
-  final VoidCallback onSave;
-  final String? secondarySaveLabel;
-  final VoidCallback? onSecondarySave;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
-    final availableHeight = MediaQuery.sizeOf(context).height - keyboardInset;
-    final maxHeight = math.max(240.0, availableHeight * 0.92);
-    return Material(
-      color: scheme.surface,
-      borderRadius: const BorderRadius.vertical(
-        top: Radius.circular(HkRadii.xxl),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: maxHeight, maxWidth: 640),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: HkSpacing.xs),
-            Center(
-              child: Container(
-                key: const ValueKey('editor-sheet-drag-handle'),
-                width: 44,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: scheme.outlineVariant,
-                  borderRadius: BorderRadius.circular(HkRadii.full),
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                HkSpacing.md,
-                HkSpacing.xs,
-                HkSpacing.xs,
-                HkSpacing.xs,
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      title,
-                      style: Theme.of(context).textTheme.titleLarge
-                          ?.copyWith(fontWeight: FontWeight.w900),
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: context.l10n.close,
-                    onPressed: onCancel,
-                    icon: const Icon(Symbols.close_rounded),
-                  ),
-                ],
-              ),
-            ),
-            Flexible(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(
-                  HkSpacing.md,
-                  0,
-                  HkSpacing.md,
-                  HkSpacing.md,
-                ),
-                child: child,
-              ),
-            ),
-            SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  HkSpacing.md,
-                  HkSpacing.xs,
-                  HkSpacing.md,
-                  HkSpacing.md,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (secondarySaveLabel != null &&
-                        onSecondarySave != null) ...[
-                      OutlinedButton(
-                        onPressed: saveEnabled ? onSecondarySave : null,
-                        child: Text(secondarySaveLabel!),
-                      ),
-                      const SizedBox(height: HkSpacing.xs),
-                    ],
-                    FilledButton(
-                      onPressed: saveEnabled ? onSave : null,
-                      child: Text(saveLabel),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
+import '../../../ui/components.dart' as hk_ui;
+import '../../../ui/presentation_support.dart';
+import '../../monetization/presentation/monetization_presentation.dart';
+import 'task_actions.dart';
 
 class PlanEditorDialog extends ConsumerStatefulWidget {
   const PlanEditorDialog({this.task, this.assetId, super.key});
@@ -404,7 +184,7 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
           _metadataNumbersValid,
       orElse: () => false,
     );
-    return _EditorSheetFrame(
+    return EditorSheetFrame(
       title: widget.task == null ? context.l10n.addTask : context.l10n.editTask,
       saveLabel: widget.task == null
           ? context.l10n.createTask
@@ -505,7 +285,7 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
                         for (final item in RecurrenceUnit.values)
                           DropdownMenuItem(
                             value: item,
-                            child: Text(_recurrenceUnitLabel(context, item)),
+                            child: Text(recurrenceUnitLabel(context, item)),
                           ),
                       ],
                       onChanged: (value) =>
@@ -522,7 +302,7 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
                   for (final item in PriorityLevel.values)
                     DropdownMenuItem(
                       value: item,
-                      child: Text(_priorityLabel(context, item)),
+                      child: Text(priorityLabel(context, item)),
                     ),
                 ],
                 onChanged: (value) =>
@@ -614,7 +394,7 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
                       icon: const Icon(Icons.event),
                       label: Text(
                         context.l10n.dueDate(
-                          _formatShortDate(context, _dueDate),
+                          formatShortDate(context, _dueDate),
                         ),
                       ),
                     ),
@@ -624,7 +404,7 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
                     child: OutlinedButton.icon(
                       onPressed: _pickTime,
                       icon: const Icon(Symbols.schedule_rounded),
-                      label: Text(_formatShortTime(context, _dueDate)),
+                      label: Text(formatShortTime(context, _dueDate)),
                     ),
                   ),
                 ],
@@ -632,7 +412,7 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
             ],
           );
         },
-        error: (error, _) => Text(_failureMessage(context, error)),
+        error: (error, _) => Text(failureMessage(context, error)),
         loading: () => const LinearProgressIndicator(),
       ),
     );
@@ -752,7 +532,7 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
           if (mounted && state.failure != null) {
             if (state.failure!.code ==
                     TaskCreationFailureCode.insufficientPoints ||
-                _isInsufficientPointsError(state.failure!.message)) {
+                isInsufficientPointsError(state.failure!.message)) {
               await showPointShortageDialog(
                 context,
                 ref,
@@ -762,7 +542,7 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
             }
             hk_ui.showToast(
               context,
-              content: Text(_failureMessage(context, state.failure!.message)),
+              content: Text(failureMessage(context, state.failure!.message)),
               severity: hk_ui.HkToastSeverity.error,
             );
           }
@@ -791,7 +571,7 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
       await refreshNotificationSchedules(ref);
       if (mounted) {
         if (widget.task == null) {
-          _showTaskActionFeedback(context, _TaskActionFeedbackType.created);
+          showTaskActionFeedback(context, TaskActionFeedbackType.created);
         }
         if (closeAfterSave) {
           Navigator.of(context).pop();
@@ -813,18 +593,14 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
       }
     } catch (error) {
       if (mounted) {
-        if (_isInsufficientPointsError(error)) {
+        if (isInsufficientPointsError(error)) {
           await showPointShortageDialog(context, ref, attemptedAction: 'task');
           return;
         }
         hk_ui.showToast(
           context,
           content: Text(
-            _failureMessage(
-              context,
-              error,
-              fallback: AppFailureCode.taskUpdate,
-            ),
+            failureMessage(context, error, fallback: AppFailureCode.taskUpdate),
           ),
           severity: hk_ui.HkToastSeverity.error,
         );
@@ -840,11 +616,11 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
     final durationText = _durationController.text.trim();
     final duration = durationText.isEmpty ? null : int.tryParse(durationText);
     final metadata = TaskMetadata(
-      taskType: _nullableEditText(_taskTypeController.text),
-      locationLabel: _nullableEditText(_locationController.text),
+      taskType: nullableEditText(_taskTypeController.text),
+      locationLabel: nullableEditText(_locationController.text),
       estimatedDurationMinutes: duration,
-      requiredMaterials: _commaList(_materialsController.text),
-      reminderRecommendation: _nullableEditText(
+      requiredMaterials: commaSeparatedValues(_materialsController.text),
+      reminderRecommendation: nullableEditText(
         _reminderRecommendationController.text,
       ),
     );

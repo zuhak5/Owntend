@@ -2,7 +2,7 @@
 
 ## Active production containment
 
-Production release, signing, Sentry, Supabase mutation/advisor, Play AAB, and
+Production Shorebird release/patch/promotion, signing, Sentry, Supabase mutation/advisor, Play AAB, and
 VersionDeck publication rails were paused on 2026-08-11. The redacted
 evidence, action ledger, limits, and re-enable owners are recorded in
 [`docs/operations/production-containment.md`](docs/operations/production-containment.md).
@@ -46,6 +46,7 @@ Changes in these areas require elevated review:
 - AdMob server-side verification, reward claims, point balances, and charged creation.
 - Backup archive parsing, restore staging, schema compatibility, and rollback. All backup imports enforce strict preallocation resource budgets before live mutation: 256 MiB compressed limit (`_maxBackupBytes`), 512 MiB total expanded limit (`_maxExtractedBytes`), 256 MiB single entry limit (`_maxSingleEntryBytes`), 10,000 maximum entry count (`_maxEntryCount`), 20x maximum compression ratio (`_maxCompressionRatio`), and streaming declared-vs-actual byte size validation.
 - Sentry initialization, scrubbing, event processors, release publication, and telemetry fields.
+- Shorebird release/patch identity, strict eligibility, tracks/promotion/rollback, KMS signing, app IDs, tokens, and updater provenance.
 - Android permissions, exact alarms, foreground services, boot receivers, and location.
 - Production configuration, Android signing, APK verification, and VersionDeck.
 
@@ -58,6 +59,7 @@ Never commit:
 - Supabase service-role credentials.
 - Google OAuth secrets.
 - Sentry authentication tokens.
+- Shorebird API tokens, Android signing material, Google OIDC credentials, or exportable patch-signing private keys.
 - Android keystores, signing passwords, or `android/key.properties`.
 - Private user content or production database exports.
 

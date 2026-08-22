@@ -1,186 +1,48 @@
-# Android Production Release Rails
+# Android release runbook
 
-> **Scoped production containment is active.** Exact-main signed APK and AAB
-> evidence rails may run. Public or hosted-service mutation remains contained:
-> no Sentry release mutation, GitHub Release/tag publication, verified
-> VersionDeck download publication, Google Play upload/rollout, or hosted
-> backend mutation is authorized by an evidence build. See the
-> [TASK-001 containment record](production-containment.md).
+Production release mutation remains contained. This runbook defines evidence and handoff; it does not authorize a Shorebird publish, Play upload, Sentry mutation, GitHub Release, VersionDeck publication, hosted backend mutation, or rollout.
 
-## Scope
+## Canonical release rail
 
-This runbook coordinates Owntend's production Android evidence rails. It does not authorize local signing, backend deployment, Google Play upload, rollout, Sentry mutation, or public deployment.
+[`Shorebird Android Release`](../../.github/workflows/shorebird-release-android.yml) replaces the old independent APK and Play builds. It accepts an exact source SHA, flavor, and `validate`/`publish` operation. `validate` is the default and runs `shorebird release android --dry-run`. Production publication additionally requires:
 
-The executable sources are:
+- dispatch from exact current `main`;
+- an exact successful `Validate Google Backend and Release Contracts` run for the source SHA;
+- `production` environment approval;
+- `SHOREBIRD_PRODUCTION_RELEASES_ENABLED=true`;
+- the environment-scoped Shorebird token, Play upload signer, and non-exportable production KMS signing key.
 
-- [`tool/build_play_prod.ps1`](../../tool/build_play_prod.ps1) and [`tool/build_prod.ps1`](../../tool/build_prod.ps1)
-- [`tool/build_prod_abi_evidence.ps1`](../../tool/build_prod_abi_evidence.ps1)
-- [`tool/collect_android_release_evidence.ps1`](../../tool/collect_android_release_evidence.ps1)
-- [`tool/verify_android_apk_artifact_set.mjs`](../../tool/verify_android_apk_artifact_set.mjs)
-- [`tool/validate_google_release_contracts.mjs`](../../tool/validate_google_release_contracts.mjs)
-- [`pubspec.yaml`](../../pubspec.yaml)
+The backend workflow's required jobs include `Deno SSV tests`, `Google contract/static checks`, and `Supabase database tests`. A pending migration must follow the separately protected migration workflow; release CI does not deploy it.
 
-Use the dedicated [Google Play release runbook](google-play-release-runbook.md) for manual Play Console and Play-delivered device evidence. Use the [VersionDeck runbook](../versiondeck-release-runbook.md) for downstream APK verification evidence.
+The release workflow produces one canonical Shorebird AAB with obfuscation, Dart symbols, R8 mapping, merged-manifest/dependency/lint/SBOM evidence, exact toolchain manifest, engine symbols, checksum, and provenance. The release identifier is the `pubspec.yaml` value `x.y.z+N`. Sentry retains `app.owntend.mobile@x.y.z+N` and dist `N`.
 
-## Release identity and version uniqueness
+## VersionDeck APK derivation
 
-The final source identity is one full Git commit SHA on `main`. Freeze that SHA for the entire sequence; do not combine backend, AAB, APK, Sentry, Play, or VersionDeck evidence from different commits.
+Only a published production release can enter `production-android-signing`. [`tool/derive_versiondeck_apks.ps1`](../../tool/derive_versiondeck_apks.ps1) consumes the exact AAB from the preceding job. Pinned Bundletool creates the signed universal APK. The script then derives `arm64-v8a`, `armeabi-v7a`, and `x86_64` APKs by pruning other native directories, aligning, resigning with the established standalone signer, and verifying package, version/build, signer, native-directory set, hash, and size. It never invokes Flutter.
 
-`pubspec.yaml` is the release identity source and must use `x.y.z+N`:
+`Verify Production APK Artifact Set` ignores non-production and dry-run workflows. For the exact protected artifact, it rechecks all three ABI APKs and GitHub attestations at current `main`. This verification is evidence only and does not authorize distribution.
 
-- `x.y.z` becomes Android `versionName`.
-- `N` becomes Android `versionCode` and the Sentry distribution.
-- The AAB filename is `Owntend-x.y.z-build-N.aab`.
-- The universal APK filename is `Owntend-x.y.z-build-N.apk`.
-- ABI-specific evidence APK filenames are `Owntend-x.y.z-build-N-arm64-v8a.apk`, `Owntend-x.y.z-build-N-armeabi-v7a.apk`, and `Owntend-x.y.z-build-N-x86_64.apk`.
-- Every ABI-specific APK must report the exact same Android `versionCode` `N`; Flutter's ABI-derived version-code offset must remain disabled through the reviewed build property.
-- The Sentry release is `app.owntend.mobile@x.y.z+N`.
+## Operator sequence
 
-Both build scripts parse and reject any other version shape. An operator must confirm that `N` is greater than every version code already uploaded to Play before starting the final sequence. Once Play accepts a version code, never reuse it, even if the release is halted or deleted.
+1. Freeze one exact `main` SHA and the `pubspec.yaml` release identity.
+2. Require all ordinary Flutter, Node, Android, security, backend, database, documentation, dependency, secret-scan, and action-pin checks.
+3. Run `Shorebird Android Release` with `flavor=prod`, `operation=validate`, and the exact SHA. Review the dry-run evidence.
+4. Complete physical-device release smoke tests and the Play/Data safety/privacy reviews.
+5. Only after explicit production authorization, enable the release kill switch and rerun with `operation=publish` through the protected `production` environment.
+6. Review the canonical AAB evidence and the separately protected exact-AAB APK derivation/verification. Do not mix artifacts from different runs or SHAs.
+7. Handle Play, Sentry, GitHub Release, and VersionDeck as separately authorized operations using their own runbooks.
+8. For a patch, follow [`shorebird-code-push.md`](shorebird-code-push.md); a native, asset, dependency, or toolchain change requires a new release.
 
-If source changes after any final-SHA evidence is collected, choose a new final SHA, update the build number when required, and restart the sequence.
+## Failures and partial state
 
-## Strict final-SHA sequence
-
-During scoped containment, the backend validation plus signed APK and AAB evidence steps below are executable. Sentry, GitHub Release, VersionDeck verified publication, Play upload/rollout, and hosted backend mutation remain separate blocked publication steps.
-
-1. **Backend database gate.** If the release contains pending database migrations, review and apply pending migrations to the exact project ref; inspect remote list and dry-run evidence and require verification to succeed. Then run `Validate Google Backend and Release Contracts` on the same `main` SHA. Its checks cover locked Deno formatting/type/tests for AdMob SSV, account deletion, and deletion-status recovery; deletion-site static tests; Google/Android static contracts; a local Supabase database start, lint, and test cycle; and the read-only Supabase Advisors audit. The required backend workflow jobs are `Deno SSV tests`, `Google contract/static checks`, and `Supabase database tests`.
-2. **APK evidence.** Run `tool/build_prod.ps1` at the same SHA through the protected Build Production APK workflow. Require signer, checksum, manifest/dependency evidence, symbol/mapping handoff, and provenance attestation. The same protected run may additionally produce the exact expected `arm64-v8a`, `armeabi-v7a`, and `x86_64` APKs as evidence-only variants through `tool/build_prod_abi_evidence.ps1`. Do not perform Sentry or GitHub Release mutation during scoped containment.
-3. **Strict ABI artifact-set verification.** After a successful Build Production APK run, `Verify Production APK Artifact Set` independently restores the protected ABI evidence and requires the exact three-ABI set. `tool/verify_android_apk_artifact_set.mjs` rechecks every APK's package, exact version/build, production signer, SHA-256/checksum, single native ABI, size report, and SLSA subject/hash/source tuple. Missing, duplicate, unexpected, or mismatched variants fail closed. This artifact/provenance verification does **not** substitute for clean-install or upgrade runtime evidence.
-4. **VersionDeck containment.** The static site may be deployed only with an explicit disabled manifest during scoped containment. Successful universal, split-APK, provenance, or artifact-set evidence is not by itself public download authorization.
-5. **Separate AAB evidence.** Run `tool/build_play_prod.ps1` at the same frozen SHA as an independent rail. Review the AAB checksum, upload-key signature evidence, merged manifest, output metadata when present, dependency report, evidence summary, and provenance. This workflow does not upload to Google Play.
-
-## Immutable-asset withdrawal, supersession, and incident procedure
-
-Once a release is published, its artifacts must remain durable. Recovery requires a new build under a new version/build number rather than editing an existing release.
-
-**If a released asset is found to be defective:**
-
-1. Do not attempt to delete or overwrite the published release assets.
-2. Record the defect, its scope, and whether it affects security, privacy,
-   data integrity, or correct behavior.
-3. Decide whether downloads should be disabled immediately:
-   - If yes, publish an explicit disabled VersionDeck manifest for the
-     current `main` SHA to stop the download path. Record this as a VersionDeck containment action.
-   - If no, record the decision and the threshold that would change it.
-4. Determine whether the release requires a public disclosure, advisory,
-   or Play Console action.
-5. Create a corrected build with a higher build number (greater than any
-   previously uploaded to Play). Follow the full release sequence.
-6. After the corrected release is verified, update the VersionDeck
-   control file (`tool/versiondeck-control.json`) with a
-   `historicalReleaseDecisions` entry for the withdrawn release:
-   - `status: "withdrawn"`
-   - `reasonCode` identifying the withdrawal cause
-   - `message` with a human-readable summary
-   - `decidedAt` timestamp
-7. Publish a new VersionDeck manifest pointing to the corrected release.
-8. Record the complete incident in an operations document.
-
-Never weaken the release-verification checks or VersionDeck trust model to recover a release faster. A slightly delayed corrected release is always safer than a weakened trust boundary.
-
-## Shared build and security gates
-
-Both Android build scripts:
-
-1. Validate canonical toolchain consistency.
-2. Run `npm ci`, `tool/validate_google_release_contracts.mjs`, locked Edge Function checks, and locked Edge Function tests.
-3. Derive version/build metadata from `pubspec.yaml`.
-4. Validate required production variables, construct `config/prod.json`, and restore signing files from secrets.
-5. Clean, resolve Flutter dependencies, regenerate localization and Drift output, analyze, run the Flutter test suite, and run the production configuration test.
-6. Remove the known generated integration-test registrant and reject `IntegrationTestPlugin` from release registrants before and after the release build.
-7. Build the `prodRelease` artifact and remove temporary signing/configuration files in cleanup.
-
-## AAB rail summary
-
-The AAB script creates exactly one `prodRelease` bundle and verifies:
-
-- SHA-256 plus a matching `.sha256` file.
-- JAR signature validity.
-- The AAB signing certificate matches the certificate in the restored upload keystore.
-- Package, version name, and version code through generated metadata or the merged manifest.
-- Merged production manifest and runtime-dependency evidence through the shared collector.
-
-The AAB is only a verified upload candidate. The script does not call Google Play APIs, select a track, create an edit, upload release notes, or roll out a release. See the [Google Play release runbook](google-play-release-runbook.md).
-
-## APK and Sentry rail
-
-The APK script additionally validates fixed Sentry organization/project expectations, then builds and verifies the standalone universal APK:
-
-- Exactly `app.owntend.mobile`, with the `pubspec.yaml` version/build.
-- Non-debuggable package metadata.
-- APK signature validity and the fixed standalone production signer.
-- SHA-256 stability and exact checksum-file contents.
-- The same merged-manifest, output-metadata, and dependency evidence collected for the AAB rail.
-- Obfuscated Dart symbol files in `build/sentry-debug/dart`, the Flutter obfuscation map `build/sentry-debug/dart/mapping.json`, and the Android R8 mapping file `build/app/outputs/mapping/prodRelease/mapping.txt`.
-
-The protected APK workflow also builds three evidence-only ABI variants after the universal handoff is preserved. Each split must independently prove the exact package/version/build identity, fixed signer, exactly one expected native ABI, SHA-256/checksum, ABI-specific Dart symbols, R8 mapping relationship, deterministic size report, and SLSA provenance. The universal APK remains authoritative during this evidence phase and the split evidence does not authorize VersionDeck publication.
-
-## Evidence collector contract
-
-For both artifact types, `tool/collect_android_release_evidence.ps1` emits:
-
-- `release-evidence-summary.json` with artifact type/name/SHA-256, parsed package, version name/code, parsed target SDK, parsed backup setting, the exactly-one parsed AdMob application ID, merged-manifest and output-metadata sources, dependency configuration, analytics result, and generation time.
-- `prod-release-runtime-classpath.txt` from Gradle `:app:dependencies --configuration prodReleaseRuntimeClasspath`.
-- `AndroidManifest-prodRelease.xml`, copied from the newest merged `prodRelease` manifest.
-- `output-metadata-apk.json` or `output-metadata-aab.json` when matching generated output metadata exists. APK discovery recognizes the Android Gradle Plugin `outputs/apk/prod/release/output-metadata.json` path; AAB discovery is restricted to `outputs/bundle/prodRelease/output-metadata.json`.
-
-The collector parses the merged XML rather than accepting substring matches. It rejects direct Firebase Analytics, a debuggable production manifest, `android:allowBackup` other than exactly `false`, target SDK other than 36, fine/background location, the Google demo AdMob application ID, missing required coarse-location/notification/exact-alarm permissions, anything other than exactly one production AdMob metadata entry, package mismatch, multiple artifact metadata elements, or version/build mismatch.
-
-The collector remains the shared universal APK/AAB manifest, dependency, SBOM, notices, lint, toolchain, asset-provenance, and APK-size evidence source. ABI-specific artifact-set trust is layered on top of it rather than weakening or replacing those checks.
-
-## ABI artifact-set verification contract
-
-`tool/verify_android_apk_artifact_set.mjs` and `.github/workflows/verify-production-apk-artifact-set.yml` enforce the evidence-only multi-APK trust boundary. The verifier accepts only this exact set:
-
-- `arm64-v8a`
-- `armeabi-v7a`
-- `x86_64`
-
-For every variant it requires a unique ABI identity, unique filename, unique SHA-256, exact `app.owntend.mobile` package, exact `pubspec.yaml` version name and build number, fixed standalone signer, exactly one matching native `lib/<abi>/` tree, exact checksum contents, matching deterministic size report, expected Dart-symbol identity, and SLSA provenance whose subject name/hash and source commit match that APK.
-
-The verifier fails closed on a missing ABI, duplicate ABI, unexpected fourth ABI, multi-ABI APK mislabeled as a split, wrong signer, wrong version/build/package, hash/checksum mismatch, size-report mismatch, or attestation subject/source mismatch. During P1-C it also requires the evidence containment flags to keep the universal APK authoritative and public/VersionDeck split publication disabled.
-
-This verification is artifact and provenance evidence only. Installability, launch behavior, and universal-to-split upgrade behavior are separate runtime evidence and must be recorded as completed, explicitly waived, or otherwise unresolved in the release record; they must never be inferred from a green artifact-set workflow.
-
-## Upload key, standalone APK signer, and Play App Signing
-
-The Play AAB and standalone APK rails use distinct secrets and may use
-different keystores. Keep their evidence meanings separate:
-
-- For the AAB, upload secrets represent the **upload key**. The
-  script proves the bundle matches the restored keystore, not that the key
-  matches the upload certificate currently enrolled in Play Console.
-- For the APK, secrets represent the **standalone
-  distribution signer**.
-- Under Play App Signing, Google signs Play-delivered APKs with the separate **app signing key** shown in Play Console. The Play app-signing certificate must be recorded and verified against a Play-delivered APK. Do not substitute the upload certificate or standalone APK signer unless Play Console independently proves they are the same certificate.
-
-Never export the Play app-signing private key. Store only certificate fingerprints and provenance needed for comparison. See the [Google Play release runbook](google-play-release-runbook.md) for the required Console and device checks.
-
-## Failure and rollback boundaries
-
-- **Backend gate failure:** stop. Do not start either signed artifact rail. A local database gate does not authorize hosted backend deployment.
-- **Final SHA changes:** invalidate the release record and rerun the backend, AAB, APK, and downstream evidence for the new SHA.
-- **AAB failure before Play upload:** no Play release exists. Preserve diagnostics, discard the candidate, and rerun only after correction.
-- **Play accepts the AAB:** the version code is consumed. Halt or remove the affected rollout through Play Console as appropriate, then publish a corrected build with a higher version code; never replace the accepted bundle under the old code.
-- **APK evidence failure:** occurs before Sentry mutation; do not publish the APK.
-- **ABI artifact-set verification failure:** keep the universal APK authoritative, preserve diagnostics, and do not enable split-APK VersionDeck semantics. Correct the build/evidence contract and rerun from exact current `main`.
-- **Sentry succeeds but a later step fails:** record the partial Sentry release/deploy. The script tolerates an existing Sentry release on retry, but the operator must ensure the same release identity and SHA before retrying.
-
-Never weaken signer, checksum, package, backend, ABI-set, or VersionDeck checks to recover a release.
+- A validation failure publishes nothing. Fix the cause; never add Shorebird bypass flags.
+- A Shorebird release upload that partially succeeds must be inspected in the Shorebird Console before retrying the same version. Do not change source SHA or signing keys during a retry.
+- APK derivation failure does not invalidate the Play AAB or Shorebird release, but blocks VersionDeck evidence. Retry only from the same AAB hash and source run.
+- Sentry and VersionDeck failures do not justify rebuilding the AAB. Preserve symbols/evidence and use the same release/source identity.
+- A bad patch is disabled or rolled back in the Shorebird Console; do not treat promotion or a counter-patch as rollback.
 
 ## Required release record
 
-Record at minimum:
+Record the exact source SHA, backend-gate run, workflow run/attempt, flavor/app ID, Shorebird release version, CLI/Flutter/engine revisions, KMS key version, AAB hash/signature, Play upload signer, standalone APK signer, APK hashes, attestations, symbol/evidence artifact IDs, environment approvals, device evidence, and every separately authorized publication decision. Never record tokens, private keys, keystore passwords, user content, or raw credentials.
 
-- Final source SHA and `pubspec.yaml` version/build.
-- Backend verification output and separate hosted-backend deployment evidence.
-- AAB artifact name, artifact/checksum equality, upload-certificate fingerprint, evidence-summary fields, and manifest/dependency review.
-- Universal APK artifact/evidence names, checksum, standalone signer, provenance, and Sentry publication status (contained/not run unless separately authorized).
-- For split APK work: the exact `arm64-v8a`, `armeabi-v7a`, and `x86_64` filenames, SHA-256 values, sizes, signer/package/version/build results, ABI-content results, size-report references, provenance tuples, and strict artifact-set verification result.
-- Runtime split-APK clean-install and prior-universal-to-matching-split upgrade status. If intentionally skipped, record the explicit waiver/deviation rather than marking it verified.
-- VersionDeck source SHA, independent verification result, and public manifest result.
-- Google Play Console upload, Play App Signing, track/rollout, app-content, and device evidence from the dedicated runbook.
-- Operator, reviewer/approval evidence, timestamps, exceptions, rollback decisions, and all checks deferred to hosted services or devices.
-
-Do not put credentials, tokens, private signing material, direct user identifiers, or private test data in the release record.
+See [`shorebird-code-push.md`](shorebird-code-push.md), [`google-play-release-runbook.md`](google-play-release-runbook.md), [`../versiondeck-release-runbook.md`](../versiondeck-release-runbook.md), [`../SENTRY_OPERATIONS.md`](../SENTRY_OPERATIONS.md), and [`production-containment.md`](production-containment.md).

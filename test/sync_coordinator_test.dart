@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:drift/drift.dart' hide isNull, isNotNull;
 import 'package:drift/native.dart';
@@ -8,6 +9,7 @@ import 'package:owntend/src/core/data/repositories.dart';
 import 'package:owntend/src/core/database/app_database.dart';
 import 'package:owntend/src/core/domain/models.dart';
 import 'package:owntend/src/core/supabase/supabase_failure.dart';
+import 'package:owntend/src/core/sync/change_feed_contract.dart';
 import 'package:owntend/src/core/sync/local_sync_store.dart';
 import 'package:owntend/src/core/sync/supabase_sync_gateway.dart';
 import 'package:owntend/src/core/sync/sync_coordinator.dart';
@@ -21,6 +23,7 @@ class _MockGateway extends Mock implements SupabaseSyncGateway {}
 
 class _StatefulGateway implements SupabaseSyncGateway {
   final List<_StoredRecord> _records = [];
+  final List<_StoredRecord> _feed = [];
   final Map<String, int> pullCalls = {};
   final Map<String, int> writeCalls = {};
   var batchWriteCalls = 0;
@@ -29,6 +32,7 @@ class _StatefulGateway implements SupabaseSyncGateway {
   var startRealtimeCalls = 0;
   var maintenanceCompletionCalls = 0;
   var maintenanceUndoCalls = 0;
+  String? _activeUserId = 'user-1';
   Completer<void>? maintenanceCompletionGate;
   String? maintenanceCanonicalPlanTitle;
   int? failMaintenanceCompletionCall;
@@ -37,8 +41,8 @@ class _StatefulGateway implements SupabaseSyncGateway {
   Completer<void>? materializeMediaGate;
   Completer<void>? pullGate;
   Completer<void>? startRealtimeGate;
-  Completer<void>? fetchRecordByKeyGate;
-  var fetchRecordByKeyCalls = 0;
+  Completer<void>? feedGate;
+  var fetchFeedCalls = 0;
 
   @override
   Future<Set<String>> fetchAuthoritativeRecordKeys({
@@ -62,52 +66,41 @@ class _StatefulGateway implements SupabaseSyncGateway {
   void Function(SyncEntitySpec, Map<String, dynamic>)? onRealtimeDelete;
 
   @override
-  Future<SyncFeedCapability> getSyncFeedCapability() async {
-    return const SyncFeedCapability(
-      enabled: false,
-      capabilityVersion: 'none',
-      minRetainedSeq: 0,
-    );
-  }
-
-  @override
   Future<UserChangeFeedPage> fetchUserChangeFeed({
     int sinceSeq = 0,
     int limit = 100,
   }) async {
+    fetchFeedCalls++;
+    await feedGate?.future;
+    final activeUserId = _activeUserId;
+    final feedRecords = _feed
+        .where(
+          (item) => item.userId == activeUserId && item.changeSeq > sinceSeq,
+        )
+        .take(limit)
+        .toList();
+    final userHighWater = _feed
+        .where((item) => item.userId == activeUserId)
+        .fold<int>(0, (value, item) => math.max(value, item.changeSeq));
+    final nextSeq = feedRecords.isEmpty ? sinceSeq : feedRecords.last.changeSeq;
     return UserChangeFeedPage(
-      changes: const [],
-      highWaterSeq: 0,
-      nextSeq: sinceSeq,
-      hasMore: false,
+      entries: [
+        for (final item in feedRecords)
+          ChangeFeedEntry(
+            changeSeq: item.changeSeq,
+            record: item.record,
+            operation: item.record.isDeleted ? 'DELETE' : 'UPDATE',
+          ),
+      ],
+      highWaterSeq: userHighWater,
+      nextSeq: nextSeq,
+      hasMore: nextSeq < userHighWater,
       resnapshotRequired: false,
-      capabilityVersion: 'none',
-      capabilityEnabled: false,
     );
   }
 
   @override
-  Future<List<Map<String, dynamic>>> validateChangeFeedParity() async {
-    return const [];
-  }
-
-  @override
-  Future<SyncRecord?> fetchRecordByKey({
-    required SyncEntitySpec spec,
-    required String recordKey,
-    required String userId,
-  }) async {
-    fetchRecordByKeyCalls++;
-    await fetchRecordByKeyGate?.future;
-    for (final item in _records) {
-      if (item.userId == userId &&
-          item.record.spec.entity == spec.entity &&
-          item.record.recordKey == recordKey) {
-        return item.record;
-      }
-    }
-    return null;
-  }
+  Future<int> fetchUserChangeFeedHighWater() async => _syncSeq;
 
   @override
   Future<int> syncHead(String userId) async {
@@ -187,7 +180,6 @@ class _StatefulGateway implements SupabaseSyncGateway {
           clientModifiedAt: expectedDue,
           originDeviceId: 'remote-device',
           revision: 8,
-          syncSeq: 8,
           serverUpdatedAt: expectedDue,
         ),
       );
@@ -212,7 +204,6 @@ class _StatefulGateway implements SupabaseSyncGateway {
           clientModifiedAt: expectedDue,
           originDeviceId: 'remote-device',
           revision: 7,
-          syncSeq: 7,
           serverUpdatedAt: expectedDue,
         ),
       );
@@ -301,12 +292,14 @@ class _StatefulGateway implements SupabaseSyncGateway {
         userId: userId,
         deviceId: null,
         record: canonical,
+        changeSeq: _syncSeq,
       );
       if (storedIndex < 0) {
         _records.add(stored);
       } else {
         _records[storedIndex] = stored;
       }
+      _feed.add(stored);
       return canonical;
     }
 
@@ -431,6 +424,7 @@ class _StatefulGateway implements SupabaseSyncGateway {
     required void Function(SyncRealtimeStatus status, Object? error) onStatus,
   }) async {
     startRealtimeCalls++;
+    _activeUserId = userId;
     await startRealtimeGate?.future;
     onRealtimeChange = onChange;
     onRealtimeDelete = onDelete;
@@ -444,15 +438,15 @@ class _StatefulGateway implements SupabaseSyncGateway {
   }
 
   @override
-  Future<List<SyncRecord>> pullChanges({
+  Future<List<SyncRecord>> pullAuthoritativeSnapshotPage({
     required SyncEntitySpec spec,
     required String userId,
     required String deviceId,
-    required int afterSyncSeq,
     String? afterRecordKey,
     void Function(int exactCount)? onExactCount,
     bool materializeMedia = true,
   }) async {
+    _activeUserId = userId;
     pullCalls[spec.entity] = (pullCalls[spec.entity] ?? 0) + 1;
     await pullGate?.future;
     final records =
@@ -463,16 +457,11 @@ class _StatefulGateway implements SupabaseSyncGateway {
                   item.record.spec.entity == spec.entity &&
                   (spec.scope != SyncScope.deviceScoped ||
                       item.deviceId == deviceId) &&
-                  (item.record.syncSeq! > afterSyncSeq ||
-                      (item.record.syncSeq == afterSyncSeq &&
-                          item.record.recordKey.compareTo(
-                                afterRecordKey ?? '',
-                              ) >
-                              0)),
+                  item.record.recordKey.compareTo(afterRecordKey ?? '') > 0,
             )
             .map((item) => item.record)
             .toList()
-          ..sort((a, b) => a.syncSeq!.compareTo(b.syncSeq!));
+          ..sort((a, b) => a.recordKey.compareTo(b.recordKey));
     onExactCount?.call(records.length);
     return records.take(SupabaseSyncGateway.pageSize).toList();
   }
@@ -491,7 +480,6 @@ class _StatefulGateway implements SupabaseSyncGateway {
       clientModifiedAt: record.clientModifiedAt,
       originDeviceId: record.originDeviceId,
       revision: record.revision,
-      syncSeq: record.syncSeq,
       serverUpdatedAt: record.serverUpdatedAt,
       deletedAt: record.deletedAt,
     );
@@ -530,12 +518,14 @@ class _StatefulGateway implements SupabaseSyncGateway {
       userId: userId,
       deviceId: record.spec.scope == SyncScope.deviceScoped ? deviceId : null,
       record: canonical,
+      changeSeq: _syncSeq,
     );
     if (index < 0) {
       _records.add(stored);
     } else {
       _records[index] = stored;
     }
+    _feed.add(stored);
     return RemoteWriteResult.applied(canonical);
   }
 
@@ -576,15 +566,14 @@ class _StatefulGateway implements SupabaseSyncGateway {
     required SyncRecord? existing,
     required int revision,
   }) {
-    final syncSeq = ++_syncSeq;
+    ++_syncSeq;
     return SyncRecord(
       spec: record.spec,
       recordKey: record.recordKey,
       values: {...?existing?.values, ...record.values},
       clientModifiedAt: record.clientModifiedAt,
       originDeviceId: record.originDeviceId,
-      revision: revision < syncSeq ? syncSeq : revision,
-      syncSeq: syncSeq,
+      revision: revision,
       serverUpdatedAt: DateTime.now().toUtc(),
       deletedAt: record.deletedAt,
     );
@@ -596,12 +585,43 @@ class _StatefulGateway implements SupabaseSyncGateway {
     required String recordKey,
     String? deviceId,
   }) {
+    final deleted = _records
+        .where(
+          (item) =>
+              item.userId == userId &&
+              item.record.spec.entity == spec.entity &&
+              item.record.recordKey == recordKey &&
+              (spec.scope != SyncScope.deviceScoped ||
+                  item.deviceId == deviceId),
+        )
+        .firstOrNull;
     _records.removeWhere(
       (item) =>
           item.userId == userId &&
           item.record.spec.entity == spec.entity &&
           item.record.recordKey == recordKey &&
           (spec.scope != SyncScope.deviceScoped || item.deviceId == deviceId),
+    );
+    final deletedAt = DateTime.now().toUtc();
+    _feed.add(
+      _StoredRecord(
+        userId: userId,
+        deviceId: deviceId,
+        changeSeq: ++_syncSeq,
+        record: SyncRecord(
+          spec: spec,
+          recordKey: recordKey,
+          values: {
+            for (var index = 0; index < spec.keyColumns.length; index++)
+              spec.keyColumns[index]: recordKey.split('|')[index],
+          },
+          clientModifiedAt: deletedAt,
+          originDeviceId: deleted?.record.originDeviceId ?? 'remote-device',
+          revision: deleted?.record.revision ?? 1,
+          serverUpdatedAt: deletedAt,
+          deletedAt: deletedAt,
+        ),
+      ),
     );
     final keyParts = recordKey.split('|');
     onRealtimeDelete!(spec, {
@@ -617,11 +637,10 @@ class _FailingOnceGateway extends _StatefulGateway {
   var failNextPull = true;
 
   @override
-  Future<List<SyncRecord>> pullChanges({
+  Future<List<SyncRecord>> pullAuthoritativeSnapshotPage({
     required SyncEntitySpec spec,
     required String userId,
     required String deviceId,
-    required int afterSyncSeq,
     String? afterRecordKey,
     void Function(int exactCount)? onExactCount,
     bool materializeMedia = true,
@@ -634,11 +653,10 @@ class _FailingOnceGateway extends _StatefulGateway {
         retryable: true,
       );
     }
-    return super.pullChanges(
+    return super.pullAuthoritativeSnapshotPage(
       spec: spec,
       userId: userId,
       deviceId: deviceId,
-      afterSyncSeq: afterSyncSeq,
       afterRecordKey: afterRecordKey,
       onExactCount: onExactCount,
       materializeMedia: materializeMedia,
@@ -669,11 +687,13 @@ class _StoredRecord {
     required this.userId,
     required this.deviceId,
     required this.record,
+    this.changeSeq = 0,
   });
 
   final String userId;
   final String? deviceId;
   final SyncRecord record;
+  final int changeSeq;
 }
 
 class _FakeAuthRepository implements AuthRepository {
@@ -790,7 +810,7 @@ void main() {
     await store.recordSyncSuccess(DateTime.utc(2026, 8, 3, 10));
     final auth = _FakeAuthRepository(const AuthSession(userId: 'user-1'));
     addTearDown(auth.controller.close);
-    final gateway = _StatefulGateway()..pullGate = Completer<void>();
+    final gateway = _StatefulGateway()..feedGate = Completer<void>();
     await gateway.write(
       record: SyncRecord(
         spec: syncSpecByEntity['area']!,
@@ -821,7 +841,7 @@ void main() {
     addTearDown(coordinator.dispose);
 
     final syncFuture = coordinator.syncIncremental();
-    await _waitFor(() => gateway.pullCalls.isNotEmpty);
+    await _waitFor(() => gateway.fetchFeedCalls > 0);
 
     final prepareFuture = coordinator.prepareForAccountDeletion('user-1');
     await _waitFor(() async {
@@ -830,7 +850,7 @@ void main() {
     });
 
     await store.clearAllAccountData(expectedUserId: 'user-1');
-    gateway.pullGate!.complete();
+    gateway.feedGate!.complete();
 
     await syncFuture;
     await prepareFuture;
@@ -1092,7 +1112,6 @@ void main() {
           },
           clientModifiedAt: now,
           originDeviceId: 'cloud-server',
-          syncSeq: 1,
         ),
       ),
     );
@@ -1211,11 +1230,18 @@ void main() {
       final auth = _FakeAuthRepository(const AuthSession(userId: 'user-1'));
       addTearDown(auth.controller.close);
       final gateway = _MockGateway();
-      when(() => gateway.getSyncFeedCapability()).thenAnswer(
-        (_) async => const SyncFeedCapability(
-          enabled: false,
-          capabilityVersion: 'none',
-          minRetainedSeq: 0,
+      when(
+        () => gateway.fetchUserChangeFeed(
+          sinceSeq: any(named: 'sinceSeq'),
+          limit: any(named: 'limit'),
+        ),
+      ).thenAnswer(
+        (_) async => const UserChangeFeedPage(
+          entries: [],
+          highWaterSeq: 0,
+          nextSeq: 0,
+          hasMore: false,
+          resnapshotRequired: false,
         ),
       );
       when(() => gateway.syncHead(any())).thenAnswer((_) async => 0);
@@ -1234,11 +1260,10 @@ void main() {
         ),
       ).thenAnswer((_) async => const BatchWriteUnsuitable());
       when(
-        () => gateway.pullChanges(
+        () => gateway.pullAuthoritativeSnapshotPage(
           spec: any(named: 'spec'),
           userId: any(named: 'userId'),
           deviceId: any(named: 'deviceId'),
-          afterSyncSeq: any(named: 'afterSyncSeq'),
           afterRecordKey: any(named: 'afterRecordKey'),
           onExactCount: any(named: 'onExactCount'),
           materializeMedia: any(named: 'materializeMedia'),
@@ -1270,7 +1295,6 @@ void main() {
             ),
             originDeviceId: 'remote-device',
             revision: 1,
-            syncSeq: 10,
             serverUpdatedAt: DateTime.utc(2026, 6, 29),
           ),
         );
@@ -1435,7 +1459,7 @@ void main() {
     },
   );
 
-  test('maintenance arriving during pull republishes streaks', () async {
+  test('maintenance arriving in the feed republishes streaks', () async {
     final db = AppDatabase(executor: NativeDatabase.memory());
     addTearDown(db.close);
     final store = LocalSyncStore(db);
@@ -1483,9 +1507,67 @@ void main() {
         );
     await db.delete(db.syncOutbox).go();
     await store.setEnabled(enabled: true, boundUserId: 'user-1');
+    await store.recordSyncSuccess(DateTime.now().toUtc());
     final auth = _FakeAuthRepository(const AuthSession(userId: 'user-1'));
     addTearDown(auth.controller.close);
     final gateway = _MockGateway();
+    when(() => gateway.fetchUserChangeFeedHighWater())
+        .thenAnswer((_) async => 0);
+    when(
+      () => gateway.fetchUserChangeFeed(
+        sinceSeq: any(named: 'sinceSeq'),
+        limit: any(named: 'limit'),
+      ),
+    ).thenAnswer((invocation) async {
+      final sinceSeq = invocation.namedArguments[#sinceSeq] as int;
+      final record = SyncRecord(
+        spec: syncSpecByEntity['maintenance_record']!,
+        recordKey: 'late-record',
+        values: {
+          'id': 'late-record',
+          'plan_id': 'late-plan',
+          'due_date': today.toUtc().toIso8601String(),
+          'completed_at': now.toUtc().toIso8601String(),
+          'notes': null,
+        },
+        clientModifiedAt: now.toUtc(),
+        originDeviceId: 'remote-device',
+        revision: 1,
+        serverUpdatedAt: now.toUtc(),
+      );
+      return UserChangeFeedPage(
+        entries: sinceSeq < 90
+            ? [
+                ChangeFeedEntry(
+                  changeSeq: 90,
+                  record: record,
+                  operation: 'INSERT',
+                ),
+              ]
+            : const [],
+        highWaterSeq: 90,
+        nextSeq: sinceSeq < 90 ? 90 : sinceSeq,
+        hasMore: false,
+        resnapshotRequired: false,
+      );
+    });
+    when(
+      () => gateway.fetchAuthoritativeRecordKeys(
+        spec: any(named: 'spec'),
+        userId: any(named: 'userId'),
+        deviceId: any(named: 'deviceId'),
+      ),
+    ).thenAnswer((invocation) async {
+      final spec = invocation.namedArguments[#spec] as SyncEntitySpec;
+      return switch (spec.entity) {
+        'area' => {'area_first_floor'},
+        'room' => {'late-room'},
+        'asset' => {'late-asset'},
+        'maintenance_plan' => {'late-plan'},
+        'maintenance_record' => {'late-record'},
+        _ => <String>{},
+      };
+    });
     when(() => gateway.syncHead(any())).thenAnswer((_) async => 100);
     when(
       () => gateway.writeNewBatch(
@@ -1496,11 +1578,10 @@ void main() {
     ).thenAnswer((_) async => const BatchWriteUnsuitable());
     final pulls = <String, int>{};
     when(
-      () => gateway.pullChanges(
+      () => gateway.pullAuthoritativeSnapshotPage(
         spec: any(named: 'spec'),
         userId: any(named: 'userId'),
         deviceId: any(named: 'deviceId'),
-        afterSyncSeq: any(named: 'afterSyncSeq'),
         afterRecordKey: any(named: 'afterRecordKey'),
         onExactCount: any(named: 'onExactCount'),
         materializeMedia: any(named: 'materializeMedia'),
@@ -1527,7 +1608,6 @@ void main() {
           clientModifiedAt: now.toUtc(),
           originDeviceId: 'remote-device',
           revision: 1,
-          syncSeq: 90,
           serverUpdatedAt: now.toUtc(),
         ),
       ];
@@ -1550,7 +1630,6 @@ void main() {
           clientModifiedAt: local.clientModifiedAt,
           originDeviceId: local.originDeviceId,
           revision: 1,
-          syncSeq: 91,
           serverUpdatedAt: now.toUtc(),
           deletedAt: local.deletedAt,
         ),
@@ -2325,29 +2404,27 @@ void main() {
       expect(remaining.single.recordKey, secondMutation.recordKey);
     },
   );
-  test(
-    'table pulls do not issue duplicate high-water preflight queries',
-    () async {
-      final db = AppDatabase(executor: NativeDatabase.memory());
-      addTearDown(db.close);
-      final store = LocalSyncStore(db);
-      await store.account();
-      await store.setEnabled(enabled: true, boundUserId: 'user-1');
-      await store.recordSyncSuccess(DateTime.utc(2026, 6, 30));
-      await db.delete(db.syncOutbox).go();
-      final auth = _FakeAuthRepository(const AuthSession(userId: 'user-1'));
-      addTearDown(auth.controller.close);
-      final gateway = _StatefulGateway().._syncSeq = 100;
-      final coordinator = SyncCoordinator(auth, store, gateway);
-      addTearDown(coordinator.dispose);
+  test('incremental sync fetches one canonical feed page', () async {
+    final db = AppDatabase(executor: NativeDatabase.memory());
+    addTearDown(db.close);
+    final store = LocalSyncStore(db);
+    await store.account();
+    await store.setEnabled(enabled: true, boundUserId: 'user-1');
+    await store.recordSyncSuccess(DateTime.utc(2026, 6, 30));
+    await db.delete(db.syncOutbox).go();
+    final auth = _FakeAuthRepository(const AuthSession(userId: 'user-1'));
+    addTearDown(auth.controller.close);
+    final gateway = _StatefulGateway().._syncSeq = 100;
+    final coordinator = SyncCoordinator(auth, store, gateway);
+    addTearDown(coordinator.dispose);
 
-      await coordinator.syncNow();
+    await coordinator.syncNow();
 
-      expect(await store.cursor('maintenance_plan_metadata'), 0);
-      expect(gateway.pullCalls['maintenance_plan_metadata'], 1);
-      expect(gateway.syncHeadCalls, 0);
-    },
-  );
+    expect(await store.cursor('maintenance_plan_metadata'), 0);
+    expect(gateway.fetchFeedCalls, 1);
+    expect(gateway.pullCalls, isEmpty);
+    expect(gateway.syncHeadCalls, 0);
+  });
 
   test('overlapping broad startup triggers reuse the active sync', () async {
     final db = AppDatabase(executor: NativeDatabase.memory());
@@ -2365,7 +2442,7 @@ void main() {
     final connectivity = _FakeConnectivity(true);
     addTearDown(connectivity.controller.close);
 
-    final gateway = _StatefulGateway()..pullGate = Completer<void>();
+    final gateway = _StatefulGateway()..feedGate = Completer<void>();
 
     final coordinator = SyncCoordinator(
       auth,
@@ -2378,7 +2455,7 @@ void main() {
 
     final activeSync = coordinator.syncNow();
 
-    await _eventually(() async => gateway.pullCalls.isNotEmpty);
+    await _eventually(() async => gateway.fetchFeedCalls > 0);
 
     // Exercise both the lifecycle trigger and the coordinator's delayed
     // startup trigger while the broad pull is still active.
@@ -2386,17 +2463,16 @@ void main() {
     await coordinator.onAppResumed();
     await Future<void>.delayed(const Duration(milliseconds: 650));
 
-    expect(gateway.pullCalls.values, everyElement(1));
+    expect(gateway.fetchFeedCalls, 1);
 
-    gateway.pullGate!.complete();
+    gateway.feedGate!.complete();
     await activeSync;
 
     // A duplicate broad pull would be scheduled after the active operation
     // and increment every table's count to two.
     await Future<void>.delayed(const Duration(milliseconds: 700));
 
-    expect(gateway.pullCalls, isNotEmpty);
-    expect(gateway.pullCalls.values, everyElement(1));
+    expect(gateway.fetchFeedCalls, 1);
   });
 
   test('concurrent realtime initialization opens one subscription', () async {
@@ -3002,6 +3078,7 @@ void main() {
     final store = LocalSyncStore(db);
     await store.account();
     await store.setEnabled(enabled: true, boundUserId: 'user-1');
+    await store.recordSyncSuccess(DateTime.now().toUtc());
     await db.delete(db.syncOutbox).go();
     final auth = _FakeAuthRepository(const AuthSession(userId: 'user-1'));
     addTearDown(auth.controller.close);
@@ -3035,12 +3112,13 @@ void main() {
     await store.applyRemoteFeedRecord(seeded.canonical!);
     await db.delete(db.syncOutbox).go();
 
-    gateway.fetchRecordByKeyGate = Completer<void>();
+    final priorFeedCalls = gateway.fetchFeedCalls;
+    gateway.feedGate = Completer<void>();
     gateway.hardDelete(userId: 'user-1', spec: spec, recordKey: 'theme');
-    await _eventually(() async => gateway.fetchRecordByKeyCalls > 0);
+    await _eventually(() async => gateway.fetchFeedCalls > priorFeedCalls);
 
     auth.emit(AuthEventType.signedIn, const AuthSession(userId: 'user-2'));
-    gateway.fetchRecordByKeyGate!.complete();
+    gateway.feedGate!.complete();
     await Future<void>.delayed(const Duration(milliseconds: 100));
 
     final local = await db
@@ -3055,6 +3133,7 @@ void main() {
     final store = LocalSyncStore(db);
     await store.account();
     await store.setEnabled(enabled: true, boundUserId: 'user-1');
+    await store.recordSyncSuccess(DateTime.now().toUtc());
     await db.delete(db.syncOutbox).go();
     final auth = _FakeAuthRepository(const AuthSession(userId: 'user-1'));
     addTearDown(auth.controller.close);
@@ -3097,7 +3176,7 @@ void main() {
               .getSingleOrNull() ==
           null;
     });
-    expect(gateway.fetchRecordByKeyCalls, greaterThanOrEqualTo(2));
+    expect(gateway.fetchFeedCalls, greaterThanOrEqualTo(1));
   });
 }
 

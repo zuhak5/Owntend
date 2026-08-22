@@ -24,13 +24,13 @@ Flutter services
 Release and verification tooling
   -> exact backend, Edge Function, database, web, and static contracts
   -> signed AAB plus evidence and verification
-  -> signed APK, evidence, and Sentry release
+  -> canonical Shorebird AAB, exact-AAB APK evidence, and retained symbols
   -> VersionDeck independent verification and static deployment
 ```
 
 ## Flutter application
 
-The Flutter presentation and application layer is structured modularly by domain. `lib/main.dart` acts as the clean application root, declaring imports, feature parts, `main()`, process runner, and `OwntendApp`. Feature-specific UI screens, dialogs, and widgets reside under `lib/src/features/` (startup, navigation, dashboard, rooms, assets, maintenance, search, trash, notifications, statistics, settings, backup, and monetization), shared widgets and enum formatters in `lib/src/ui/`, domain providers in `lib/src/core/providers/app_providers.dart`, and domain data repositories in `lib/src/core/data/`.
+The Flutter presentation and application layer is structured modularly by domain. `lib/main.dart` is a bootstrap-only entry point. `lib/src/app/owntend_app.dart` owns process startup and the application shell, while `lib/src/app/app_dependencies.dart` is the single exported Riverpod composition surface. Feature presentation libraries live under `lib/src/features/` (startup, navigation, dashboard, rooms, assets, maintenance, search, trash, notifications, statistics, settings, backup, and monetization) and import their dependencies explicitly instead of sharing application-root private scope. Focused shared presentation APIs live under `lib/src/ui/`; domain providers live in `lib/src/core/providers/app_providers.dart`; domain data repositories live in `lib/src/core/data/`. Exactly one `databaseProvider`, in `lib/src/core/database/app_database.dart`, owns the process database supplied during deferred startup.
 
 Riverpod is the dependency and state-management mechanism. GoRouter is the navigation mechanism. Modules maintain strict boundaries with decoupled services, repositories, and state controllers.
 
@@ -68,7 +68,9 @@ The backend is authoritative for ownership, point balances, charged operations, 
 
 Local mutations become durable outbox work. The coordinator binds work to an authenticated account, pushes idempotent operations, pulls cloud changes using cursors and revisions, records shadows, handles retry and conflicts, and uses realtime events as invalidation rather than as complete authoritative payloads.
 
-Foreground resume and network restoration are pull-capable convergence points even when `lastSyncedAt` is recent. After ensuring Realtime, the coordinator schedules one broad convergence pass that also pushes pending local work; an already-running broad pull satisfies the request, while targeted or push-only work is followed by the required broad pull. The server feed is used only when its capability is enabled, otherwise the legacy pull remains the canonical fallback.
+The synchronization implementation is divided behind stable public facades. `LocalSyncStore` delegates account/hydration, outbox, remote application, composite mutation, and media-cleanup responsibilities to focused store modules. `SyncCoordinator` retains the public lifecycle and account-deletion surface while focused modules own run/pull/snapshot, push/conflict, post-ready media, and runtime/connectivity/realtime behavior. These are one store and one state machine, not parallel protocols or compatibility paths.
+
+Foreground resume and network restoration are pull-capable convergence points even when `lastSyncedAt` is recent. After ensuring Realtime, the coordinator schedules one broad convergence pass that also pushes pending local work; an already-running broad pull satisfies the request, while targeted or push-only work is followed by the required broad pull. Initial hydration and retention gaps use an authoritative owner-scoped snapshot. Every subsequent incremental pass uses the always-on contract-1 server feed; contract mismatch or incomplete page application fails without advancing the durable checkpoint.
 
 See `sync-protocol.md`.
 
@@ -111,7 +113,9 @@ Owntend produces versioned ZIP archives with a manifest and hashes. Restore trea
 
 ## Observability
 
-Sentry is optional by configuration. Events are scrubbed and should contain only technical diagnostics. Production workflows associate releases with source and artifacts without uploading user data.
+Sentry is optional by configuration. Events are scrubbed and should contain only technical diagnostics; Shorebird patch attribution is bounded to `base` or an integer while release/dist remain unchanged. Production workflows associate releases with source and artifacts without uploading user data or mutating Sentry.
+
+Shorebird is the Android release/code-push boundary. Each existing flavor maps to a distinct app ID. The updater checks Shorebird for a signed Dart patch at startup and applies it on a subsequent launch. Repository and Shorebird dry-run gates reject native, asset, dependency, toolchain, and unknown changes. Google Cloud KMS signs patches without exporting a private key. Production stable promotion is a separate exact-patch operation after staging device evidence.
 
 ## Build and distribution
 

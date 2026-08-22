@@ -34,13 +34,18 @@ const manifest = read('android/app/src/main/AndroidManifest.xml');
 const appGradle = read('android/app/build.gradle.kts');
 const settingsGradle = read('android/settings.gradle.kts');
 const gitignore = read('.gitignore');
-const monetization = read('lib/src/features/monetization/monetization.dart');
+const monetization = [
+  'lib/src/features/monetization/monetization.dart',
+  ...filesUnder('lib/src/features/monetization/src', new Set(['.dart'])),
+]
+  .map(read)
+  .join('\n');
 const adRuntime = read('lib/src/features/monetization/ad_runtime.dart');
 const adRetry = read('lib/src/features/monetization/ad_retry_policy.dart');
 const adCache = read('lib/src/features/monetization/ad_cache.dart');
 const ssv = read('supabase/functions/admob-ssv-handler/index.ts');
 const authoritativePointsMigration = read(
-  'supabase/migrations/20260815000003_points_monetization.sql',
+  'supabase/migrations/20260821124930_initial_schema.sql',
 );
 const deletionClient = read('download-site/account-deletion.js');
 const flutterDeletionClient = read(

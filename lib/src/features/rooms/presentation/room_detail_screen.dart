@@ -1,4 +1,4 @@
-part of '../../../../main.dart';
+part of 'rooms_presentation.dart';
 
 class RoomDetailScreen extends ConsumerWidget {
   const RoomDetailScreen({required this.roomId, super.key});
@@ -95,7 +95,7 @@ class RoomDetailScreen extends ConsumerWidget {
                               Text(
                                 context.l10n.roomHealthSemantic(
                                   roomHealth.score,
-                                  _healthStateLabel(context, roomHealth.state),
+                                  healthStateLabel(context, roomHealth.state),
                                 ),
                                 style: Theme.of(context).textTheme.bodySmall,
                               ),
@@ -124,7 +124,7 @@ class RoomDetailScreen extends ConsumerWidget {
                     )) ...[
                       hk_ui.SectionHeader(
                         title:
-                            '${_assetTypePluralLabel(context, entry.key)} · ${entry.value.length}',
+                            '${assetTypePluralLabel(context, entry.key)} · ${entry.value.length}',
                       ),
                       for (final asset in entry.value)
                         hk_ui.SwipeDelete(
@@ -160,7 +160,7 @@ class RoomDetailScreen extends ConsumerWidget {
           );
         },
         error: (error, _) =>
-            ErrorPanel(message: _failureMessage(context, error)),
+            hk_ui.ErrorPanel(message: failureMessage(context, error)),
         loading: () => const Center(child: CircularProgressIndicator()),
       ),
     );

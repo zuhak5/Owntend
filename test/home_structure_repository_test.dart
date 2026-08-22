@@ -719,45 +719,54 @@ void main() {
       );
     });
 
-    test('permanently deletes plans with records and notifications', () async {
-      final maintenance = DriftMaintenanceRepository(db);
-      final roomId = await repo.saveRoom(
-        areaId: 'area_first_floor',
-        name: 'Laundry',
-      );
-      final assetId = await repo.saveAsset(
-        name: 'Washer',
-        assetType: AssetType.device,
-        roomId: roomId,
-      );
-      final planId = await maintenance.savePlan(
-        assetId: assetId,
-        title: 'Clean filter',
-        recurrence: const RecurrenceRule(
-          interval: 1,
-          unit: RecurrenceUnit.months,
-        ),
-        priority: PriorityLevel.medium,
-        nextDueDate: DateTime(2026),
-      );
-      await maintenance.completePlan(planId, completedAt: DateTime(2026, 1, 2));
-      await db
-          .into(db.appNotifications)
-          .insert(
-            AppNotificationsCompanion.insert(
-              id: 'notification_filter',
-              planId: planId,
-              channel: 'due',
-              scheduledFor: DateTime(2026, 1, 1),
-            ),
-          );
+    test(
+      'permanently deletes plan records and detaches inbox history',
+      () async {
+        final maintenance = DriftMaintenanceRepository(db);
+        final roomId = await repo.saveRoom(
+          areaId: 'area_first_floor',
+          name: 'Laundry',
+        );
+        final assetId = await repo.saveAsset(
+          name: 'Washer',
+          assetType: AssetType.device,
+          roomId: roomId,
+        );
+        final planId = await maintenance.savePlan(
+          assetId: assetId,
+          title: 'Clean filter',
+          recurrence: const RecurrenceRule(
+            interval: 1,
+            unit: RecurrenceUnit.months,
+          ),
+          priority: PriorityLevel.medium,
+          nextDueDate: DateTime(2026),
+        );
+        await maintenance.completePlan(
+          planId,
+          completedAt: DateTime(2026, 1, 2),
+        );
+        await db
+            .into(db.inboxNotifications)
+            .insert(
+              InboxNotificationsCompanion.insert(
+                id: 'inbox_filter',
+                title: 'Filter due',
+                body: 'Clean the washer filter',
+                kind: 'task',
+                planId: Value(planId),
+                dedupeKey: const Value('filter-due'),
+              ),
+            );
 
-      await maintenance.deletePlan(planId);
+        await maintenance.deletePlan(planId);
 
-      expect(await db.select(db.maintenancePlans).get(), isEmpty);
-      expect(await db.select(db.maintenanceRecords).get(), isEmpty);
-      expect(await db.select(db.appNotifications).get(), isEmpty);
-    });
+        expect(await db.select(db.maintenancePlans).get(), isEmpty);
+        expect(await db.select(db.maintenanceRecords).get(), isEmpty);
+        final inbox = await db.select(db.inboxNotifications).getSingle();
+        expect(inbox.planId, isNull);
+      },
+    );
 
     test('completes a plan once and preserves completion time', () async {
       final maintenance = DriftMaintenanceRepository(db);
@@ -1077,7 +1086,7 @@ void main() {
       final settings = DriftSettingsRepository(db);
       await db
           .into(db.settings)
-          .insert(
+          .insertOnConflictUpdate(
             SettingsCompanion.insert(
               key: 'notification_preferences',
               value: '{"enabled":true,"localReminders":true,"maxRemindersPerDay":4}',
@@ -1094,26 +1103,18 @@ void main() {
       expect(preferences.preferExactReminders, isFalse);
     });
 
-    test(
-      'legacy disabled notifications stay disabled in watched state',
-      () async {
-        await (db.update(db.settings)
-              ..where((setting) => setting.key.equals('notifications_enabled')))
-            .write(
-              SettingsCompanion(
-                value: const Value('false'),
-                updatedAt: Value(DateTime.now()),
-              ),
-            );
-        final settings = DriftSettingsRepository(db);
+    test('disabled notification preference is observed canonically', () async {
+      final settings = DriftSettingsRepository(db);
+      await settings.setNotificationPreferences(
+        const NotificationPreferences(enabled: false),
+      );
 
-        expect((await settings.notificationPreferences()).enabled, isFalse);
-        expect(
-          (await settings.watchNotificationPreferences().first).enabled,
-          isFalse,
-        );
-      },
-    );
+      expect((await settings.notificationPreferences()).enabled, isFalse);
+      expect(
+        (await settings.watchNotificationPreferences().first).enabled,
+        isFalse,
+      );
+    });
 
     test('app language preference persists through settings', () async {
       final settings = DriftSettingsRepository(db);

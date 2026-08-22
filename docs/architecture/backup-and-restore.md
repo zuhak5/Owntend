@@ -18,7 +18,7 @@ The current design uses a versioned ZIP archive containing:
 
 The format version is independent from the Flutter package version and the Drift schema version. Compatibility must be decided explicitly rather than inferred from application version alone.
 
-Drift schema 2 adds local derived search-generation metadata and invalidation triggers. This does not change the backup ZIP format. A valid schema-1 database can be opened by the current application and migrated forward to schema 2 before restore import proceeds. `search_index_state` is not imported as user-domain data: importing the authoritative searchable tables fires the local invalidation triggers, leaving search dirty until `DriftSearchRepository` rebuilds the FTS snapshot on the next query or explicit recovery rebuild.
+Production v1 accepts backup format `1` with database schema `1` only. `search_index_state` and synchronization runtime tables are not imported as user-domain authority: importing authoritative searchable tables fires local invalidation triggers, leaving search dirty until `DriftSearchRepository` rebuilds the FTS snapshot on the next query or explicit recovery rebuild.
 
 ## Export sequence
 
@@ -66,7 +66,7 @@ Validation must occur before any file is written outside a controlled staging di
 4. Enforce entry-count, per-entry, total-expanded-size, and compression limits.
 5. Normalize every path and reject absolute, traversal, duplicate, or disallowed entries.
 6. Verify hashes and expected file types.
-7. Validate database/schema compatibility and migrate an accepted older Drift database through `AppDatabase` before import.
+7. Require backup format `1` and schema `1`; reject any other version before import.
 8. Create a pre-restore safety backup of the current state, hash it, and record `safetyBackupComplete`.
 9. Acquire restore barrier: suspend `SyncCoordinator`, cancel WorkManager background jobs, and clear scheduled reminders. Write `servicesSuspended` phase.
 10. Extract media into a private staging directory (`.restore-$token`), register the sidecar root in `SidecarRegistryStore`, and write `mediaStaged` phase.
@@ -75,7 +75,7 @@ Validation must occur before any file is written outside a controlled staging di
 13. Make the recorded restore disposition durable (`pauseAfterLocalRestore` or `enqueueRestoreSnapshot`) and record `cloudIntentDurable` before terminal journal cleanup.
 14. Rebuild derived runtime state and notifications where owned by their lifecycle. Search is generation-bound: restored authoritative rows invalidate the FTS snapshot automatically, and the repository rebuilds it before a subsequent search can return results.
 15. Delete `.previous-$token` and `.restore-$token` media directories (`cleanupPending`), remove them from `SidecarRegistryStore`, and write `terminal` phase to clear journal. If deletion fails, update `SidecarRegistryStore` with `SidecarState.pendingCleanup` and error details for future startup sweepers or account deletion.
-16. If interrupted, the process-level restore recovery gate runs before deferred account cleanup, cloud bootstrap, authentication hydration, realtime, or background sync. `RestoreJournalResolver` rolls back pre-DB-commit phases (< `dbCommitStarted`) or rolls forward post-commit phases (>= `dbCommitStarted`), fails closed on account-scope mismatch, and does not clear the journal until the recorded cloud disposition is durable. Recovery failure leaves startup blocked with retry. After successful resolution, `SidecarRegistryStore.sweepOrphans(...)` cleans terminal or legacy sidecars. A newer unsupported journal version also blocks startup.
+16. If interrupted, the process-level restore recovery gate runs before deferred account cleanup, cloud bootstrap, authentication hydration, realtime, or background sync. `RestoreJournalResolver` rolls back pre-DB-commit phases (< `dbCommitStarted`) or rolls forward post-commit phases (>= `dbCommitStarted`), fails closed on account-scope mismatch, and does not clear the journal until the recorded cloud disposition is durable. Recovery failure leaves startup blocked with retry. After successful resolution, `SidecarRegistryStore.sweepOrphans(...)` cleans terminal or unregistered orphan sidecars. A newer unsupported journal version also blocks startup.
 
 ## Compatibility
 

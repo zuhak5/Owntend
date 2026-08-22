@@ -2,7 +2,7 @@
 
 **Product:** Owntend Android Application
 **Version:** 1.0.0 (Build 1)
-**Generated:** 2026-08-15T13:47:35.602Z
+**Generated:** 2026-08-22T01:46:25.561Z
 
 > Owntend uses and redistributes open-source software packages under their respective upstream licenses.
 > This document contains third-party notices, attribution statements, and full license texts for all direct and
@@ -19,19 +19,19 @@
 
 ## 1. Dart and Flutter Dependencies
 
-Total resolved packages: **254**
+Total resolved packages: **255**
 
 | Package | Version | Type | License | Upstream Link |
 | :--- | :--- | :--- | :--- | :--- |
 | `_fe_analyzer_shared` | `103.0.0` | transitive | BSD-3-Clause | [pub.dev/_fe_analyzer_shared](https://pub.dev/packages/_fe_analyzer_shared) |
 | `analyzer` | `13.3.0` | transitive | BSD-3-Clause | [pub.dev/analyzer](https://pub.dev/packages/analyzer) |
-| `android_file_picker` | `1.0.0` | transitive | MIT | [pub.dev/android_file_picker](https://pub.dev/packages/android_file_picker) |
+| `android_file_picker` | `1.0.1` | transitive | MIT | [pub.dev/android_file_picker](https://pub.dev/packages/android_file_picker) |
 | `ansicolor` | `2.0.3` | transitive | Apache-2.0 | [pub.dev/ansicolor](https://pub.dev/packages/ansicolor) |
 | `app_links` | `7.2.1` | transitive | Apache-2.0 | [pub.dev/app_links](https://pub.dev/packages/app_links) |
 | `app_links_linux` | `1.0.3` | transitive | Apache-2.0 | [pub.dev/app_links_linux](https://pub.dev/packages/app_links_linux) |
 | `app_links_platform_interface` | `2.0.4` | transitive | Apache-2.0 | [pub.dev/app_links_platform_interface](https://pub.dev/packages/app_links_platform_interface) |
 | `app_links_web` | `1.0.4` | transitive | Apache-2.0 | [pub.dev/app_links_web](https://pub.dev/packages/app_links_web) |
-| `archive` | `4.0.9` | direct main | Apache-2.0 | [pub.dev/archive](https://pub.dev/packages/archive) |
+| `archive` | `4.1.0` | direct main | Apache-2.0 | [pub.dev/archive](https://pub.dev/packages/archive) |
 | `args` | `2.7.0` | transitive | BSD-3-Clause | [pub.dev/args](https://pub.dev/packages/args) |
 | `async` | `2.13.1` | transitive | BSD-3-Clause | [pub.dev/async](https://pub.dev/packages/async) |
 | `audioplayers` | `6.8.1` | direct main | MIT | [pub.dev/audioplayers](https://pub.dev/packages/audioplayers) |
@@ -54,7 +54,7 @@ Total resolved packages: **254**
 | `cli_config` | `0.2.0` | transitive | MIT | [pub.dev/cli_config](https://pub.dev/packages/cli_config) |
 | `cli_util` | `0.5.2` | transitive | BSD-3-Clause | [pub.dev/cli_util](https://pub.dev/packages/cli_util) |
 | `clock` | `1.1.2` | transitive | Apache-2.0 | [pub.dev/clock](https://pub.dev/packages/clock) |
-| `code_assets` | `1.2.1` | transitive | MIT | [pub.dev/code_assets](https://pub.dev/packages/code_assets) |
+| `code_assets` | `2.0.0` | transitive | MIT | [pub.dev/code_assets](https://pub.dev/packages/code_assets) |
 | `collection` | `1.19.1` | direct main | BSD-3-Clause | [pub.dev/collection](https://pub.dev/packages/collection) |
 | `connectivity_plus` | `7.3.1` | direct main | BSD-3-Clause | [pub.dev/connectivity_plus](https://pub.dev/packages/connectivity_plus) |
 | `connectivity_plus_platform_interface` | `2.1.0` | transitive | BSD-3-Clause | [pub.dev/connectivity_plus_platform_interface](https://pub.dev/packages/connectivity_plus_platform_interface) |
@@ -66,7 +66,7 @@ Total resolved packages: **254**
 | `cupertino_icons` | `1.0.9` | direct main | MIT | [pub.dev/cupertino_icons](https://pub.dev/packages/cupertino_icons) |
 | `dart_jsonwebtoken` | `3.4.1` | transitive | MIT | [pub.dev/dart_jsonwebtoken](https://pub.dev/packages/dart_jsonwebtoken) |
 | `dart_style` | `3.1.12` | transitive | BSD-3-Clause | [pub.dev/dart_style](https://pub.dev/packages/dart_style) |
-| `dbus` | `0.7.14` | transitive | LGPL-3.0-or-later | [pub.dev/dbus](https://pub.dev/packages/dbus) |
+| `dbus` | `0.7.15` | transitive | LGPL-3.0-or-later | [pub.dev/dbus](https://pub.dev/packages/dbus) |
 | `drift` | `2.34.3` | direct main | MIT | [pub.dev/drift](https://pub.dev/packages/drift) |
 | `drift_dev` | `2.34.5` | direct dev | MIT | [pub.dev/drift_dev](https://pub.dev/packages/drift_dev) |
 | `drift_flutter` | `0.3.1` | direct main | MIT | [pub.dev/drift_flutter](https://pub.dev/packages/drift_flutter) |
@@ -76,10 +76,10 @@ Total resolved packages: **254**
 | `ffi_leak_tracker` | `0.1.2` | transitive | MIT | [pub.dev/ffi_leak_tracker](https://pub.dev/packages/ffi_leak_tracker) |
 | `file` | `7.0.1` | transitive | Apache-2.0 | [pub.dev/file](https://pub.dev/packages/file) |
 | `file_picker` | `12.0.0` | direct main | MIT | [pub.dev/file_picker](https://pub.dev/packages/file_picker) |
-| `file_picker_darwin` | `1.0.0` | transitive | MIT | [pub.dev/file_picker_darwin](https://pub.dev/packages/file_picker_darwin) |
-| `file_picker_linux` | `1.0.0` | transitive | BSD-3-Clause | [pub.dev/file_picker_linux](https://pub.dev/packages/file_picker_linux) |
-| `file_picker_platform_interface` | `3.0.0` | transitive | BSD-3-Clause | [pub.dev/file_picker_platform_interface](https://pub.dev/packages/file_picker_platform_interface) |
-| `file_picker_web` | `3.0.0` | transitive | BSD-3-Clause | [pub.dev/file_picker_web](https://pub.dev/packages/file_picker_web) |
+| `file_picker_darwin` | `1.0.1` | transitive | MIT | [pub.dev/file_picker_darwin](https://pub.dev/packages/file_picker_darwin) |
+| `file_picker_linux` | `1.0.1` | transitive | BSD-3-Clause | [pub.dev/file_picker_linux](https://pub.dev/packages/file_picker_linux) |
+| `file_picker_platform_interface` | `3.0.1` | transitive | BSD-3-Clause | [pub.dev/file_picker_platform_interface](https://pub.dev/packages/file_picker_platform_interface) |
+| `file_picker_web` | `3.0.1` | transitive | BSD-3-Clause | [pub.dev/file_picker_web](https://pub.dev/packages/file_picker_web) |
 | `file_selector_linux` | `0.9.4` | transitive | BSD-3-Clause | [pub.dev/file_selector_linux](https://pub.dev/packages/file_selector_linux) |
 | `file_selector_macos` | `0.9.5` | transitive | BSD-3-Clause | [pub.dev/file_selector_macos](https://pub.dev/packages/file_selector_macos) |
 | `file_selector_platform_interface` | `2.7.0` | transitive | BSD-3-Clause | [pub.dev/file_selector_platform_interface](https://pub.dev/packages/file_selector_platform_interface) |
@@ -88,7 +88,7 @@ Total resolved packages: **254**
 | `fl_chart` | `1.2.0` | direct main | MIT | [pub.dev/fl_chart](https://pub.dev/packages/fl_chart) |
 | `flutter` | `0.0.0` | direct main | BSD-3-Clause | [pub.dev/flutter](https://pub.dev/packages/flutter) |
 | `flutter_driver` | `0.0.0` | transitive | BSD-3-Clause | [pub.dev/flutter_driver](https://pub.dev/packages/flutter_driver) |
-| `flutter_foreground_task` | `10.0.0` | direct main | MIT | [pub.dev/flutter_foreground_task](https://pub.dev/packages/flutter_foreground_task) |
+| `flutter_foreground_task` | `11.0.1` | direct main | MIT | [pub.dev/flutter_foreground_task](https://pub.dev/packages/flutter_foreground_task) |
 | `flutter_lints` | `6.0.0` | direct dev | BSD-3-Clause | [pub.dev/flutter_lints](https://pub.dev/packages/flutter_lints) |
 | `flutter_local_notifications` | `22.3.0` | direct main | BSD-3-Clause | [pub.dev/flutter_local_notifications](https://pub.dev/packages/flutter_local_notifications) |
 | `flutter_local_notifications_linux` | `8.0.1` | transitive | BSD-3-Clause | [pub.dev/flutter_local_notifications_linux](https://pub.dev/packages/flutter_local_notifications_linux) |
@@ -115,7 +115,7 @@ Total resolved packages: **254**
 | `geolocator_android` | `5.0.3` | transitive | MIT | [pub.dev/geolocator_android](https://pub.dev/packages/geolocator_android) |
 | `geolocator_apple` | `2.3.14` | transitive | MIT | [pub.dev/geolocator_apple](https://pub.dev/packages/geolocator_apple) |
 | `geolocator_linux` | `0.2.6` | transitive | BSD-3-Clause | [pub.dev/geolocator_linux](https://pub.dev/packages/geolocator_linux) |
-| `geolocator_platform_interface` | `4.2.8` | transitive | MIT | [pub.dev/geolocator_platform_interface](https://pub.dev/packages/geolocator_platform_interface) |
+| `geolocator_platform_interface` | `4.3.0` | transitive | MIT | [pub.dev/geolocator_platform_interface](https://pub.dev/packages/geolocator_platform_interface) |
 | `geolocator_web` | `4.1.4` | transitive | MIT | [pub.dev/geolocator_web](https://pub.dev/packages/geolocator_web) |
 | `geolocator_windows` | `0.2.5` | transitive | MIT | [pub.dev/geolocator_windows](https://pub.dev/packages/geolocator_windows) |
 | `glob` | `2.1.3` | transitive | BSD-3-Clause | [pub.dev/glob](https://pub.dev/packages/glob) |
@@ -132,12 +132,12 @@ Total resolved packages: **254**
 | `graphs` | `2.3.2` | transitive | BSD-3-Clause | [pub.dev/graphs](https://pub.dev/packages/graphs) |
 | `gsettings` | `0.2.8` | transitive | MIT | [pub.dev/gsettings](https://pub.dev/packages/gsettings) |
 | `gtk` | `2.2.0` | transitive | MIT | [pub.dev/gtk](https://pub.dev/packages/gtk) |
-| `hooks` | `2.1.0` | transitive | MIT | [pub.dev/hooks](https://pub.dev/packages/hooks) |
+| `hooks` | `2.2.0` | transitive | MIT | [pub.dev/hooks](https://pub.dev/packages/hooks) |
 | `html` | `0.15.6` | transitive | BSD-3-Clause | [pub.dev/html](https://pub.dev/packages/html) |
 | `http` | `1.6.0` | direct main | BSD-3-Clause | [pub.dev/http](https://pub.dev/packages/http) |
 | `http_multi_server` | `3.2.2` | transitive | BSD-3-Clause | [pub.dev/http_multi_server](https://pub.dev/packages/http_multi_server) |
 | `http_parser` | `4.1.2` | transitive | BSD-3-Clause | [pub.dev/http_parser](https://pub.dev/packages/http_parser) |
-| `image` | `4.8.0` | transitive | MIT | [pub.dev/image](https://pub.dev/packages/image) |
+| `image` | `4.9.2` | transitive | MIT | [pub.dev/image](https://pub.dev/packages/image) |
 | `image_picker` | `1.2.3` | direct main | BSD-3-Clause | [pub.dev/image_picker](https://pub.dev/packages/image_picker) |
 | `image_picker_android` | `0.8.13+19` | transitive | BSD-3-Clause | [pub.dev/image_picker_android](https://pub.dev/packages/image_picker_android) |
 | `image_picker_for_web` | `3.1.1` | transitive | BSD-3-Clause | [pub.dev/image_picker_for_web](https://pub.dev/packages/image_picker_for_web) |
@@ -164,10 +164,10 @@ Total resolved packages: **254**
 | `meta` | `1.19.0` | transitive | BSD-3-Clause | [pub.dev/meta](https://pub.dev/packages/meta) |
 | `mime` | `2.0.0` | transitive | BSD-3-Clause | [pub.dev/mime](https://pub.dev/packages/mime) |
 | `mocktail` | `1.0.5` | direct dev | Apache-2.0 | [pub.dev/mocktail](https://pub.dev/packages/mocktail) |
-| `native_toolchain_c` | `0.19.3` | transitive | MIT | [pub.dev/native_toolchain_c](https://pub.dev/packages/native_toolchain_c) |
+| `native_toolchain_c` | `0.19.4` | transitive | MIT | [pub.dev/native_toolchain_c](https://pub.dev/packages/native_toolchain_c) |
 | `nm` | `0.5.0` | transitive | MIT | [pub.dev/nm](https://pub.dev/packages/nm) |
 | `node_preamble` | `2.0.2` | transitive | MIT | [pub.dev/node_preamble](https://pub.dev/packages/node_preamble) |
-| `objective_c` | `9.5.0` | transitive | MIT | [pub.dev/objective_c](https://pub.dev/packages/objective_c) |
+| `objective_c` | `9.6.0` | transitive | MIT | [pub.dev/objective_c](https://pub.dev/packages/objective_c) |
 | `package_config` | `2.2.0` | transitive | BSD-3-Clause | [pub.dev/package_config](https://pub.dev/packages/package_config) |
 | `package_info_plus` | `10.2.1` | direct main | BSD-3-Clause | [pub.dev/package_info_plus](https://pub.dev/packages/package_info_plus) |
 | `package_info_plus_platform_interface` | `4.1.0` | transitive | BSD-3-Clause | [pub.dev/package_info_plus_platform_interface](https://pub.dev/packages/package_info_plus_platform_interface) |
@@ -198,7 +198,7 @@ Total resolved packages: **254**
 | `pubspec_parse` | `1.5.0` | transitive | BSD-3-Clause | [pub.dev/pubspec_parse](https://pub.dev/packages/pubspec_parse) |
 | `realtime_client` | `2.13.0` | transitive | MIT | [pub.dev/realtime_client](https://pub.dev/packages/realtime_client) |
 | `recase` | `4.1.0` | transitive | MIT | [pub.dev/recase](https://pub.dev/packages/recase) |
-| `record_use` | `1.1.0` | transitive | MIT | [pub.dev/record_use](https://pub.dev/packages/record_use) |
+| `record_use` | `1.1.1` | transitive | MIT | [pub.dev/record_use](https://pub.dev/packages/record_use) |
 | `riverpod` | `3.4.2` | transitive | MIT | [pub.dev/riverpod](https://pub.dev/packages/riverpod) |
 | `sentry` | `9.27.0` | transitive | MIT | [pub.dev/sentry](https://pub.dev/packages/sentry) |
 | `sentry_dart_plugin` | `3.4.0` | direct dev | MIT | [pub.dev/sentry_dart_plugin](https://pub.dev/packages/sentry_dart_plugin) |
@@ -216,13 +216,14 @@ Total resolved packages: **254**
 | `shelf_packages_handler` | `3.0.2` | transitive | BSD-3-Clause | [pub.dev/shelf_packages_handler](https://pub.dev/packages/shelf_packages_handler) |
 | `shelf_static` | `1.1.3` | transitive | BSD-3-Clause | [pub.dev/shelf_static](https://pub.dev/packages/shelf_static) |
 | `shelf_web_socket` | `3.0.0` | transitive | BSD-3-Clause | [pub.dev/shelf_web_socket](https://pub.dev/packages/shelf_web_socket) |
+| `shorebird_code_push` | `2.0.7` | direct main | MIT | [pub.dev/shorebird_code_push](https://pub.dev/packages/shorebird_code_push) |
 | `sky_engine` | `0.0.0` | transitive | BSD-3-Clause | [pub.dev/sky_engine](https://pub.dev/packages/sky_engine) |
 | `source_gen` | `4.2.4` | transitive | BSD-3-Clause | [pub.dev/source_gen](https://pub.dev/packages/source_gen) |
 | `source_map_stack_trace` | `2.1.2` | transitive | BSD-3-Clause | [pub.dev/source_map_stack_trace](https://pub.dev/packages/source_map_stack_trace) |
-| `source_maps` | `0.10.13` | transitive | BSD-3-Clause | [pub.dev/source_maps](https://pub.dev/packages/source_maps) |
+| `source_maps` | `0.10.14` | transitive | BSD-3-Clause | [pub.dev/source_maps](https://pub.dev/packages/source_maps) |
 | `source_span` | `1.10.2` | transitive | BSD-3-Clause | [pub.dev/source_span](https://pub.dev/packages/source_span) |
 | `sqlcipher_flutter_libs` | `0.7.0+eol` | transitive | MIT | [pub.dev/sqlcipher_flutter_libs](https://pub.dev/packages/sqlcipher_flutter_libs) |
-| `sqlite3` | `3.5.1` | direct main | MIT | [pub.dev/sqlite3](https://pub.dev/packages/sqlite3) |
+| `sqlite3` | `3.5.2` | direct main | MIT | [pub.dev/sqlite3](https://pub.dev/packages/sqlite3) |
 | `sqlite3_flutter_libs` | `0.6.0+eol` | transitive | MIT | [pub.dev/sqlite3_flutter_libs](https://pub.dev/packages/sqlite3_flutter_libs) |
 | `sqlparser` | `0.45.0` | transitive | MIT | [pub.dev/sqlparser](https://pub.dev/packages/sqlparser) |
 | `stack_trace` | `1.12.1` | transitive | BSD-3-Clause | [pub.dev/stack_trace](https://pub.dev/packages/stack_trace) |
@@ -235,7 +236,7 @@ Total resolved packages: **254**
 | `supabase_common` | `0.1.2` | transitive | MIT | [pub.dev/supabase_common](https://pub.dev/packages/supabase_common) |
 | `supabase_flutter` | `2.17.2` | direct main | MIT | [pub.dev/supabase_flutter](https://pub.dev/packages/supabase_flutter) |
 | `sync_http` | `0.3.1` | transitive | BSD-3-Clause | [pub.dev/sync_http](https://pub.dev/packages/sync_http) |
-| `synchronized` | `3.4.1+1` | transitive | MIT | [pub.dev/synchronized](https://pub.dev/packages/synchronized) |
+| `synchronized` | `3.4.1+2` | transitive | MIT | [pub.dev/synchronized](https://pub.dev/packages/synchronized) |
 | `system_info2` | `4.1.0` | transitive | MIT | [pub.dev/system_info2](https://pub.dev/packages/system_info2) |
 | `term_glyph` | `1.2.2` | transitive | BSD-3-Clause | [pub.dev/term_glyph](https://pub.dev/packages/term_glyph) |
 | `test` | `1.31.1` | transitive | MIT | [pub.dev/test](https://pub.dev/packages/test) |
@@ -254,7 +255,7 @@ Total resolved packages: **254**
 | `url_launcher_windows` | `3.1.5` | transitive | BSD-3-Clause | [pub.dev/url_launcher_windows](https://pub.dev/packages/url_launcher_windows) |
 | `uuid` | `4.6.0` | direct main | MIT | [pub.dev/uuid](https://pub.dev/packages/uuid) |
 | `vector_math` | `2.4.2` | transitive | BSD-3-Clause | [pub.dev/vector_math](https://pub.dev/packages/vector_math) |
-| `vm_service` | `15.2.0` | transitive | BSD-3-Clause | [pub.dev/vm_service](https://pub.dev/packages/vm_service) |
+| `vm_service` | `15.3.0` | transitive | BSD-3-Clause | [pub.dev/vm_service](https://pub.dev/packages/vm_service) |
 | `watcher` | `1.2.1` | transitive | BSD-3-Clause | [pub.dev/watcher](https://pub.dev/packages/watcher) |
 | `web` | `1.1.1` | transitive | BSD-3-Clause | [pub.dev/web](https://pub.dev/packages/web) |
 | `web_socket` | `1.0.1` | transitive | BSD-3-Clause | [pub.dev/web_socket](https://pub.dev/packages/web_socket) |
@@ -266,15 +267,15 @@ Total resolved packages: **254**
 | `webview_flutter_platform_interface` | `2.15.1` | transitive | BSD-3-Clause | [pub.dev/webview_flutter_platform_interface](https://pub.dev/packages/webview_flutter_platform_interface) |
 | `webview_flutter_wkwebview` | `3.26.0` | transitive | MIT | [pub.dev/webview_flutter_wkwebview](https://pub.dev/packages/webview_flutter_wkwebview) |
 | `win32` | `6.4.0` | transitive | BSD-3-Clause | [pub.dev/win32](https://pub.dev/packages/win32) |
-| `windows_file_picker` | `1.0.0` | transitive | MIT | [pub.dev/windows_file_picker](https://pub.dev/packages/windows_file_picker) |
-| `workmanager` | `0.10.7` | direct main | MIT | [pub.dev/workmanager](https://pub.dev/packages/workmanager) |
-| `workmanager_android` | `0.10.6` | transitive | BSD-3-Clause | [pub.dev/workmanager_android](https://pub.dev/packages/workmanager_android) |
+| `windows_file_picker` | `1.0.1` | transitive | MIT | [pub.dev/windows_file_picker](https://pub.dev/packages/windows_file_picker) |
+| `workmanager` | `0.10.9` | direct main | MIT | [pub.dev/workmanager](https://pub.dev/packages/workmanager) |
+| `workmanager_android` | `0.10.8` | transitive | BSD-3-Clause | [pub.dev/workmanager_android](https://pub.dev/packages/workmanager_android) |
 | `workmanager_apple` | `0.9.10` | transitive | MIT | [pub.dev/workmanager_apple](https://pub.dev/packages/workmanager_apple) |
 | `workmanager_linux` | `0.1.1+1` | transitive | BSD-3-Clause | [pub.dev/workmanager_linux](https://pub.dev/packages/workmanager_linux) |
 | `workmanager_platform_interface` | `0.10.4` | transitive | MIT | [pub.dev/workmanager_platform_interface](https://pub.dev/packages/workmanager_platform_interface) |
 | `workmanager_web` | `0.2.0` | transitive | BSD-3-Clause | [pub.dev/workmanager_web](https://pub.dev/packages/workmanager_web) |
 | `xdg_directories` | `1.1.0` | transitive | BSD-3-Clause | [pub.dev/xdg_directories](https://pub.dev/packages/xdg_directories) |
-| `xml` | `6.6.1` | transitive | MIT | [pub.dev/xml](https://pub.dev/packages/xml) |
+| `xml` | `7.0.1` | transitive | MIT | [pub.dev/xml](https://pub.dev/packages/xml) |
 | `yaml` | `3.1.3` | transitive | MIT | [pub.dev/yaml](https://pub.dev/packages/yaml) |
 | `yet_another_json_isolate` | `2.1.1` | transitive | MIT | [pub.dev/yet_another_json_isolate](https://pub.dev/packages/yet_another_json_isolate) |
 
@@ -317,14 +318,14 @@ Total resolved packages: **52**
 | `@noble/curves` | `1.9.7` | dev | MIT | [npmjs.com/package/@noble/curves](https://www.npmjs.com/package/@noble/curves) |
 | `@noble/hashes` | `1.8.0` | dev | MIT | [npmjs.com/package/@noble/hashes](https://www.npmjs.com/package/@noble/hashes) |
 | `@supabase/auth-js` | `2.112.3` | dev | MIT | [npmjs.com/package/@supabase/auth-js](https://www.npmjs.com/package/@supabase/auth-js) |
-| `@supabase/cli-darwin-arm64` | `2.114.0` | dev | MIT | [npmjs.com/package/@supabase/cli-darwin-arm64](https://www.npmjs.com/package/@supabase/cli-darwin-arm64) |
-| `@supabase/cli-darwin-x64` | `2.114.0` | dev | MIT | [npmjs.com/package/@supabase/cli-darwin-x64](https://www.npmjs.com/package/@supabase/cli-darwin-x64) |
-| `@supabase/cli-linux-arm64` | `2.114.0` | dev | MIT | [npmjs.com/package/@supabase/cli-linux-arm64](https://www.npmjs.com/package/@supabase/cli-linux-arm64) |
-| `@supabase/cli-linux-arm64-musl` | `2.114.0` | dev | MIT | [npmjs.com/package/@supabase/cli-linux-arm64-musl](https://www.npmjs.com/package/@supabase/cli-linux-arm64-musl) |
-| `@supabase/cli-linux-x64` | `2.114.0` | dev | MIT | [npmjs.com/package/@supabase/cli-linux-x64](https://www.npmjs.com/package/@supabase/cli-linux-x64) |
-| `@supabase/cli-linux-x64-musl` | `2.114.0` | dev | MIT | [npmjs.com/package/@supabase/cli-linux-x64-musl](https://www.npmjs.com/package/@supabase/cli-linux-x64-musl) |
-| `@supabase/cli-windows-arm64` | `2.114.0` | dev | MIT | [npmjs.com/package/@supabase/cli-windows-arm64](https://www.npmjs.com/package/@supabase/cli-windows-arm64) |
-| `@supabase/cli-windows-x64` | `2.114.0` | dev | MIT | [npmjs.com/package/@supabase/cli-windows-x64](https://www.npmjs.com/package/@supabase/cli-windows-x64) |
+| `@supabase/cli-darwin-arm64` | `2.115.0` | dev | MIT | [npmjs.com/package/@supabase/cli-darwin-arm64](https://www.npmjs.com/package/@supabase/cli-darwin-arm64) |
+| `@supabase/cli-darwin-x64` | `2.115.0` | dev | MIT | [npmjs.com/package/@supabase/cli-darwin-x64](https://www.npmjs.com/package/@supabase/cli-darwin-x64) |
+| `@supabase/cli-linux-arm64` | `2.115.0` | dev | MIT | [npmjs.com/package/@supabase/cli-linux-arm64](https://www.npmjs.com/package/@supabase/cli-linux-arm64) |
+| `@supabase/cli-linux-arm64-musl` | `2.115.0` | dev | MIT | [npmjs.com/package/@supabase/cli-linux-arm64-musl](https://www.npmjs.com/package/@supabase/cli-linux-arm64-musl) |
+| `@supabase/cli-linux-x64` | `2.115.0` | dev | MIT | [npmjs.com/package/@supabase/cli-linux-x64](https://www.npmjs.com/package/@supabase/cli-linux-x64) |
+| `@supabase/cli-linux-x64-musl` | `2.115.0` | dev | MIT | [npmjs.com/package/@supabase/cli-linux-x64-musl](https://www.npmjs.com/package/@supabase/cli-linux-x64-musl) |
+| `@supabase/cli-windows-arm64` | `2.115.0` | dev | MIT | [npmjs.com/package/@supabase/cli-windows-arm64](https://www.npmjs.com/package/@supabase/cli-windows-arm64) |
+| `@supabase/cli-windows-x64` | `2.115.0` | dev | MIT | [npmjs.com/package/@supabase/cli-windows-x64](https://www.npmjs.com/package/@supabase/cli-windows-x64) |
 | `@supabase/functions-js` | `2.112.3` | dev | MIT | [npmjs.com/package/@supabase/functions-js](https://www.npmjs.com/package/@supabase/functions-js) |
 | `@supabase/phoenix` | `0.4.5` | dev | MIT | [npmjs.com/package/@supabase/phoenix](https://www.npmjs.com/package/@supabase/phoenix) |
 | `@supabase/postgrest-js` | `2.112.3` | dev | MIT | [npmjs.com/package/@supabase/postgrest-js](https://www.npmjs.com/package/@supabase/postgrest-js) |
@@ -335,7 +336,7 @@ Total resolved packages: **52**
 | `esbuild` | `0.28.2` | dev | MIT | [npmjs.com/package/esbuild](https://www.npmjs.com/package/esbuild) |
 | `iceberg-js` | `0.8.1` | dev | MIT | [npmjs.com/package/iceberg-js](https://www.npmjs.com/package/iceberg-js) |
 | `jose` | `6.2.8` | dev | MIT | [npmjs.com/package/jose](https://www.npmjs.com/package/jose) |
-| `supabase` | `2.114.0` | dev | Apache-2.0 | [npmjs.com/package/supabase](https://www.npmjs.com/package/supabase) |
+| `supabase` | `2.115.0` | dev | Apache-2.0 | [npmjs.com/package/supabase](https://www.npmjs.com/package/supabase) |
 | `tslib` | `2.8.1` | dev | MIT | [npmjs.com/package/tslib](https://www.npmjs.com/package/tslib) |
 | `yaml` | `2.9.0` | dev | ISC | [npmjs.com/package/yaml](https://www.npmjs.com/package/yaml) |
 
@@ -347,7 +348,7 @@ Total resolved specifiers: **10**
 
 | Package | Version | Source | License | Upstream Link |
 | :--- | :--- | :--- | :--- | :--- |
-| `@sentry/deno` | `8.55.2` | npm | MIT | [https://www.npmjs.com/package/@sentry/deno](https://www.npmjs.com/package/@sentry/deno) |
+| `@sentry/deno` | `10.70.0` | npm | MIT | [https://www.npmjs.com/package/@sentry/deno](https://www.npmjs.com/package/@sentry/deno) |
 | `@std/assert` | `1.0.19` | jsr | MIT | [https://jsr.io/@std/assert](https://jsr.io/@std/assert) |
 | `@std/assert` | `1.0.16` | jsr | MIT | [https://jsr.io/@std/assert](https://jsr.io/@std/assert) |
 | `@std/assert` | `1.0.19` | jsr | MIT | [https://jsr.io/@std/assert](https://jsr.io/@std/assert) |
@@ -355,7 +356,7 @@ Total resolved specifiers: **10**
 | `@supabase/supabase-js` | `2.112.3` | npm | MIT | [https://www.npmjs.com/package/@supabase/supabase-js](https://www.npmjs.com/package/@supabase/supabase-js) |
 | `@supabase/supabase-js` | `2.112.3` | npm | MIT | [https://www.npmjs.com/package/@supabase/supabase-js](https://www.npmjs.com/package/@supabase/supabase-js) |
 | `esbuild` | `0.28.2` | npm | MIT | [https://www.npmjs.com/package/esbuild](https://www.npmjs.com/package/esbuild) |
-| `supabase` | `2.114.0` | npm | MIT | [https://www.npmjs.com/package/supabase](https://www.npmjs.com/package/supabase) |
+| `supabase` | `2.115.0` | npm | MIT | [https://www.npmjs.com/package/supabase](https://www.npmjs.com/package/supabase) |
 | `yaml` | `2.9.0` | npm | MIT | [https://www.npmjs.com/package/yaml](https://www.npmjs.com/package/yaml) |
 
 ---

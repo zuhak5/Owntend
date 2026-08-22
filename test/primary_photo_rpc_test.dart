@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  group('Task 24 - Primary Photo RPC Tests', () {
+  group('primary photo RPC', () {
     test('verifies primary photo payload structure', () {
       const assetId = '00000000-0000-0000-0000-000000000111';
       const photoId = '00000000-0000-0000-0000-000000000902';

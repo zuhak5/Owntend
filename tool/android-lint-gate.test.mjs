@@ -92,10 +92,12 @@ test('Release evidence collector archives and binds Android lint reports into su
   assert.match(collector, /android_lint_verified\s*=\s*\$true/);
 });
 
-test('Production build scripts execute release builds where lint is enforced', async () => {
-  const buildProd = await read('tool/build_prod.ps1');
-  assert.match(buildProd, /build', 'apk', '--flavor', 'prod', '--release/);
-
-  const buildPlay = await read('tool/build_play_prod.ps1');
-  assert.match(buildPlay, /build', 'appbundle', '--flavor', 'prod', '--release/);
+test('Shorebird release workflow collects lint from the canonical AAB build', async () => {
+  const workflow = await read('.github/workflows/shorebird-release-android.yml');
+  assert.match(workflow, /invoke_shorebird_release\.ps1/);
+  assert.match(workflow, /collect_android_release_evidence\.ps1/);
+  assert.ok(
+    workflow.indexOf('invoke_shorebird_release.ps1') <
+      workflow.indexOf('collect_android_release_evidence.ps1'),
+  );
 });

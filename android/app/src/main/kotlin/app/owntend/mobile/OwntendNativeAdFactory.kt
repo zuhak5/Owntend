@@ -135,7 +135,7 @@ class OwntendNativeAdFactory(
         val callToActionTextColor: Int,
     ) {
         companion object {
-            private const val SCHEMA_VERSION = 2
+            private const val SCHEMA_VERSION = 1
             private val colorPattern = Regex("^#[0-9A-Fa-f]{6}$")
 
             fun fromOptions(options: Map<String, Any>?): NativeAdPalette? {

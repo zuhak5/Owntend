@@ -47,8 +47,8 @@ test("VersionDeck provenance policy binds the APK to the canonical production ra
   assert.equal(policy.repository, VERSIONDECK_REPOSITORY);
   assert.equal(policy.sourceDigest, COMMIT);
   assert.equal(policy.sourceRef, "refs/heads/main");
-  assert.equal(policy.workflowPath, ".github/workflows/build-production-android.yml");
-  assert.equal(policy.workflowName, "Build Production APK");
+  assert.equal(policy.workflowPath, ".github/workflows/shorebird-release-android.yml");
+  assert.equal(policy.workflowName, "Shorebird Android Release");
   assert.equal(policy.workflowTrigger, "workflow_dispatch");
   assert.equal(policy.runnerEnvironment, "github-hosted");
   assert.equal(policy.artifactName, apkName);
@@ -131,15 +131,15 @@ function verifierFixture(overrides = {}) {
       sourceRepositoryIdentifier: "1319597440",
       sourceRepositoryOwnerUri: "https://github.com/zuhak5",
       sourceRepositoryOwnerIdentifier: "233116763",
-      signerWorkflow: `https://github.com/${VERSIONDECK_REPOSITORY}/.github/workflows/build-production-android.yml@refs/heads/main`,
+      signerWorkflow: `https://github.com/${VERSIONDECK_REPOSITORY}/.github/workflows/shorebird-release-android.yml@refs/heads/main`,
       signerDigest: commitSha,
-      workflowName: "Build Production APK",
+      workflowName: "Shorebird Android Release",
       workflowTrigger: "workflow_dispatch",
       runnerEnvironment: "github-hosted",
       runInvocationUri: `https://github.com/${VERSIONDECK_REPOSITORY}/actions/runs/31329512924/attempts/1`,
       runId: "31329512924",
       runAttempt: "1",
-      buildConfigUri: `https://github.com/${VERSIONDECK_REPOSITORY}/.github/workflows/build-production-android.yml@refs/heads/main`,
+      buildConfigUri: `https://github.com/${VERSIONDECK_REPOSITORY}/.github/workflows/shorebird-release-android.yml@refs/heads/main`,
       buildConfigDigest: commitSha,
       certificateIssuer: "CN=sigstore-intermediate,O=sigstore.dev",
       oidcIssuer: "https://token.actions.githubusercontent.com",

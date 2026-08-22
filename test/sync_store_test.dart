@@ -60,7 +60,6 @@ void main() {
               id: 1,
               deviceId: 'replacement-device',
               enabled: false,
-              uploadProhibited: false,
               migrationState: 'localOnly',
               restorePending: false,
               hydrationCompletedUnits: 0,
@@ -529,7 +528,6 @@ void main() {
           clientModifiedAt: DateTime.utc(2026, 6, 28),
           originDeviceId: 'remote-device',
           revision: 2,
-          syncSeq: 20,
           serverUpdatedAt: DateTime.utc(2026, 6, 28),
         ),
       ]);
@@ -570,7 +568,6 @@ void main() {
           clientModifiedAt: now,
           originDeviceId: 'remote-device',
           revision: 1,
-          syncSeq: 20,
           serverUpdatedAt: now,
         ),
         SyncRecord(
@@ -590,7 +587,6 @@ void main() {
           clientModifiedAt: now,
           originDeviceId: 'remote-device',
           revision: 1,
-          syncSeq: 21,
           serverUpdatedAt: now,
         ),
       ]);
@@ -622,7 +618,6 @@ void main() {
         clientModifiedAt: deletedAt,
         originDeviceId: 'remote-device',
         revision: 3,
-        syncSeq: 30,
         serverUpdatedAt: deletedAt,
         deletedAt: deletedAt,
       ),
@@ -633,7 +628,6 @@ void main() {
         clientModifiedAt: deletedAt,
         originDeviceId: 'remote-device',
         revision: 3,
-        syncSeq: 31,
         serverUpdatedAt: deletedAt,
         deletedAt: deletedAt,
       ),
@@ -674,7 +668,6 @@ void main() {
           clientModifiedAt: now,
           originDeviceId: 'remote-device',
           revision: 1,
-          syncSeq: now.microsecondsSinceEpoch,
           serverUpdatedAt: now,
         ),
       ]);
@@ -715,7 +708,6 @@ void main() {
           clientModifiedAt: now,
           originDeviceId: 'remote-device',
           revision: 1,
-          syncSeq: now.microsecondsSinceEpoch,
           serverUpdatedAt: now,
         ),
       ]);
@@ -801,7 +793,7 @@ void main() {
             .having(
               (item) => item.recordKey,
               'record key',
-              'permission_education_seen_v2',
+              'permission_education_seen',
             )
             .having((item) => item.operation, 'operation', 'upsert'),
       ),
@@ -812,7 +804,7 @@ void main() {
     );
     expect(
       syncSpecByEntity['user_setting']!.localWhere,
-      contains("'permission_education_seen_v2'"),
+      isNot(contains('permission_education_seen_v2')),
     );
   });
 
@@ -931,7 +923,6 @@ void main() {
           clientModifiedAt: now,
           originDeviceId: 'device-b',
           revision: 1,
-          syncSeq: 100,
           serverUpdatedAt: now,
         ),
       ]);
@@ -957,7 +948,6 @@ void main() {
       clientModifiedAt: now,
       originDeviceId: 'device-b',
       revision: 1,
-      syncSeq: 1,
       serverUpdatedAt: now,
     );
     final areaRecord = SyncRecord(
@@ -975,7 +965,6 @@ void main() {
       clientModifiedAt: now,
       originDeviceId: 'device-b',
       revision: 1,
-      syncSeq: 2,
       serverUpdatedAt: now,
     );
 
@@ -1038,7 +1027,6 @@ void main() {
           clientModifiedAt: now,
           originDeviceId: 'device-b',
           revision: 1,
-          syncSeq: 50,
           serverUpdatedAt: now,
         ),
       ]);
@@ -1100,7 +1088,6 @@ void main() {
         clientModifiedAt: now,
         originDeviceId: 'device-b',
         revision: 1,
-        syncSeq: 75,
         serverUpdatedAt: now,
       ),
     ]);

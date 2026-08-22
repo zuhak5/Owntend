@@ -38,6 +38,7 @@ enum ThemePreference { system, light, dark }
 enum AppLanguage { en, ar }
 
 enum NotificationMessageCode {
+  generic('generic'),
   weatherAlert('weather_alert'),
   taskOverdue('task_overdue'),
   taskDueToday('task_due_today'),
@@ -318,7 +319,7 @@ class InboxNotification {
     required this.createdAt,
     this.route,
     this.planId,
-    this.messageCode,
+    this.messageCode = NotificationMessageCode.generic,
     this.messageArgs = const {},
     this.readAt,
   });
@@ -329,7 +330,7 @@ class InboxNotification {
   final String kind;
   final String? route;
   final String? planId;
-  final String? messageCode;
+  final NotificationMessageCode messageCode;
   final Map<String, dynamic> messageArgs;
   final DateTime createdAt;
   final DateTime? readAt;

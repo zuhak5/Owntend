@@ -1,7 +1,7 @@
-part of '../../../../main.dart';
+part of 'startup_presentation.dart';
 
-class _StartupHome extends StatelessWidget {
-  const _StartupHome({
+class StartupHome extends StatelessWidget {
+  const StartupHome({
     required this.state,
     required this.status,
     required this.language,
@@ -10,6 +10,7 @@ class _StartupHome extends StatelessWidget {
     required this.onCheckConnection,
     required this.onContinueOffline,
     required this.onSignOut,
+    super.key,
   });
 
   final StartupBootstrapState state;
@@ -202,7 +203,7 @@ SyncStatus _syncStatusWithHydration(
   );
 }
 
-SyncStatus _syntheticStartupStatus(
+SyncStatus syntheticStartupStatus(
   RestoreRunState state, {
   SyncPhase phase = SyncPhase.initializing,
   String? message,
@@ -238,101 +239,6 @@ InitialHydrationProgress _syntheticStartupProgress(
         ? failure ?? 'Startup restore failed.'
         : null,
   );
-}
-
-AppLanguage _supportedDeviceLanguage(Locale locale) {
-  return locale.languageCode.toLowerCase() == AppLanguage.ar.name
-      ? AppLanguage.ar
-      : AppLanguage.en;
-}
-
-String _failureMessage(
-  BuildContext context,
-  Object error, {
-  AppFailureCode fallback = AppFailureCode.general,
-}) => localizedFailureMessage(
-  context.l10n,
-  appFailureCodeFor(error, fallback: fallback),
-);
-
-String _localeTag(BuildContext context) =>
-    Localizations.localeOf(context).toLanguageTag();
-
-String _formatShortDate(BuildContext context, DateTime value) =>
-    DateFormat.yMMMd(_localeTag(context)).format(value);
-
-String _formatLongDate(BuildContext context, DateTime value) =>
-    DateFormat.yMMMMEEEEd(_localeTag(context)).format(value);
-
-String _formatShortTime(BuildContext context, DateTime value) =>
-    DateFormat.jm(_localeTag(context)).format(value);
-
-String _formatShortDateTime(BuildContext context, DateTime value) =>
-    DateFormat.yMMMd(_localeTag(context)).add_jm().format(value);
-
-String _formatMonthDay(BuildContext context, DateTime value) =>
-    DateFormat.MMMd(_localeTag(context)).format(value);
-
-String _formatInteger(BuildContext context, num value) =>
-    NumberFormat.decimalPattern(_localeTag(context)).format(value);
-
-String _localizedFeatureMessage(BuildContext context, String value) {
-  final l10n = context.l10n;
-  final countMatch = RegExp(
-    r'^(\d+) (overdue task\(s\)|item\(s\)|due today|warranty alert\(s\))\.$',
-  ).firstMatch(value);
-  if (countMatch != null) {
-    final count = int.parse(countMatch.group(1)!);
-    return switch (countMatch.group(2)) {
-      'overdue task(s)' => l10n.overdueTaskSentence(count),
-      'item(s)' => l10n.itemCountSentence(count),
-      'due today' => l10n.dueTodayTaskSentence(count),
-      'warranty alert(s)' => l10n.warrantyAlertSentence(count),
-      _ => value,
-    };
-  }
-  return switch (value) {
-    'No maintenance plan yet.' => l10n.noMaintenancePlanYet,
-    'Add a maintenance task.' => l10n.addAMaintenanceTask,
-    'Critical task due today.' => l10n.criticalTaskDueToday,
-    'Critical care is due soon.' => l10n.criticalCareIsDueSoon,
-    'Warranty has expired.' => l10n.warrantyHasExpired,
-    'Warranty expires within 30 days.' => l10n.warrantyExpiresWithin30Days,
-    'Maintenance is on track.' => l10n.maintenanceIsOnTrack,
-    'Review upcoming maintenance.' => l10n.reviewUpcomingMaintenance,
-    'No items in this room yet.' => l10n.noItemsInThisRoomYet,
-    'Add the first item.' => l10n.addTheFirstItem,
-    'Room is on track.' => l10n.roomIsOnTrack,
-    'Add maintenance tasks for this room.' =>
-      l10n.addMaintenanceTasksForThisRoom,
-    'Home setup is incomplete.' => l10n.homeSetupIsIncomplete,
-    'No successful backup yet.' => l10n.noSuccessfulBackupYet,
-    'Home maintenance is ready.' => l10n.homeMaintenanceIsReady,
-    'Review upcoming tasks.' => l10n.reviewUpcomingTasks,
-    _ => value,
-  };
-}
-
-ThemeMode _effectiveThemeMode(
-  ThemePreference preference, {
-  required bool timeOfDayThemeEnabled,
-  required DateTime now,
-}) {
-  final automaticUsesLocalClock =
-      preference == ThemePreference.system || timeOfDayThemeEnabled;
-  return switch (preference) {
-    ThemePreference.light => ThemeMode.light,
-    ThemePreference.dark => ThemeMode.dark,
-    ThemePreference.system =>
-      automaticUsesLocalClock && _isLocalDaytime(now)
-          ? ThemeMode.light
-          : ThemeMode.dark,
-  };
-}
-
-bool _isLocalDaytime(DateTime value) {
-  final local = value.toLocal();
-  return local.hour >= 6 && local.hour < 18;
 }
 
 class NotificationBootstrap extends ConsumerStatefulWidget {

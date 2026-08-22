@@ -42,17 +42,13 @@ bool notificationBackgroundAccountMatches({
   required String? sessionUserId,
   required String? boundUserId,
   required bool accountEnabled,
-  required bool uploadProhibited,
-  required String? migrationState,
 }) {
   final sessionId = sessionUserId?.trim();
   final localId = boundUserId?.trim();
   return sessionId != null &&
       sessionId.isNotEmpty &&
       localId == sessionId &&
-      accountEnabled &&
-      !uploadProhibited &&
-      migrationState != 'quarantined';
+      accountEnabled;
 }
 
 @pragma('vm:entry-point')
@@ -85,8 +81,6 @@ void owntendWorkManagerCallback() {
             sessionUserId: session?.user.id,
             boundUserId: account?.boundUserId,
             accountEnabled: account?.enabled ?? false,
-            uploadProhibited: account?.uploadProhibited ?? false,
-            migrationState: account?.migrationState,
           )) {
             AppLogger.info(
               'background_worker_rejected_unauthenticated_or_mismatched',
@@ -125,8 +119,6 @@ void owntendWorkManagerCallback() {
                     sessionUserId: currentSession?.user.id,
                     boundUserId: currentAccount?.boundUserId,
                     accountEnabled: currentAccount?.enabled ?? false,
-                    uploadProhibited: currentAccount?.uploadProhibited ?? false,
-                    migrationState: currentAccount?.migrationState,
                   );
             },
           );
@@ -187,9 +179,7 @@ Future<bool> runCloudSyncInBackground({
     final account = await store.existingAccount();
     if (account == null ||
         !account.enabled ||
-        account.boundUserId != session.user.id ||
-        account.uploadProhibited ||
-        account.migrationState == 'quarantined') {
+        account.boundUserId != session.user.id) {
       await cancelAccountScopedBackgroundWork();
       return true;
     }
@@ -332,8 +322,6 @@ class OwntendNotificationScheduler
       sessionUserId: session?.user.id,
       boundUserId: account?.boundUserId,
       accountEnabled: account?.enabled ?? false,
-      uploadProhibited: account?.uploadProhibited ?? false,
-      migrationState: account?.migrationState,
     )) {
       await wm.Workmanager().cancelByUniqueName(dailyRefreshTask);
       return;
@@ -350,8 +338,6 @@ class OwntendNotificationScheduler
           sessionUserId: currentSession?.user.id,
           boundUserId: currentAccount?.boundUserId,
           accountEnabled: currentAccount?.enabled ?? false,
-          uploadProhibited: currentAccount?.uploadProhibited ?? false,
-          migrationState: currentAccount?.migrationState,
         )) {
       await workManager.cancelByUniqueName(dailyRefreshTask);
       return;
@@ -1173,7 +1159,7 @@ class NotificationMessageGenerator {
     DashboardSummary? dashboard,
   }) {
     final overdue = now.difference(task.plan.nextDueDate);
-    final overdueText = overdue.isNegative ? null : _durationLabel(overdue);
+    final overdueText = overdue.isNegative ? null : durationLabel(overdue);
     if (overdueText != null) {
       return _limit(
         '${task.plan.title} is $overdueText overdue for ${task.asset.name}.',
@@ -1238,7 +1224,7 @@ class NotificationMessageGenerator {
     };
   }
 
-  String _durationLabel(Duration duration) {
+  String durationLabel(Duration duration) {
     final minutes = duration.inMinutes;
     if (minutes < 60) {
       return '${minutes.clamp(1, 59)}m';

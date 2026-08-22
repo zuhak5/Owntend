@@ -11,6 +11,7 @@ void main() {
     release: 'app.owntend.mobile@1.3.4+19',
     dist: '19',
     appVersion: '1.3.4',
+    shorebirdPatchNumber: '7',
     tracesSampleRate: 0.05,
   );
 
@@ -32,6 +33,7 @@ void main() {
         'app_environment': 'prod',
         'app_version': '1.3.4',
         'build_number': '19',
+        'shorebird_patch_number': '7',
         'run_id': 'run-test',
       });
     },

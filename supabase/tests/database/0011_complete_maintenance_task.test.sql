@@ -214,13 +214,16 @@ values (
 -- Monetized task creation is authorized before an offline sync replay can ask
 -- the existing completion RPC to materialize the same plan.
 insert into public.creation_point_operations (
-  operation_id, user_id, entity_type, entity_id, charged_amount
+  operation_id, user_id, entity_type, entity_id, charged_amount,
+  request_hash, client_request_hash
 ) values (
   '33333333-0000-0000-0000-000000000001',
   '33333333-3333-3333-3333-333333333333',
   'task',
   'rpc-plan',
-  1
+  1,
+  repeat('1', 64),
+  repeat('2', 64)
 );
 
 insert into public.maintenance_plans (
@@ -228,8 +231,8 @@ insert into public.maintenance_plans (
   id,
   asset_id,
   title,
-  interval_count,
-  interval_unit,
+  recurrence_interval,
+  recurrence_unit,
   priority,
   next_due_date,
   reminder_days_before,
@@ -262,7 +265,7 @@ select is(
   (
     public.complete_maintenance_task(
       jsonb_build_object(
-        'version', 2,
+        'version', 1,
         'operation_id', 'rpc-early-record',
         'expected_next_due_date', '2026-08-18T09:00:00.000Z',
         'plan', jsonb_build_object(
@@ -431,7 +434,7 @@ select is(
   (
     public.complete_maintenance_task(
       jsonb_build_object(
-        'version', 2,
+        'version', 1,
         'operation_id', 'rpc-record-1',
         'expected_next_due_date', '2026-07-01T00:00:00.000Z',
         'plan', jsonb_build_object(
@@ -466,7 +469,7 @@ select is(
   (
     public.complete_maintenance_task(
       jsonb_build_object(
-        'version', 2,
+        'version', 1,
         'operation_id', 'rpc-record-1',
         'expected_next_due_date', '2026-07-01T00:00:00.000Z',
         'plan', jsonb_build_object(
@@ -1066,14 +1069,14 @@ select is(
   'the losing race operation never advances recurrence twice'
 );
 
--- Fractional timestamp and legacy cloud plan compatibility tests
+-- Fractional timestamp precision is canonical across completion payloads.
 insert into public.maintenance_plans (
   id,
   user_id,
   asset_id,
   title,
-  interval_count,
-  interval_unit,
+  recurrence_interval,
+  recurrence_unit,
   priority,
   next_due_date,
   reminder_days_before,
@@ -1100,7 +1103,7 @@ insert into public.maintenance_plans (
 create temp table rpc_fractional_result as
 select public.complete_maintenance_task(
   jsonb_build_object(
-    'version', 2,
+    'version', 1,
     'operation_id', 'frac-op-1',
     'plan_id', 'fractional-plan',
     'expected_plan_revision', 1,
@@ -1130,7 +1133,7 @@ select public.complete_maintenance_task(
 select is(
   (select result ->> 'status' from rpc_fractional_result),
   'applied',
-  'RPC accepts canonical whole-second completion against legacy fractional cloud plan'
+  'RPC accepts a whole-second completion against a fractional cloud plan'
 );
 
 select is(
@@ -1147,7 +1150,7 @@ select is(
 create temp table rpc_fractional_seq_result as
 select public.complete_maintenance_task(
   jsonb_build_object(
-    'version', 2,
+    'version', 1,
     'operation_id', 'frac-op-2',
     'plan_id', 'fractional-plan',
     'depends_on_operation_id', 'frac-op-1',
@@ -1185,7 +1188,7 @@ select is(
 create temp table rpc_fractional_winner_result as
 select public.complete_maintenance_task(
   jsonb_build_object(
-    'version', 2,
+    'version', 1,
     'operation_id', 'frac-op-winner-b',
     'plan_id', 'fractional-plan',
     'expected_plan_revision', 2,

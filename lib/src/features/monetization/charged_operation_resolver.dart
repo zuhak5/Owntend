@@ -93,8 +93,7 @@ class ChargedOperationResolver {
             ),
           );
         } else if (status.status == 'not_found') {
-          if (status.capabilityVersion == '1.2.0' &&
-              op.requestPayload.isNotEmpty) {
+          if (op.requestPayload.isNotEmpty) {
             try {
               if (op.requestPayload.containsKey('plan')) {
                 final result = await monetizationRepo.createTask(
