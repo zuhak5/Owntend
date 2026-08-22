@@ -452,3 +452,12 @@ export async function main(argv = process.argv.slice(2)) {
   );
   console.log(`Generated ${publicationMode === "disabled" ? "disabled " : ""}VersionDeck schema ${result.manifest.schemaVersion} with ${result.manifest.releases.length} verified release(s).`);
 }
+
+const invokedAsScript = process.argv[1] &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (invokedAsScript) {
+  main().catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });
+}
