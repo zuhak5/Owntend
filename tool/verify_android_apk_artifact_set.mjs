@@ -398,10 +398,14 @@ export function normalizeVerifiedProvenance(jsonText, { sourceSha, artifactName,
     throw new Error('Attestation predicate type is invalid.');
   }
   const subjects = Array.isArray(statement.subject) ? statement.subject : [];
-  if (subjects.length !== 1) throw new Error('Expected exactly one attested subject.');
-  if (subjects[0]?.name !== artifactName) throw new Error('Attested subject name is invalid.');
-  if (normalizedSha(subjects[0]?.digest?.sha256) !== normalizedSha(artifactSha256)) {
-    throw new Error('Attested subject SHA-256 is invalid.');
+  if (subjects.length === 0) throw new Error('Attested subjects are missing.');
+  const subject = subjects.find(
+    (item) =>
+      item?.name === artifactName &&
+      normalizedSha(item?.digest?.sha256) === normalizedSha(artifactSha256),
+  );
+  if (!subject) {
+    throw new Error(`Attested subject ${artifactName} with matching SHA-256 was not found.`);
   }
 
   const buildDefinition = statement.predicate?.buildDefinition;

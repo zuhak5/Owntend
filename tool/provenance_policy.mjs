@@ -314,17 +314,19 @@ function normalizeVerifiedAttestationRecord(record, policy) {
   }
   assertExact(statement.predicateType, policy.predicateType, "Predicate type");
 
-  if (!Array.isArray(statement.subject) || statement.subject.length !== 1) {
-    throw new Error("Expected exactly one attested subject.");
+  if (!Array.isArray(statement.subject) || statement.subject.length === 0) {
+    throw new Error("Attested subjects are missing.");
   }
-  const subject = statement.subject[0];
+  const subject = statement.subject.find(
+    (item) =>
+      item?.name === policy.artifactName &&
+      normalizeSha256(item?.digest?.sha256) === policy.artifactSha256,
+  );
+  if (!subject) {
+    throw new Error(`Attested subject ${policy.artifactName} with matching SHA-256 was not found.`);
+  }
   const subjectName = assertString(subject?.name, "Attested subject name");
   const subjectSha256 = normalizeSha256(subject?.digest?.sha256);
-  if (!subjectSha256) {
-    throw new Error("Attested subject SHA-256 is missing.");
-  }
-  assertExact(subjectName, policy.artifactName, "Attested subject name");
-  assertExact(subjectSha256, policy.artifactSha256, "Attested subject SHA-256");
 
   const predicate = statement.predicate;
   if (!isPlainObject(predicate)) {
