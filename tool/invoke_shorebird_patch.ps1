@@ -49,11 +49,10 @@ $arguments = @(
     '--obfuscate',
     "--split-debug-info=$symbols",
     '--public-key-cmd=bash tool/shorebird_kms_public_key.sh',
-    '--sign-cmd=bash tool/shorebird_kms_sign.sh',
-    '--',
-    '--no-pub'
+    '--sign-cmd=bash tool/shorebird_kms_sign.sh'
 )
 if ($DryRun) { $arguments += '--dry-run' }
+$arguments += @('--', '--no-pub')
 
 Push-Location $workspace
 try {

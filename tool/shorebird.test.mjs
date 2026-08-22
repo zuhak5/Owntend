@@ -58,6 +58,18 @@ test('Shorebird is commit pinned and KMS helpers never contain private key mater
   assert.doesNotMatch(`${publicKey}\n${signer}`, /BEGIN (?:RSA )?PRIVATE KEY/);
 });
 
+test('Shorebird dry-run flags stay before the Flutter argument separator', async () => {
+  for (const scriptPath of [
+    'tool/invoke_shorebird_release.ps1',
+    'tool/invoke_shorebird_patch.ps1',
+  ]) {
+    const script = await read(scriptPath);
+    const dryRun = script.indexOf("if ($DryRun) { $arguments += '--dry-run' }");
+    const separator = script.indexOf("$arguments += @('--', '--no-pub')");
+    assert.ok(dryRun >= 0 && dryRun < separator, scriptPath);
+  }
+});
+
 test('runtime patch attribution is privacy-safe and startup-safe', async () => {
   const config = await read('lib/src/core/observability/observability_config.dart');
   const scope = await read('lib/src/core/observability/sentry_scope.dart');

@@ -40,11 +40,10 @@ $arguments = @(
     "--dart-define-from-file=$resolvedConfig",
     '--obfuscate',
     "--split-debug-info=$symbols",
-    '--public-key-cmd=bash tool/shorebird_kms_public_key.sh',
-    '--',
-    '--no-pub'
+    '--public-key-cmd=bash tool/shorebird_kms_public_key.sh'
 )
 if ($DryRun) { $arguments += '--dry-run' }
+$arguments += @('--', '--no-pub')
 
 Push-Location $workspace
 try {

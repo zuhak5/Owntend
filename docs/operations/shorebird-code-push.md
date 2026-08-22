@@ -165,6 +165,8 @@ The policy tests run before the temporary `pubspec.yaml` asset injection so they
 
 The first safe CI commands are dry-runs:
 
+In PowerShell command builders, Shorebird options such as `--dry-run` must be added before the `--` separator. Only Flutter options such as `--no-pub` belong after it; Shorebird forwards everything after the separator directly to Flutter.
+
 ```bash
 sha=$(git rev-parse origin/main)
 gh workflow run "Shorebird Android Release" --ref main -f flavor=dev -f operation=validate -f source_sha="$sha"
