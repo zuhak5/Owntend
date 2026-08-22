@@ -6,6 +6,8 @@
 -keep class io.flutter.view.** { *; }
 -keep class io.flutter.embedding.** { *; }
 -keep class io.flutter.plugins.GeneratedPluginRegistrant { *; }
+-dontwarn io.flutter.**
+-dontwarn com.google.android.play.core.**
 
 # WorkManager uses Room-generated classes through reflection during
 # AndroidX Startup initialization. Keep those implementations intact in
