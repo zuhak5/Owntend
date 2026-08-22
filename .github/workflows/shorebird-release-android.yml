@@ -226,6 +226,7 @@ jobs:
           name: ${{ steps.metadata.outputs.artifact_name }}
           path: |
             build/app/outputs/bundle/${{ inputs.flavor }}Release/*.aab
+            build/app/outputs/mapping/${{ inputs.flavor }}Release/mapping.txt
             build/shorebird-release-${{ inputs.flavor }}-*.json
             build/shorebird-symbols/${{ inputs.flavor }}/base/**
             build/shorebird/obfuscation_map.json
@@ -295,6 +296,7 @@ jobs:
           New-Item -ItemType Directory -Path "build\shorebird-symbols\prod" -Force | Out-Null
           Copy-Item -LiteralPath $SymbolsSource.FullName -Destination "build\shorebird-symbols\prod\base" -Recurse -Force
           $Mapping = @(Get-ChildItem canonical-release -Recurse -Filter mapping.txt | Select-Object -First 1)
+          if (-not $Mapping -or -not (Test-Path -LiteralPath $Mapping.FullName -PathType Leaf)) { throw "Expected canonical R8 mapping.txt in release evidence." }
           New-Item -ItemType Directory -Path "build\app\outputs\mapping\prodRelease" -Force | Out-Null
           Copy-Item -LiteralPath $Mapping.FullName -Destination "build\app\outputs\mapping\prodRelease\mapping.txt" -Force
           .\tool\derive_versiondeck_apks.ps1 -AppBundle $Aab[0].FullName -ExpectedVersion "${{ needs.release.outputs.version_name }}" -ExpectedBuild "${{ needs.release.outputs.build_number }}" -KeystorePath $Keystore -KeyAlias $env:ANDROID_APK_KEY_ALIAS
