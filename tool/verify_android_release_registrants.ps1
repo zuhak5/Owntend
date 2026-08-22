@@ -11,7 +11,7 @@ if ($RemoveGeneratedMain -and (Test-Path -LiteralPath $mainRegistrant -PathType 
     Remove-Item -LiteralPath $mainRegistrant -Force
 }
 
-$registrants = foreach ($root in @((Join-Path $workspace 'android'), (Join-Path $workspace 'build'))) {
+$registrants = foreach ($root in @((Join-Path $workspace 'android'), (Join-Path $workspace 'build\app'))) {
     if (Test-Path -LiteralPath $root -PathType Container) {
         Get-ChildItem -LiteralPath $root -Recurse -File -Filter 'GeneratedPluginRegistrant.*'
     }

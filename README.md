@@ -29,7 +29,6 @@ android/                 Android host, manifests, flavors, signing guards
 assets/                  App images, illustrations, audio, and fonts
 config/                  Safe configuration examples; real configs are ignored
 download-site/           VersionDeck static download site
-integration_test/        Flutter integration tests
 lib/                     Flutter application and generated localization
 supabase/                Local Supabase config, migrations, tests, functions
 test/                    Flutter unit and widget tests

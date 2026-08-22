@@ -60,7 +60,7 @@ flutter test test/android_splash_resource_test.dart
 
 ## Flutter and Dart Formatting
 
-All Dart code under `lib/`, `test/`, and `integration_test/` is formatted and verified:
+All Dart code under `lib/` and `test/` is formatted and verified:
 ```powershell
-dart format --output=none --set-exit-if-changed lib test integration_test
+dart format --output=none --set-exit-if-changed lib test
 ```

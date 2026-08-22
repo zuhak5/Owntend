@@ -6,11 +6,8 @@ import 'package:owntend/l10n/app_localizations.dart';
 import 'package:owntend/src/core/config/app_config.dart';
 import 'package:owntend/src/features/auth/presentation/account_screen.dart';
 import 'package:owntend/src/features/auth/presentation/auth_providers.dart';
-import 'package:integration_test/integration_test.dart';
 
 void main() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
-
   testWidgets('offline account presentation works in English and Arabic', (
     tester,
   ) async {

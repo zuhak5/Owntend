@@ -75,7 +75,6 @@ Owntend is an Android-first Flutter application for household asset organization
 
 - `lib/`: Flutter application, domain services, repositories, synchronization, monetization, authentication, backup, and generated localization.
 - `test/`: Flutter unit and widget tests.
-- `integration_test/`: Flutter integration tests.
 - `android/`: Android host application, permissions, flavors, and release guards.
 - `supabase/`: local Supabase configuration, SQL migrations, database tests, and Edge Functions.
 - `download-site/`: VersionDeck source.
@@ -189,7 +188,7 @@ Treat generated manifests and static build output according to the scripts under
 flutter pub get
 flutter gen-l10n
 dart run build_runner build
-dart format --output=none --set-exit-if-changed lib test integration_test
+dart format --output=none --set-exit-if-changed lib test
 flutter analyze --no-pub
 flutter test --no-pub --concurrency=1 --timeout 3m --exclude-tags production-config
 ```

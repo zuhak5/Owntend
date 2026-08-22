@@ -88,7 +88,7 @@ Generated files must remain deterministic and should not be manually edited.
 ## Standard validation
 
 ```powershell
-dart format --output=none --set-exit-if-changed lib test integration_test
+dart format --output=none --set-exit-if-changed lib test
 flutter analyze --no-pub
 flutter test --no-pub --concurrency=1 --timeout 3m --exclude-tags production-config
 ```

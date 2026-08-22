@@ -89,7 +89,7 @@ npm run supabase:test
 flutter pub get
 flutter gen-l10n
 dart run build_runner build
-dart format --output=none --set-exit-if-changed lib test integration_test
+dart format --output=none --set-exit-if-changed lib test
 flutter analyze --no-pub
 flutter test --no-pub --concurrency=1 --timeout 3m --exclude-tags production-config
 ```

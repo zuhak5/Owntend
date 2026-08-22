@@ -115,7 +115,7 @@ AI agents must also list documentation reviewed and changed in their final repor
 Run the narrowest relevant checks, then the standard Flutter suite when Flutter code changed:
 
 ```powershell
-dart format --output=none --set-exit-if-changed lib test integration_test
+dart format --output=none --set-exit-if-changed lib test
 flutter analyze --no-pub
 flutter test --no-pub --concurrency=1 --timeout 3m --exclude-tags production-config
 ```

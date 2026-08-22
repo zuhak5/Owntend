@@ -16,6 +16,8 @@ The current application version is defined only in `pubspec.yaml`. Released vers
 
 ### Fixed
 
+- Removed `integration_test` SDK dev dependency and migrated `offline_account_localization_test.dart` to unit/widget testing in `test/`, preventing `IntegrationTestPlugin` from leaking into release plugin registrants during Flutter and Shorebird builds.
+- Scoped `verify_android_release_registrants.ps1` build output scanning to `build\app` to avoid deep Shorebird toolchain cache recursion on Windows runners.
 - Kept Shorebird `--dry-run` on the Shorebird side of the `--` Flutter-argument separator in release and patch command builders, preventing validation runs from forwarding an unsupported option to `flutter build`.
 - Ordered Shorebird release and patch validation so the committed-source policy test runs before the temporary `shorebird.yaml` asset injection, while preserving that injection immediately before the protected build.
 - Pinned generated `*.g.dart` files to LF checkouts so the Windows Flutter CI runner can reproduce Drift output without false CRLF-only generated-source failures.
