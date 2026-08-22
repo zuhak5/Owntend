@@ -16,6 +16,7 @@ The current application version is defined only in `pubspec.yaml`. Released vers
 
 ### Fixed
 
+- Fixed Bundletool password flag format to use `pass:` prefix and pinned Node.js setup in the protected VersionDeck APK derivation workflow job.
 - Included R8 `mapping.txt` in the canonical Shorebird release evidence artifact upload to support downstream protected VersionDeck APK derivation and symbol packaging.
 - Removed `integration_test` SDK dev dependency and migrated `offline_account_localization_test.dart` to unit/widget testing in `test/`, preventing `IntegrationTestPlugin` from leaking into release plugin registrants during Flutter and Shorebird builds.
 - Scoped `verify_android_release_registrants.ps1` build output scanning to `build\app` to avoid deep Shorebird toolchain cache recursion on Windows runners.

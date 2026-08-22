@@ -54,8 +54,8 @@ $apksArchive = Join-Path $temporaryRoot 'universal.apks'
     --mode=universal `
     "--ks=$resolvedKeystore" `
     "--ks-key-alias=$KeyAlias" `
-    --ks-pass=env:ANDROID_APK_KEYSTORE_PASSWORD `
-    --key-pass=env:ANDROID_APK_KEY_PASSWORD `
+    "--ks-pass=pass:$env:ANDROID_APK_KEYSTORE_PASSWORD" `
+    "--key-pass=pass:$env:ANDROID_APK_KEY_PASSWORD" `
     --overwrite
 if ($LASTEXITCODE -ne 0) { throw "Pinned bundletool failed with exit code $LASTEXITCODE." }
 

@@ -16,7 +16,7 @@ const read = async (path) =>
 test('GitHub Actions use only reviewed immutable references', async () => {
   const result = await validateRepositoryActionReferences();
   assert.deepEqual(result.errors, []);
-  assert.equal(result.externalReferences, 57);
+  assert.equal(result.externalReferences, 58);
   assert.equal(result.localReferences, 0);
   assert.equal(result.files.length, 9);
 });
