@@ -169,7 +169,6 @@ jobs:
         run: |
           .\tool\configure_shorebird.ps1 -EnsurePubspecAsset
           $Parameters = @{ Flavor = "${{ inputs.flavor }}"; ReleaseVersion = "${{ inputs.release_version }}"; ReleaseBaseSha = "${{ inputs.release_base_sha }}"; ConfigPath = "config\${{ inputs.flavor }}.json" }
-          .\tool\verify_android_release_registrants.ps1 -RemoveGeneratedMain
           .\tool\invoke_shorebird_patch.ps1 @Parameters -DryRun
           if ("${{ inputs.operation }}" -eq "publish") { .\tool\invoke_shorebird_patch.ps1 @Parameters }
           .\tool\verify_android_release_registrants.ps1

@@ -206,7 +206,6 @@ jobs:
             BuildNumber = "${{ steps.metadata.outputs.build_number }}"
             ConfigPath = "config\${{ inputs.flavor }}.json"
           }
-          .\tool\verify_android_release_registrants.ps1 -RemoveGeneratedMain
           if ("${{ inputs.operation }}" -eq "validate") { .\tool\invoke_shorebird_release.ps1 @Parameters -DryRun }
           else { .\tool\invoke_shorebird_release.ps1 @Parameters }
           .\tool\verify_android_release_registrants.ps1

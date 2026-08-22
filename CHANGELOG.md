@@ -16,6 +16,7 @@ The current application version is defined only in `pubspec.yaml`. Released vers
 
 ### Fixed
 
+- Fixed missing Android `GeneratedPluginRegistrant` in Shorebird release and patch builds by removing the premature registrant deletion before the Shorebird build invocation, ensuring plugin platform channels are present at runtime.
 - Fixed Android plugin registration in minified release builds by using additive Gradle sourceSet configuration and preserving Flutter plugin reflection entry points in ProGuard rules.
 - Resolved batched build provenance attestations by matching target artifact subjects across multi-subject SLSA statements in VersionDeck APK verification tooling.
 - Fixed Bundletool password flag format to use `pass:` prefix and pinned Node.js setup in the protected VersionDeck APK derivation workflow job.
