@@ -108,6 +108,8 @@ Receives Google Mobile Ads server-side verification callbacks. It validates prov
 - If Sentry is enabled for a function, use request-scoped capture only and report only genuine server failures. Do not attach JWTs, recovery keys, claim IDs, user IDs, raw callback query strings, or webhook payload bodies.
 - Test malformed, unauthorized, replayed, expired, and partial-failure paths.
 
+The server-only cleanup, recent-session, and AdMob settlement RPCs explicitly revoke execution from `PUBLIC`, `anon`, and `authenticated`, then grant only `service_role`. This remains necessary even when the function body also checks the service-role JWT because the Data API ACL must fail closed before invocation.
+
 ## Hosted Advisor gate
 
 The protected `Audit Supabase Advisors` workflow queries both security and performance Advisors from exact current `main` and stores a sanitized report artifact. Advisor results are classified deliberately:
