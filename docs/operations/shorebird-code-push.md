@@ -153,14 +153,15 @@ First validate in a disposable clone or a clean branch:
 $env:SHOREBIRD_DEV_APP_ID = '<dev UUID>'
 $env:SHOREBIRD_STAGING_APP_ID = '<staging UUID>'
 $env:SHOREBIRD_PROD_APP_ID = '<prod UUID>'
-.\tool\configure_shorebird.ps1 -EnsurePubspecAsset
+.\tool\configure_shorebird.ps1
 .\tool\install_shorebird.ps1
-shorebird doctor
 node --test tool/shorebird.test.mjs tool/toolchain.test.mjs
 node tool/toolchain_manifest.mjs --enforce --require-shorebird
+.\tool\configure_shorebird.ps1 -EnsurePubspecAsset
+shorebird doctor
 ```
 
-Verify that the generated `shorebird.yaml` has the expected mapping and `patch_verification: strict`, and that `git status --short` shows only the expected temporary `pubspec.yaml` asset edit. Remove the generated ignored file and discard that temporary edit in the disposable clone. `shorebird doctor` and `operation=validate` do not publish a release.
+The policy tests run before the temporary `pubspec.yaml` asset injection so they can verify that source control still omits generated Shorebird configuration. Then verify that the generated `shorebird.yaml` has the expected mapping and `patch_verification: strict`, and that `git status --short` shows only the expected temporary `pubspec.yaml` asset edit. Remove the generated ignored file and discard that temporary edit in the disposable clone. `shorebird doctor` and `operation=validate` do not publish a release.
 
 The first safe CI commands are dry-runs:
 

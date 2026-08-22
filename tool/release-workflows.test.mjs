@@ -130,6 +130,11 @@ test('Shorebird release rail is dry-run by default and preserves production gate
   assert.match(workflow, /setup-gcloud@e427ad8a34f8676edf47cf7d7925499adf3eb74f # v2\.2\.1/);
   assert.match(workflow, /version: "581\.0\.0"/);
   assert.match(workflow, /invoke_shorebird_release\.ps1 @Parameters -DryRun/);
+  const releasePolicyTest = workflow.indexOf('node --test tool/shorebird.test.mjs tool/toolchain.test.mjs');
+  const releaseAssetInjection = workflow.indexOf('configure_shorebird.ps1 -EnsurePubspecAsset');
+  const releaseDryRun = workflow.indexOf('invoke_shorebird_release.ps1 @Parameters -DryRun');
+  assert.ok(releasePolicyTest >= 0 && releasePolicyTest < releaseAssetInjection);
+  assert.ok(releaseAssetInjection < releaseDryRun);
   assert.ok(workflow.lastIndexOf('verify_android_release_registrants.ps1 -RemoveGeneratedMain') < workflow.indexOf('invoke_shorebird_release.ps1 @Parameters -DryRun'));
   assert.match(workflow, /shorebird-release-\$\{\{ inputs\.flavor \}\}-\*\.json/);
   assert.match(await read('tool/invoke_shorebird_release.ps1'), /--flutter-version=\$\(\$shorebirdPin\.releaseFlutterVersion\)/);
@@ -151,6 +156,11 @@ test('Shorebird patch rail rejects unsafe diffs and publishes only to staging tr
   assert.match(workflow, /candidate must be the exact release-branch tip/);
   assert.match(workflow, /SHOREBIRD_PRODUCTION_PATCHES_ENABLED/);
   assert.match(workflow, /validate-google-backend\.yml\/runs\?head_sha=/);
+  const patchPolicyTest = workflow.indexOf('node --test tool/shorebird.test.mjs tool/toolchain.test.mjs');
+  const patchAssetInjection = workflow.indexOf('configure_shorebird.ps1 -EnsurePubspecAsset');
+  const patchDryRun = workflow.indexOf('invoke_shorebird_patch.ps1 @Parameters -DryRun');
+  assert.ok(patchPolicyTest >= 0 && patchPolicyTest < patchAssetInjection);
+  assert.ok(patchAssetInjection < patchDryRun);
   assert.ok(workflow.indexOf('invoke_shorebird_patch.ps1 @Parameters -DryRun') < workflow.indexOf('invoke_shorebird_patch.ps1 @Parameters }'));
   assert.match(patchScript, /--track=staging/);
   assert.match(patchScript, /--public-key-cmd=bash tool\/shorebird_kms_public_key\.sh/);

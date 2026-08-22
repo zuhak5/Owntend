@@ -133,7 +133,7 @@ jobs:
           }
           $Config = [ordered]@{ APP_ENV = "${{ inputs.flavor }}"; SUPABASE_URL = $env:SUPABASE_URL; SUPABASE_PUBLISHABLE_KEY = $env:SUPABASE_PUBLISHABLE_KEY; GOOGLE_WEB_CLIENT_ID = $env:GOOGLE_WEB_CLIENT_ID; SENTRY_ENABLED = -not [string]::IsNullOrWhiteSpace($env:SENTRY_DSN); SENTRY_DSN = $env:SENTRY_DSN; SENTRY_TRACES_SAMPLE_RATE = "0.0" }
           $Config | ConvertTo-Json | Set-Content -LiteralPath "config\${{ inputs.flavor }}.json" -Encoding utf8NoBOM
-          .\tool\configure_shorebird.ps1 -EnsurePubspecAsset
+          .\tool\configure_shorebird.ps1
           [IO.File]::WriteAllBytes((Join-Path $PWD "android\app\owntend-release.jks"), [Convert]::FromBase64String($env:ANDROID_KEYSTORE_BASE64))
           @("storePassword=$env:ANDROID_STORE_PASSWORD", "keyPassword=$env:ANDROID_KEY_PASSWORD", "keyAlias=$env:ANDROID_KEY_ALIAS", "storeFile=owntend-release.jks") | Set-Content -LiteralPath "android\key.properties" -Encoding utf8NoBOM
       - name: Install exact Shorebird CLI and validate dependencies
@@ -158,12 +158,16 @@ jobs:
         shell: pwsh
         env:
           SHOREBIRD_TOKEN: ${{ secrets.SHOREBIRD_TOKEN }}
+          SHOREBIRD_DEV_APP_ID: ${{ vars.SHOREBIRD_DEV_APP_ID }}
+          SHOREBIRD_STAGING_APP_ID: ${{ vars.SHOREBIRD_STAGING_APP_ID }}
+          SHOREBIRD_PROD_APP_ID: ${{ vars.SHOREBIRD_PROD_APP_ID }}
           GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
           SHOREBIRD_KMS_LOCATION: ${{ vars.SHOREBIRD_KMS_LOCATION }}
           SHOREBIRD_KMS_KEYRING: ${{ vars.SHOREBIRD_KMS_KEYRING }}
           SHOREBIRD_KMS_KEY: ${{ vars.SHOREBIRD_KMS_KEY }}
           SHOREBIRD_KMS_KEY_VERSION: ${{ vars.SHOREBIRD_KMS_KEY_VERSION }}
         run: |
+          .\tool\configure_shorebird.ps1 -EnsurePubspecAsset
           $Parameters = @{ Flavor = "${{ inputs.flavor }}"; ReleaseVersion = "${{ inputs.release_version }}"; ReleaseBaseSha = "${{ inputs.release_base_sha }}"; ConfigPath = "config\${{ inputs.flavor }}.json" }
           .\tool\verify_android_release_registrants.ps1 -RemoveGeneratedMain
           .\tool\invoke_shorebird_patch.ps1 @Parameters -DryRun

@@ -138,7 +138,7 @@ jobs:
             SENTRY_TRACES_SAMPLE_RATE = if ("${{ inputs.flavor }}" -eq "prod") { "0.05" } else { "0.0" }
           }
           $Config | ConvertTo-Json | Set-Content -LiteralPath "config\${{ inputs.flavor }}.json" -Encoding utf8NoBOM
-          .\tool\configure_shorebird.ps1 -EnsurePubspecAsset
+          .\tool\configure_shorebird.ps1
 
       - name: Restore Android release signing credentials
         shell: pwsh
@@ -190,12 +190,16 @@ jobs:
         shell: pwsh
         env:
           SHOREBIRD_TOKEN: ${{ secrets.SHOREBIRD_TOKEN }}
+          SHOREBIRD_DEV_APP_ID: ${{ vars.SHOREBIRD_DEV_APP_ID }}
+          SHOREBIRD_STAGING_APP_ID: ${{ vars.SHOREBIRD_STAGING_APP_ID }}
+          SHOREBIRD_PROD_APP_ID: ${{ vars.SHOREBIRD_PROD_APP_ID }}
           GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
           SHOREBIRD_KMS_LOCATION: ${{ vars.SHOREBIRD_KMS_LOCATION }}
           SHOREBIRD_KMS_KEYRING: ${{ vars.SHOREBIRD_KMS_KEYRING }}
           SHOREBIRD_KMS_KEY: ${{ vars.SHOREBIRD_KMS_KEY }}
           SHOREBIRD_KMS_KEY_VERSION: ${{ vars.SHOREBIRD_KMS_KEY_VERSION }}
         run: |
+          .\tool\configure_shorebird.ps1 -EnsurePubspecAsset
           $Parameters = @{
             Flavor = "${{ inputs.flavor }}"
             BuildName = "${{ steps.metadata.outputs.version_name }}"
