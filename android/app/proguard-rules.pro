@@ -23,4 +23,10 @@
 -keep class com.google.ads.mediation.** { *; }
 -keep class app.owntend.mobile.OwntendNativeAdFactory { *; }
 
+# flutter_foreground_task plugin
+-keep class com.pravera.flutter_foreground_task.** { *; }
+-dontwarn com.pravera.flutter_foreground_task.**
 
+# androidx media3 / ExoPlayer (audioplayers)
+-keep class androidx.media3.** { *; }
+-dontwarn androidx.media3.**

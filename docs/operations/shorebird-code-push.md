@@ -226,6 +226,65 @@ Exercise startup, update download, the changed behavior, offline/restart behavio
 
 Set `SHOREBIRD_PRODUCTION_PROMOTIONS_ENABLED=true` only after the staging device record is approved. Dispatch `Promote Shorebird Patch` from exact current `main` with the release version, exact patch number, and exact confirmation text:
 
+```bash
+sha=$(git rev-parse origin/main)
+gh workflow run "Shorebird Android Release" --ref main -f flavor=dev -f operation=validate -f source_sha="$sha"
+gh workflow run "Shorebird Android Release" --ref main -f flavor=staging -f operation=validate -f source_sha="$sha"
+```
+
+Review the uploaded config-free evidence, exact CLI/toolchain manifest, AAB hash, symbol files, and logs. A validation run does not publish a Shorebird release and cannot derive public VersionDeck artifacts.
+
+## Release, patch, preview, promotion, and rollback
+
+### Create the first Shorebird-enabled development APK
+
+After the safe validation passes, a local operator can create a non-published installable APK in the prepared disposable clone. Restore the non-production Android signing files and a safe `config/dev.json`, authenticate with a non-production `SHOREBIRD_TOKEN`, set the non-production GCP/KMS Variables, then run:
+
+```powershell
+shorebird release android --flavor=dev --artifact=apk --target=lib/main.dart --build-name=1.0.0 --build-number=1 --dart-define-from-file=config/dev.json --obfuscate --split-debug-info=build/shorebird-symbols/dev/base --public-key-cmd="bash tool/shorebird_kms_public_key.sh" --dry-run
+```
+
+Install the resulting dev release APK on a test device. Because this is `--dry-run`, it is Shorebird-enabled build validation but is not registered as a patchable server release. Never use a debug build to validate code push.
+
+### Publish a release
+
+`Shorebird Android Release` is the only release build rail. It always creates one canonical AAB. Production requires exact current `main`, the exact backend validation gate, the `production` approval, and `SHOREBIRD_PRODUCTION_RELEASES_ENABLED=true`. The protected downstream job derives the universal and three single-ABI VersionDeck APKs from that exact AAB using pinned Bundletool; it never recompiles Flutter.
+
+Example non-production publication after authorization:
+
+```bash
+gh workflow run "Shorebird Android Release" --ref main -f flavor=staging -f operation=publish -f source_sha="$(git rev-parse origin/main)"
+```
+
+No workflow uploads to Play, mutates Sentry, deploys VersionDeck, or creates a GitHub Release.
+
+### Publish the first staging patch
+
+1. Record the release's exact source SHA and release version, for example `1.0.0+1`.
+2. Create branch `release/1.0.0+1` from that release SHA. Commit only patch-eligible Flutter changes plus neutral tests/docs. Do not change assets, native code, dependencies, toolchain, or release configuration.
+3. Push the branch. For a production patch, run `Validate Google, Backend, and Database` on the exact candidate SHA and resolve every job before continuing. A pending hosted migration still requires its separately authorized deployment and compatibility verification; the patch workflow never mutates Supabase.
+4. Dispatch a validation:
+
+   ```bash
+   gh workflow run "Shorebird Android Patch" --ref "release/1.0.0+1" -f flavor=prod -f operation=validate -f release_version="1.0.0+1" -f release_base_sha="BASE_SHA" -f candidate_sha="CANDIDATE_SHA"
+   ```
+
+5. Review the static eligibility JSON and Shorebird dry-run. After explicit authorization, production approval, and `SHOREBIRD_PRODUCTION_PATCHES_ENABLED=true`, rerun with `operation=publish`. Publication is accepted only from the exact tip of `release/<release_version>`, and the wrapper publishes only to track `staging`; it never uses `--allow-native-diffs`, `--allow-asset-diffs`, or `--confirm`. The evidence artifact preserves both the dry-run record and the published patch number.
+
+### Verify on a physical device
+
+Use a clean device or emulator with a production release build whose exact version matches the target release. Preview the production app's staging track:
+
+```powershell
+shorebird preview --app-id=$env:SHOREBIRD_PROD_APP_ID --release-version=1.0.0+1 --track=staging
+```
+
+Exercise startup, update download, the changed behavior, offline/restart behavior, English and Arabic/RTL, and the release's critical smoke tests. Verify the installed patch on a second launch when the updater requires restart. Confirm that sanitized Sentry events, if separately enabled, use the unchanged release/dist and only `shorebird_patch_number=<integer>`; a base install uses `base`. Record device/OS, exact release, exact patch number, staging track, time, tester, and result.
+
+### Promote the exact tested patch
+
+Set `SHOREBIRD_PRODUCTION_PROMOTIONS_ENABLED=true` only after the staging device record is approved. Dispatch `Promote Shorebird Patch` from exact current `main` with the release version, exact patch number, and exact confirmation text:
+
 ```text
 PREVIEWED PATCH 1.0.0+1#1
 ```
@@ -242,9 +301,24 @@ It cannot promote `latest` or a different patch implicitly.
 
 Use the Shorebird Console for the production app, select the exact release and patch, and use the Console rollback/disable control. Record the incident and verify on a device that the patch is no longer offered. Do not substitute `patches set-track`, do not publish a counter-patch blindly, and do not use a guessed rollback CLI command. If account or Console access is unavailable, leave the production promotion kill switch false and escalate to the release owner.
 
+### Engine boot-loop protection & automatic unstaging fallback
+
+Shorebird's native engine incorporates automatic crash resilience:
+1. If an active OTA patch triggers a fatal crash during early bootstrap before the first Flutter frame renders, the native updater marks the launch as failed.
+2. Consecutive startup crashes automatically unstage the faulty patch and revert execution to the previous stable patch or base Play Store binary.
+3. Because Owntend enforces **strictly additive Drift database migrations** (SB-010), rolling back to an earlier patch or base binary never causes database incompatibility, missing column crashes, or data corruption.
+4. If an unhandled exception or network partition occurs during initialization, Owntend's `_RestoreRecoveryGate` presents emergency offline and sign-out options rather than freezing or crashing.
+
 ## Sentry and VersionDeck boundaries
 
-The runtime keeps the existing release identity `app.owntend.mobile@x.y.z+N` and dist `N`; patch identity is a bounded tag, not a new Sentry release. Release evidence retains Dart obfuscation symbols, R8 mapping, and exact-revision Shorebird engine-symbol archives. [`tool/publish_sentry_release.ps1`](../../tool/publish_sentry_release.ps1) may upload engine symbols only when Sentry mutation receives separate authorization and `-EngineSymbolsDirectory` is provided.
+The runtime keeps the existing release identity `app.owntend.mobile@x.y.z+N` and dist `N`; patch identity is a bounded tag (`shorebird_patch_number`), not a new Sentry release. Release evidence retains Dart obfuscation symbols, R8 mapping, and exact-revision Shorebird engine-symbol archives. [`tool/publish_sentry_release.ps1`](../../tool/publish_sentry_release.ps1) may upload engine symbols only when Sentry mutation receives separate authorization and `-EngineSymbolsDirectory` is provided.
+
+### Sentry Release Health & Patch Regression Alerting
+
+Sentry monitors release health tagged by `shorebird_patch_number` (`base` or patch integer):
+- **Alert Rule 1 (Patch Crash-Rate Spike)**: Triggers when the crash-free session rate for any `shorebird_patch_number` drops below 99.0% over a 15-minute evaluation window.
+- **Alert Rule 2 (Patch New Issue Spike)**: Triggers when >= 5 new unhandled events with tag `shorebird_patch_number` occur within 1 hour of patch deployment.
+- **Rollback Procedure**: When an alert fires on a newly promoted patch, operators immediately disable/rollback the patch in the Shorebird Console to return all clients safely to the previous stable patch.
 
 VersionDeck verifies the unified Shorebird release workflow provenance. Its universal and ABI APKs come from the same canonical AAB. `Verify Production APK Artifact Set` ignores validation/non-production runs, then independently checks a published production artifact set. VersionDeck remains disabled until its separate verified-publication procedure is authorized.
 

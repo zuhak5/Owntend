@@ -201,7 +201,26 @@ class _RestoreTaskHandler extends TaskHandler {
   }
 
   @override
-  Future<void> onDestroy(DateTime timestamp, bool isTimeout) async {}
+  Future<void> onDestroy(DateTime timestamp, bool isTimeout) async {
+    if (isTimeout) {
+      reportOperationFailure(
+        operation: 'restore_foreground_service_timeout',
+        error: TimeoutException('Foreground service dataSync timeout reached.'),
+        stackTrace: StackTrace.current,
+        fields: const {'execution': 'foreground_service', 'timeout': true},
+      );
+      try {
+        await enqueueRestoreRecovery();
+      } on Object catch (recoveryError, recoveryStackTrace) {
+        reportOperationFailure(
+          operation: 'restore_recovery_enqueue_failed',
+          error: recoveryError,
+          stackTrace: recoveryStackTrace,
+          fields: const {'execution': 'foreground_service', 'timeout': true},
+        );
+      }
+    }
+  }
 }
 
 Future<InitialHydrationProgress?> _readProgress() async {

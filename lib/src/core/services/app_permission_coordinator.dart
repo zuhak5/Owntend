@@ -1,13 +1,9 @@
-import 'dart:io';
-
 import 'package:drift/drift.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../database/app_database.dart';
-
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 enum AppPermissionKind { notifications, location, exactAlarms }
 
@@ -52,22 +48,8 @@ class AppPermissionCoordinator
   @override
   Future<AppPermissionState> check(AppPermissionKind kind) async {
     try {
-      if (!Platform.isAndroid && kind == AppPermissionKind.exactAlarms) {
+      if (kind == AppPermissionKind.exactAlarms) {
         return AppPermissionState.unavailable;
-      }
-      if (kind == AppPermissionKind.exactAlarms && Platform.isAndroid) {
-        try {
-          final plugin = FlutterLocalNotificationsPlugin()
-              .resolvePlatformSpecificImplementation<
-                AndroidFlutterLocalNotificationsPlugin
-              >();
-          final canExact = await plugin?.canScheduleExactNotifications();
-          if (canExact != null) {
-            return canExact
-                ? AppPermissionState.granted
-                : AppPermissionState.denied;
-          }
-        } catch (_) {}
       }
       if (kind == AppPermissionKind.location &&
           !await Geolocator.isLocationServiceEnabled()) {
@@ -81,6 +63,9 @@ class AppPermissionCoordinator
 
   @override
   Future<AppPermissionState> request(AppPermissionKind kind) async {
+    if (kind == AppPermissionKind.exactAlarms) {
+      return AppPermissionState.unavailable;
+    }
     final current = await check(kind);
     if (current == AppPermissionState.granted ||
         current == AppPermissionState.permanentlyDenied ||
@@ -91,20 +76,6 @@ class AppPermissionCoordinator
     }
     await markPrompted(kind);
     try {
-      if (kind == AppPermissionKind.exactAlarms && Platform.isAndroid) {
-        try {
-          final plugin = FlutterLocalNotificationsPlugin()
-              .resolvePlatformSpecificImplementation<
-                AndroidFlutterLocalNotificationsPlugin
-              >();
-          final granted = await plugin?.requestExactAlarmsPermission();
-          if (granted != null) {
-            return granted
-                ? AppPermissionState.granted
-                : AppPermissionState.denied;
-          }
-        } catch (_) {}
-      }
       return _mapStatus(await _permission(kind).request());
     } on MissingPluginException {
       return AppPermissionState.unavailable;
@@ -174,18 +145,7 @@ class AppPermissionCoordinator
           }
           return await openAppPermissionSettings();
         case AppPermissionKind.exactAlarms:
-          if (!Platform.isAndroid) {
-            return false;
-          }
-          final plugin = FlutterLocalNotificationsPlugin()
-              .resolvePlatformSpecificImplementation<
-                AndroidFlutterLocalNotificationsPlugin
-              >();
-          final result = await plugin?.requestExactAlarmsPermission();
-          if (result != null) {
-            return true;
-          }
-          return await openAppPermissionSettings();
+          return false;
       }
     } on MissingPluginException {
       return false;

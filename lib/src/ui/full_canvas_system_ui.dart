@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -23,7 +21,6 @@ class StandardSystemUi extends StatefulWidget {
 
 class _StandardSystemUiState extends State<StandardSystemUi>
     with WidgetsBindingObserver {
-  static const _platform = MethodChannel('owntend/system_ui');
   static const _overlayStyle = SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.dark,
@@ -55,21 +52,7 @@ class _StandardSystemUiState extends State<StandardSystemUi>
 
   void _restoreStandardUi() {
     SystemChrome.setSystemUIOverlayStyle(_overlayStyle);
-    unawaited(_setNativeFullCanvas(enabled: false));
-    unawaited(
-      SystemChrome.setEnabledSystemUIMode(
-        SystemUiMode.manual,
-        overlays: SystemUiOverlay.values,
-      ),
-    );
-  }
-
-  Future<void> _setNativeFullCanvas({required bool enabled}) async {
-    try {
-      await _platform.invokeMethod<void>('setFullCanvas', enabled);
-    } on MissingPluginException {
-      // Widget tests and non-Android targets use SystemChrome as the fallback.
-    }
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   }
 
   @override
@@ -78,7 +61,6 @@ class _StandardSystemUiState extends State<StandardSystemUi>
 
 class _FullCanvasSystemUiState extends State<FullCanvasSystemUi>
     with WidgetsBindingObserver {
-  static const _platform = MethodChannel('owntend/system_ui');
   static const _overlayStyle = SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.dark,
@@ -87,20 +69,12 @@ class _FullCanvasSystemUiState extends State<FullCanvasSystemUi>
     systemNavigationBarDividerColor: Colors.transparent,
     systemNavigationBarIconBrightness: Brightness.dark,
   );
-  Timer? _reapplyTimer;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _applyFullCanvasUi();
-    _reapplyTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (timer.tick > 45) {
-        timer.cancel();
-        return;
-      }
-      _applyFullCanvasUi();
-    });
   }
 
   @override
@@ -118,34 +92,16 @@ class _FullCanvasSystemUiState extends State<FullCanvasSystemUi>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _reapplyTimer?.cancel();
-    unawaited(_setNativeFullCanvas(enabled: false));
-    unawaited(
-      SystemChrome.setEnabledSystemUIMode(
-        SystemUiMode.manual,
-        overlays: SystemUiOverlay.values,
-      ),
-    );
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
   }
 
   void _applyFullCanvasUi() {
     SystemChrome.setSystemUIOverlayStyle(_overlayStyle);
-    unawaited(_setNativeFullCanvas(enabled: true));
-    unawaited(
-      SystemChrome.setEnabledSystemUIMode(
-        SystemUiMode.manual,
-        overlays: const [],
-      ),
+    SystemChrome.setEnabledSystemUIMode(
+      SystemUiMode.immersiveSticky,
+      overlays: const [],
     );
-  }
-
-  Future<void> _setNativeFullCanvas({required bool enabled}) async {
-    try {
-      await _platform.invokeMethod<void>('setFullCanvas', enabled);
-    } on MissingPluginException {
-      // Widget tests and non-Android targets use SystemChrome as the fallback.
-    }
   }
 
   @override

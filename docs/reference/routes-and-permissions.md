@@ -67,7 +67,6 @@ The current main manifest declares:
 | `INTERNET` | Supabase, authentication, ads, weather/network features, Sentry | Keep network payloads privacy-safe |
 | `ACCESS_COARSE_LOCATION` | Optional current-location selection for a weather area | Request in context; preserve manual selection; no precise/background expansion |
 | `POST_NOTIFICATIONS` | Local maintenance reminders on supported Android versions | Explain value and handle denial |
-| `SCHEDULE_EXACT_ALARM` | Optional exact timing for reminders | Ask only from exact-timing context; retain inexact fallback |
 | `RECEIVE_BOOT_COMPLETED` | Restore scheduled reminders after reboot | Keep receiver work bounded |
 | `WAKE_LOCK` | Reliable bounded notification/background work | Avoid long-running holds |
 | `VIBRATE` | Notification behavior | Respect user/channel settings |

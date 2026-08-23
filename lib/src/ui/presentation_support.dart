@@ -83,3 +83,4 @@ export 'full_canvas_system_ui.dart';
 export 'local_media_file.dart';
 export 'motion.dart';
 export 'presentation_formatters.dart';
+export 'widgets/remote_or_bundled_image.dart';

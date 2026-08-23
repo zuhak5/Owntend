@@ -141,12 +141,10 @@ Future<T> runWithNativeAdsSuspended<T>(
   }
 }
 
-const _systemUiChannel = MethodChannel('owntend/system_ui');
-
 Future<String?> resolveSystemRewardTimeZone(String? fallback) async {
   if (!_supportsMobileAds || !Platform.isAndroid) return fallback;
   try {
-    final value = await _systemUiChannel.invokeMethod<String>('getTimeZoneId');
+    final value = await NativeCapabilities().getTimeZoneId();
     final timeZone = value?.trim();
     return timeZone == null || timeZone.isEmpty ? fallback : timeZone;
   } on Object catch (error) {

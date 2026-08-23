@@ -277,8 +277,7 @@ class InboxNotifications extends Table {
         ),
       )();
   TextColumn get messageArgs => text().withDefault(const Constant('{}'))();
-  TextColumn get dedupeKey =>
-      text().withLength(max: 128).withDefault(const Constant(''))();
+  TextColumn get dedupeKey => text().withLength(max: 128).nullable()();
   DateTimeColumn get readAt => dateTime().nullable()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
@@ -451,8 +450,13 @@ class SyncAccount extends Table {
   TextColumn get deviceId => text()();
   TextColumn get boundUserId => text().nullable()();
   BoolColumn get enabled => boolean().withDefault(const Constant(false))();
-  TextColumn get migrationState =>
-      text().withDefault(const Constant('localOnly'))();
+  TextColumn get migrationState => text()
+      .withDefault(const Constant('localOnly'))
+      .check(
+        const CustomExpression<bool>(
+          "migration_state IN ('localOnly', 'binding', 'active', 'restorePaused', 'migrating', 'migrated', 'failed', 'blocked')",
+        ),
+      )();
   DateTimeColumn get lastSyncedAt => dateTime().nullable()();
   DateTimeColumn get lastSyncAttemptAt => dateTime().nullable()();
   DateTimeColumn get lastSyncFailureAt => dateTime().nullable()();
@@ -535,12 +539,12 @@ class AppDatabase extends _$AppDatabase {
       name: databaseName,
       native: const DriftNativeOptions(
         shareAcrossIsolates: true,
-        setup: _configureNativeSqlite,
+        setup: configureNativeSqlite,
       ),
     );
   }
 
-  static void _configureNativeSqlite(CommonDatabase db) {
+  static void configureNativeSqlite(CommonDatabase db) {
     db.execute('PRAGMA busy_timeout = $_sqliteBusyTimeoutMs');
     db.execute('PRAGMA journal_mode = WAL');
     db.execute('PRAGMA synchronous = NORMAL');
@@ -800,9 +804,8 @@ END
       ?extraWhen,
     ].join(' AND ');
     final payload = payloadExpression ?? 'NULL';
-    await customStatement('DROP TRIGGER IF EXISTS $triggerName');
     await customStatement('''
-CREATE TRIGGER $triggerName
+CREATE TRIGGER IF NOT EXISTS $triggerName
 AFTER $event ON $table
 WHEN $conditions
 BEGIN

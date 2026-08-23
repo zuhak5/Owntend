@@ -62,8 +62,12 @@ assertContract(
   'AdMob application metadata is missing.',
 );
 assertContract(
-  /ca-app-pub-5274007212820203~7167645746/.test(manifest),
-  'The production Android manifest must use the production AdMob app ID.',
+  /\$\{admobAppId\}/.test(manifest),
+  'The source Android manifest must use the admobAppId placeholder.',
+);
+assertContract(
+  /ca-app-pub-5274007212820203~7167645746/.test(appGradle),
+  'The production Gradle configuration must declare the production AdMob app ID.',
 );
 assertContract(
   (manifest.match(/com\.google\.android\.gms\.ads\.APPLICATION_ID/g) ?? [])
@@ -80,7 +84,7 @@ assertContract(
   'Background location is forbidden.',
 );
 assertContract(/targetSdk\s*=\s*36/.test(appGradle), 'targetSdk must remain API 36.');
-assertContract(/compileSdk\s*=\s*37/.test(appGradle), 'compileSdk must remain API 37.');
+assertContract(/compileSdk\s*=\s*36/.test(appGradle), 'compileSdk must remain API 36.');
 
 const gradleSources = `${appGradle}\n${settingsGradle}`;
 assertContract(

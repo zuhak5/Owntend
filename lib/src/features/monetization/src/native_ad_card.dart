@@ -1,13 +1,24 @@
 part of '../monetization.dart';
 
+enum NativeAdVariant {
+  standard(112),
+  compact(64),
+  card(200);
+
+  const NativeAdVariant(this.height);
+  final double height;
+}
+
 class HkNativeAdCard extends ConsumerStatefulWidget {
   const HkNativeAdCard({
     required this.placement,
+    this.variant = NativeAdVariant.standard,
     this.enabledOverride,
     super.key,
   });
 
   final String placement;
+  final NativeAdVariant variant;
   final bool? enabledOverride;
 
   @override
@@ -50,6 +61,7 @@ class _HkNativeAdCardState extends ConsumerState<HkNativeAdCard> {
   void didUpdateWidget(covariant HkNativeAdCard oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.placement != widget.placement ||
+        oldWidget.variant != widget.variant ||
         oldWidget.enabledOverride != widget.enabledOverride) {
       _deactivate();
     }
@@ -71,13 +83,14 @@ class _HkNativeAdCardState extends ConsumerState<HkNativeAdCard> {
   Widget build(BuildContext context) {
     return HkNativeAdSlotFrame(
       collapsed: !_enabled || _failed,
+      height: widget.variant.height,
       bottomSpacing: HkSpacing.sm,
       child: _displayLease != null
           ? ClipRRect(
               borderRadius: BorderRadius.circular(18),
               child: AdWidget(ad: _displayLease!.value),
             )
-          : const HkNativeAdLoadingSkeleton(),
+          : HkNativeAdLoadingSkeleton(variant: widget.variant),
     );
   }
 
@@ -172,15 +185,35 @@ class _HkNativeAdCardState extends ConsumerState<HkNativeAdCard> {
     final requestGeneration = ++_requestGeneration;
     late final NativeAd request;
     late final AdLease<NativeAd> lease;
+
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final nativeCapabilities = ref.read(nativeCapabilitiesProvider);
+    final capabilities = await nativeCapabilities.getInfo();
+    if (!mounted) return;
+    final supportsV2 =
+        capabilities.supports('nativeAds', minVersion: 2) ||
+        capabilities.shellVersion >= 2;
+
+    final customOptions = supportsV2
+        ? <String, Object>{
+            'schemaVersion': 2,
+            'layoutVariant': widget.variant.name,
+            'cornerRadiusDp': 16.0,
+            'isDark': isDark,
+            'placement': widget.placement,
+            ...palette,
+          }
+        : <String, Object>{
+            'schemaVersion': 1,
+            'isDark': isDark,
+            'placement': widget.placement,
+            ...palette,
+          };
+
     request = NativeAd(
       adUnitId: ads.units.native(widget.placement),
       factoryId: _nativeFactoryId,
-      customOptions: {
-        'schemaVersion': 1,
-        'isDark': Theme.of(context).brightness == Brightness.dark,
-        'placement': widget.placement,
-        ...palette,
-      },
+      customOptions: customOptions,
       request: const AdRequest(),
       listener: NativeAdListener(
         onAdLoaded: (loadedAd) {
@@ -415,12 +448,20 @@ class _HkNativeAdCardState extends ConsumerState<HkNativeAdCard> {
 }
 
 class HkNativeAdLoadingSkeleton extends StatelessWidget {
-  const HkNativeAdLoadingSkeleton({super.key});
+  const HkNativeAdLoadingSkeleton({
+    this.variant = NativeAdVariant.standard,
+    super.key,
+  });
+
+  final NativeAdVariant variant;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final placeholder = scheme.onSurfaceVariant.withValues(alpha: 0.14);
+    final isCompact = variant == NativeAdVariant.compact;
+    final isCard = variant == NativeAdVariant.card;
+
     return ExcludeSemantics(
       child: DecoratedBox(
         key: const ValueKey('native-ad-loading-skeleton'),
@@ -430,56 +471,109 @@ class HkNativeAdLoadingSkeleton extends StatelessWidget {
           border: Border.all(color: scheme.outlineVariant),
         ),
         child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              _NativeAdSkeletonBlock(
-                width: 64,
-                height: 64,
-                color: placeholder,
-                radius: 12,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
+          padding: EdgeInsets.all(isCompact ? 10 : 16),
+          child: isCard
+              ? Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _NativeAdSkeletonBlock(
-                      width: 132,
-                      height: 12,
-                      color: placeholder,
-                    ),
-                    const SizedBox(height: 8),
-                    _NativeAdSkeletonBlock(
-                      width: double.infinity,
-                      height: 8,
-                      color: placeholder,
-                    ),
-                    const SizedBox(height: 6),
                     Row(
                       children: [
-                        Expanded(
-                          child: _NativeAdSkeletonBlock(
-                            width: double.infinity,
-                            height: 8,
-                            color: placeholder,
-                          ),
-                        ),
-                        const SizedBox(width: 16),
                         _NativeAdSkeletonBlock(
-                          width: 82,
-                          height: 28,
+                          width: 48,
+                          height: 48,
                           color: placeholder,
-                          radius: 8,
+                          radius: 10,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _NativeAdSkeletonBlock(
+                                width: 120,
+                                height: 12,
+                                color: placeholder,
+                              ),
+                              const SizedBox(height: 6),
+                              _NativeAdSkeletonBlock(
+                                width: 80,
+                                height: 10,
+                                color: placeholder,
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
+                    const SizedBox(height: 12),
+                    Expanded(
+                      child: _NativeAdSkeletonBlock(
+                        width: double.infinity,
+                        height: double.infinity,
+                        color: placeholder,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    _NativeAdSkeletonBlock(
+                      width: double.infinity,
+                      height: 38,
+                      color: placeholder,
+                      radius: 8,
+                    ),
+                  ],
+                )
+              : Row(
+                  children: [
+                    _NativeAdSkeletonBlock(
+                      width: isCompact ? 44 : 64,
+                      height: isCompact ? 44 : 64,
+                      color: placeholder,
+                      radius: isCompact ? 8 : 12,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _NativeAdSkeletonBlock(
+                            width: isCompact ? 100 : 132,
+                            height: 12,
+                            color: placeholder,
+                          ),
+                          if (!isCompact) ...[
+                            const SizedBox(height: 8),
+                            _NativeAdSkeletonBlock(
+                              width: double.infinity,
+                              height: 8,
+                              color: placeholder,
+                            ),
+                          ],
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              if (!isCompact)
+                                Expanded(
+                                  child: _NativeAdSkeletonBlock(
+                                    width: double.infinity,
+                                    height: 8,
+                                    color: placeholder,
+                                  ),
+                                ),
+                              const Spacer(),
+                              _NativeAdSkeletonBlock(
+                                width: isCompact ? 64 : 82,
+                                height: isCompact ? 24 : 28,
+                                color: placeholder,
+                                radius: 8,
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
-              ),
-            ],
-          ),
         ),
       ),
     );
@@ -514,12 +608,14 @@ class HkNativeAdSlotFrame extends StatelessWidget {
   const HkNativeAdSlotFrame({
     required this.collapsed,
     required this.child,
+    this.height = 112,
     this.bottomSpacing = 0,
     super.key,
   });
 
   final bool collapsed;
   final Widget child;
+  final double height;
   final double bottomSpacing;
 
   @override
@@ -527,7 +623,7 @@ class HkNativeAdSlotFrame extends StatelessWidget {
     return AnimatedSize(
       duration: const Duration(milliseconds: 180),
       child: SizedBox(
-        height: collapsed ? 0 : 112 + bottomSpacing,
+        height: collapsed ? 0 : height + bottomSpacing,
         width: double.infinity,
         child: collapsed
             ? null

@@ -3,6 +3,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tz;
@@ -221,6 +222,22 @@ Future<bool> runCloudSyncInBackground({
   }
 }
 
+class NotificationChannelRegistry {
+  const NotificationChannelRegistry._();
+
+  static const dueChannelId = 'owntend_due';
+  static const overdueChannelId = 'owntend_overdue';
+  static const criticalChannelId = 'owntend_critical';
+  static const digestChannelId = 'owntend_digest';
+
+  static const allChannelIds = [
+    dueChannelId,
+    overdueChannelId,
+    criticalChannelId,
+    digestChannelId,
+  ];
+}
+
 class OwntendNotificationScheduler
     implements NotificationScheduler, NotificationBackgroundRegistration {
   // Public parameter names are clearer for callers while the stored fields stay private.
@@ -259,10 +276,11 @@ class OwntendNotificationScheduler
   Future<void>? _refreshInFlight;
   bool _refreshRequestedWhileInFlight = false;
 
-  static const _dueChannelId = 'owntend_due';
-  static const _overdueChannelId = 'owntend_overdue';
-  static const _criticalChannelId = 'owntend_critical';
-  static const _digestChannelId = 'owntend_digest';
+  static const _dueChannelId = NotificationChannelRegistry.dueChannelId;
+  static const _overdueChannelId = NotificationChannelRegistry.overdueChannelId;
+  static const _criticalChannelId =
+      NotificationChannelRegistry.criticalChannelId;
+  static const _digestChannelId = NotificationChannelRegistry.digestChannelId;
   static const _maintenanceGroupKey = 'owntend_maintenance';
   static const _maintenanceIdBase = 10000;
   static const _snoozeIdBase = 500000000;
@@ -375,11 +393,9 @@ class OwntendNotificationScheduler
         >();
     final notificationsEnabled =
         await android?.areNotificationsEnabled() ?? true;
-    final canScheduleExact =
-        await android?.canScheduleExactNotifications() ?? true;
     return NotificationPermissionState(
       notificationsEnabled: notificationsEnabled,
-      canScheduleExact: canScheduleExact,
+      canScheduleExact: false,
     );
   }
 
@@ -751,7 +767,7 @@ class OwntendNotificationScheduler
     );
     return _DesiredReminder(
       snapshot,
-      () => _plugin.zonedSchedule(
+      () => _safeZonedSchedule(
         id: _digestNotificationId,
         title: title,
         body: visibleBody,
@@ -887,7 +903,7 @@ class OwntendNotificationScheduler
     final body = preferences.privacyMode
         ? l10n.openOwntendToViewThisReminder
         : l10n.notificationTaskBody;
-    await _plugin.zonedSchedule(
+    await _safeZonedSchedule(
       id: _stableNotificationId(
         '${snoozed ? 'snooze' : 'task'}:${task.plan.id}',
         snoozed ? _snoozeIdBase : _maintenanceIdBase,
@@ -920,6 +936,43 @@ class OwntendNotificationScheduler
       androidScheduleMode: scheduleMode,
       payload: _taskRoute(task.plan.id),
     );
+  }
+
+  Future<void> _safeZonedSchedule({
+    required int id,
+    required String? title,
+    required String? body,
+    required tz.TZDateTime scheduledDate,
+    required NotificationDetails notificationDetails,
+    required AndroidScheduleMode androidScheduleMode,
+    String? payload,
+  }) async {
+    try {
+      await _plugin.zonedSchedule(
+        id: id,
+        title: title,
+        body: body,
+        scheduledDate: scheduledDate,
+        notificationDetails: notificationDetails,
+        androidScheduleMode: androidScheduleMode,
+        payload: payload,
+      );
+    } on PlatformException catch (error) {
+      if (androidScheduleMode != AndroidScheduleMode.inexactAllowWhileIdle) {
+        AppLogger.warning('exact_alarm_fallback_to_inexact', error: error);
+        await _plugin.zonedSchedule(
+          id: id,
+          title: title,
+          body: body,
+          scheduledDate: scheduledDate,
+          notificationDetails: notificationDetails,
+          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+          payload: payload,
+        );
+        return;
+      }
+      rethrow;
+    }
   }
 
   @override
@@ -1127,13 +1180,7 @@ class OwntendNotificationScheduler
   Future<AndroidScheduleMode> _taskScheduleMode(
     NotificationPreferences preferences,
   ) async {
-    if (!preferences.preferExactReminders) {
-      return AndroidScheduleMode.inexactAllowWhileIdle;
-    }
-    final state = await permissionState();
-    return state.canScheduleExact
-        ? AndroidScheduleMode.exactAllowWhileIdle
-        : AndroidScheduleMode.inexactAllowWhileIdle;
+    return AndroidScheduleMode.inexactAllowWhileIdle;
   }
 }
 

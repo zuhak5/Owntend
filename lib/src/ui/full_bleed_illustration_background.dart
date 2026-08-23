@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 /// Paints a softly feathered illustration behind full-screen foreground
@@ -7,6 +9,7 @@ class FullBleedIllustrationBackground extends StatelessWidget {
     required this.backgroundGradient,
     required this.child,
     this.illustrationAsset,
+    this.cachedRemoteAssetPath,
     this.illustration,
     this.alignment = Alignment.center,
     this.fit = BoxFit.contain,
@@ -30,6 +33,7 @@ class FullBleedIllustrationBackground extends StatelessWidget {
        assert(rightFade >= 0 && rightFade <= 0.5);
 
   final String? illustrationAsset;
+  final String? cachedRemoteAssetPath;
   final Widget? illustration;
   final AlignmentGeometry alignment;
   final BoxFit fit;
@@ -91,6 +95,34 @@ class FullBleedIllustrationBackground extends StatelessWidget {
   }
 
   Widget _buildArtwork() {
+    if (cachedRemoteAssetPath != null && cachedRemoteAssetPath!.isNotEmpty) {
+      final file = File(cachedRemoteAssetPath!);
+      if (file.existsSync()) {
+        return Image.file(
+          file,
+          fit: fit,
+          alignment: alignment,
+          filterQuality: FilterQuality.high,
+          gaplessPlayback: true,
+          semanticLabel: semanticLabel,
+          excludeFromSemantics: excludeFromSemantics || semanticLabel == null,
+          errorBuilder: (context, error, stackTrace) =>
+              illustrationAsset != null
+              ? Image.asset(
+                  illustrationAsset!,
+                  fit: fit,
+                  alignment: alignment,
+                  filterQuality: FilterQuality.high,
+                  gaplessPlayback: true,
+                  semanticLabel: semanticLabel,
+                  excludeFromSemantics:
+                      excludeFromSemantics || semanticLabel == null,
+                )
+              : const SizedBox.shrink(),
+        );
+      }
+    }
+
     Widget artwork;
     if (illustrationAsset case final asset?) {
       artwork = Image.asset(

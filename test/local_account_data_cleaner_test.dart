@@ -306,6 +306,25 @@ void main() {
       expect(await marker.exists(), isFalse);
     },
   );
+
+  test('strictly preserves Shorebird engine sandbox and patch cache directories during cleanup', () async {
+    await _seedBoundAccountData(database, store, 'user-1');
+    await _writePrivateFile(documents, 'photos/item/photo.jpg');
+    final patchLib = await _writePrivateFile(
+      documents,
+      'shorebird/patches/patch_1.vmcode',
+    );
+    final engineCache = await _writePrivateFile(
+      cache,
+      'code_push/engine_cache.bin',
+    );
+
+    await cleaner.clearAfterCloudDeletion('user-1');
+
+    expect(await Directory(p.join(documents.path, 'photos')).exists(), isFalse);
+    expect(await patchLib.exists(), isTrue);
+    expect(await engineCache.exists(), isTrue);
+  });
 }
 
 Future<void> _seedBoundAccountData(

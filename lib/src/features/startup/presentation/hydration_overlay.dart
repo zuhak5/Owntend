@@ -617,13 +617,11 @@ class _HydrationHero extends StatelessWidget {
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: animation,
-      child: Image.asset(
-        'assets/illustrations/owntend-restore-hero-target.png',
+      child: const RemoteOrBundledImage(
+        assetPath: 'assets/illustrations/owntend-restore-hero-target.png',
         fit: BoxFit.contain,
         alignment: Alignment.center,
         filterQuality: FilterQuality.high,
-        gaplessPlayback: true,
-        excludeFromSemantics: true,
       ),
       builder: (context, child) {
         final phase = animation.value * math.pi * 2;

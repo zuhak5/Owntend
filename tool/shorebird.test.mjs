@@ -79,3 +79,44 @@ test('runtime patch attribution is privacy-safe and startup-safe', async () => {
   assert.match(scope, /shorebird_patch_number/);
   assert.match(scrubber, /shorebird_patch_number/);
 });
+
+test('patch eligibility classifier categorizes neutral-only diffs with clear message', () => {
+  const neutralPaths = ['docs/operations/note.md', 'supabase/tests/db_test.sql', 'tool/validate.mjs'];
+  const classified = neutralPaths.map(classifyPatchPath);
+  assert.ok(classified.every((entry) => entry.status === 'neutral'));
+});
+
+test('verifyShorebirdPatchEvidence validates correct evidence and flags invalid fields', async () => {
+  const { verifyShorebirdPatchEvidence, SHOREBIRD_PATCH_EVIDENCE_SCHEMA_VERSION } = await import(
+    './verify_shorebird_patch_evidence.mjs'
+  );
+
+  const validEvidence = {
+    schemaVersion: SHOREBIRD_PATCH_EVIDENCE_SCHEMA_VERSION,
+    releaseVersion: '1.0.0+4',
+    patchNumber: 1,
+    flavor: 'prod',
+    track: 'staging',
+    candidateSha: '0123456789abcdef0123456789abcdef01234567',
+    releaseBaseSha: 'abcdef0123456789abcdef0123456789abcdef01',
+    sentrySymbolsUploaded: true,
+    timestamp: new Date().toISOString(),
+  };
+
+  const validResult = verifyShorebirdPatchEvidence(validEvidence);
+  assert.equal(validResult.isValid, true);
+  assert.equal(validResult.issues.length, 0);
+
+  const invalidEvidence = {
+    ...validEvidence,
+    releaseVersion: 'invalid-semver',
+    patchNumber: -1,
+    flavor: 'invalid-flavor',
+    candidateSha: 'short-sha',
+    sentrySymbolsUploaded: false,
+  };
+
+  const invalidResult = verifyShorebirdPatchEvidence(invalidEvidence, { requireSentrySymbols: true });
+  assert.equal(invalidResult.isValid, false);
+  assert.ok(invalidResult.issues.length >= 4);
+});

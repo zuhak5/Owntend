@@ -20,8 +20,8 @@ class OwntendNativeAdFactory(
         nativeAd: NativeAd,
         customOptions: MutableMap<String, Any>?,
     ): NativeAdView {
-        val view = LayoutInflater.from(context)
-            .inflate(R.layout.owntend_native_ad, null) as NativeAdView
+        val layoutRes = resolveLayoutResource(customOptions)
+        val view = LayoutInflater.from(context).inflate(layoutRes, null) as NativeAdView
         val icon = view.findViewById<ImageView>(R.id.owntend_ad_icon)
         val headline = view.findViewById<TextView>(R.id.owntend_ad_headline)
         val body = view.findViewById<TextView>(R.id.owntend_ad_body)
@@ -38,12 +38,14 @@ class OwntendNativeAdFactory(
         view.callToActionView = callToAction
         view.adChoicesView = adChoices
 
-        // Validate a complete palette before mutating the inflated view. An
-        // unknown or malformed schema falls back as one unit, so app-owned
-        // chrome cannot mix colors from different theme states.
+        val cornerRadiusDp =
+            ((customOptions?.get("cornerRadiusDp") as? Number)?.toFloat() ?: 16f).coerceIn(0f, 28f)
+
+        // Validate palette from custom options (schemaVersion 1 or 2), fallback to XML theme resources.
         val palette =
             NativeAdPalette.fromOptions(customOptions)
                 ?: NativeAdPalette.fromResources(context)
+
         applyPalette(
             view = view,
             headline = headline,
@@ -53,58 +55,72 @@ class OwntendNativeAdFactory(
             adBadge = adBadge,
             callToAction = callToAction,
             palette = palette,
+            cornerRadiusDp = cornerRadiusDp,
         )
 
-        headline.text = nativeAd.headline.orEmpty()
-        body.bindOptional(nativeAd.body)
-        advertiser.bindOptional(nativeAd.advertiser)
-        callToAction.bindOptional(nativeAd.callToAction)
+        headline?.text = nativeAd.headline.orEmpty()
+        body?.bindOptional(nativeAd.body)
+        advertiser?.bindOptional(nativeAd.advertiser)
+        callToAction?.bindOptional(nativeAd.callToAction)
+
         val drawable = nativeAd.icon?.drawable
-        if (drawable == null) {
-            icon.setImageDrawable(null)
-            icon.visibility = View.GONE
-        } else {
-            icon.setImageDrawable(drawable)
-            icon.visibility = View.VISIBLE
+        if (icon != null) {
+            if (drawable == null) {
+                icon.setImageDrawable(null)
+                icon.visibility = View.GONE
+            } else {
+                icon.setImageDrawable(drawable)
+                icon.visibility = View.VISIBLE
+            }
         }
 
         view.setNativeAd(nativeAd)
         return view
     }
 
+    private fun resolveLayoutResource(options: Map<String, Any>?): Int {
+        val variant = options?.get("layoutVariant") as? String
+        return when (variant?.lowercase()) {
+            "compact" -> R.layout.owntend_native_ad_compact
+            "card" -> R.layout.owntend_native_ad_card
+            else -> R.layout.owntend_native_ad
+        }
+    }
+
     private fun applyPalette(
         view: NativeAdView,
-        headline: TextView,
-        body: TextView,
-        advertiser: TextView,
-        sponsored: TextView,
-        adBadge: TextView,
-        callToAction: TextView,
+        headline: TextView?,
+        body: TextView?,
+        advertiser: TextView?,
+        sponsored: TextView?,
+        adBadge: TextView?,
+        callToAction: TextView?,
         palette: NativeAdPalette,
+        cornerRadiusDp: Float,
     ) {
         view.background =
             roundedDrawable(
                 fillColor = palette.backgroundColor,
                 strokeColor = palette.borderColor,
-                cornerRadiusDp = 16f,
+                cornerRadiusDp = cornerRadiusDp,
             )
-        headline.setTextColor(palette.headlineColor)
-        body.setTextColor(palette.bodyColor)
-        advertiser.setTextColor(palette.advertiserColor)
-        sponsored.setTextColor(palette.sponsoredColor)
-        adBadge.setTextColor(palette.adBadgeTextColor)
-        adBadge.background =
+        headline?.setTextColor(palette.headlineColor)
+        body?.setTextColor(palette.bodyColor)
+        advertiser?.setTextColor(palette.advertiserColor)
+        sponsored?.setTextColor(palette.sponsoredColor)
+        adBadge?.setTextColor(palette.adBadgeTextColor)
+        adBadge?.background =
             roundedDrawable(
                 fillColor = palette.adBadgeBackgroundColor,
                 strokeColor = palette.adBadgeTextColor,
-                cornerRadiusDp = 4f,
+                cornerRadiusDp = (cornerRadiusDp / 4f).coerceIn(2f, 8f),
             )
-        callToAction.setTextColor(palette.callToActionTextColor)
-        callToAction.background =
+        callToAction?.setTextColor(palette.callToActionTextColor)
+        callToAction?.background =
             roundedDrawable(
                 fillColor = palette.callToActionBackgroundColor,
                 strokeColor = palette.callToActionBackgroundColor,
-                cornerRadiusDp = 8f,
+                cornerRadiusDp = (cornerRadiusDp / 2f).coerceIn(4f, 14f),
             )
     }
 
@@ -135,17 +151,16 @@ class OwntendNativeAdFactory(
         val callToActionTextColor: Int,
     ) {
         companion object {
-            private const val SCHEMA_VERSION = 1
             private val colorPattern = Regex("^#[0-9A-Fa-f]{6}$")
 
             fun fromOptions(options: Map<String, Any>?): NativeAdPalette? {
-                val schemaVersion = options?.get("schemaVersion") as? Number
-                if (schemaVersion?.toDouble() != SCHEMA_VERSION.toDouble()) {
+                val schemaVersion = (options?.get("schemaVersion") as? Number)?.toInt() ?: 0
+                if (schemaVersion != 1 && schemaVersion != 2) {
                     return null
                 }
 
                 fun color(key: String): Int? {
-                    val encoded = options[key] as? String ?: return null
+                    val encoded = options?.get(key) as? String ?: return null
                     if (!colorPattern.matches(encoded)) return null
                     return try {
                         Color.parseColor(encoded)

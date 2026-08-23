@@ -1,10 +1,6 @@
 package app.owntend.mobile
 
-import android.graphics.Color
-import android.os.Build
 import android.os.Bundle
-import android.view.View
-import android.view.WindowManager
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -17,9 +13,7 @@ class MainActivity : FlutterActivity() {
     private var fullCanvasEnabled = true
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            WindowCompat.setDecorFitsSystemWindows(window, false)
-        }
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         super.onCreate(savedInstanceState)
         applySystemUiMode()
     }
@@ -37,6 +31,27 @@ class MainActivity : FlutterActivity() {
         }
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
+            "owntend/capabilities",
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "getCapabilities" -> {
+                    result.success(
+                        mapOf(
+                            "shellVersion" to 2,
+                            "capabilities" to mapOf(
+                                "systemUi" to 2,
+                                "nativeAds" to 2,
+                                "platformEnv" to 1,
+                            ),
+                        ),
+                    )
+                }
+                "getTimeZoneId" -> result.success(java.util.TimeZone.getDefault().id)
+                else -> result.notImplemented()
+            }
+        }
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
             "owntend/system_ui",
         ).setMethodCallHandler { call, result ->
             when (call.method) {
@@ -45,7 +60,6 @@ class MainActivity : FlutterActivity() {
                     applySystemUiMode()
                     result.success(null)
                 }
-                "getTimeZoneId" -> result.success(java.util.TimeZone.getDefault().id)
                 else -> result.notImplemented()
             }
         }
@@ -79,61 +93,22 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun hideSystemBars() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            WindowCompat.setDecorFitsSystemWindows(window, false)
-            WindowCompat.getInsetsController(window, window.decorView).apply {
-                hide(WindowInsetsCompat.Type.systemBars())
-                systemBarsBehavior =
-                    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-                isAppearanceLightStatusBars = true
-                isAppearanceLightNavigationBars = true
-            }
-            return
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            hide(WindowInsetsCompat.Type.systemBars())
+            systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            isAppearanceLightStatusBars = true
+            isAppearanceLightNavigationBars = true
         }
-
-        var flags =
-            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
-                View.SYSTEM_UI_FLAG_FULLSCREEN or
-                View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
-                View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
-                View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
-                View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            flags = flags or View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            flags = flags or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
-        }
-        // FLAG_FULLSCREEN disables SOFT_INPUT_ADJUST_RESIZE on pre-Android 11.
-        // The legacy visibility flag still hides the status bar without breaking
-        // Flutter's IME hit-test coordinates.
-        window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
-        @Suppress("DEPRECATION")
-        window.decorView.systemUiVisibility = flags
-        window.statusBarColor = Color.TRANSPARENT
-        window.navigationBarColor = Color.TRANSPARENT
     }
 
     private fun showSystemBars() {
-        window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            WindowCompat.setDecorFitsSystemWindows(window, true)
-            WindowCompat.getInsetsController(window, window.decorView).apply {
-                show(WindowInsetsCompat.Type.systemBars())
-                isAppearanceLightStatusBars = true
-                isAppearanceLightNavigationBars = true
-            }
-            return
+        WindowCompat.setDecorFitsSystemWindows(window, true)
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            show(WindowInsetsCompat.Type.systemBars())
+            isAppearanceLightStatusBars = true
+            isAppearanceLightNavigationBars = true
         }
-
-        var flags = View.SYSTEM_UI_FLAG_VISIBLE
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            flags = flags or View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            flags = flags or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
-        }
-        @Suppress("DEPRECATION")
-        window.decorView.systemUiVisibility = flags
     }
 }

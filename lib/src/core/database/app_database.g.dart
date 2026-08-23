@@ -6503,11 +6503,10 @@ class $InboxNotificationsTable extends InboxNotifications
   late final GeneratedColumn<String> dedupeKey = GeneratedColumn<String>(
     'dedupe_key',
     aliasedName,
-    false,
+    true,
     additionalChecks: GeneratedColumn.checkTextLength(maxTextLength: 128),
     type: DriftSqlType.string,
     requiredDuringInsert: false,
-    defaultValue: const Constant(''),
   );
   static const VerificationMeta _readAtMeta = const VerificationMeta('readAt');
   @override
@@ -6696,7 +6695,7 @@ class $InboxNotificationsTable extends InboxNotifications
       dedupeKey: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}dedupe_key'],
-      )!,
+      ),
       readAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}read_at'],
@@ -6728,7 +6727,7 @@ class InboxNotificationRow extends DataClass
   final String? planId;
   final String messageCode;
   final String messageArgs;
-  final String dedupeKey;
+  final String? dedupeKey;
   final DateTime? readAt;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -6741,7 +6740,7 @@ class InboxNotificationRow extends DataClass
     this.planId,
     required this.messageCode,
     required this.messageArgs,
-    required this.dedupeKey,
+    this.dedupeKey,
     this.readAt,
     required this.createdAt,
     required this.updatedAt,
@@ -6761,7 +6760,9 @@ class InboxNotificationRow extends DataClass
     }
     map['message_code'] = Variable<String>(messageCode);
     map['message_args'] = Variable<String>(messageArgs);
-    map['dedupe_key'] = Variable<String>(dedupeKey);
+    if (!nullToAbsent || dedupeKey != null) {
+      map['dedupe_key'] = Variable<String>(dedupeKey);
+    }
     if (!nullToAbsent || readAt != null) {
       map['read_at'] = Variable<DateTime>(readAt);
     }
@@ -6784,7 +6785,9 @@ class InboxNotificationRow extends DataClass
           : Value(planId),
       messageCode: Value(messageCode),
       messageArgs: Value(messageArgs),
-      dedupeKey: Value(dedupeKey),
+      dedupeKey: dedupeKey == null && nullToAbsent
+          ? const Value.absent()
+          : Value(dedupeKey),
       readAt: readAt == null && nullToAbsent
           ? const Value.absent()
           : Value(readAt),
@@ -6807,7 +6810,7 @@ class InboxNotificationRow extends DataClass
       planId: serializer.fromJson<String?>(json['planId']),
       messageCode: serializer.fromJson<String>(json['messageCode']),
       messageArgs: serializer.fromJson<String>(json['messageArgs']),
-      dedupeKey: serializer.fromJson<String>(json['dedupeKey']),
+      dedupeKey: serializer.fromJson<String?>(json['dedupeKey']),
       readAt: serializer.fromJson<DateTime?>(json['readAt']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
@@ -6825,7 +6828,7 @@ class InboxNotificationRow extends DataClass
       'planId': serializer.toJson<String?>(planId),
       'messageCode': serializer.toJson<String>(messageCode),
       'messageArgs': serializer.toJson<String>(messageArgs),
-      'dedupeKey': serializer.toJson<String>(dedupeKey),
+      'dedupeKey': serializer.toJson<String?>(dedupeKey),
       'readAt': serializer.toJson<DateTime?>(readAt),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
@@ -6841,7 +6844,7 @@ class InboxNotificationRow extends DataClass
     Value<String?> planId = const Value.absent(),
     String? messageCode,
     String? messageArgs,
-    String? dedupeKey,
+    Value<String?> dedupeKey = const Value.absent(),
     Value<DateTime?> readAt = const Value.absent(),
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -6854,7 +6857,7 @@ class InboxNotificationRow extends DataClass
     planId: planId.present ? planId.value : this.planId,
     messageCode: messageCode ?? this.messageCode,
     messageArgs: messageArgs ?? this.messageArgs,
-    dedupeKey: dedupeKey ?? this.dedupeKey,
+    dedupeKey: dedupeKey.present ? dedupeKey.value : this.dedupeKey,
     readAt: readAt.present ? readAt.value : this.readAt,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
@@ -6942,7 +6945,7 @@ class InboxNotificationsCompanion
   final Value<String?> planId;
   final Value<String> messageCode;
   final Value<String> messageArgs;
-  final Value<String> dedupeKey;
+  final Value<String?> dedupeKey;
   final Value<DateTime?> readAt;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
@@ -7021,7 +7024,7 @@ class InboxNotificationsCompanion
     Value<String?>? planId,
     Value<String>? messageCode,
     Value<String>? messageArgs,
-    Value<String>? dedupeKey,
+    Value<String?>? dedupeKey,
     Value<DateTime?>? readAt,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
@@ -11134,6 +11137,9 @@ class $SyncAccountTable extends SyncAccount
     'migration_state',
     aliasedName,
     false,
+    check: () => const CustomExpression<bool>(
+      "migration_state IN ('localOnly', 'binding', 'active', 'restorePaused', 'migrating', 'migrated', 'failed', 'blocked')",
+    ),
     type: DriftSqlType.string,
     requiredDuringInsert: false,
     defaultValue: const Constant('localOnly'),
@@ -19123,7 +19129,7 @@ typedef $$InboxNotificationsTableCreateCompanionBuilder =
       Value<String?> planId,
       Value<String> messageCode,
       Value<String> messageArgs,
-      Value<String> dedupeKey,
+      Value<String?> dedupeKey,
       Value<DateTime?> readAt,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
@@ -19139,7 +19145,7 @@ typedef $$InboxNotificationsTableUpdateCompanionBuilder =
       Value<String?> planId,
       Value<String> messageCode,
       Value<String> messageArgs,
-      Value<String> dedupeKey,
+      Value<String?> dedupeKey,
       Value<DateTime?> readAt,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
@@ -19465,7 +19471,7 @@ class $$InboxNotificationsTableTableManager
                 Value<String?> planId = const Value.absent(),
                 Value<String> messageCode = const Value.absent(),
                 Value<String> messageArgs = const Value.absent(),
-                Value<String> dedupeKey = const Value.absent(),
+                Value<String?> dedupeKey = const Value.absent(),
                 Value<DateTime?> readAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
@@ -19495,7 +19501,7 @@ class $$InboxNotificationsTableTableManager
                 Value<String?> planId = const Value.absent(),
                 Value<String> messageCode = const Value.absent(),
                 Value<String> messageArgs = const Value.absent(),
-                Value<String> dedupeKey = const Value.absent(),
+                Value<String?> dedupeKey = const Value.absent(),
                 Value<DateTime?> readAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),

@@ -120,8 +120,7 @@ $permissionNames = @($manifestNode.SelectNodes('uses-permission') | ForEach-Obje
     })
 foreach ($requiredPermission in @(
     'android.permission.ACCESS_COARSE_LOCATION',
-    'android.permission.POST_NOTIFICATIONS',
-    'android.permission.SCHEDULE_EXACT_ALARM'
+    'android.permission.POST_NOTIFICATIONS'
 )) {
     if ($permissionNames -notcontains $requiredPermission) {
         throw "Merged manifest is missing required permission: $requiredPermission"
@@ -129,7 +128,8 @@ foreach ($requiredPermission in @(
 }
 foreach ($forbiddenPermission in @(
         'android.permission.ACCESS_FINE_LOCATION',
-        'android.permission.ACCESS_BACKGROUND_LOCATION'
+        'android.permission.ACCESS_BACKGROUND_LOCATION',
+        'android.permission.SCHEDULE_EXACT_ALARM'
     )) {
     if ($permissionNames -contains $forbiddenPermission) {
         throw "Merged manifest contains forbidden permission: $forbiddenPermission"

@@ -298,31 +298,37 @@ void main() {
   });
 
   group('Android notification manifest', () {
-    test('declares exact alarm permission and scheduled receivers', () {
-      final manifest = File('android/app/src/main/AndroidManifest.xml')
-          .readAsStringSync();
+    test(
+      'excludes exact alarm permission and declares scheduled receivers',
+      () {
+        final manifest = File('android/app/src/main/AndroidManifest.xml')
+            .readAsStringSync();
 
-      expect(manifest, contains('android.permission.SCHEDULE_EXACT_ALARM'));
-      expect(
-        manifest,
-        contains(
-          'com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver',
-        ),
-      );
-      expect(
-        manifest,
-        contains(
-          'com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver',
-        ),
-      );
-      expect(manifest, contains('android.intent.action.BOOT_COMPLETED'));
-      expect(manifest, contains('android.intent.action.MY_PACKAGE_REPLACED'));
-      expect(manifest, contains('android:allowBackup="false"'));
-      expect(
-        manifest,
-        isNot(contains('android.permission.ACCESS_FINE_LOCATION')),
-      );
-    });
+        expect(
+          manifest,
+          isNot(contains('android.permission.SCHEDULE_EXACT_ALARM')),
+        );
+        expect(
+          manifest,
+          contains(
+            'com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver',
+          ),
+        );
+        expect(
+          manifest,
+          contains(
+            'com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver',
+          ),
+        );
+        expect(manifest, contains('android.intent.action.BOOT_COMPLETED'));
+        expect(manifest, contains('android.intent.action.MY_PACKAGE_REPLACED'));
+        expect(manifest, contains('android:allowBackup="false"'));
+        expect(
+          manifest,
+          isNot(contains('android.permission.ACCESS_FINE_LOCATION')),
+        );
+      },
+    );
   });
 }
 

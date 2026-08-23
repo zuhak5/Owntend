@@ -16,22 +16,55 @@ const _paletteKeys = <String>[
 ];
 
 void main() {
-  test('Flutter and Android share the complete schema-1 palette contract', () {
-    final flutter = File(
-      'lib/src/features/monetization/src/native_ad_card.dart',
-    ).readAsStringSync();
+  test(
+    'Flutter and Android share the schema-1 and schema-2 palette contract',
+    () {
+      final flutter = File(
+        'lib/src/features/monetization/src/native_ad_card.dart',
+      ).readAsStringSync();
+      final kotlin = File(
+        'android/app/src/main/kotlin/app/owntend/mobile/'
+        'OwntendNativeAdFactory.kt',
+      ).readAsStringSync();
+
+      expect(flutter, contains("'schemaVersion': 1"));
+      expect(flutter, contains("'schemaVersion': 2"));
+      expect(kotlin, contains('schemaVersion != 1 && schemaVersion != 2'));
+      for (final key in _paletteKeys) {
+        expect(flutter, contains("'$key'"), reason: 'Flutter must emit $key.');
+        expect(
+          kotlin,
+          contains('"$key"'),
+          reason: 'Android must consume $key.',
+        );
+      }
+      expect(kotlin, isNot(contains('customOptions?.get("textColor")')));
+    },
+  );
+
+  test('factory supports layoutVariant templates and XML resources', () {
     final kotlin = File(
       'android/app/src/main/kotlin/app/owntend/mobile/'
       'OwntendNativeAdFactory.kt',
     ).readAsStringSync();
-
-    expect(flutter, contains("'schemaVersion': 1"));
-    expect(kotlin, contains('private const val SCHEMA_VERSION = 1'));
-    for (final key in _paletteKeys) {
-      expect(flutter, contains("'$key'"), reason: 'Flutter must emit $key.');
-      expect(kotlin, contains('"$key"'), reason: 'Android must consume $key.');
-    }
-    expect(kotlin, isNot(contains('customOptions?.get("textColor")')));
+    expect(kotlin, contains('R.layout.owntend_native_ad_compact'));
+    expect(kotlin, contains('R.layout.owntend_native_ad_card'));
+    expect(kotlin, contains('R.layout.owntend_native_ad'));
+    expect(
+      File('android/app/src/main/res/layout/owntend_native_ad_compact.xml')
+          .existsSync(),
+      isTrue,
+    );
+    expect(
+      File('android/app/src/main/res/layout/owntend_native_ad_card.xml')
+          .existsSync(),
+      isTrue,
+    );
+    expect(
+      File('android/app/src/main/res/layout/owntend_native_ad.xml')
+          .existsSync(),
+      isTrue,
+    );
   });
 
   test('factory validates and applies one complete palette before binding', () {
@@ -86,11 +119,11 @@ void main() {
       ]) {
         expect(kotlin, contains(registration));
       }
-      expect(kotlin, contains('body.bindOptional(nativeAd.body)'));
-      expect(kotlin, contains('advertiser.bindOptional(nativeAd.advertiser)'));
+      expect(kotlin, contains('body?.bindOptional(nativeAd.body)'));
+      expect(kotlin, contains('advertiser?.bindOptional(nativeAd.advertiser)'));
       expect(
         kotlin,
-        contains('callToAction.bindOptional(nativeAd.callToAction)'),
+        contains('callToAction?.bindOptional(nativeAd.callToAction)'),
       );
       expect(kotlin, contains('icon.setImageDrawable(null)'));
       expect(kotlin, contains('View.GONE'));

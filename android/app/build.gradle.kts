@@ -62,7 +62,7 @@ plugins {
 
 android {
     namespace = "app.owntend.mobile"
-    compileSdk = 37
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     sourceSets {
@@ -83,10 +83,11 @@ android {
 
     defaultConfig {
         applicationId = "app.owntend.mobile"
-        minSdk = flutter.minSdkVersion
+        minSdk = 26
         targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        manifestPlaceholders["admobAppId"] = "ca-app-pub-3940256099942544~3347511713"
     }
 
     flavorDimensions += "environment"
@@ -96,16 +97,19 @@ android {
             applicationIdSuffix = ".dev"
             versionNameSuffix = "-dev"
             resValue("string", "app_name", "Owntend Dev")
+            manifestPlaceholders["admobAppId"] = "ca-app-pub-3940256099942544~3347511713"
         }
         create("staging") {
             dimension = "environment"
             applicationIdSuffix = ".staging"
             versionNameSuffix = "-staging"
             resValue("string", "app_name", "Owntend Staging")
+            manifestPlaceholders["admobAppId"] = "ca-app-pub-3940256099942544~3347511713"
         }
         create("prod") {
             dimension = "environment"
             resValue("string", "app_name", "Owntend")
+            manifestPlaceholders["admobAppId"] = "ca-app-pub-5274007212820203~7167645746"
         }
     }
 

@@ -280,28 +280,21 @@ void main() {
     ).readAsStringSync();
     expect(
       activity,
-      contains('if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)'),
-    );
-    expect(
-      activity,
       contains('WindowCompat.setDecorFitsSystemWindows(window, false)'),
     );
     expect(
       activity,
       contains('WindowCompat.setDecorFitsSystemWindows(window, true)'),
     );
-    expect(activity, contains('window.decorView.systemUiVisibility = flags'));
-    expect(activity, contains('View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY'));
     expect(
       activity,
-      contains('window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)'),
-    );
-    expect(
-      activity,
-      isNot(
-        contains('window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)'),
+      contains(
+        'WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE',
       ),
     );
+    expect(activity, isNot(contains('systemUiVisibility')));
+    expect(activity, isNot(contains('SYSTEM_UI_FLAG_IMMERSIVE_STICKY')));
+    expect(activity, isNot(contains('SYSTEM_UI_FLAG_FULLSCREEN')));
     final manifest = File('android/app/src/main/AndroidManifest.xml')
         .readAsStringSync();
     expect(manifest, contains('android:windowSoftInputMode="adjustResize"'));

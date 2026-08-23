@@ -30,9 +30,9 @@ test('Canonical toolchain configuration is complete and valid', async () => {
   assert.equal(tc.java.distribution, 'temurin');
   assert.equal(tc.node.version, '24');
   assert.equal(tc.deno.version, '2.9.3');
-  assert.equal(tc.android.compileSdkVersion, 37);
+  assert.equal(tc.android.compileSdkVersion, 36);
   assert.equal(tc.android.targetSdkVersion, 36);
-  assert.equal(tc.android.minSdkVersion, 24);
+  assert.equal(tc.android.minSdkVersion, 26);
   assert.equal(tc.android.buildToolsVersion, '36.0.0');
   assert.equal(tc.android.agpVersion, '9.3.0');
   assert.equal(tc.android.kotlinVersion, '2.4.10');
@@ -88,7 +88,7 @@ test('Toolchain policy evaluation detects mismatches and fails closed', async ()
       kotlinVersion: '2.4.10',
       gradleDistribution: '9.6.1-bin',
       gradleDistributionSha256: '9c0f7faeeb306cb14e4279a3e084ca6b596894089a0638e68a07c945a32c9e14',
-      compileSdkVersion: 37,
+      compileSdkVersion: 36,
       targetSdkVersion: 36,
     },
     node: { version: '24.11.1' },

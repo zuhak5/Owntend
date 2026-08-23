@@ -122,7 +122,11 @@ export async function evaluatePatchEligibility({
     errors.push(...blocked.map((entry) => `${entry.path}: ${entry.reason}`));
   }
   if (patchable.length === 0) {
-    errors.push('No patchable Flutter source changed.');
+    if (files.length > 0 && files.every((entry) => entry.status === 'neutral')) {
+      errors.push('All changed files are server-side or documentation only — no client patch needed.');
+    } else {
+      errors.push('No patchable Flutter source changed.');
+    }
   }
 
   return {
