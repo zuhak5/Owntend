@@ -62,7 +62,7 @@ plugins {
 
 android {
     namespace = "app.owntend.mobile"
-    compileSdk = 36
+    compileSdk = 37
     ndkVersion = flutter.ndkVersion
 
     sourceSets {

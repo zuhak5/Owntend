@@ -84,7 +84,7 @@ assertContract(
   'Background location is forbidden.',
 );
 assertContract(/targetSdk\s*=\s*36/.test(appGradle), 'targetSdk must remain API 36.');
-assertContract(/compileSdk\s*=\s*36/.test(appGradle), 'compileSdk must remain API 36.');
+assertContract(/compileSdk\s*=\s*37/.test(appGradle), 'compileSdk must remain API 37.');
 
 const gradleSources = `${appGradle}\n${settingsGradle}`;
 assertContract(

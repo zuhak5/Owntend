@@ -38,8 +38,11 @@ ChangeFeedEntry parseSyncFeedChange(Map<String, dynamic> change) {
   final rawKeyData = change['key_data'];
   final rawRecordId = change['record_id'];
   final rawRevision = change['revision'];
-  final clientUpdatedAt = _parseRequiredUtc(change['client_updated_at']);
   final serverCreatedAt = _parseRequiredUtc(change['created_at']);
+  final rawClientUpdatedAt = change['client_updated_at'];
+  final clientUpdatedAt = rawClientUpdatedAt == null
+      ? serverCreatedAt
+      : _parseRequiredUtc(rawClientUpdatedAt);
   if (changeSeq is! int ||
       changeSeq <= 0 ||
       entity is! String ||

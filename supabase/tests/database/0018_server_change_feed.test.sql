@@ -37,7 +37,7 @@ execute create_user_b;
 -- Auth initialization creates a profile, and profiles participate in the
 -- canonical owner-scoped change feed.
 select extensions.results_eq(
-  $$ select entity_type, record_id, op_type
+  $$ select entity_type, record_id, op_type, client_updated_at is not null
      from public.server_change_feed
      where user_id = '00000000-0000-0000-0000-00000000000a'
        and entity_type = 'profile'
@@ -47,9 +47,10 @@ select extensions.results_eq(
   $$ values (
     'profile',
     'profile',
-    'INSERT'
+    'INSERT',
+    true
   ) $$,
-  'Auth user initialization logs profile INSERT change feed entry'
+  'Auth user initialization logs profile INSERT change feed entry with non-null client_updated_at'
 );
 
 -- 2. Test Trigger on INSERT / UPDATE / DELETE

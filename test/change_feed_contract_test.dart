@@ -125,6 +125,85 @@ void main() {
       expect(parsed.record.isDeleted, isFalse);
     });
 
+    test('profile upsert payload parses and supports null client_updated_at fallback', () {
+      final explicit = parseSyncFeedChange({
+        'contract_version': 1,
+        'change_seq': 1,
+        'entity_type': 'profile',
+        'record_id': 'profile',
+        'op_type': 'INSERT',
+        'key_data': <String, dynamic>{},
+        'client_updated_at': '2026-08-23T00:34:42Z',
+        'created_at': '2026-08-23T00:34:42Z',
+        'revision': 1,
+        'payload': {
+          'user_id': 'user-1',
+          'nickname': 'Thulfiqar',
+          'updated_at': '2026-08-23T00:34:42Z',
+          'revision': 1,
+        },
+      });
+
+      expect(explicit.changeSeq, 1);
+      expect(explicit.record.spec, profileSyncSpec);
+      expect(explicit.record.recordKey, 'profile');
+      expect(explicit.record.values['nickname'], 'Thulfiqar');
+      expect(
+        explicit.record.clientModifiedAt,
+        DateTime.utc(2026, 8, 23, 0, 34, 42),
+      );
+
+      final fallback = parseSyncFeedChange({
+        'contract_version': 1,
+        'change_seq': 2,
+        'entity_type': 'profile',
+        'record_id': 'profile',
+        'op_type': 'INSERT',
+        'key_data': <String, dynamic>{},
+        'client_updated_at': null,
+        'created_at': '2026-08-23T00:34:42Z',
+        'revision': 1,
+        'payload': {
+          'user_id': 'user-1',
+          'nickname': null,
+          'updated_at': '2026-08-23T00:34:42Z',
+          'revision': 1,
+        },
+      });
+
+      expect(fallback.changeSeq, 2);
+      expect(fallback.record.spec, profileSyncSpec);
+      expect(fallback.record.recordKey, 'profile');
+      expect(fallback.record.values['nickname'], isNull);
+      expect(
+        fallback.record.clientModifiedAt,
+        DateTime.utc(2026, 8, 23, 0, 34, 42),
+      );
+    });
+
+    test('invalid client_updated_at string fails closed', () {
+      expect(
+        () => parseSyncFeedChange({
+          'contract_version': 1,
+          'change_seq': 3,
+          'entity_type': 'profile',
+          'record_id': 'profile',
+          'op_type': 'INSERT',
+          'key_data': <String, dynamic>{},
+          'client_updated_at': 'not-a-date',
+          'created_at': '2026-08-23T00:34:42Z',
+          'revision': 1,
+          'payload': {
+            'user_id': 'user-1',
+            'nickname': null,
+            'updated_at': '2026-08-23T00:34:42Z',
+            'revision': 1,
+          },
+        }),
+        _isProtocolFailure,
+      );
+    });
+
     test('unsupported contract version fails closed', () {
       expect(() => requireSyncFeedContractVersion(2), _isProtocolFailure);
       expect(
