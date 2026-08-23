@@ -39,6 +39,11 @@ foreach ($entry in $ids.GetEnumerator()) {
 if ($content -match '\$\{SHOREBIRD_[A-Z_]+\}') {
     throw 'shorebird.yaml contains an unresolved app-ID placeholder.'
 }
+
+# shorebird.yaml is a Flutter asset, so line endings are part of the release
+# artifact. Normalize to LF before writing so Windows checkout settings cannot
+# create a byte-level asset diff between a base release and its patches.
+$content = $content.Replace("`r`n", "`n").Replace("`r", "`n")
 [System.IO.File]::WriteAllText(
     $outputPath,
     $content,
@@ -74,4 +79,4 @@ if ($EnsurePubspecAsset) {
 }
 
 $hash = (Get-FileHash -LiteralPath $outputPath -Algorithm SHA256).Hash.ToLowerInvariant()
-Write-Host "Generated ignored shorebird.yaml for dev, staging, and prod (SHA-256 $hash)."
+Write-Host "Generated ignored shorebird.yaml for dev, staging, and prod (LF, SHA-256 $hash)."
