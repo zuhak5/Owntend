@@ -17,16 +17,16 @@ Validation still enters the selected GitHub environment because Shorebird authen
 
 ## Separately contained mutations
 
-- production Shorebird release publication;
+- production Shorebird release publication (gated by `SHOREBIRD_PRODUCTION_RELEASES_ENABLED` kill-switch and production environment approval);
 - production patch publication to staging and exact staging-to-stable promotion;
 - Shorebird Console patch rollback/disable;
 - Google Play upload/track/rollout;
 - Sentry release/deploy/debug-file mutation using `SENTRY_AUTH_TOKEN`;
-- GitHub Release or tag publication;
-- VersionDeck `verified` active downloads;
 - hosted Supabase mutation except through its separately authorized protected workflow.
 
-This implementation prepares those guarded paths but does not authorize or execute them. The enable Variables remain absent/false until an operator records explicit approval.
+Once production Shorebird release publication is authorized and successfully executed on `main`, the downstream pipeline automatically drives APK set verification, GitHub Release creation with verified APK assets, and VersionDeck deployment to GitHub Pages in verified publication mode.
+
+The enable Variables remain absent/false until an operator records explicit approval.
 
 ## Preserved guarantees
 

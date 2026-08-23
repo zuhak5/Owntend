@@ -1,10 +1,11 @@
 # VersionDeck Release Runbook
 
-> **Scoped containment status:** VersionDeck itself may be deployed with an
-> explicit disabled manifest, but verified APK download publication remains
-> contained. A successful Shorebird release or exact-AAB APK evidence build does not automatically
-> authorize public downloads. The account-deletion surface is independent of
-> release publication. See the
+> **Automated publication pipeline:** When a production `Shorebird Android Release`
+> is published on `main`, `Verify Production APK Artifact Set` automatically validates the
+> derived ABI APKs and provenance, creates/updates the official GitHub Release with the
+> verified ABI APKs and `.sha256` checksum assets, and triggers `Deploy VersionDeck` via
+> `workflow_run` in verified mode to generate the signed manifest and publish to GitHub Pages.
+> The account-deletion surface is independent of release publication. See the
 > [Production containment record](operations/production-containment.md).
 
 ## Purpose
@@ -38,7 +39,7 @@ A release is downloadable only when the pipeline can verify the expected propert
 - The unified `Shorebird Android Release` workflow identity and exact current-main source.
 - An APK derived from the canonical Shorebird AAB with pinned Bundletool, never an independent Flutter compile.
 
-The published production Shorebird job creates a universal APK and exactly `arm64-v8a`, `armeabi-v7a`, and `x86_64` variants from one AAB. `Verify Production APK Artifact Set` independently rechecks the protected set and provenance. VersionDeck's verifier and manifest schema bind APK and AAB evidence to `.github/workflows/shorebird-release-android.yml`. A validation/dry-run, non-production artifact, patch artifact, missing ABI, changed signer, or different source run is ineligible.
+The published production Shorebird job creates a universal APK and exactly `arm64-v8a`, `armeabi-v7a`, and `x86_64` variants from one AAB. `Verify Production APK Artifact Set` independently rechecks the protected set and provenance, creates the official GitHub Release with the verified ABI APKs and checksums, and triggers `Deploy VersionDeck`. VersionDeck's verifier and manifest schema bind APK and AAB evidence to `.github/workflows/shorebird-release-android.yml`. A validation/dry-run, non-production artifact, patch artifact, missing ABI, changed signer, or different source run is ineligible.
 
 Live build status is informational. It must not grant download trust to an in-progress artifact.
 

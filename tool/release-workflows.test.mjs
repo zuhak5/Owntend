@@ -325,7 +325,8 @@ test('VersionDeck exposes only reviewed disabled and verified publication modes'
 
   assert.doesNotMatch(workflow, /^  push:/m);
   assert.doesNotMatch(workflow, /^  release:/m);
-  assert.doesNotMatch(workflow, /^  workflow_run:/m);
+  assert.match(workflow, /^  workflow_run:/m);
+  assert.match(workflow, /- Verify Production APK Artifact Set/);
 
   assert.match(workflow, /publication_mode:/);
   assert.match(workflow, /default: disabled/);
@@ -335,7 +336,11 @@ test('VersionDeck exposes only reviewed disabled and verified publication modes'
 
   assert.match(
     workflow,
-    /if: github\.event_name == 'workflow_dispatch' && github\.ref == 'refs\/heads\/main'/,
+    /github\.event_name == 'workflow_dispatch' && github\.ref == 'refs\/heads\/main'/,
+  );
+  assert.match(
+    workflow,
+    /github\.event_name == 'workflow_run'/,
   );
 
   assert.match(workflow, /disabled\)\s+[\s\S]*expected_publication_status="disabled"/);

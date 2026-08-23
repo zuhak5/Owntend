@@ -145,7 +145,7 @@ test('protected Shorebird workflow derives APKs only after the canonical AAB job
   assert.doesNotMatch(workflow, /deploy-download-site|publication_mode:\s*verified/);
 });
 
-test('post-build artifact-set workflow independently verifies exactly the protected ABI set', async () => {
+test('post-build artifact-set workflow independently verifies exactly the protected ABI set and publishes release', async () => {
   const workflow = await read('.github/workflows/verify-production-apk-artifact-set.yml');
 
   assert.match(workflow, /workflow_run:/);
@@ -161,6 +161,6 @@ test('post-build artifact-set workflow independently verifies exactly the protec
   assert.match(workflow, /--version-name "\$EXPECTED_VERSION"/);
   assert.match(workflow, /--version-code "\$EXPECTED_BUILD"/);
   assert.match(workflow, /apk-artifact-set-verification\.json/);
-  assert.doesNotMatch(workflow, /gh release (?:create|upload|edit)/);
-  assert.doesNotMatch(workflow, /deploy-download-site|publication-mode\s+verified/);
+  assert.match(workflow, /gh release create/);
+  assert.match(workflow, /gh release upload/);
 });

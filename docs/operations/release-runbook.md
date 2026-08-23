@@ -20,7 +20,7 @@ The release workflow produces one canonical Shorebird AAB with obfuscation, Dart
 
 Only a published production release can enter `production-android-signing`. [`tool/derive_versiondeck_apks.ps1`](../../tool/derive_versiondeck_apks.ps1) consumes the exact AAB from the preceding job. Pinned Bundletool creates the signed universal APK. The script then derives `arm64-v8a`, `armeabi-v7a`, and `x86_64` APKs by pruning other native directories, aligning, resigning with the established standalone signer, and verifying package, version/build, signer, native-directory set, hash, and size. It never invokes Flutter.
 
-`Verify Production APK Artifact Set` ignores non-production and dry-run workflows. For the exact protected artifact, it rechecks all three ABI APKs and GitHub attestations at current `main`. This verification is evidence only and does not authorize distribution.
+`Verify Production APK Artifact Set` ignores non-production and dry-run workflows. For the exact protected artifact, it rechecks all three ABI APKs and GitHub attestations at current `main`. Upon successful verification, it creates/updates the official GitHub Release, uploads the verified ABI APKs and `.sha256` checksums, and triggers `Deploy VersionDeck` via `workflow_run` to automatically publish the verified release manifest to GitHub Pages.
 
 ## Operator sequence
 
@@ -29,8 +29,8 @@ Only a published production release can enter `production-android-signing`. [`to
 3. Run `Shorebird Android Release` with `flavor=prod`, `operation=validate`, and the exact SHA. Review the dry-run evidence.
 4. Complete physical-device release smoke tests and the Play/Data safety/privacy reviews.
 5. Only after explicit production authorization, enable the release kill switch and rerun with `operation=publish` through the protected `production` environment.
-6. Review the canonical AAB evidence and the separately protected exact-AAB APK derivation/verification. Do not mix artifacts from different runs or SHAs.
-7. Handle Play, Sentry, GitHub Release, and VersionDeck as separately authorized operations using their own runbooks.
+6. Review the canonical AAB evidence and the downstream automated verification: `Verify Production APK Artifact Set` verifies the ABI APKs, creates the GitHub Release, uploads APK assets, and triggers `Deploy VersionDeck` to update GitHub Pages automatically.
+7. Handle Play and Sentry as separately authorized operations using their own runbooks.
 8. For a patch, follow [`shorebird-code-push.md`](shorebird-code-push.md); a native, asset, dependency, or toolchain change requires a new release.
 
 ## Failures and partial state
