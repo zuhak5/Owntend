@@ -13,10 +13,11 @@ if ($ReleaseBaseSha -notmatch '^[0-9a-f]{40}$') { throw 'ReleaseBaseSha must be 
 $resolvedConfig = [System.IO.Path]::GetFullPath($ConfigPath)
 if (-not (Test-Path -LiteralPath $resolvedConfig -PathType Leaf)) { throw "Runtime config is missing: $resolvedConfig" }
 if ([string]::IsNullOrWhiteSpace($env:SHOREBIRD_TOKEN)) { throw 'SHOREBIRD_TOKEN is required.' }
-if (-not (Test-Path -LiteralPath (Join-Path $workspace 'shorebird.yaml') -PathType Leaf)) {
+$shorebirdConfigPath = Join-Path $workspace 'shorebird.yaml'
+if (-not (Test-Path -LiteralPath $shorebirdConfigPath -PathType Leaf)) {
     throw 'Generate ignored shorebird.yaml with tool/configure_shorebird.ps1 first.'
 }
-$shorebirdConfig = Get-Content -LiteralPath (Join-Path $workspace 'shorebird.yaml') -Raw
+$shorebirdConfig = Get-Content -LiteralPath $shorebirdConfigPath -Raw
 $appIdMatch = [regex]::Match(
     $shorebirdConfig,
     "(?m)^\s{2}$([regex]::Escape($Flavor)):\s+([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\s*$",
@@ -37,6 +38,22 @@ function Get-ReleasePatches {
 
 $patchesBefore = if ($DryRun) { @() } else { @(Get-ReleasePatches) }
 
+# Release 1.0.0+4 was published with a transient generated shorebird.yaml whose
+# packaged bytes cannot be reproduced by the current generator. Runs #5 and #6
+# proved that the only Shorebird compatibility difference is exactly
+# base/assets/flutter_assets/shorebird.yaml; the Android build and native checks
+# otherwise pass. Shorebird cannot patch assets, so for this one legacy base we
+# may safely ignore that generated-config-only difference. Guard the exception by
+# flavor, release version, exact base SHA, and the exact generated config hash
+# observed in run #6. Any future config or release change fails closed.
+$shorebirdConfigHash = (Get-FileHash -LiteralPath $shorebirdConfigPath -Algorithm SHA256).Hash.ToLowerInvariant()
+$legacyConfigAssetDiffAllowed = (
+    $Flavor -eq 'prod' -and
+    $ReleaseVersion -eq '1.0.0+4' -and
+    $ReleaseBaseSha -eq 'a2740314447514e03063a15cd0726de632171d2d' -and
+    $shorebirdConfigHash -eq 'e020e0f579713e5c4849924db9ecd7b6495de68cc3a87b8f7aa71b9cd38bd88c'
+)
+
 $symbols = Join-Path $workspace "build\shorebird-symbols\$Flavor\patch-$($ReleaseVersion.Replace('+', '-'))"
 New-Item -ItemType Directory -Path $symbols -Force | Out-Null
 $arguments = @(
@@ -51,6 +68,10 @@ $arguments = @(
     '--public-key-cmd=bash tool/shorebird_kms_public_key.sh',
     '--sign-cmd=bash tool/shorebird_kms_sign.sh'
 )
+if ($legacyConfigAssetDiffAllowed) {
+    Write-Warning 'Allowing the known generated shorebird.yaml asset difference for legacy prod release 1.0.0+4 only.'
+    $arguments += '--allow-asset-diffs'
+}
 if ($DryRun) { $arguments += '--dry-run' }
 $arguments += @('--', '--no-pub')
 
@@ -107,7 +128,9 @@ $evidence = [ordered]@{
     ci_run_id = [string]$env:GITHUB_RUN_ID
     ci_run_attempt = [string]$env:GITHUB_RUN_ATTEMPT
     native_diff_bypass = $false
-    asset_diff_bypass = $false
+    asset_diff_bypass = [bool]$legacyConfigAssetDiffAllowed
+    asset_diff_bypass_reason = if ($legacyConfigAssetDiffAllowed) { 'legacy-generated-shorebird-yaml-only' } else { $null }
+    shorebird_config_sha256 = $shorebirdConfigHash
     generated_at_utc = [DateTime]::UtcNow.ToString('o')
 }
 $evidencePath = Join-Path $workspace "build\shorebird-patch-$Flavor-$mode.json"
