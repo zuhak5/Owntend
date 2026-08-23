@@ -198,13 +198,7 @@ class _MoveCopyItemDialogState extends ConsumerState<MoveCopyItemDialog> {
                     },
                 ],
               };
-              final requestHash = sha256
-                  .convert(utf8.encode(jsonEncode(unsignedPayload)))
-                  .toString();
-              final debit = await monetization.createAsset({
-                ...unsignedPayload,
-                'request_hash': requestHash,
-              });
+              final debit = await monetization.createAsset(unsignedPayload);
               if (walletUserId != null) {
                 ref
                     .read(pointWalletControllerProvider.notifier)
@@ -1281,13 +1275,7 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
           'details': _pointAssetDetailsPayload(),
           'initial_plans': const <Map<String, dynamic>>[],
         };
-        final requestHash = sha256
-            .convert(utf8.encode(jsonEncode(unsignedPayload)))
-            .toString();
-        final debit = await monetization.createAsset({
-          ...unsignedPayload,
-          'request_hash': requestHash,
-        });
+        final debit = await monetization.createAsset(unsignedPayload);
         debitResult = debit;
         if (walletUserId != null) {
           ref

@@ -147,7 +147,7 @@ test('Shorebird release rail is dry-run by default and preserves production gate
   assert.doesNotMatch(workflow, /gh release (?:create|upload|edit)|SENTRY_AUTH_TOKEN|edits\.(?:insert|bundles|tracks)/);
 });
 
-test('Shorebird patch rail rejects unsafe diffs and publishes only to staging track', async () => {
+test('Shorebird patch rail rejects unsafe diffs and publishes production directly to stable track', async () => {
   const workflow = await read('.github/workflows/shorebird-patch-android.yml');
   const patchScript = await read('tool/invoke_shorebird_patch.ps1');
   assert.match(workflow, /default: validate/);
@@ -162,7 +162,8 @@ test('Shorebird patch rail rejects unsafe diffs and publishes only to staging tr
   assert.ok(patchPolicyTest >= 0 && patchPolicyTest < patchAssetInjection);
   assert.ok(patchAssetInjection < patchDryRun);
   assert.ok(workflow.indexOf('invoke_shorebird_patch.ps1 @Parameters -DryRun') < workflow.indexOf('invoke_shorebird_patch.ps1 @Parameters }'));
-  assert.match(patchScript, /--track=staging/);
+  assert.match(patchScript, /--track=\$targetTrack/);
+  assert.match(patchScript, /\$targetTrack = if \(\$Flavor -eq 'prod'\) \{ 'stable' \}/);
   assert.match(patchScript, /--public-key-cmd=bash tool\/shorebird_kms_public_key\.sh/);
   assert.match(patchScript, /--sign-cmd=bash tool\/shorebird_kms_sign\.sh/);
   assert.match(patchScript, /'--',\s*'--no-pub'/);
@@ -170,6 +171,7 @@ test('Shorebird patch rail rejects unsafe diffs and publishes only to staging tr
   assert.match(patchScript, /releaseEngineRevision/);
   assert.match(patchScript, /Expected exactly one newly published patch/);
   assert.match(patchScript, /shorebird-patch-\$Flavor-\$mode\.json/);
+  assert.match(patchScript, /published-directly-to-stable/);
   assert.doesNotMatch(patchScript, /allow-native-diffs|--confirm/);
   assert.equal((patchScript.match(/--allow-asset-diffs/g) ?? []).length, 1);
   assert.match(patchScript, /\$Flavor -eq 'prod'/);
@@ -181,9 +183,11 @@ test('Shorebird patch rail rejects unsafe diffs and publishes only to staging tr
   assert.match(patchScript, /legacy-generated-shorebird-yaml-only/);
 });
 
-test('promotion is exact, protected, and requires device-preview confirmation', async () => {
+test('promotion script and workflow are marked deprecated for normal production patches', async () => {
   const workflow = await read('.github/workflows/shorebird-promote-patch.yml');
   const script = await read('tool/promote_shorebird_patch.ps1');
+  assert.match(workflow, /DEPRECATED/);
+  assert.match(script, /DEPRECATED/);
   assert.match(workflow, /environment: production/);
   assert.match(workflow, /SHOREBIRD_PRODUCTION_PROMOTIONS_ENABLED/);
   assert.match(workflow, /secrets\.SHOREBIRD_TOKEN/);

@@ -580,6 +580,9 @@ WHERE entity = 'profile'
   ) async {
     final spec = syncSpecByEntity[mutation.entity];
     if (spec == null) {
+      if (mutation.entity == 'device_setting') {
+        return null;
+      }
       throw SupabaseFailure(
         kind: SupabaseFailureKind.incompatibleSchema,
         message:

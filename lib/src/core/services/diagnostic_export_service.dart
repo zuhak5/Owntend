@@ -6,6 +6,7 @@ import 'package:crypto/crypto.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:shorebird_code_push/shorebird_code_push.dart';
 import 'package:uuid/uuid.dart';
 
 import '../utils/redacting_logger.dart';
@@ -23,9 +24,11 @@ class DiagnosticExportService {
     AppDiagnosticFileStore? fileStore,
     Future<Directory> Function()? temporaryDirectory,
     Future<PackageInfo> Function()? packageInfo,
+    ShorebirdUpdater? updater,
   }) : _fileStore = fileStore ?? AppDiagnosticRuntime.fileStore,
        _temporaryDirectory = temporaryDirectory ?? getTemporaryDirectory,
-       _packageInfo = packageInfo ?? PackageInfo.fromPlatform;
+       _packageInfo = packageInfo ?? PackageInfo.fromPlatform,
+       _updater = updater ?? ShorebirdUpdater();
 
   static const retention = Duration(hours: 24);
   static const redactionVersion = 1;
@@ -34,6 +37,7 @@ class DiagnosticExportService {
   final AppDiagnosticFileStore? _fileStore;
   final Future<Directory> Function() _temporaryDirectory;
   final Future<PackageInfo> Function() _packageInfo;
+  final ShorebirdUpdater _updater;
 
   Future<File> export() async {
     final createdAt = DateTime.now().toUtc();
@@ -66,10 +70,24 @@ class DiagnosticExportService {
     }
 
     final info = await _packageInfo();
+    String shorebirdPatchNumber = 'base';
+    var shorebirdAvailable = false;
+    try {
+      shorebirdAvailable = _updater.isAvailable;
+      if (shorebirdAvailable) {
+        final currentPatch = await _updater.readCurrentPatch();
+        shorebirdPatchNumber = currentPatch?.number.toString() ?? 'base';
+      }
+    } on Object {
+      // safe fallback
+    }
+
     final manifest = <String, Object?>{
       'app': 'Owntend',
       'version': info.version,
       'buildNumber': info.buildNumber,
+      'shorebirdPatchNumber': shorebirdPatchNumber,
+      'shorebirdAvailable': shorebirdAvailable,
       'os': Platform.operatingSystem,
       'osVersion': redactDiagnosticValue(Platform.operatingSystemVersion),
       'timezone': DateTime.now().timeZoneName,

@@ -64,12 +64,37 @@ class PatchUpdateCoordinator extends Notifier<PatchUpdateState> {
   Future<void> _init() async {
     try {
       if (!_updater.isAvailable) {
+        AppLogger.info(
+          'shorebird_runtime_status',
+          fields: {
+            'is_available': false,
+            'current_patch_number': 'unavailable',
+            'patch_active': false,
+          },
+        );
         state = const PatchUpdateUnavailable();
         return;
       }
       final currentPatch = await _updater.readCurrentPatch();
       final currentNumber = currentPatch?.number;
       final nextPatch = await _updater.readNextPatch();
+      AppLogger.info(
+        'shorebird_runtime_status',
+        fields: {
+          'is_available': true,
+          'current_patch_number': currentNumber?.toString() ?? 'base',
+          'next_patch_number': nextPatch?.number.toString() ?? 'none',
+          'patch_active': currentNumber != null,
+        },
+      );
+      if (currentNumber == null) {
+        AppLogger.info('shorebird_base_running');
+      } else {
+        AppLogger.info(
+          'shorebird_patch_active',
+          fields: {'patch_number': currentNumber},
+        );
+      }
       if (nextPatch != null) {
         state = PatchUpdateReady(
           nextPatchNumber: nextPatch.number,
@@ -104,6 +129,13 @@ class PatchUpdateCoordinator extends Notifier<PatchUpdateState> {
 
       final nextPatch = await _updater.readNextPatch();
       if (nextPatch != null) {
+        AppLogger.info(
+          'shorebird_patch_downloaded_restart_required',
+          fields: {
+            'current_patch_number': currentNumber?.toString() ?? 'base',
+            'next_patch_number': nextPatch.number.toString(),
+          },
+        );
         state = PatchUpdateReady(
           nextPatchNumber: nextPatch.number,
           currentPatchNumber: currentNumber,
@@ -122,6 +154,13 @@ class PatchUpdateCoordinator extends Notifier<PatchUpdateState> {
         await _updater.update();
         final readyPatch = await _updater.readNextPatch();
         if (readyPatch != null) {
+          AppLogger.info(
+            'shorebird_patch_downloaded_restart_required',
+            fields: {
+              'current_patch_number': currentNumber?.toString() ?? 'base',
+              'next_patch_number': readyPatch.number.toString(),
+            },
+          );
           state = PatchUpdateReady(
             nextPatchNumber: readyPatch.number,
             currentPatchNumber: currentNumber,
@@ -130,13 +169,25 @@ class PatchUpdateCoordinator extends Notifier<PatchUpdateState> {
         }
       } else if (status == UpdateStatus.restartRequired) {
         final readyPatch = await _updater.readNextPatch();
+        final nextNumber = readyPatch?.number ?? (currentNumber ?? 0) + 1;
+        AppLogger.info(
+          'shorebird_patch_downloaded_restart_required',
+          fields: {
+            'current_patch_number': currentNumber?.toString() ?? 'base',
+            'next_patch_number': nextNumber.toString(),
+          },
+        );
         state = PatchUpdateReady(
-          nextPatchNumber: readyPatch?.number ?? (currentNumber ?? 0) + 1,
+          nextPatchNumber: nextNumber,
           currentPatchNumber: currentNumber,
         );
         return;
       }
 
+      AppLogger.info(
+        'shorebird_patch_up_to_date',
+        fields: {'current_patch_number': currentNumber?.toString() ?? 'base'},
+      );
       state = PatchUpdateUpToDate(currentPatchNumber: currentNumber);
     } on Object catch (error) {
       AppLogger.warning('shorebird_patch_check_failed', error: error);

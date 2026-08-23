@@ -96,7 +96,7 @@ test('verifyShorebirdPatchEvidence validates correct evidence and flags invalid 
     releaseVersion: '1.0.0+4',
     patchNumber: 1,
     flavor: 'prod',
-    track: 'staging',
+    track: 'stable',
     candidateSha: '0123456789abcdef0123456789abcdef01234567',
     releaseBaseSha: 'abcdef0123456789abcdef0123456789abcdef01',
     sentrySymbolsUploaded: true,

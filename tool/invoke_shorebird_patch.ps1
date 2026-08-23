@@ -76,13 +76,14 @@ $legacyConfigAssetDiffAllowed = (
     $shorebirdConfigHash -eq 'e020e0f579713e5c4849924db9ecd7b6495de68cc3a87b8f7aa71b9cd38bd88c'
 )
 
+$targetTrack = if ($Flavor -eq 'prod') { 'stable' } else { $Flavor }
 $symbols = Join-Path $workspace "build\shorebird-symbols\$Flavor\patch-$($ReleaseVersion.Replace('+', '-'))"
 New-Item -ItemType Directory -Path $symbols -Force | Out-Null
 $arguments = @(
     'patch', 'android',
     "--flavor=$Flavor",
     "--release-version=$ReleaseVersion",
-    '--track=staging',
+    "--track=$targetTrack",
     '--target=lib/main.dart',
     "--dart-define-from-file=$resolvedConfig",
     '--obfuscate',
@@ -115,14 +116,14 @@ if ($LASTEXITCODE -ne 0 -or $resolvedReleaseFlutter -ne [string]$shorebirdPin.re
     throw 'The Shorebird patch build did not use its canonical base Flutter/engine revisions.'
 }
 
-$mode = if ($DryRun) { 'dry-run' } else { 'published-to-staging' }
+$mode = if ($DryRun) { 'dry-run' } elseif ($Flavor -eq 'prod') { 'published-directly-to-stable' } else { "published-to-$Flavor" }
 $patchNumber = $null
 if (-not $DryRun) {
     $existingNumbers = @($patchesBefore | ForEach-Object { [int]$_.number })
     $newPatches = @(Get-ReleasePatches | Where-Object { [int]$_.number -notin $existingNumbers })
     if ($newPatches.Count -ne 1) { throw "Expected exactly one newly published patch, found $($newPatches.Count)." }
-    if ([string]$newPatches[0].channel -ne 'staging' -or [bool]$newPatches[0].is_rolled_back) {
-        throw 'The newly published patch is not an active staging-track patch.'
+    if ([string]$newPatches[0].channel -ne $targetTrack -or [bool]$newPatches[0].is_rolled_back) {
+        throw "The newly published patch is not an active $targetTrack-track patch."
     }
     $patchNumber = [int]$newPatches[0].number
 }
@@ -136,7 +137,7 @@ $evidence = [ordered]@{
     release_version = $ReleaseVersion
     release_base_sha = $ReleaseBaseSha
     patch_number = $patchNumber
-    track = 'staging'
+    track = $targetTrack
     source_sha = $sourceSha
     shorebird_cli_version = [string]$shorebirdPin.version
     shorebird_cli_commit = [string]$shorebirdPin.commit

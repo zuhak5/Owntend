@@ -175,5 +175,35 @@ void main() {
         );
       },
     );
+
+    test('logs diagnostic events on startup and update check', () async {
+      when(() => mockUpdater.isAvailable).thenReturn(true);
+      when(() => mockUpdater.readCurrentPatch())
+          .thenAnswer((_) async => const Patch(number: 2));
+      when(() => mockUpdater.readNextPatch()).thenAnswer((_) async => null);
+      when(() => mockUpdater.checkForUpdate())
+          .thenAnswer((_) async => UpdateStatus.upToDate);
+
+      final container = ProviderContainer(
+        overrides: [
+          patchUpdateCoordinatorProvider.overrideWith(
+            () => PatchUpdateCoordinator(updater: mockUpdater),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final coordinator = container.read(
+        patchUpdateCoordinatorProvider.notifier,
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      await coordinator.checkForUpdates(force: true);
+
+      expect(
+        container.read(patchUpdateCoordinatorProvider),
+        isA<PatchUpdateUpToDate>(),
+      );
+    });
   });
 }

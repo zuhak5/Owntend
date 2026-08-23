@@ -1,4 +1,8 @@
-name: Promote Shorebird Patch
+# DEPRECATED: Production patches in Owntend now publish directly to track 'stable'
+# via .github/workflows/shorebird-patch-android.yml. This workflow is retained only
+# as a manual emergency promotion fallback.
+
+name: Promote Shorebird Patch (Deprecated Manual Fallback)
 
 on:
   workflow_dispatch:

@@ -10,7 +10,7 @@ on:
         type: choice
         options: [dev, staging, prod]
       operation:
-        description: "Validate runs all checks and Shorebird dry-run; publish uploads only to staging track"
+        description: "Validate runs all checks and Shorebird dry-run; publish uploads directly to stable for prod (or flavor track for non-prod)"
         required: true
         default: validate
         type: choice
@@ -154,7 +154,7 @@ jobs:
           }
           node tool/toolchain_manifest.mjs --enforce --require-shorebird
           node --test tool/shorebird.test.mjs tool/toolchain.test.mjs
-      - name: Run mandatory Shorebird dry-run, then optional staging publication
+      - name: Run mandatory Shorebird dry-run, then optional patch publication
         shell: pwsh
         env:
           SHOREBIRD_TOKEN: ${{ secrets.SHOREBIRD_TOKEN }}

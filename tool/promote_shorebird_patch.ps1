@@ -1,3 +1,7 @@
+# DEPRECATED: Production patches in Owntend now publish directly to track 'stable' via
+# tool/invoke_shorebird_patch.ps1. This script is retained only as a manual/emergency
+# fallback and is NOT part of the canonical automated production patch pipeline.
+
 param(
     [Parameter(Mandatory = $true)][string]$AppId,
     [Parameter(Mandatory = $true)][string]$ReleaseVersion,

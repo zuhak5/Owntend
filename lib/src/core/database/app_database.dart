@@ -747,27 +747,34 @@ END
         "'notification_preferences', 'onboarding_completed', "
         "'permission_education_seen', "
         "'home_location'";
-    const deviceSettingKeys = "'weather_cache'";
-    for (final (entity, keys) in [
-      ('user_setting', userSettingKeys),
-      ('device_setting', deviceSettingKeys),
+    for (final (event, rowPrefix, operation) in [
+      ('INSERT', 'NEW', 'upsert'),
+      ('UPDATE', 'NEW', 'upsert'),
+      ('DELETE', 'OLD', 'delete'),
     ]) {
-      for (final (event, rowPrefix, operation) in [
-        ('INSERT', 'NEW', 'upsert'),
-        ('UPDATE', 'NEW', 'upsert'),
-        ('DELETE', 'OLD', 'delete'),
-      ]) {
-        await _createSyncTrigger(
-          table: 'settings',
-          entity: entity,
-          keyExpression: 'key',
-          event: event,
-          rowPrefix: rowPrefix,
-          operation: operation,
-          extraWhen: "$rowPrefix.key IN ($keys)",
-        );
-      }
+      await _createSyncTrigger(
+        table: 'settings',
+        entity: 'user_setting',
+        keyExpression: 'key',
+        event: event,
+        rowPrefix: rowPrefix,
+        operation: operation,
+        extraWhen: "$rowPrefix.key IN ($userSettingKeys)",
+      );
     }
+
+    await customStatement(
+      'DROP TRIGGER IF EXISTS sync_settings_device_setting_insert',
+    );
+    await customStatement(
+      'DROP TRIGGER IF EXISTS sync_settings_device_setting_update',
+    );
+    await customStatement(
+      'DROP TRIGGER IF EXISTS sync_settings_device_setting_delete',
+    );
+    await customStatement(
+      "DELETE FROM offline_mutation_queue WHERE entity = 'device_setting'",
+    );
   }
 
   Future<void> _createSyncTrigger({

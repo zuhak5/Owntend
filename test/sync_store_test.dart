@@ -1001,54 +1001,55 @@ void main() {
     expect(await store.isPristineForCloudBootstrap(), isFalse);
   });
 
-  test(
-    'remote home location invalidates and tombstones device weather cache',
-    () async {
-      await db
-          .into(db.settings)
-          .insertOnConflictUpdate(
-            SettingsCompanion.insert(
-              key: 'weather_cache',
-              value: '{"temperature":24}',
-            ),
-          );
-      await db.delete(db.syncOutbox).go();
-      final now = DateTime.utc(2026, 6, 29);
+  test('remote home location invalidates device weather cache without enqueuing outbox mutation', () async {
+    await db
+        .into(db.settings)
+        .insertOnConflictUpdate(
+          SettingsCompanion.insert(
+            key: 'weather_cache',
+            value: '{"temperature":24}',
+          ),
+        );
+    await db.delete(db.syncOutbox).go();
+    final now = DateTime.utc(2026, 6, 29);
 
-      await store.applyRemoteRecords([
-        SyncRecord(
-          spec: syncSpecByEntity['user_setting']!,
-          recordKey: 'home_location',
-          values: {
-            'key': 'home_location',
-            'value': '{"label":"Baghdad","latitude":33.3,"longitude":44.4}',
-            'updated_at': now.toIso8601String(),
-          },
-          clientModifiedAt: now,
-          originDeviceId: 'device-b',
-          revision: 1,
-          serverUpdatedAt: now,
-        ),
-      ]);
+    await store.applyRemoteRecords([
+      SyncRecord(
+        spec: syncSpecByEntity['user_setting']!,
+        recordKey: 'home_location',
+        values: {
+          'key': 'home_location',
+          'value': '{"label":"Baghdad","latitude":33.3,"longitude":44.4}',
+          'updated_at': now.toIso8601String(),
+        },
+        clientModifiedAt: now,
+        originDeviceId: 'device-b',
+        revision: 1,
+        serverUpdatedAt: now,
+      ),
+    ]);
 
-      expect(
-        await (db.select(
-          db.settings,
-        )..where((row) => row.key.equals('weather_cache'))).getSingleOrNull(),
-        isNull,
-      );
-      final pending = await store.pendingMutations();
-      expect(
-        pending,
-        contains(
-          isA<LocalSyncMutation>()
-              .having((item) => item.entity, 'entity', 'device_setting')
-              .having((item) => item.recordKey, 'record key', 'weather_cache')
-              .having((item) => item.operation, 'operation', 'delete'),
-        ),
-      );
-    },
-  );
+    expect(
+      await (db.select(
+        db.settings,
+      )..where((row) => row.key.equals('weather_cache'))).getSingleOrNull(),
+      isNull,
+    );
+    final pending = await store.pendingMutations();
+    expect(pending.where((item) => item.entity == 'device_setting'), isEmpty);
+  });
+
+  test('readMutation gracefully returns null for legacy device_setting outbox mutation', () async {
+    final mutation = LocalSyncMutation(
+      entity: 'device_setting',
+      recordKey: 'weather_cache',
+      operation: 'delete',
+      changedAt: DateTime.now().toUtc(),
+      attempts: 0,
+    );
+    final record = await store.readMutation(mutation, 'device-test');
+    expect(record, isNull);
+  });
 
   test('remote inbox pulls retain 250 rows and queue tombstones', () async {
     final base = DateTime.utc(2026, 6, 1);

@@ -53,7 +53,15 @@ class SupabaseMonetizationRepository extends MonetizationRepository {
 
   @override
   Future<PointDebitResult> createAsset(Map<String, dynamic> operation) async {
-    return _createWithPointDebit('create_asset_with_point_debit', operation);
+    final unsignedPayload = Map<String, dynamic>.from(operation)
+      ..remove('request_hash');
+    final requestHash = sha256
+        .convert(utf8.encode(jsonEncode(unsignedPayload)))
+        .toString();
+    return _createWithPointDebit('create_asset_with_point_debit', {
+      ...unsignedPayload,
+      'request_hash': requestHash,
+    });
   }
 
   @override
