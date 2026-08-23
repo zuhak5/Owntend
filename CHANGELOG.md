@@ -19,6 +19,7 @@ The current application version is defined only in `pubspec.yaml`. Released vers
 
 ### Fixed
 
+- Fixed missing client SHA-256 `request_hash` generation during item and copy-item creation, eliminating `INVALID_REQUEST_HASH` failures on the `create_asset_with_point_debit` RPC, and added defense-in-depth automatic request hash computation in `SupabaseMonetizationRepository`.
 - Fixed `null` `client_updated_at` values in Supabase `server_change_feed` for `profile` records, backfilled existing rows, enforced `NOT NULL` on change-feed client timestamps, and added resilient `created_at` fallback in Flutter client change-feed parsing to prevent sync-blocking `incompatibleSchema` errors.
 - Fixed missing Android `GeneratedPluginRegistrant` in Shorebird release and patch builds by removing the premature registrant deletion before the Shorebird build invocation, ensuring plugin platform channels are present at runtime.
 - Fixed Android plugin registration in minified release builds by using additive Gradle sourceSet configuration and preserving Flutter plugin reflection entry points in ProGuard rules.

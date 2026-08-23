@@ -165,7 +165,7 @@ class _MoveCopyItemDialogState extends ConsumerState<MoveCopyItemDialog> {
           if (online) {
             try {
               final walletUserId = monetization.currentUserId;
-              final debit = await monetization.createAsset({
+              final unsignedPayload = <String, dynamic>{
                 'operation_id': copyOperationId,
                 'asset': {
                   'id': copiedAssetId,
@@ -197,6 +197,13 @@ class _MoveCopyItemDialogState extends ConsumerState<MoveCopyItemDialog> {
                       'metadata': _taskMetadataPayload(task.plan.metadata),
                     },
                 ],
+              };
+              final requestHash = sha256
+                  .convert(utf8.encode(jsonEncode(unsignedPayload)))
+                  .toString();
+              final debit = await monetization.createAsset({
+                ...unsignedPayload,
+                'request_hash': requestHash,
               });
               if (walletUserId != null) {
                 ref
@@ -1260,7 +1267,7 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
           throw StateError('Cloud points service is unavailable.');
         }
         final walletUserId = monetization.currentUserId;
-        final debit = await monetization.createAsset({
+        final unsignedPayload = <String, dynamic>{
           'operation_id': _creationOperationId ??= _uuid.v7(),
           'asset': {
             'id': assetId,
@@ -1273,6 +1280,13 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
           },
           'details': _pointAssetDetailsPayload(),
           'initial_plans': const <Map<String, dynamic>>[],
+        };
+        final requestHash = sha256
+            .convert(utf8.encode(jsonEncode(unsignedPayload)))
+            .toString();
+        final debit = await monetization.createAsset({
+          ...unsignedPayload,
+          'request_hash': requestHash,
         });
         debitResult = debit;
         if (walletUserId != null) {

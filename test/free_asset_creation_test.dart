@@ -113,6 +113,34 @@ void main() {
       },
     );
 
+    test('asset creation payload includes a valid 64-char hex request_hash', () async {
+      final unsignedPayload = {
+        'operation_id': 'op-asset-002',
+        'asset': {
+          'id': 'asset-free-002',
+          'name': 'Kitchen Blender',
+          'asset_type': 'device',
+          'room_id': 'room-kitchen',
+        },
+        'details': {'brand': 'BrandX', 'model': 'BX-100'},
+        'initial_plans': const <Map<String, dynamic>>[],
+      };
+      final repo = _ZeroPointsMonetizationRepository();
+      await repo.createAsset({
+        ...unsignedPayload,
+        'request_hash':
+            'c813adc62ab3f9d608220e84a969c7055803e54847eb667ece9e427f498a0b7d',
+      });
+
+      expect(repo.createAssetCalls, hasLength(1));
+      final call = repo.createAssetCalls.first;
+      expect(call['request_hash'], isA<String>());
+      expect(
+        call['request_hash'] as String,
+        matches(RegExp(r'^[0-9a-f]{64}$')),
+      );
+    });
+
     test('creating a standalone task with 0 balance throws InsufficientPointsException', () async {
       final repo = _ZeroPointsMonetizationRepository();
       final operationStore = TaskCreationOperationStore();

@@ -84,11 +84,23 @@ class SupabaseMonetizationRepository extends MonetizationRepository {
     String functionName,
     Map<String, dynamic> operation,
   ) async {
+    final payload = Map<String, dynamic>.from(operation);
+    final rawHash = payload['request_hash'];
+    final normalizedHash = rawHash is String
+        ? rawHash.trim().toLowerCase()
+        : '';
+    if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(normalizedHash)) {
+      final unsignedPayload = Map<String, dynamic>.from(payload)
+        ..remove('request_hash');
+      payload['request_hash'] = sha256
+          .convert(utf8.encode(jsonEncode(unsignedPayload)))
+          .toString();
+    }
     late final Map<String, dynamic> data;
     try {
       data = await client.rpc<Map<String, dynamic>>(
         functionName,
-        params: {'p_operation': operation},
+        params: {'p_operation': payload},
       );
     } on PostgrestException catch (error) {
       if (error.message == 'OPERATION_ID_REUSED') {
