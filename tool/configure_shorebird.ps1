@@ -45,25 +45,8 @@ if ($content -match '\$\{SHOREBIRD_[A-Z_]+\}') {
     (New-Object System.Text.UTF8Encoding($false))
 )
 
-if ($EnsurePubspecAsset) {
-    $pubspec = Get-Content -LiteralPath $pubspecPath -Raw
-    if ($pubspec -notmatch '(?m)^\s{4}-\s+shorebird\.yaml\s*$') {
-        if ($pubspec -notmatch '(?m)^\s{2}assets:\s*$') {
-            throw 'pubspec.yaml has no flutter assets block for Shorebird initialization.'
-        }
-        $pubspec = [regex]::Replace(
-            $pubspec,
-            '(?m)^(\s{2}assets:\s*\r?\n)',
-            "`$1    - shorebird.yaml`r`n",
-            1
-        )
-        [System.IO.File]::WriteAllText(
-            $pubspecPath,
-            $pubspec,
-            (New-Object System.Text.UTF8Encoding($false))
-        )
-    }
-}
+# Shorebird CLI automatically handles bundling shorebird.yaml into assets
+# during release and patch builds. Do not inject raw shorebird.yaml into pubspec.yaml.
 
 $hash = (Get-FileHash -LiteralPath $outputPath -Algorithm SHA256).Hash.ToLowerInvariant()
 Write-Host "Generated ignored shorebird.yaml for dev, staging, and prod (SHA-256 $hash)."
