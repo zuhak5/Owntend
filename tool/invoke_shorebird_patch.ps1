@@ -28,10 +28,32 @@ $appId = $appIdMatch.Groups[1].Value.ToLowerInvariant()
 $canonical = Get-Content -LiteralPath (Join-Path $workspace 'config\toolchain.json') -Raw | ConvertFrom-Json
 $shorebirdPin = $canonical.canonicalToolchain.tools.shorebirdCli
 
+function ConvertFrom-ShorebirdJsonOutput {
+    param(
+        [Parameter(Mandatory = $true)][string]$CommandOutput,
+        [Parameter(Mandatory = $true)][string]$Context
+    )
+
+    # Shorebird may emit progress and Git warnings on the same merged stream even
+    # when --json is requested. The JSON envelope is the final payload, so locate
+    # it explicitly instead of attempting to parse the entire diagnostic stream.
+    $jsonStart = $CommandOutput.LastIndexOf('{"status":')
+    if ($jsonStart -lt 0) {
+        throw "$Context did not emit a Shorebird JSON envelope.`n$CommandOutput"
+    }
+    $jsonText = $CommandOutput.Substring($jsonStart).Trim()
+    try {
+        return $jsonText | ConvertFrom-Json
+    }
+    catch {
+        throw "$Context JSON was invalid.`nJSON payload:`n$jsonText`nFull output:`n$CommandOutput"
+    }
+}
+
 function Get-ReleasePatches {
-    $jsonText = (& shorebird patches list --release-version $ReleaseVersion --app-id $appId --json 2>&1 | Out-String).Trim()
-    if ($LASTEXITCODE -ne 0) { throw "Could not list Shorebird patches.`n$jsonText" }
-    try { $envelope = $jsonText | ConvertFrom-Json } catch { throw "Shorebird patch-list JSON was invalid.`n$jsonText" }
+    $commandOutput = (& shorebird patches list --release-version $ReleaseVersion --app-id $appId --json 2>&1 | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0) { throw "Could not list Shorebird patches.`n$commandOutput" }
+    $envelope = ConvertFrom-ShorebirdJsonOutput -CommandOutput $commandOutput -Context 'Shorebird patch-list'
     if ($envelope.status -ne 'success') { throw 'Shorebird patch-list request did not report success.' }
     return @($envelope.data.patches)
 }
