@@ -51,7 +51,7 @@ export const approvedActionReleases = Object.freeze({
     '7c6bc770dae815cd3e89ee6cdf493a5fab2cc093': 'v3.0.0',
   }),
   'google-github-actions/setup-gcloud': Object.freeze({
-    e427ad8a34f8676edf47cf7d7925499adf3eb74f: 'v2.2.1',
+    aa5489c8933f4cc7a4f7d45035b3b1440c9c10db: 'v3.0.1',
   }),
   'subosito/flutter-action': Object.freeze({
     '1a449444c387b1966244ae4d4f8c696479add0b2': 'v2.23.0',

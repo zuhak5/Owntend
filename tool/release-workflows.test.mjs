@@ -127,7 +127,7 @@ test('Shorebird release rail is dry-run by default and preserves production gate
   assert.match(workflow, /secrets\.SHOREBIRD_TOKEN/);
   assert.match(workflow, /vars\.SHOREBIRD_(?:DEV|STAGING|PROD)_APP_ID/);
   assert.match(workflow, /google-github-actions\/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3\.0\.0/);
-  assert.match(workflow, /setup-gcloud@e427ad8a34f8676edf47cf7d7925499adf3eb74f # v2\.2\.1/);
+  assert.match(workflow, /setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3\.0\.1/);
   assert.match(workflow, /version: "581\.0\.0"/);
   assert.match(workflow, /invoke_shorebird_release\.ps1 @Parameters -DryRun/);
   const releasePolicyTest = workflow.indexOf('node --test tool/shorebird.test.mjs tool/toolchain.test.mjs');
