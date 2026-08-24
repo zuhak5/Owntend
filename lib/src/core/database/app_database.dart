@@ -229,7 +229,7 @@ class MaintenancePlanMetadata extends Table {
   TextColumn get requiredMaterialsJson =>
       text().withDefault(const Constant('[]'))();
   TextColumn get reminderRecommendation => text().nullable()();
-  IntColumn get sortOrder => integer().nullable()();
+  IntColumn get sortOrder => integer().withDefault(const Constant(0))();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
 

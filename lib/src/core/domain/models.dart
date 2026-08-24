@@ -476,7 +476,7 @@ class TaskMetadata {
     this.estimatedDurationMinutes,
     this.requiredMaterials = const [],
     this.reminderRecommendation,
-    this.sortOrder,
+    this.sortOrder = 0,
   });
 
   final String? taskType;
@@ -484,7 +484,7 @@ class TaskMetadata {
   final int? estimatedDurationMinutes;
   final List<String> requiredMaterials;
   final String? reminderRecommendation;
-  final int? sortOrder;
+  final int sortOrder;
 }
 
 class MaintenancePlan {

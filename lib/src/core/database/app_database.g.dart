@@ -5481,9 +5481,10 @@ class $MaintenancePlanMetadataTable extends MaintenancePlanMetadata
   late final GeneratedColumn<int> sortOrder = GeneratedColumn<int>(
     'sort_order',
     aliasedName,
-    true,
+    false,
     type: DriftSqlType.int,
     requiredDuringInsert: false,
+    defaultValue: const Constant(0),
   );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
@@ -5640,7 +5641,7 @@ class $MaintenancePlanMetadataTable extends MaintenancePlanMetadata
       sortOrder: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}sort_order'],
-      ),
+      )!,
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -5666,7 +5667,7 @@ class MaintenancePlanMetadataRow extends DataClass
   final int? estimatedDurationMinutes;
   final String requiredMaterialsJson;
   final String? reminderRecommendation;
-  final int? sortOrder;
+  final int sortOrder;
   final DateTime createdAt;
   final DateTime updatedAt;
   const MaintenancePlanMetadataRow({
@@ -5676,7 +5677,7 @@ class MaintenancePlanMetadataRow extends DataClass
     this.estimatedDurationMinutes,
     required this.requiredMaterialsJson,
     this.reminderRecommendation,
-    this.sortOrder,
+    required this.sortOrder,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -5699,9 +5700,7 @@ class MaintenancePlanMetadataRow extends DataClass
     if (!nullToAbsent || reminderRecommendation != null) {
       map['reminder_recommendation'] = Variable<String>(reminderRecommendation);
     }
-    if (!nullToAbsent || sortOrder != null) {
-      map['sort_order'] = Variable<int>(sortOrder);
-    }
+    map['sort_order'] = Variable<int>(sortOrder);
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
     return map;
@@ -5723,9 +5722,7 @@ class MaintenancePlanMetadataRow extends DataClass
       reminderRecommendation: reminderRecommendation == null && nullToAbsent
           ? const Value.absent()
           : Value(reminderRecommendation),
-      sortOrder: sortOrder == null && nullToAbsent
-          ? const Value.absent()
-          : Value(sortOrder),
+      sortOrder: Value(sortOrder),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
     );
@@ -5749,7 +5746,7 @@ class MaintenancePlanMetadataRow extends DataClass
       reminderRecommendation: serializer.fromJson<String?>(
         json['reminderRecommendation'],
       ),
-      sortOrder: serializer.fromJson<int?>(json['sortOrder']),
+      sortOrder: serializer.fromJson<int>(json['sortOrder']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
     );
@@ -5768,7 +5765,7 @@ class MaintenancePlanMetadataRow extends DataClass
       'reminderRecommendation': serializer.toJson<String?>(
         reminderRecommendation,
       ),
-      'sortOrder': serializer.toJson<int?>(sortOrder),
+      'sortOrder': serializer.toJson<int>(sortOrder),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
     };
@@ -5781,7 +5778,7 @@ class MaintenancePlanMetadataRow extends DataClass
     Value<int?> estimatedDurationMinutes = const Value.absent(),
     String? requiredMaterialsJson,
     Value<String?> reminderRecommendation = const Value.absent(),
-    Value<int?> sortOrder = const Value.absent(),
+    int? sortOrder,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) => MaintenancePlanMetadataRow(
@@ -5797,7 +5794,7 @@ class MaintenancePlanMetadataRow extends DataClass
     reminderRecommendation: reminderRecommendation.present
         ? reminderRecommendation.value
         : this.reminderRecommendation,
-    sortOrder: sortOrder.present ? sortOrder.value : this.sortOrder,
+    sortOrder: sortOrder ?? this.sortOrder,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -5876,7 +5873,7 @@ class MaintenancePlanMetadataCompanion
   final Value<int?> estimatedDurationMinutes;
   final Value<String> requiredMaterialsJson;
   final Value<String?> reminderRecommendation;
-  final Value<int?> sortOrder;
+  final Value<int> sortOrder;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   final Value<int> rowid;
@@ -5940,7 +5937,7 @@ class MaintenancePlanMetadataCompanion
     Value<int?>? estimatedDurationMinutes,
     Value<String>? requiredMaterialsJson,
     Value<String?>? reminderRecommendation,
-    Value<int?>? sortOrder,
+    Value<int>? sortOrder,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
     Value<int>? rowid,
@@ -18370,7 +18367,7 @@ typedef $$MaintenancePlanMetadataTableCreateCompanionBuilder =
       Value<int?> estimatedDurationMinutes,
       Value<String> requiredMaterialsJson,
       Value<String?> reminderRecommendation,
-      Value<int?> sortOrder,
+      Value<int> sortOrder,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<int> rowid,
@@ -18383,7 +18380,7 @@ typedef $$MaintenancePlanMetadataTableUpdateCompanionBuilder =
       Value<int?> estimatedDurationMinutes,
       Value<String> requiredMaterialsJson,
       Value<String?> reminderRecommendation,
-      Value<int?> sortOrder,
+      Value<int> sortOrder,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<int> rowid,
@@ -18680,7 +18677,7 @@ class $$MaintenancePlanMetadataTableTableManager
                 Value<int?> estimatedDurationMinutes = const Value.absent(),
                 Value<String> requiredMaterialsJson = const Value.absent(),
                 Value<String?> reminderRecommendation = const Value.absent(),
-                Value<int?> sortOrder = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -18704,7 +18701,7 @@ class $$MaintenancePlanMetadataTableTableManager
                 Value<int?> estimatedDurationMinutes = const Value.absent(),
                 Value<String> requiredMaterialsJson = const Value.absent(),
                 Value<String?> reminderRecommendation = const Value.absent(),
-                Value<int?> sortOrder = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),

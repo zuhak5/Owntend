@@ -292,14 +292,36 @@ Map<String, dynamic> _toRemoteCompatible(
 ) {
   return {
     for (final entry in source.entries)
-      entry.key: spec.dateColumns.contains(entry.key)
-          ? _dateToIso(entry.value)
-          : spec.boolColumns.contains(entry.key)
-          ? entry.value == true || entry.value == 1
-          : spec.jsonColumns.contains(entry.key) && entry.value is String
-          ? jsonDecode(entry.value as String)
-          : entry.value,
+      entry.key: _sanitizeRemoteValue(entry.key, entry.value, spec),
   };
+}
+
+dynamic _sanitizeRemoteValue(String key, dynamic value, SyncEntitySpec spec) {
+  if (key == 'sort_order') {
+    return value is num ? value.toInt() : 0;
+  }
+  if (key == 'reminder_days_before') {
+    return value is num ? value.toInt() : 0;
+  }
+  if (key == 'is_enabled') {
+    return value == null ? true : (value == true || value == 1);
+  }
+  if (key == 'is_primary') {
+    return value == null ? false : (value == true || value == 1);
+  }
+  if (key == 'required_materials_json') {
+    return (value == null || value.toString().trim().isEmpty) ? '[]' : value;
+  }
+  if (spec.dateColumns.contains(key)) {
+    return _dateToIso(value);
+  }
+  if (spec.boolColumns.contains(key)) {
+    return value == true || value == 1;
+  }
+  if (spec.jsonColumns.contains(key) && value is String) {
+    return jsonDecode(value);
+  }
+  return value;
 }
 
 String? _dateToIso(dynamic value) {

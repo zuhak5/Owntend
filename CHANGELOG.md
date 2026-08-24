@@ -6,6 +6,8 @@ The current application version is defined only in `pubspec.yaml`. Released vers
 
 ## Unreleased
 
+- Hardened Supabase schema triggers and Flutter sync serialization across all 17 synchronized tables: `set_owntend_row_metadata()` now defensively coalesces default-backed NOT NULL columns (`sort_order`, `required_materials_json`, `reminder_days_before`, `is_enabled`, `is_primary`, `created_at`, `revision`) on `BEFORE INSERT OR UPDATE`, Drift `MaintenancePlanMetadata` defaults `sortOrder` to `0`, `TaskMetadata` defaults `sortOrder` to `0`, and local-to-remote DTO serialization sanitizes all default values before payload dispatch, resolving `23502` constraint violations. Bumped application version to `1.0.0+6`.
+
 - Automated continuous delivery pipeline from Shorebird production publish to public VersionDeck download site: `Verify Production APK Artifact Set` now automatically creates/updates the official GitHub Release with verified ABI APKs and SHA-256 checksums upon successful APK verification, and triggers `Deploy VersionDeck` via `workflow_run` to generate the verified manifest and deploy the update to GitHub Pages.
 - Upgraded Android compilation target to `compileSdk = 37` across build scripts and canonical toolchain specifications to resolve Android 16/17 AAR metadata requirements from modern AndroidX and native storage/permission plugins, while keeping runtime target at `targetSdk = 36` and minimum reach at `minSdk = 26`.
 - Upgraded `archive` to `^4.2.0` (resolving large archive streaming and `XZDecoder` fixes) and verified 100% compliance across all 312 package dependencies under license and vulnerability review policies.
