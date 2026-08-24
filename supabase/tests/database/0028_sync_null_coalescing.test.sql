@@ -68,8 +68,8 @@ select extensions.is(
 );
 
 -- 6. Insert asset photo with explicit null is_primary
-insert into public.asset_photos (user_id, id, asset_id, storage_path, thumbnail_path, is_primary)
-values ('00000000-0000-0000-0000-000000000099', 'photo_null_test', 'asset_null_test', 'test/path.jpg', 'test/thumb.jpg', null);
+insert into public.asset_photos (user_id, id, asset_id, object_path, is_primary)
+values ('00000000-0000-0000-0000-000000000099', 'photo_null_test', 'asset_null_test', '00000000-0000-0000-0000-000000000099/photo.jpg', null);
 
 select extensions.is(
   (select is_primary from public.asset_photos where id = 'photo_null_test'),
