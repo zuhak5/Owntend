@@ -337,7 +337,21 @@ String? _dateToIso(dynamic value) {
 }
 
 Object? _toLocalValue(SyncEntitySpec spec, String column, dynamic value) {
-  if (value == null) return null;
+  if (value == null) {
+    if (column == 'sort_order' || column == 'reminder_days_before') {
+      return 0;
+    }
+    if (column == 'is_enabled') {
+      return 1;
+    }
+    if (column == 'is_primary') {
+      return 0;
+    }
+    if (column == 'required_materials_json') {
+      return '[]';
+    }
+    return null;
+  }
   if (spec.dateColumns.contains(column)) {
     final date = value is DateTime ? value : DateTime.parse(value.toString());
     return date.toUtc().millisecondsSinceEpoch ~/ 1000;
@@ -346,6 +360,7 @@ Object? _toLocalValue(SyncEntitySpec spec, String column, dynamic value) {
     return value == true ? 1 : 0;
   }
   if (spec.jsonColumns.contains(column)) {
+    if (value is String) return value;
     return jsonEncode(value);
   }
   return value as Object;

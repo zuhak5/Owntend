@@ -508,7 +508,20 @@ class SyncRecord {
   factory SyncRecord.fromRemote(SyncEntitySpec spec, Map<String, dynamic> row) {
     final values = <String, dynamic>{};
     for (final remoteColumn in spec.remoteDataColumns) {
-      values[spec.localColumnFor(remoteColumn)] = row[remoteColumn];
+      final localCol = spec.localColumnFor(remoteColumn);
+      var val = row[remoteColumn];
+      if (val == null) {
+        if (localCol == 'sort_order' || localCol == 'reminder_days_before') {
+          val = 0;
+        } else if (localCol == 'is_enabled') {
+          val = true;
+        } else if (localCol == 'is_primary') {
+          val = false;
+        } else if (localCol == 'required_materials_json') {
+          val = '[]';
+        }
+      }
+      values[localCol] = val;
     }
     final updatedAtText =
         row['updated_at'] as String? ??
