@@ -1,3 +1,4 @@
+import 'package:drift/drift.dart' hide isNull, isNotNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:owntend/src/core/database/app_database.dart';
@@ -42,7 +43,17 @@ void main() {
     await store.setHydrationPlan(20);
     await store.addHydrationUnits(5);
     await store.setHydrationStage(InitialHydrationStage.restoringCloudData);
-    await store.setCursor('room', 1234, lastRecordKey: 'room-b');
+    // WP-010: cursor rows are arranged through Drift after the legacy
+    // per-entity cursor API was deleted from LocalSyncStore.
+    await store.db
+        .into(store.db.syncCursors)
+        .insertOnConflictUpdate(
+          SyncCursorsCompanion.insert(
+            entity: 'room',
+            lastSyncSeq: const Value(1234),
+            lastRecordKey: const Value('room-b'),
+          ),
+        );
     await store.failHydration('Network unavailable.');
 
     final relaunchedStore = LocalSyncStore(database);
@@ -54,7 +65,13 @@ void main() {
     expect(retained?.totalUnits, 20);
     expect(retained?.percentage, 25);
     expect(retained?.failure, 'Network unavailable.');
-    expect(await relaunchedStore.cursorCheckpoint('room'), (1234, 'room-b'));
+    // WP-010: cursor rows are asserted through Drift after the legacy
+    // per-entity cursor API was deleted from LocalSyncStore.
+    final roomCursor = await (relaunchedStore.db.select(
+      relaunchedStore.db.syncCursors,
+    )..where((item) => item.entity.equals('room'))).getSingleOrNull();
+    expect(roomCursor?.lastSyncSeq, 1234);
+    expect(roomCursor?.lastRecordKey, 'room-b');
 
     final resumed = await relaunchedStore.beginOrResumeHydration();
     expect(resumed.runId, started.runId);

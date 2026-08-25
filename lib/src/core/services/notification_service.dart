@@ -3,7 +3,6 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tz;
@@ -151,9 +150,6 @@ void owntendWorkManagerCallback() {
     }
   });
 }
-
-@pragma('vm:entry-point')
-void homeKeeperWorkManagerCallback() => owntendWorkManagerCallback();
 
 @pragma('vm:entry-point')
 Future<bool> runCloudSyncInBackground({
@@ -371,15 +367,12 @@ class OwntendNotificationScheduler
   }
 
   @override
-  Future<void> requestPermissions({bool exactAlarms = false}) async {
+  Future<void> requestPermissions() async {
     final gateway = _permissionGateway;
     if (gateway == null) {
       throw StateError('Permission requests require an AppPermissionGateway.');
     }
     await gateway.request(AppPermissionKind.notifications);
-    if (exactAlarms) {
-      await gateway.request(AppPermissionKind.exactAlarms);
-    }
   }
 
   @override
@@ -395,7 +388,6 @@ class OwntendNotificationScheduler
         await android?.areNotificationsEnabled() ?? true;
     return NotificationPermissionState(
       notificationsEnabled: notificationsEnabled,
-      canScheduleExact: false,
     );
   }
 
@@ -938,6 +930,9 @@ class OwntendNotificationScheduler
     );
   }
 
+  /// Schedules an inexact local notification. Exact-alarm modes are never
+  /// requested by Owntend, so there is no fallback branch: scheduling either
+  /// succeeds or the error propagates to the reconciliation owner.
   Future<void> _safeZonedSchedule({
     required int id,
     required String? title,
@@ -947,32 +942,15 @@ class OwntendNotificationScheduler
     required AndroidScheduleMode androidScheduleMode,
     String? payload,
   }) async {
-    try {
-      await _plugin.zonedSchedule(
-        id: id,
-        title: title,
-        body: body,
-        scheduledDate: scheduledDate,
-        notificationDetails: notificationDetails,
-        androidScheduleMode: androidScheduleMode,
-        payload: payload,
-      );
-    } on PlatformException catch (error) {
-      if (androidScheduleMode != AndroidScheduleMode.inexactAllowWhileIdle) {
-        AppLogger.warning('exact_alarm_fallback_to_inexact', error: error);
-        await _plugin.zonedSchedule(
-          id: id,
-          title: title,
-          body: body,
-          scheduledDate: scheduledDate,
-          notificationDetails: notificationDetails,
-          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-          payload: payload,
-        );
-        return;
-      }
-      rethrow;
-    }
+    await _plugin.zonedSchedule(
+      id: id,
+      title: title,
+      body: body,
+      scheduledDate: scheduledDate,
+      notificationDetails: notificationDetails,
+      androidScheduleMode: androidScheduleMode,
+      payload: payload,
+    );
   }
 
   @override
@@ -1194,102 +1172,4 @@ class _DesiredReminder {
 
   final ReminderScheduleEntry snapshot;
   final Future<void> Function() schedule;
-}
-
-class NotificationMessageGenerator {
-  const NotificationMessageGenerator();
-
-  String taskMessage({
-    required TaskItem task,
-    required DateTime now,
-    StreakState? streak,
-    DashboardSummary? dashboard,
-  }) {
-    final overdue = now.difference(task.plan.nextDueDate);
-    final overdueText = overdue.isNegative ? null : durationLabel(overdue);
-    if (overdueText != null) {
-      return _limit(
-        '${task.plan.title} is $overdueText overdue for ${task.asset.name}.',
-      );
-    }
-    final streakText = streak == null || streak.currentStreak == 0
-        ? null
-        : '${streak.currentStreak}-day streak';
-    final progressText = dashboard == null
-        ? null
-        : '${(dashboard.completionRate * 100).round()}% monthly';
-    final timeText = _timeOfDay(now);
-    final templates = [
-      '$timeText reminder: ${task.asset.name} needs ${task.plan.title}.',
-      overdueText == null
-          ? '${task.plan.title} is due for ${task.asset.name}.'
-          : '${task.plan.title} is $overdueText overdue for ${task.asset.name}.',
-      streakText == null
-          ? '${task.asset.name}: ${task.plan.title}.'
-          : '${task.plan.title} is ready. Current streak: $streakText.',
-      progressText == null
-          ? 'Task ready: ${task.plan.title}.'
-          : '$progressText complete. Next up: ${task.plan.title}.',
-      '${task.asset.name} has a ${_assetTypeCareLabel(task.asset.assetType)} task due.',
-    ];
-    final seed = [
-      task.plan.id,
-      task.plan.nextDueDate.hour,
-      now.day,
-      now.hour ~/ 4,
-      task.status.name,
-    ].join(':');
-    final index = _stableIndex(seed, templates.length);
-    return _limit(templates[index]);
-  }
-
-  int _stableIndex(String value, int modulo) {
-    var hash = 0;
-    for (final codeUnit in value.codeUnits) {
-      hash = ((hash * 31) + codeUnit) & 0x7fffffff;
-    }
-    return hash % modulo;
-  }
-
-  String _timeOfDay(DateTime now) {
-    if (now.hour < 12) {
-      return 'morning';
-    }
-    if (now.hour < 17) {
-      return 'afternoon';
-    }
-    return 'evening';
-  }
-
-  String _assetTypeCareLabel(AssetType type) {
-    return switch (type) {
-      AssetType.safety => 'safety',
-      AssetType.pet => 'pet care',
-      AssetType.device => 'appliance',
-      AssetType.plant => 'plant',
-      AssetType.general => 'home',
-    };
-  }
-
-  String durationLabel(Duration duration) {
-    final minutes = duration.inMinutes;
-    if (minutes < 60) {
-      return '${minutes.clamp(1, 59)}m';
-    }
-    final hours = duration.inHours;
-    if (hours < 48) {
-      final remainder = minutes.remainder(60);
-      return remainder == 0 ? '${hours}h' : '${hours}h ${remainder}m';
-    }
-    final days = duration.inDays;
-    return '$days day${days == 1 ? '' : 's'}';
-  }
-
-  String _limit(String value) {
-    final normalized = value.replaceAll(RegExp(r'\s+'), ' ').trim();
-    if (normalized.length <= 110) {
-      return normalized;
-    }
-    return '${normalized.substring(0, 107).trimRight()}...';
-  }
 }

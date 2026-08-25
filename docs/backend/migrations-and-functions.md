@@ -1,5 +1,14 @@
 # Backend Migrations and Edge Functions
 
+### Browser origin allowlists (WP-002)
+
+`delete-account` and `account-deletion-status` allow browser origins
+`https://owntend.app` plus development origins (`localhost:4173`,
+`127.0.0.1:4173`) only when the runtime environment variable
+`OWNTEND_FUNCTIONS_ENV` is set to a non-`production` value. Unset defaults to
+production so hosted deployments fail closed; pgTAP/unit coverage asserts both
+postures.
+
 ## Migration policy
 
 The repository lifecycle checkbox in `AGENTS.md` decides whether Supabase history is a disposable baseline or production history.
@@ -122,7 +131,27 @@ Database-side pgTAP coverage independently locks the exposed RPC security mode, 
 
 ## Deno validation
 
-The backend and Android release workflows enforce locked `deno fmt --check`, `deno check --frozen`, and `deno test --frozen` commands for `admob-ssv-handler`, `delete-account`, and `account-deletion-status`. Passing them validates committed source contracts only; it does not prove which revision or secrets are deployed to a hosted project.
+Every deployable function owns an exact `deno.json` (no caret ranges) and its
+own `deno.lock`; the shared `_shared` helpers are compiled through each
+function's config and the root `deno.json` exists only for repository-wide
+formatting and `_shared` tests. The backend, Android release, and endpoint
+integration workflows enforce locked `deno fmt --check`, `deno check --frozen`,
+and `deno test --frozen` commands for `admob-ssv-handler`, `delete-account`,
+`account-deletion-status`, and `process-media-cleanup`. Passing them validates
+committed source contracts only; it does not prove which revision or secrets
+are deployed to a hosted project.
+
+## Disposable backend integration lane
+
+`npm run test:backend-integration` is the canonical backend gate. It builds an
+isolated disposable workspace (unique project id, shifted ports, CLI link state
+never copied), starts a blank local stack that applies exactly the one baseline
+migration, lints the schema, runs the full pgTAP suite against the blank
+baseline, serves every configured Edge Function over real HTTP with a run-scoped
+worker capability, executes `supabase/tests/integration/*.test.ts` through the
+actual `/functions/v1/...` gateway, and tears everything down in every outcome.
+Credentials stay in memory; nothing is printed. The lane refuses to target any
+developer-started stack and can never reach a hosted project.
 
 ## Pre-launch canonical baseline
 

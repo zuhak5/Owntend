@@ -58,7 +58,7 @@ class SupabaseMonetizationRepository extends MonetizationRepository {
     final requestHash = sha256
         .convert(utf8.encode(jsonEncode(unsignedPayload)))
         .toString();
-    return _createWithPointDebit('create_asset_with_point_debit', {
+    return _createWithPointDebit('create_asset', {
       ...unsignedPayload,
       'request_hash': requestHash,
     });

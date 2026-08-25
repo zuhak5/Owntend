@@ -36,6 +36,7 @@ enum SyncMutationState {
   pending,
   inFlight,
   conflictRecovery,
+  conflict,
   failedVisible;
 
   static SyncMutationState fromStorage(String value) {
@@ -80,6 +81,7 @@ class SyncEntitySpec {
     this.boolColumns = const {},
     this.jsonColumns = const {},
     this.remoteRenames = const {},
+    this.localOnlyColumns = const {},
     this.scope = SyncScope.shared,
     this.localWhere,
   });
@@ -94,11 +96,18 @@ class SyncEntitySpec {
   final Set<String> jsonColumns;
   final String modifiedExpression;
   final Map<String, String> remoteRenames;
+
+  /// Local columns that never exist on the remote table. They are excluded
+  /// from the remote select clause and from outgoing write payloads, and are
+  /// populated locally (for example by media materialization) instead.
+  final Set<String> localOnlyColumns;
+
   final SyncScope scope;
   final String? localWhere;
 
   List<String> get remoteDataColumns => [
-    for (final column in localColumns) remoteRenames[column] ?? column,
+    for (final column in localColumns)
+      if (!localOnlyColumns.contains(column)) remoteRenames[column] ?? column,
   ];
 
   List<String> get remoteSelectColumns => scope == SyncScope.catalog
@@ -314,12 +323,14 @@ const syncEntitySpecs = <SyncEntitySpec>[
       'relative_path',
       'caption',
       'is_primary',
+      'cloud_object_path',
       'created_at',
     ],
     dateColumns: {'created_at'},
     boolColumns: {'is_primary'},
     modifiedExpression: 'created_at',
-    remoteRenames: {'relative_path': 'object_path'},
+    remoteRenames: {'cloud_object_path': 'object_path'},
+    localOnlyColumns: {'relative_path'},
   ),
   SyncEntitySpec(
     entity: 'maintenance_plan',
@@ -496,7 +507,8 @@ class SyncRecord {
       'user_id': userId,
       if (spec.scope == SyncScope.deviceScoped) 'device_id': deviceId,
       for (final entry in values.entries)
-        spec.remoteColumnFor(entry.key): entry.value,
+        if (!spec.localOnlyColumns.contains(entry.key))
+          spec.remoteColumnFor(entry.key): entry.value,
     };
     payload.putIfAbsent(
       'updated_at',

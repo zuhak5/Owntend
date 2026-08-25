@@ -42,6 +42,8 @@ migrate_working_dir/
 /release/
 /output/
 /dist/
+/.versiondeck-site/
+/.versiondeck-diagnostics/
 /*.zip
 /.agents/
 /.codex-remote-attachments/
@@ -67,6 +69,7 @@ app.*.map.json
 
 # JavaScript tooling
 /node_modules/
+node_modules/
 
 # Supabase CLI state
 /supabase/.temp/
@@ -83,7 +86,5 @@ app.*.map.json
 /supabase/.env
 !/supabase/.env.example
 
-# JavaScript dependencies
-node_modules/
-
+# Supabase migration backup
 /supabase/migration_backup/

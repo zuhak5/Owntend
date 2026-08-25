@@ -107,7 +107,6 @@ class NotificationPreferences {
     this.reminderHour = 9,
     this.maxRemindersPerDay = 6,
     this.defaultSnoozeMinutes = 60,
-    this.preferExactReminders = false,
   });
 
   final bool enabled;
@@ -124,7 +123,6 @@ class NotificationPreferences {
   final int reminderHour;
   final int maxRemindersPerDay;
   final int defaultSnoozeMinutes;
-  final bool preferExactReminders;
 
   bool get allowsLocalReminders => enabled && localReminders;
   bool get allowsInbox => enabled && inAppInbox;
@@ -146,7 +144,6 @@ class NotificationPreferences {
     int? reminderHour,
     int? maxRemindersPerDay,
     int? defaultSnoozeMinutes,
-    bool? preferExactReminders,
   }) {
     return NotificationPreferences(
       enabled: enabled ?? this.enabled,
@@ -165,7 +162,6 @@ class NotificationPreferences {
       reminderHour: reminderHour ?? this.reminderHour,
       maxRemindersPerDay: maxRemindersPerDay ?? this.maxRemindersPerDay,
       defaultSnoozeMinutes: defaultSnoozeMinutes ?? this.defaultSnoozeMinutes,
-      preferExactReminders: preferExactReminders ?? this.preferExactReminders,
     );
   }
 }

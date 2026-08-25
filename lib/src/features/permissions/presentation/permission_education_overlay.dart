@@ -5,8 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:owntend/l10n/app_localizations_ext.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
-import '../../../../src/core/domain/models.dart';
-import '../../../../src/ui/app_theme.dart';
+import '../../../core/domain/models.dart';
+import '../../../ui/app_theme.dart';
 import '../application/permission_education_controller.dart';
 import '../domain/capability_snapshots.dart';
 import '../domain/permission_capability.dart';
@@ -63,9 +63,6 @@ class PermissionEducationOverlayWrapper extends ConsumerWidget {
       onEnableNotifications: () {
         notifier.enableNotifications();
       },
-      onEnableExactTiming: () {
-        notifier.enableExactTiming();
-      },
       onDefer: () {
         notifier.deferCurrentStep();
       },
@@ -87,7 +84,6 @@ class PermissionEducationOverlayWidget extends StatefulWidget {
     required this.onUseCurrentLocation,
     required this.onChooseLocationManually,
     required this.onEnableNotifications,
-    required this.onEnableExactTiming,
     required this.onDefer,
     required this.onFinishLater,
     this.status,
@@ -106,7 +102,6 @@ class PermissionEducationOverlayWidget extends StatefulWidget {
   final VoidCallback onUseCurrentLocation;
   final VoidCallback onChooseLocationManually;
   final VoidCallback onEnableNotifications;
-  final VoidCallback onEnableExactTiming;
   final VoidCallback onDefer;
   final VoidCallback onFinishLater;
   final CapabilityStatus? status;
@@ -253,7 +248,6 @@ class _PermissionEducationOverlayWidgetState
                           onChooseLocationManually:
                               widget.onChooseLocationManually,
                           onEnableNotifications: widget.onEnableNotifications,
-                          onEnableExactTiming: widget.onEnableExactTiming,
                           onDefer: widget.onDefer,
                           onFinishLater: widget.onFinishLater,
                           onOpenSettings: widget.onOpenSettings,
@@ -282,7 +276,6 @@ class _PermissionCapabilityCard extends StatelessWidget {
     required this.onUseCurrentLocation,
     required this.onChooseLocationManually,
     required this.onEnableNotifications,
-    required this.onEnableExactTiming,
     required this.onDefer,
     required this.onFinishLater,
     required this.status,
@@ -302,7 +295,6 @@ class _PermissionCapabilityCard extends StatelessWidget {
   final VoidCallback onUseCurrentLocation;
   final VoidCallback onChooseLocationManually;
   final VoidCallback onEnableNotifications;
-  final VoidCallback onEnableExactTiming;
   final VoidCallback onDefer;
   final VoidCallback onFinishLater;
   final CapabilityStatus? status;
@@ -317,21 +309,14 @@ class _PermissionCapabilityCard extends StatelessWidget {
     final nextAction = status?.nextAction ?? PermissionNextAction.request;
     final opensSettings =
         nextAction == PermissionNextAction.openAppSettings ||
-        nextAction == PermissionNextAction.openLocationSettings ||
-        nextAction == PermissionNextAction.openExactAlarmSettings;
+        nextAction == PermissionNextAction.openLocationSettings;
     final statusMessage = _statusMessage(context);
-    final exactIsGated =
-        capability == PermissionCapability.exactReminderTiming &&
-        notifications != null &&
-        !notifications!.preferences.allowsLocalReminders;
 
     final title = switch (capability) {
       PermissionCapability.deviceLocation =>
         context.l10n.permissionSetupWeatherTitle,
       PermissionCapability.notifications =>
         context.l10n.neverMissImportantMaintenance,
-      PermissionCapability.exactReminderTiming =>
-        context.l10n.permissionSetupExactOptionalTitle,
     };
 
     final body = switch (capability) {
@@ -339,8 +324,6 @@ class _PermissionCapabilityCard extends StatelessWidget {
         context.l10n.permissionSetupWeatherBody,
       PermissionCapability.notifications =>
         context.l10n.notificationEducationBody,
-      PermissionCapability.exactReminderTiming =>
-        context.l10n.permissionSetupExactOptionalBody,
     };
 
     final reassurance = switch (capability) {
@@ -348,8 +331,6 @@ class _PermissionCapabilityCard extends StatelessWidget {
         context.l10n.permissionSetupWeatherPrivacy,
       PermissionCapability.notifications =>
         context.l10n.notificationEducationReassurance,
-      PermissionCapability.exactReminderTiming =>
-        context.l10n.approximateReminderTimingWarning,
     };
 
     return Semantics(
@@ -404,11 +385,6 @@ class _PermissionCapabilityCard extends StatelessWidget {
                       ),
                     PermissionCapability.notifications =>
                       _NotificationCapabilityIllustration(
-                        animation: animation,
-                        reduceMotion: reduceMotion,
-                      ),
-                    PermissionCapability.exactReminderTiming =>
-                      _ExactAlarmCapabilityIllustration(
                         animation: animation,
                         reduceMotion: reduceMotion,
                       ),
@@ -473,8 +449,6 @@ class _PermissionCapabilityCard extends StatelessWidget {
                             Symbols.privacy_tip_rounded,
                           PermissionCapability.notifications =>
                             Symbols.tune_rounded,
-                          PermissionCapability.exactReminderTiming =>
-                            Symbols.schedule_rounded,
                         },
                         size: 20,
                         color: scheme.primary,
@@ -535,8 +509,7 @@ class _PermissionCapabilityCard extends StatelessWidget {
                       ),
                     ],
                   ),
-                ] else if (capability ==
-                    PermissionCapability.notifications) ...[
+                ] else ...[
                   Row(
                     children: [
                       Expanded(
@@ -573,49 +546,6 @@ class _PermissionCapabilityCard extends StatelessWidget {
                       ),
                     ],
                   ),
-                ] else ...[
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextButton(
-                          onPressed: isBusy ? null : onDefer,
-                          child: Text(
-                            context.l10n.permissionSetupUseApproximateTiming,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: HkSpacing.xs),
-                      Expanded(
-                        flex: 2,
-                        child: FilledButton.icon(
-                          onPressed: isBusy || exactIsGated
-                              ? null
-                              : opensSettings
-                              ? onOpenSettings
-                              : onEnableExactTiming,
-                          icon: isBusy
-                              ? const SizedBox.square(
-                                  dimension: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Icon(Symbols.alarm_on_rounded),
-                          label: Text(
-                            opensSettings
-                                ? context.l10n.permissionSetupManageInSettings
-                                : exactIsGated
-                                ? context
-                                      .l10n
-                                      .permissionExactRequiresDeviceReminders
-                                : context
-                                      .l10n
-                                      .permissionSetupAllowPreciseTiming,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
                 ],
               ],
             ),
@@ -647,10 +577,6 @@ class _PermissionCapabilityCard extends StatelessWidget {
     if (capability == PermissionCapability.notifications &&
         status?.effectiveState == EffectiveCapabilityState.blocked) {
       return context.l10n.permissionNotificationAccessRequired;
-    }
-    if (capability == PermissionCapability.exactReminderTiming &&
-        notifications?.usesApproximateTiming == true) {
-      return context.l10n.approximateTiming;
     }
     return null;
   }
@@ -820,82 +746,6 @@ class _NotificationCapabilityIllustration extends StatelessWidget {
                       Symbols.notifications_active_rounded,
                       color: scheme.primary,
                       size: 39,
-                    ),
-                  ),
-                ),
-              ],
-            );
-          },
-        ),
-      ),
-    );
-  }
-}
-
-class _ExactAlarmCapabilityIllustration extends StatelessWidget {
-  const _ExactAlarmCapabilityIllustration({
-    required this.animation,
-    required this.reduceMotion,
-  });
-
-  final Animation<double> animation;
-  final bool reduceMotion;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Semantics(
-      label: context.l10n.permissionSetupExactOptionalTitle,
-      image: true,
-      child: ExcludeSemantics(
-        child: AnimatedBuilder(
-          animation: animation,
-          builder: (context, child) {
-            final phase = reduceMotion ? 0.35 : animation.value;
-            return Stack(
-              alignment: Alignment.center,
-              children: [
-                Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(HkRadii.xl),
-                    gradient: LinearGradient(
-                      colors: [
-                        scheme.primaryContainer.withValues(alpha: 0.74),
-                        scheme.surfaceContainerLowest,
-                      ],
-                    ),
-                  ),
-                ),
-                Container(
-                  width: 82 + (phase * 5),
-                  height: 82 + (phase * 5),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: scheme.primary.withValues(alpha: 0.22),
-                      width: 3,
-                    ),
-                  ),
-                ),
-                Transform.translate(
-                  offset: Offset(0, reduceMotion ? 0 : -2 + (phase * 4)),
-                  child: Container(
-                    width: 66,
-                    height: 66,
-                    decoration: BoxDecoration(
-                      color: scheme.surfaceContainerLowest,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: scheme.primary.withValues(alpha: 0.18),
-                          blurRadius: 22,
-                        ),
-                      ],
-                    ),
-                    child: Icon(
-                      Symbols.alarm_on_rounded,
-                      color: scheme.primary,
-                      size: 40,
                     ),
                   ),
                 ),

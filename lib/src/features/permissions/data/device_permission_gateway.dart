@@ -75,7 +75,5 @@ class FlutterDevicePermissionGateway implements DevicePermissionGateway {
       switch (capability) {
         PermissionCapability.deviceLocation => AppPermissionKind.location,
         PermissionCapability.notifications => AppPermissionKind.notifications,
-        PermissionCapability.exactReminderTiming =>
-          AppPermissionKind.exactAlarms,
       };
 }

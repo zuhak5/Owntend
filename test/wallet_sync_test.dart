@@ -279,6 +279,11 @@ void main() {
     final taskController = File(
       'lib/src/features/maintenance/application/task_creation_controller.dart',
     ).readAsStringSync();
+    // WP-003: charged asset flow moved from the dialog into the application
+    // layer; the dialog itself must no longer touch wallet adoption.
+    final assetController = File(
+      'lib/src/features/assets/application/asset_creation_controller.dart',
+    ).readAsStringSync();
     final assetDialogs = File(
       'lib/src/features/assets/presentation/asset_dialogs.dart',
     ).readAsStringSync();
@@ -287,12 +292,8 @@ void main() {
     ).readAsStringSync();
 
     expect(taskController, contains('adoptAuthoritativeMutationResult'));
-    expect(
-      RegExp('adoptAuthoritativeMutationResult')
-          .allMatches(assetDialogs)
-          .length,
-      greaterThanOrEqualTo(2),
-    );
+    expect(assetController, contains('adoptAuthoritativeMutationResult'));
+    expect(assetDialogs, isNot(contains('adoptAuthoritativeMutationResult')));
     expect(
       resolver,
       contains('_adoptAuthoritativeBalance(accountScope, balance)'),

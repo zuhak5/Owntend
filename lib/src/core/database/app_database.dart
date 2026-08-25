@@ -10,7 +10,29 @@ import '../domain/models.dart';
 
 part 'app_database.g.dart';
 
+/// Monotonic generation identity for the local database.
+///
+/// A successful atomic restore closes the previous handles, swaps the data,
+/// and increments this epoch exactly once. Every database-derived provider
+/// reaches the database through [databaseProvider], which watches this value,
+/// so dependent caches dispose and reload without any cross-feature
+/// invalidation lists. Failed or rolled-back restores never publish a new
+/// epoch.
+class DatabaseRestoreEpoch extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  void bump() => state++;
+}
+
+final databaseRestoreEpochProvider =
+    NotifierProvider<DatabaseRestoreEpoch, int>(DatabaseRestoreEpoch.new);
+
 final databaseProvider = Provider<AppDatabase>((ref) {
+  // Depend on the restore epoch so the database (and therefore every
+  // repository and stream derived from it) is rebuilt when a restore swaps
+  // the underlying data.
+  ref.watch(databaseRestoreEpochProvider);
   final db = AppDatabase();
   ref.onDispose(db.close);
   return db;
@@ -178,6 +200,7 @@ class AssetPhotos extends Table {
   TextColumn get assetId =>
       text().references(Assets, #id, onDelete: KeyAction.cascade)();
   TextColumn get relativePath => text()();
+  TextColumn get cloudObjectPath => text().nullable()();
   TextColumn get caption => text().withLength(max: 500).nullable()();
   BoolColumn get isPrimary => boolean().withDefault(const Constant(false))();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
@@ -314,17 +337,34 @@ class SyncOutbox extends Table {
 
   TextColumn get entity => text()();
   TextColumn get recordKey => text()();
-  TextColumn get operation => text()();
+  TextColumn get operation => text().check(
+    const CustomExpression<bool>(
+      // 'upsert'/'delete' are written by the sync triggers; 'execute' is the
+      // maintenance-completion journal that must survive response loss.
+      "operation IN ('upsert', 'delete', 'execute')",
+    ),
+  )();
   TextColumn get payloadJson => text().nullable()();
   TextColumn get userId => text().nullable()();
   DateTimeColumn get changedAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get createdAt => dateTime().nullable()();
-  TextColumn get state => text().withDefault(const Constant('pending'))();
-  IntColumn get attempts => integer().withDefault(const Constant(0))();
+  TextColumn get state => text()
+      .withDefault(const Constant('pending'))
+      .check(
+        const CustomExpression<bool>(
+          "state IN ('pending', 'inFlight', 'conflictRecovery', "
+          "'failedVisible', 'conflict')",
+        ),
+      )();
+  IntColumn get attempts => integer()
+      .withDefault(const Constant(0))
+      .check(const CustomExpression<bool>('attempts >= -1'))();
   DateTimeColumn get nextAttemptAt => dateTime().nullable()();
   TextColumn get lastErrorCode => text().nullable()();
   TextColumn get lastError => text().nullable()();
-  IntColumn get generation => integer().withDefault(const Constant(1))();
+  IntColumn get generation => integer()
+      .withDefault(const Constant(1))
+      .check(const CustomExpression<bool>('generation >= 1'))();
 
   @override
   Set<Column<Object>> get primaryKey => {entity, recordKey};
@@ -355,10 +395,17 @@ class NotificationReconciliationRequests extends Table {
 
   TextColumn get scopeKey => text()();
   TextColumn get planId => text().nullable()();
-  TextColumn get reason => text()();
+  TextColumn get reason => text().check(
+    const CustomExpression<bool>(
+      "reason IN ('local_completion', 'undo_completion', "
+      "'occurrence_completed_elsewhere', 'completion_rejected')",
+    ),
+  )();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
-  IntColumn get attempts => integer().withDefault(const Constant(0))();
+  IntColumn get attempts => integer()
+      .withDefault(const Constant(0))
+      .check(const CustomExpression<bool>('attempts >= -1'))();
   DateTimeColumn get nextAttemptAt => dateTime().nullable()();
   TextColumn get lastErrorCode => text().nullable()();
   TextColumn get lastErrorMessage => text().nullable()();
@@ -374,11 +421,47 @@ class SyncCursors extends Table {
   String get tableName => 'sync_cursors';
 
   TextColumn get entity => text()();
-  IntColumn get lastSyncSeq => integer().withDefault(const Constant(0))();
+  IntColumn get lastSyncSeq => integer()
+      .withDefault(const Constant(0))
+      .check(const CustomExpression<bool>('last_sync_seq >= 0'))();
   TextColumn get lastRecordKey => text().nullable()();
+  IntColumn get feedGeneration => integer()
+      .withDefault(const Constant(1))
+      .check(const CustomExpression<bool>('feed_generation >= 1'))();
+  IntColumn get highWaterSeq => integer()
+      .withDefault(const Constant(0))
+      .check(const CustomExpression<bool>('high_water_seq >= 0'))();
 
   @override
   Set<Column<Object>> get primaryKey => {entity};
+}
+
+@DataClassName('SyncConflictRow')
+class SyncConflicts extends Table {
+  @override
+  String get tableName => 'sync_conflicts';
+
+  TextColumn get id => text()();
+  TextColumn get accountId => text()();
+  TextColumn get entity => text()();
+  TextColumn get recordKey => text()();
+  TextColumn get operationId => text().nullable()();
+  TextColumn get localPayloadJson => text().nullable()();
+  TextColumn get remotePayloadJson => text().nullable()();
+  IntColumn get remoteRevision => integer().nullable()();
+  TextColumn get resolutionStatus => text()
+      .withDefault(const Constant('unresolved'))
+      .check(
+        const CustomExpression<bool>(
+          "resolution_status IN ('unresolved', 'resolved_keep_local', "
+          "'resolved_keep_remote', 'resolved_server_acknowledged')",
+        ),
+      )();
+  DateTimeColumn get resolvedAt => dateTime().nullable()();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
 }
 
 class SyncShadows extends Table {
@@ -397,11 +480,33 @@ class SyncShadows extends Table {
   Set<Column<Object>> get primaryKey => {entity, recordKey};
 }
 
+/// Durable bookkeeping for incremental-feed records that were skipped because
+/// a local outbox intent masks them. A row here promises that the masked
+/// remote change is refetched once the masking intent resolves; the feed
+/// cursor may advance past such a record only while this promise exists.
+@DataClassName('SyncSkippedFeedEntryRow')
+class SyncSkippedFeedEntries extends Table {
+  @override
+  String get tableName => 'sync_skipped_feed_entries';
+
+  TextColumn get entity => text()();
+  TextColumn get recordKey => text()();
+  TextColumn get reason => text().check(
+    const CustomExpression<bool>(
+      "reason IN ('active_intent', 'conflict_or_terminal')",
+    ),
+  )();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+
+  @override
+  Set<Column<Object>> get primaryKey => {entity, recordKey};
+}
+
 class SyncRuntime extends Table {
   @override
   String get tableName => 'sync_runtime';
 
-  IntColumn get id => integer()();
+  IntColumn get id => integer().check(const CustomExpression<bool>('id = 1'))();
   BoolColumn get suppressOutbox =>
       boolean().withDefault(const Constant(false))();
   TextColumn get leaseOwner => text().nullable()();
@@ -409,6 +514,12 @@ class SyncRuntime extends Table {
 
   @override
   Set<Column<Object>> get primaryKey => {id};
+
+  @override
+  List<String> get customConstraints => const [
+    // A lease is either fully present or fully absent.
+    'CHECK ((lease_owner IS NULL) = (lease_expires_at IS NULL))',
+  ];
 }
 
 class SyncMediaCleanup extends Table {
@@ -420,7 +531,9 @@ class SyncMediaCleanup extends Table {
   TextColumn get entity => text()();
   TextColumn get recordKey => text()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
-  IntColumn get attempts => integer().withDefault(const Constant(0))();
+  IntColumn get attempts => integer()
+      .withDefault(const Constant(0))
+      .check(const CustomExpression<bool>('attempts >= -1'))();
   DateTimeColumn get nextAttemptAt => dateTime().nullable()();
   TextColumn get lastError => text().nullable()();
 
@@ -434,7 +547,9 @@ class LocalMediaCleanup extends Table {
 
   TextColumn get relativePath => text()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
-  IntColumn get attempts => integer().withDefault(const Constant(0))();
+  IntColumn get attempts => integer()
+      .withDefault(const Constant(0))
+      .check(const CustomExpression<bool>('attempts >= -1'))();
   DateTimeColumn get nextAttemptAt => dateTime().nullable()();
   TextColumn get lastErrorCode => text().nullable()();
 
@@ -446,7 +561,7 @@ class SyncAccount extends Table {
   @override
   String get tableName => 'sync_account';
 
-  IntColumn get id => integer()();
+  IntColumn get id => integer().check(const CustomExpression<bool>('id = 1'))();
   TextColumn get deviceId => text()();
   TextColumn get boundUserId => text().nullable()();
   BoolColumn get enabled => boolean().withDefault(const Constant(false))();
@@ -469,10 +584,12 @@ class SyncAccount extends Table {
   TextColumn get hydrationRunId => text().nullable()();
   TextColumn get hydrationState => text().nullable()();
   TextColumn get hydrationStage => text().nullable()();
-  IntColumn get hydrationCompletedUnits =>
-      integer().withDefault(const Constant(0))();
-  IntColumn get hydrationTotalUnits =>
-      integer().withDefault(const Constant(0))();
+  IntColumn get hydrationCompletedUnits => integer()
+      .withDefault(const Constant(0))
+      .check(const CustomExpression<bool>('hydration_completed_units >= 0'))();
+  IntColumn get hydrationTotalUnits => integer()
+      .withDefault(const Constant(0))
+      .check(const CustomExpression<bool>('hydration_total_units >= 0'))();
   DateTimeColumn get hydrationStartedAt => dateTime().nullable()();
   DateTimeColumn get hydrationUpdatedAt => dateTime().nullable()();
   TextColumn get hydrationError => text().nullable()();
@@ -480,6 +597,14 @@ class SyncAccount extends Table {
 
   @override
   Set<Column<Object>> get primaryKey => {id};
+
+  @override
+  List<String> get customConstraints => const [
+    // Hydration progress can never exceed the announced total once a total
+    // is published.
+    'CHECK (hydration_total_units = 0 '
+        'OR hydration_completed_units <= hydration_total_units)',
+  ];
 }
 
 @DriftDatabase(
@@ -509,6 +634,8 @@ class SyncAccount extends Table {
     LocalMediaCleanup,
     SyncAccount,
     NotificationReconciliationRequests,
+    SyncConflicts,
+    SyncSkippedFeedEntries,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -584,20 +711,101 @@ class AppDatabase extends _$AppDatabase {
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) async {
       await m.createAll();
+      await _createIndexes();
+      await _createSearchIndex();
       await _createSearchIndexGenerationInfrastructure();
+      await _createSyncTriggers();
     },
     beforeOpen: (details) async {
       await customStatement('PRAGMA busy_timeout = $_sqliteBusyTimeoutMs');
       await customStatement('PRAGMA foreign_keys = ON');
-      await _createIndexes();
-      await _createSearchIndex();
-      await _createSearchIndexGenerationInfrastructure();
+      // Runtime verification only: a database that does not match the
+      // canonical v1 baseline is rejected instead of being silently repaired.
+      await _verifyBaselineObjects();
       await _seedSyncRuntime();
       await _recoverExpiredSyncRuntimeLease();
-      await _createSyncTriggers();
       await _seedDefaults();
     },
   );
+
+  static const _baselineTables = <String>[
+    'areas',
+    'rooms',
+    'assets',
+    'device_details',
+    'pet_details',
+    'plant_details',
+    'safety_details',
+    'tags',
+    'asset_tags',
+    'asset_photos',
+    'maintenance_plans',
+    'maintenance_plan_metadata',
+    'maintenance_records',
+    'notification_inbox',
+    'settings',
+    'streaks',
+    'offline_mutation_queue',
+    'reminder_schedule_snapshot',
+    'notification_reconciliation_requests',
+    'sync_cursors',
+    'sync_shadows',
+    'sync_runtime',
+    'sync_media_cleanup',
+    'local_media_cleanup',
+    'sync_account',
+    'sync_conflicts',
+    'sync_skipped_feed_entries',
+    'search_index_state',
+  ];
+
+  /// Verifies the static schema baseline exists. Missing objects indicate a
+  /// pre-baseline local database; because the project is pre-launch with no
+  /// production databases, such files are rejected with an explicit error
+  /// rather than silently patched at every open.
+  Future<void> _verifyBaselineObjects() async {
+    final rows = await customSelect(
+      "SELECT type, name FROM sqlite_master WHERE name NOT LIKE 'sqlite_%'",
+    ).get();
+    final present = rows
+        .map((row) => '${row.read<String>('type')}:${row.read<String>('name')}')
+        .toSet();
+    final missing = <String>[];
+    for (final table in _baselineTables) {
+      if (!present.contains('table:$table')) missing.add('table $table');
+    }
+    for (final statement in _indexStatements) {
+      final match = RegExp(r'INDEX (?:UNIQUE )?IF NOT EXISTS (\w+)')
+          .firstMatch(statement);
+      final name = match?.group(1);
+      if (name != null && !present.contains('index:$name')) {
+        missing.add('index $name');
+      }
+    }
+    if (!present.contains('table:search_index')) {
+      missing.add('virtual table search_index');
+    }
+    final triggerRows = rows
+        .where((row) => row.read<String>('type') == 'trigger')
+        .length;
+    const expectedTriggers =
+        15 * 3 + // synchronized entity tables
+        3 + // profile settings
+        3 + // user settings
+        11 * 3; // search invalidation triggers
+    if (triggerRows < expectedTriggers) {
+      missing.add(
+        'triggers ($triggerRows present, $expectedTriggers expected)',
+      );
+    }
+    if (missing.isNotEmpty) {
+      throw StateError(
+        'Local database does not match the canonical v1 schema baseline '
+        '(missing: ${missing.join(', ')}). Pre-launch databases have no '
+        'upgrade path; clear app storage to recreate the database.',
+      );
+    }
+  }
 
   Future<void> _seedSyncRuntime() async {
     await into(syncRuntime).insert(
@@ -657,11 +865,8 @@ WHERE id = 1
 
   static const _assetPhotoDeletePayloadExpression = '''
 CASE
-  WHEN (SELECT bound_user_id FROM sync_account WHERE id = 1) IS NULL THEN NULL
-  WHEN lower(OLD.relative_path) LIKE '%.jpeg' THEN json_object('cleanup_object_path', (SELECT bound_user_id FROM sync_account WHERE id = 1) || '/assets/' || OLD.asset_id || '/' || OLD.id || '.jpg')
-  WHEN lower(OLD.relative_path) LIKE '%.jpg' THEN json_object('cleanup_object_path', (SELECT bound_user_id FROM sync_account WHERE id = 1) || '/assets/' || OLD.asset_id || '/' || OLD.id || '.jpg')
-  WHEN lower(OLD.relative_path) LIKE '%.png' THEN json_object('cleanup_object_path', (SELECT bound_user_id FROM sync_account WHERE id = 1) || '/assets/' || OLD.asset_id || '/' || OLD.id || '.png')
-  WHEN lower(OLD.relative_path) LIKE '%.webp' THEN json_object('cleanup_object_path', (SELECT bound_user_id FROM sync_account WHERE id = 1) || '/assets/' || OLD.asset_id || '/' || OLD.id || '.webp')
+  WHEN OLD.cloud_object_path IS NOT NULL
+  THEN json_object('cleanup_object_path', OLD.cloud_object_path)
   ELSE NULL
 END
 ''';
@@ -762,19 +967,6 @@ END
         extraWhen: "$rowPrefix.key IN ($userSettingKeys)",
       );
     }
-
-    await customStatement(
-      'DROP TRIGGER IF EXISTS sync_settings_device_setting_insert',
-    );
-    await customStatement(
-      'DROP TRIGGER IF EXISTS sync_settings_device_setting_update',
-    );
-    await customStatement(
-      'DROP TRIGGER IF EXISTS sync_settings_device_setting_delete',
-    );
-    await customStatement(
-      "DELETE FROM offline_mutation_queue WHERE entity = 'device_setting'",
-    );
   }
 
   Future<void> _createSyncTrigger({
@@ -845,50 +1037,68 @@ BEGIN
     attempts = 0,
     next_attempt_at = NULL,
     last_error = NULL,
+    state = CASE
+      WHEN offline_mutation_queue.state = 'conflict' THEN 'pending'
+      ELSE offline_mutation_queue.state
+    END,
     generation = offline_mutation_queue.generation + 1;
 END
 ''');
   }
 
+  static const _indexStatements = <String>[
+    'CREATE INDEX IF NOT EXISTS idx_areas_sort ON areas(sort_order, name)',
+    'CREATE INDEX IF NOT EXISTS idx_areas_archived ON areas(archived_at)',
+    'CREATE UNIQUE INDEX IF NOT EXISTS idx_areas_active_name_nocase '
+        'ON areas(name COLLATE NOCASE) WHERE archived_at IS NULL',
+    'CREATE INDEX IF NOT EXISTS idx_rooms_area ON rooms(area_id)',
+    'CREATE INDEX IF NOT EXISTS idx_rooms_name ON rooms(name)',
+    'CREATE INDEX IF NOT EXISTS idx_rooms_archived ON rooms(archived_at)',
+    'CREATE UNIQUE INDEX IF NOT EXISTS idx_rooms_active_name_nocase '
+        'ON rooms(area_id, name COLLATE NOCASE) WHERE archived_at IS NULL',
+    'CREATE INDEX IF NOT EXISTS idx_assets_room ON assets(room_id)',
+    'CREATE INDEX IF NOT EXISTS idx_assets_type ON assets(asset_type)',
+    'CREATE INDEX IF NOT EXISTS idx_assets_archived ON assets(archived_at)',
+    'CREATE INDEX IF NOT EXISTS idx_tags_name ON tags(name)',
+    'CREATE UNIQUE INDEX IF NOT EXISTS idx_tags_name_nocase '
+        'ON tags(name COLLATE NOCASE)',
+    'CREATE INDEX IF NOT EXISTS idx_asset_tags_asset ON asset_tags(asset_id)',
+    'CREATE INDEX IF NOT EXISTS idx_asset_tags_tag ON asset_tags(tag_id)',
+    'CREATE INDEX IF NOT EXISTS idx_asset_photos_asset ON asset_photos(asset_id)',
+    'CREATE INDEX IF NOT EXISTS idx_asset_photos_primary ON asset_photos(asset_id, is_primary)',
+    'CREATE UNIQUE INDEX IF NOT EXISTS idx_asset_photos_single_primary '
+        'ON asset_photos(asset_id) WHERE is_primary = 1',
+    'CREATE INDEX IF NOT EXISTS idx_plans_asset ON maintenance_plans(asset_id)',
+    'CREATE INDEX IF NOT EXISTS idx_plans_enabled_due '
+        'ON maintenance_plans(is_enabled, next_due_date)',
+    'CREATE INDEX IF NOT EXISTS idx_plans_due ON maintenance_plans(next_due_date)',
+    'CREATE INDEX IF NOT EXISTS idx_plan_metadata_sort '
+        'ON maintenance_plan_metadata(sort_order)',
+    'CREATE INDEX IF NOT EXISTS idx_records_plan ON maintenance_records(plan_id)',
+    'CREATE INDEX IF NOT EXISTS idx_records_completed ON maintenance_records(completed_at)',
+    'CREATE INDEX IF NOT EXISTS idx_inbox_unread ON notification_inbox(read_at, created_at)',
+    'CREATE INDEX IF NOT EXISTS idx_inbox_plan ON notification_inbox(plan_id)',
+    'CREATE UNIQUE INDEX IF NOT EXISTS idx_inbox_dedupe '
+        "ON notification_inbox(dedupe_key) WHERE dedupe_key <> ''",
+    'CREATE INDEX IF NOT EXISTS idx_settings_key ON settings(key)',
+    'CREATE INDEX IF NOT EXISTS idx_streaks_updated ON streaks(updated_at)',
+    // Retry-ready operational indexes: dequeue and cleanup scans are driven
+    // by state plus scheduled retry time, not by insertion order.
+    'CREATE INDEX IF NOT EXISTS idx_outbox_retry '
+        'ON offline_mutation_queue(state, next_attempt_at, changed_at)',
+    'CREATE INDEX IF NOT EXISTS idx_sync_media_cleanup_retry '
+        'ON sync_media_cleanup(next_attempt_at, attempts)',
+    'CREATE INDEX IF NOT EXISTS idx_local_media_cleanup_retry '
+        'ON local_media_cleanup(next_attempt_at, attempts)',
+    'CREATE INDEX IF NOT EXISTS idx_notification_reconciliation_retry '
+        'ON notification_reconciliation_requests(next_attempt_at, attempts)',
+    'CREATE INDEX IF NOT EXISTS idx_sync_conflicts_account ON sync_conflicts(account_id)',
+    'CREATE INDEX IF NOT EXISTS idx_sync_conflicts_entity_record ON sync_conflicts(entity, record_key)',
+    'CREATE INDEX IF NOT EXISTS idx_sync_conflicts_status ON sync_conflicts(resolution_status)',
+  ];
+
   Future<void> _createIndexes() async {
-    final statements = [
-      'CREATE INDEX IF NOT EXISTS idx_areas_sort ON areas(sort_order, name)',
-      'CREATE INDEX IF NOT EXISTS idx_areas_archived ON areas(archived_at)',
-      'CREATE UNIQUE INDEX IF NOT EXISTS idx_areas_active_name_nocase '
-          'ON areas(name COLLATE NOCASE) WHERE archived_at IS NULL',
-      'CREATE INDEX IF NOT EXISTS idx_rooms_area ON rooms(area_id)',
-      'CREATE INDEX IF NOT EXISTS idx_rooms_name ON rooms(name)',
-      'CREATE INDEX IF NOT EXISTS idx_rooms_archived ON rooms(archived_at)',
-      'CREATE UNIQUE INDEX IF NOT EXISTS idx_rooms_active_name_nocase '
-          'ON rooms(area_id, name COLLATE NOCASE) WHERE archived_at IS NULL',
-      'CREATE INDEX IF NOT EXISTS idx_assets_room ON assets(room_id)',
-      'CREATE INDEX IF NOT EXISTS idx_assets_type ON assets(asset_type)',
-      'CREATE INDEX IF NOT EXISTS idx_assets_archived ON assets(archived_at)',
-      'CREATE INDEX IF NOT EXISTS idx_tags_name ON tags(name)',
-      'CREATE UNIQUE INDEX IF NOT EXISTS idx_tags_name_nocase '
-          'ON tags(name COLLATE NOCASE)',
-      'CREATE INDEX IF NOT EXISTS idx_asset_tags_asset ON asset_tags(asset_id)',
-      'CREATE INDEX IF NOT EXISTS idx_asset_tags_tag ON asset_tags(tag_id)',
-      'CREATE INDEX IF NOT EXISTS idx_asset_photos_asset ON asset_photos(asset_id)',
-      'CREATE INDEX IF NOT EXISTS idx_asset_photos_primary ON asset_photos(asset_id, is_primary)',
-      'CREATE UNIQUE INDEX IF NOT EXISTS idx_asset_photos_single_primary '
-          'ON asset_photos(asset_id) WHERE is_primary = 1',
-      'CREATE INDEX IF NOT EXISTS idx_plans_asset ON maintenance_plans(asset_id)',
-      'CREATE INDEX IF NOT EXISTS idx_plans_enabled_due '
-          'ON maintenance_plans(is_enabled, next_due_date)',
-      'CREATE INDEX IF NOT EXISTS idx_plans_due ON maintenance_plans(next_due_date)',
-      'CREATE INDEX IF NOT EXISTS idx_plan_metadata_sort '
-          'ON maintenance_plan_metadata(sort_order)',
-      'CREATE INDEX IF NOT EXISTS idx_records_plan ON maintenance_records(plan_id)',
-      'CREATE INDEX IF NOT EXISTS idx_records_completed ON maintenance_records(completed_at)',
-      'CREATE INDEX IF NOT EXISTS idx_inbox_unread ON notification_inbox(read_at, created_at)',
-      'CREATE INDEX IF NOT EXISTS idx_inbox_plan ON notification_inbox(plan_id)',
-      'CREATE UNIQUE INDEX IF NOT EXISTS idx_inbox_dedupe '
-          "ON notification_inbox(dedupe_key) WHERE dedupe_key <> ''",
-      'CREATE INDEX IF NOT EXISTS idx_settings_key ON settings(key)',
-      'CREATE INDEX IF NOT EXISTS idx_streaks_updated ON streaks(updated_at)',
-    ];
-    for (final statement in statements) {
+    for (final statement in _indexStatements) {
       await customStatement(statement);
     }
   }
@@ -912,10 +1122,8 @@ INSERT OR IGNORE INTO search_index_state(
     for (final table in _searchIndexSourceTables) {
       for (final event in ['INSERT', 'UPDATE', 'DELETE']) {
         final normalizedEvent = event.toLowerCase();
-        final triggerName = 'search_${table}_$normalizedEvent';
-        await customStatement('DROP TRIGGER IF EXISTS $triggerName');
         await customStatement('''
-CREATE TRIGGER $triggerName
+CREATE TRIGGER IF NOT EXISTS search_${table}_$normalizedEvent
 AFTER $event ON $table
 BEGIN
   UPDATE search_index_state
@@ -928,19 +1136,6 @@ END
   }
 
   Future<void> _createSearchIndex() async {
-    final existing = await customSelect(
-      "SELECT sql FROM sqlite_master "
-      "WHERE type = 'table' AND name = 'search_index'",
-    ).getSingleOrNull();
-    if (existing != null) {
-      final definition = existing.read<String>('sql');
-      if (!definition.contains('display_body') ||
-          !definition.contains('search_terms')) {
-        // The FTS table is a derived cache and can be recreated when its
-        // source-owned column contract changes.
-        await customStatement('DROP TABLE search_index');
-      }
-    }
     await customStatement(
       'CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5('
       'entity_type UNINDEXED, entity_id UNINDEXED, title, '

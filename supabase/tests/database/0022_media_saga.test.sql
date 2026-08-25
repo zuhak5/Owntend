@@ -7,7 +7,7 @@ set search_path = public, extensions, pg_catalog;
 select extensions.plan(22);
 
 select extensions.has_function('public', 'prepare_asset_photo_upload', ARRAY['text', 'text', 'bigint', 'text', 'text', 'text'], 'prepare-first media RPC exists');
-select extensions.has_function('public', 'finalize_asset_photo_upload', ARRAY['uuid', 'text', 'text', 'integer'], 'media finalization RPC exists');
+select extensions.has_function('public', 'finalize_asset_photo_upload', ARRAY['uuid', 'text', 'text', 'integer', 'text', 'boolean'], 'media finalization RPC exists');
 select extensions.has_function('public', 'complete_owntend_account_cleanup', ARRAY['uuid', 'text'], 'account cleanup completion RPC exists');
 select extensions.ok(not has_function_privilege('anon', 'public.prepare_asset_photo_upload(text,text,bigint,text,text,text)', 'execute'), 'anonymous callers cannot prepare uploads');
 select extensions.ok(has_function_privilege('authenticated', 'public.prepare_asset_photo_upload(text,text,bigint,text,text,text)', 'execute'), 'authenticated callers can prepare uploads');
@@ -69,7 +69,7 @@ select extensions.lives_ok(
   'valid upload preparation succeeds before object upload'
 );
 select extensions.ok(
-  (select staging_path like '00000000-0000-0000-0000-00000000000a/staging/%.jpg'
+  (select staging_path like '00000000-0000-0000-0000-00000000000a/media/photo-a.jpg'
    from public.media_staging_objects where idempotency_key = 'prepare-upload-0001'),
   'the server issues an immutable owner-scoped staging path'
 );

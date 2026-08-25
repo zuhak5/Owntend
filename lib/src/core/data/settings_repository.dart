@@ -294,10 +294,6 @@ class DriftSettingsRepository implements SettingsRepository {
             desired.defaultSnoozeMinutes != baseline.defaultSnoozeMinutes
             ? desired.defaultSnoozeMinutes
             : null,
-        preferExactReminders:
-            desired.preferExactReminders != baseline.preferExactReminders
-            ? desired.preferExactReminders
-            : null,
       );
       await _writeNotificationPreferences(merged);
     });

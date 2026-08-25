@@ -5,6 +5,9 @@ import 'dart:math' as math;
 import 'package:drift/drift.dart' hide isNull, isNotNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'support/wait_for.dart';
+
 import 'package:owntend/src/core/data/repositories.dart';
 import 'package:owntend/src/core/database/app_database.dart';
 import 'package:owntend/src/core/domain/models.dart';
@@ -27,7 +30,6 @@ class _StatefulGateway implements SupabaseSyncGateway {
   final Map<String, int> pullCalls = {};
   final Map<String, int> writeCalls = {};
   var batchWriteCalls = 0;
-  var syncHeadCalls = 0;
   var materializeMediaCalls = 0;
   var startRealtimeCalls = 0;
   var maintenanceCompletionCalls = 0;
@@ -69,6 +71,7 @@ class _StatefulGateway implements SupabaseSyncGateway {
   Future<UserChangeFeedPage> fetchUserChangeFeed({
     int sinceSeq = 0,
     int limit = 100,
+    int? expectedGeneration,
   }) async {
     fetchFeedCalls++;
     await feedGate?.future;
@@ -101,12 +104,6 @@ class _StatefulGateway implements SupabaseSyncGateway {
 
   @override
   Future<int> fetchUserChangeFeedHighWater() async => _syncSeq;
-
-  @override
-  Future<int> syncHead(String userId) async {
-    syncHeadCalls++;
-    return _syncSeq;
-  }
 
   @override
   Future<BatchWriteResult> writeNewBatch({
@@ -749,14 +746,9 @@ class _FakeConnectivity implements SyncConnectivity {
   }
 }
 
-Future<void> _waitFor(FutureOr<bool> Function() condition) async {
-  final deadline = DateTime.now().add(const Duration(seconds: 2));
-  while (DateTime.now().isBefore(deadline)) {
-    if (await condition()) return;
-    await Future<void>.delayed(const Duration(milliseconds: 10));
-  }
-  fail('Timed out waiting for test condition.');
-}
+Future<void> _waitFor(FutureOr<bool> Function() condition) async =>
+    // WP-015 (F-024): shared bounded helper replaces the wall-clock loop.
+    waitFor(() async => await condition());
 
 void main() {
   setUpAll(() {
@@ -1234,6 +1226,7 @@ void main() {
         () => gateway.fetchUserChangeFeed(
           sinceSeq: any(named: 'sinceSeq'),
           limit: any(named: 'limit'),
+          expectedGeneration: any(named: 'expectedGeneration'),
         ),
       ).thenAnswer(
         (_) async => const UserChangeFeedPage(
@@ -1244,7 +1237,6 @@ void main() {
           resnapshotRequired: false,
         ),
       );
-      when(() => gateway.syncHead(any())).thenAnswer((_) async => 0);
       when(
         () => gateway.fetchAuthoritativeRecordKeys(
           spec: any(named: 'spec'),
@@ -1517,6 +1509,7 @@ void main() {
       () => gateway.fetchUserChangeFeed(
         sinceSeq: any(named: 'sinceSeq'),
         limit: any(named: 'limit'),
+        expectedGeneration: any(named: 'expectedGeneration'),
       ),
     ).thenAnswer((invocation) async {
       final sinceSeq = invocation.namedArguments[#sinceSeq] as int;
@@ -1568,7 +1561,6 @@ void main() {
         _ => <String>{},
       };
     });
-    when(() => gateway.syncHead(any())).thenAnswer((_) async => 100);
     when(
       () => gateway.writeNewBatch(
         records: any(named: 'records'),
@@ -2420,10 +2412,16 @@ void main() {
 
     await coordinator.syncNow();
 
-    expect(await store.cursor('maintenance_plan_metadata'), 0);
+    // WP-010: per-entity cursor rows are asserted through Drift after the
+    // legacy cursor API was deleted from LocalSyncStore.
+    final metadataCursor =
+        await (store.db.select(
+              store.db.syncCursors,
+            )..where((item) => item.entity.equals('maintenance_plan_metadata')))
+            .getSingleOrNull();
+    expect(metadataCursor?.lastSyncSeq ?? 0, 0);
     expect(gateway.fetchFeedCalls, 1);
     expect(gateway.pullCalls, isEmpty);
-    expect(gateway.syncHeadCalls, 0);
   });
 
   test('overlapping broad startup triggers reuse the active sync', () async {
@@ -3226,11 +3224,10 @@ Future<void> _seedMaintenancePlanForSync(
   });
 }
 
-Future<void> _eventually(Future<bool> Function() condition) async {
-  final deadline = DateTime.now().add(const Duration(seconds: 5));
-  while (DateTime.now().isBefore(deadline)) {
-    if (await condition()) return;
-    await Future<void>.delayed(const Duration(milliseconds: 50));
-  }
-  fail('Condition was not met before the timeout.');
-}
+Future<void> _eventually(Future<bool> Function() condition) async =>
+    // WP-015 (F-024): shared bounded helper replaces the wall-clock loop.
+    waitFor(
+      () async => await condition(),
+      timeout: const Duration(seconds: 5),
+      because: 'Condition was not met before the timeout.',
+    );

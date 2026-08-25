@@ -15,7 +15,7 @@ import 'package:owntend/src/features/auth/domain/auth_repository.dart';
 const _userId = '00000000-0000-0000-0000-000000000009';
 const _assetId = 'asset-cleanup-loss';
 const _photoId = 'photo-cleanup-loss';
-const _cleanupPath = '$_userId/assets/$_assetId/$_photoId.jpg';
+const _cleanupPath = '$_userId/media/$_photoId.jpg';
 
 class _AuthRepository implements AuthRepository {
   const _AuthRepository();
@@ -45,6 +45,7 @@ class _PhotoDeleteResponseLossGateway implements SupabaseSyncGateway {
   Future<UserChangeFeedPage> fetchUserChangeFeed({
     int sinceSeq = 0,
     int limit = 100,
+    int? expectedGeneration,
   }) async => UserChangeFeedPage(
     entries: const [],
     highWaterSeq: sinceSeq,
@@ -162,6 +163,7 @@ Future<void> _seedPhoto(AppDatabase db, LocalSyncStore store) async {
             id: _photoId,
             assetId: _assetId,
             relativePath: 'media/$_assetId/$_photoId.jpeg',
+            cloudObjectPath: const Value(_cleanupPath),
           ),
         );
   });
@@ -358,7 +360,7 @@ void main() {
             recordKey: _photoId,
             values: const {
               'id': _photoId,
-              'cleanup_object_path': 'other-user/assets/a/p.jpg',
+              'cleanup_object_path': 'other-user/media/p.jpg',
             },
             clientModifiedAt: DateTime.utc(2026, 8, 17),
             originDeviceId: 'device-1',

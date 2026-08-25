@@ -140,17 +140,20 @@ class _FakeBackupRepository implements BackupRepository {
   Future<BackupState> backupState() => Future.value(const BackupState());
 
   @override
-  Future<String> exportBackup({BackupTrigger trigger = BackupTrigger.manual}) {
+  Future<String> exportBackup({
+    BackupTrigger trigger = BackupTrigger.manual,
+    String? passphrase,
+  }) {
     throw UnimplementedError();
   }
 
   @override
-  Future<BackupPreview> inspectBackup(String zipPath) {
+  Future<BackupPreview> inspectBackup(String backupPath, {String? passphrase}) {
     throw UnimplementedError();
   }
 
   @override
-  Future<void> restoreBackup(String zipPath) {
+  Future<void> restoreBackup(String backupPath, {String? passphrase}) {
     throw UnimplementedError();
   }
 

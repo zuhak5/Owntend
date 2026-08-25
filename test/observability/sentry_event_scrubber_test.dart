@@ -92,8 +92,10 @@ void main() {
     final scrubbed = scrubSentryEvent(event, Hint()) as SentryEvent;
 
     expect(
+      // WP-017 hardening: exception payloads never reach Sentry; only the
+      // sanitized exception type survives.
       scrubbed.exceptions!.single.value,
-      'Database constraint violation on check',
+      'Owntend StateError',
     );
     final frames = scrubbed.exceptions!.single.stackTrace!.frames;
     expect(frames[0].fileName, 'package:sentry_flutter/sentry_flutter.dart');
@@ -116,7 +118,7 @@ void main() {
     expect(scrubbed, isNotNull);
     // ignore: invalid_use_of_internal_member
     expect(scrubbed.unknown, isEmpty);
-    expect(scrubbed.exceptions!.single.value, 'Critical database deadlock');
+    expect(scrubbed.exceptions!.single.value, 'Owntend StateError');
   });
 
   test('drops HTTP and UI breadcrumbs but preserves sanitized app events', () {

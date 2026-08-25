@@ -18,7 +18,6 @@ class SupabaseAuthRepository implements AuthRepository {
     required this.onAccountDeletionPrepared,
     required this.onAccountDeletionCancelled,
     required this.onAccountDeleted,
-    this.onBeforeSignOut,
     AccountDeletionRecoveryStore? accountDeletionRecoveryStore,
     AccountDeletionRecoveryKeyFactory? accountDeletionRecoveryKeyFactory,
   }) : _accountDeletionRecoveryStore =
@@ -32,7 +31,6 @@ class SupabaseAuthRepository implements AuthRepository {
   final Future<void> Function(String userId) onAccountDeletionPrepared;
   final Future<void> Function(String userId) onAccountDeletionCancelled;
   final Future<void> Function(String userId) onAccountDeleted;
-  final Future<void> Function({bool allDevices})? onBeforeSignOut;
   final AccountDeletionRecoveryStore _accountDeletionRecoveryStore;
   final AccountDeletionRecoveryKeyFactory _accountDeletionRecoveryKeyFactory;
 
@@ -126,17 +124,6 @@ class SupabaseAuthRepository implements AuthRepository {
   @override
   Future<void> signOut({bool allDevices = false}) async {
     try {
-      if (onBeforeSignOut != null) {
-        try {
-          await onBeforeSignOut!(allDevices: allDevices);
-        } on Object catch (error, stackTrace) {
-          AppLogger.warning(
-            'auth_sign_out_before_hooks_failed',
-            error: error,
-            stackTrace: stackTrace,
-          );
-        }
-      }
       await traceOwntendOperation<void>('auth.sign_out', () async {
         await _client.auth.signOut(
           scope: allDevices ? SignOutScope.global : SignOutScope.local,
@@ -385,10 +372,7 @@ class SupabaseAuthRepository implements AuthRepository {
         await _accountDeletionRecoveryStore.write(currentOp);
       }
 
-      if (currentOp.phase == AccountDeletionJournalPhase.localDatabaseCleared ||
-          currentOp.phase == AccountDeletionJournalPhase.localFilesCleared ||
-          currentOp.phase ==
-              AccountDeletionJournalPhase.localDraftsAndWorkCleared) {
+      if (currentOp.phase == AccountDeletionJournalPhase.localDatabaseCleared) {
         await _clearLocalAuthentication(isAccountDeletion: true);
         currentOp = currentOp.copyWith(
           phase: AccountDeletionJournalPhase.localProviderCleared,
@@ -396,8 +380,30 @@ class SupabaseAuthRepository implements AuthRepository {
         await _accountDeletionRecoveryStore.write(currentOp);
       }
 
-      if (currentOp.phase == AccountDeletionJournalPhase.localProviderCleared) {
-        await _acknowledgeAccountDeletion(currentOp);
+      // Terminal boundary: local cleanup is done, but the deletion receipt may
+      // only be treated as acknowledged once the server returns a matching
+      // acknowledgment for this exact identity. Until then the journal keeps
+      // the capability and a restart retries exactly this step.
+      if (currentOp.phase == AccountDeletionJournalPhase.localProviderCleared ||
+          currentOp.phase ==
+              AccountDeletionJournalPhase.acknowledgementPending) {
+        try {
+          await _acknowledgeAccountDeletion(currentOp);
+        } on Object {
+          await _accountDeletionRecoveryStore.write(
+            currentOp.copyWith(
+              phase: AccountDeletionJournalPhase.acknowledgementPending,
+            ),
+          );
+          AppLogger.warning('auth_account_delete_acknowledgement_pending');
+          throw SupabaseFailure(
+            kind: SupabaseFailureKind.unknown,
+            message:
+                'The account was deleted, but the server has not yet '
+                'confirmed final cleanup. Restart Owntend to finish.',
+            retryable: true,
+          );
+        }
         currentOp = currentOp.copyWith(
           phase: AccountDeletionJournalPhase.acknowledged,
         );
@@ -406,6 +412,7 @@ class SupabaseAuthRepository implements AuthRepository {
 
       await _accountDeletionRecoveryStore.clear();
     } on Object catch (error) {
+      if (error is SupabaseFailure && error.retryable) rethrow;
       AppLogger.warning(
         'auth_account_delete_cleanup_step_failed',
         error: error,
@@ -425,11 +432,20 @@ class SupabaseAuthRepository implements AuthRepository {
     }
   }
 
+  /// Acknowledges terminal deletion and validates the server receipt.
+  ///
+  /// This is a durable protocol transition, not telemetry: any network error,
+  /// non-success status, or response that does not carry an explicit
+  /// `acknowledged` receipt for the exact expected identity throws so the
+  /// caller persists [AccountDeletionJournalPhase.acknowledgementPending] and
+  /// retries at startup. Recovery material is cleared only after strict
+  /// success.
   Future<void> _acknowledgeAccountDeletion(
     AccountDeletionRecoveryOperation operation,
   ) async {
+    Object? failure;
     try {
-      await _client.functions.invoke(
+      final response = await _client.functions.invoke(
         'account-deletion-status',
         body: {
           'recovery_key': operation.recoveryKey,
@@ -437,11 +453,26 @@ class SupabaseAuthRepository implements AuthRepository {
           'action': 'acknowledge',
         },
       );
+      final data = response.data;
+      final acknowledged =
+          data is Map &&
+          data['deleted'] == true &&
+          data['status'] == 'acknowledged' &&
+          data['user_id'] == operation.expectedUserId;
+      if (!acknowledged) {
+        failure = const SupabaseFailure(
+          kind: SupabaseFailureKind.unknown,
+          message: 'ACKNOWLEDGEMENT_RECEIPT_INVALID',
+          retryable: true,
+        );
+      }
     } on Object catch (error) {
-      AppLogger.warning(
-        'auth_account_delete_acknowledgement_failed',
-        error: error,
-      );
+      failure = error;
+    }
+    if (failure != null) {
+      // Only a stable technical marker reaches logs; never raw payloads.
+      AppLogger.warning('auth_account_delete_acknowledgement_failed');
+      throw failure;
     }
   }
 

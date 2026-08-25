@@ -84,3 +84,12 @@ entrypoint = "./functions/admob-ssv-handler/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/admob-ssv-handler/*.html" ]
+
+[functions.process-media-cleanup]
+enabled = true
+# Service-to-service endpoint: platform JWT verification is disabled and a
+# dedicated worker capability header (X-Owntend-Worker-Token) is required
+# inside the function. User JWTs and the service-role key are not accepted.
+verify_jwt = false
+import_map = "./functions/process-media-cleanup/deno.json"
+entrypoint = "./functions/process-media-cleanup/index.ts"

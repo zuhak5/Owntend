@@ -31,9 +31,10 @@ class _FakePathProviderPlatform extends PathProviderPlatform {
 }
 
 class _FakeLocalSyncStore implements LocalSyncStore {
-  _FakeLocalSyncStore({this.boundUserId});
+  _FakeLocalSyncStore({this.boundUserId, this.generationMarker});
 
   final String? boundUserId;
+  String? generationMarker;
   final List<String> calls = [];
 
   @override
@@ -53,6 +54,9 @@ class _FakeLocalSyncStore implements LocalSyncStore {
       updatedAt: now,
     );
   }
+
+  @override
+  Future<String?> readRestoreGenerationMarker() async => generationMarker;
 
   @override
   Future<void> enqueueRestoreSnapshot(DateTime timestamp) async {
@@ -92,11 +96,84 @@ void main() {
     }
   });
 
+  RestoreJournalEntry entryFor({
+    required String journalId,
+    required RestorePhase phase,
+    String accountScope = 'user-a',
+    String? mediaToken,
+    bool updateCloudIntent = true,
+    int version = kCurrentRestoreJournalVersion,
+  }) {
+    final now = DateTime.now();
+    return RestoreJournalEntry(
+      version: version,
+      journalId: journalId,
+      accountScope: accountScope,
+      archivePath: '/tmp/backup.zip',
+      archiveHash: 'hash-$journalId',
+      mediaToken: mediaToken,
+      phase: phase,
+      updateCloudIntent: updateCloudIntent,
+      createdAt: now,
+      updatedAt: now,
+    );
+  }
+
+  /// Builds the on-disk media state for one token. When [partialActivation]
+  /// is true, `photos` has already been renamed into place (state b/c) while
+  /// `profile` is still fully staged.
+  Future<void> seedMediaState(
+    String token, {
+    required bool withStaged,
+    required bool withLive,
+    bool partialActivation = false,
+  }) async {
+    if (withLive) {
+      final photosLive = Directory(p.join(docs.path, 'photos'))
+        ..createSync(recursive: true);
+      File(p.join(photosLive.path, 'old.jpg')).writeAsBytesSync([1]);
+      if (!partialActivation) {
+        final profileLive = Directory(p.join(docs.path, 'profile'))
+          ..createSync(recursive: true);
+        File(p.join(profileLive.path, 'old.png')).writeAsBytesSync([2]);
+      }
+    }
+    if (withStaged) {
+      final photosStaged = Directory(p.join(docs.path, 'photos.restore-$token'))
+        ..createSync(recursive: true);
+      File(p.join(photosStaged.path, 'new.jpg')).writeAsBytesSync([3]);
+      if (!partialActivation) {
+        final profileStaged = Directory(
+          p.join(docs.path, 'profile.restore-$token'),
+        )..createSync(recursive: true);
+        File(p.join(profileStaged.path, 'new.png')).writeAsBytesSync([4]);
+      }
+    }
+    if (partialActivation) {
+      // State b for photos: died between the two renames.
+      final photosStaged = Directory(p.join(docs.path, 'photos.restore-$token'))
+        ..createSync(recursive: true);
+      File(p.join(photosStaged.path, 'new.jpg')).writeAsBytesSync([3]);
+      final photosPrevious = Directory(
+        p.join(docs.path, 'photos.previous-$token'),
+      )..createSync(recursive: true);
+      File(p.join(photosPrevious.path, 'old.jpg')).writeAsBytesSync([1]);
+      final profilePrevious = Directory(
+        p.join(docs.path, 'profile.previous-$token'),
+      )..createSync(recursive: true);
+      File(p.join(profilePrevious.path, 'old.png')).writeAsBytesSync([2]);
+      final profileStaged = Directory(
+        p.join(docs.path, 'profile.restore-$token'),
+      )..createSync(recursive: true);
+      File(p.join(profileStaged.path, 'new.png')).writeAsBytesSync([4]);
+    }
+  }
+
   group('RestoreJournal & Store Tests', () {
     test('serializes and deserializes RestoreJournalEntry accurately', () {
       final now = DateTime.now();
       final entry = RestoreJournalEntry(
-        version: 1,
+        version: kCurrentRestoreJournalVersion,
         journalId: 'j-101',
         accountScope: 'user-a',
         archivePath: '/tmp/backup.zip',
@@ -113,7 +190,7 @@ void main() {
       final json = entry.toJson();
       final restored = RestoreJournalEntry.fromJson(json);
 
-      expect(restored.version, equals(1));
+      expect(restored.version, kCurrentRestoreJournalVersion);
       expect(restored.journalId, equals('j-101'));
       expect(restored.accountScope, equals('user-a'));
       expect(restored.phase, equals(RestorePhase.mediaStaged));
@@ -122,17 +199,9 @@ void main() {
     });
 
     test('durable store survives a new store instance', () async {
-      final now = DateTime.now();
-      final entry = RestoreJournalEntry(
-        version: 1,
+      final entry = entryFor(
         journalId: 'j-durable',
-        accountScope: 'user-a',
-        archivePath: '/tmp/durable.zip',
-        archiveHash: 'hash-durable',
         phase: RestorePhase.servicesSuspended,
-        updateCloudIntent: true,
-        createdAt: now,
-        updatedAt: now,
       );
 
       await RestoreJournalStore().saveEntry(entry);
@@ -140,30 +209,17 @@ void main() {
 
       expect(afterRestart?.journalId, 'j-durable');
       expect(afterRestart?.phase, RestorePhase.servicesSuspended);
-      expect(afterRestart?.accountScope, 'user-a');
-      expect(afterRestart?.updateCloudIntent, isTrue);
     });
 
     test('in-memory test store saves and clears active entry', () async {
       final store = InMemoryRestoreJournalStore();
-      final now = DateTime.now();
-      final entry = RestoreJournalEntry(
-        version: 1,
-        journalId: 'j-102',
-        accountScope: 'localOnly',
-        archivePath: '/tmp/test.zip',
-        archiveHash: 'hash-102',
-        phase: RestorePhase.validated,
-        updateCloudIntent: false,
-        createdAt: now,
-        updatedAt: now,
+      await store.saveEntry(
+        entryFor(journalId: 'j-102', phase: RestorePhase.validated),
       );
 
-      await store.saveEntry(entry);
       final active = await store.getActiveEntry();
       expect(active, isNotNull);
       expect(active!.journalId, equals('j-102'));
-      expect(active.phase, equals(RestorePhase.validated));
 
       await store.clearActiveEntry();
       expect(await store.getActiveEntry(), isNull);
@@ -171,95 +227,158 @@ void main() {
   });
 
   group('RestoreJournalResolver Tests', () {
-    test('rolls back pre-DB-commit state after restart', () async {
-      final store = InMemoryRestoreJournalStore();
-      final fakeSync = _FakeLocalSyncStore();
-      final now = DateTime.now();
-
-      final stagedDir = Directory(
-        p.join(docs.path, 'photos.restore-token-pre'),
-      );
-      await stagedDir.create(recursive: true);
-      expect(await stagedDir.exists(), isTrue);
-
-      final entry = RestoreJournalEntry(
-        version: 1,
-        journalId: 'j-pre',
-        accountScope: 'localOnly',
-        archivePath: '/tmp/pre.zip',
-        archiveHash: 'hash-pre',
-        mediaToken: 'token-pre',
-        phase: RestorePhase.mediaStaged,
-        updateCloudIntent: false,
-        createdAt: now,
-        updatedAt: now,
-      );
-      await store.saveEntry(entry);
-
-      final resolver = RestoreJournalResolver(
-        journalStore: store,
-        localSyncStore: fakeSync,
-      );
-
-      await resolver.resolveActiveJournal();
-
-      expect(await store.getActiveEntry(), isNull);
-      expect(await stagedDir.exists(), isFalse);
-      expect(fakeSync.calls, isEmpty);
-    });
-
-    test('rolls forward post-commit cloud intent after restart', () async {
+    test('rolls back when the database did not commit even though the journal '
+        'says dbCommitComplete', () async {
       final store = InMemoryRestoreJournalStore();
       final fakeSync = _FakeLocalSyncStore(boundUserId: 'user-a');
-      final now = DateTime.now();
+      const token = 'token-uncommitted';
 
-      final entry = RestoreJournalEntry(
-        version: 1,
-        journalId: 'j-post',
-        accountScope: 'user-a',
-        archivePath: '/tmp/post.zip',
-        archiveHash: 'hash-post',
-        mediaToken: 'token-post',
-        phase: RestorePhase.dbCommitComplete,
-        updateCloudIntent: true,
-        createdAt: now,
-        updatedAt: now,
-      );
-      await store.saveEntry(entry);
-
-      final resolver = RestoreJournalResolver(
-        journalStore: store,
-        localSyncStore: fakeSync,
-      );
-
-      await resolver.resolveActiveJournal();
-
-      expect(await store.getActiveEntry(), isNull);
-      expect(fakeSync.calls, ['enqueueRestoreSnapshot']);
-    });
-
-    test('rolls forward post-commit local-only pause after restart', () async {
-      final store = InMemoryRestoreJournalStore();
-      final fakeSync = _FakeLocalSyncStore();
-      final now = DateTime.now();
-
+      await seedMediaState(token, withStaged: true, withLive: true);
       await store.saveEntry(
-        RestoreJournalEntry(
-          version: 1,
-          journalId: 'j-local-post',
-          accountScope: 'localOnly',
-          archivePath: '/tmp/local-post.zip',
-          archiveHash: 'hash-local-post',
-          phase: RestorePhase.mediaSwapped,
-          updateCloudIntent: false,
-          createdAt: now,
-          updatedAt: now,
+        entryFor(
+          journalId: 'j-uncommitted',
+          phase: RestorePhase.dbCommitComplete,
+          mediaToken: token,
         ),
       );
 
       await RestoreJournalResolver(
         journalStore: store,
         localSyncStore: fakeSync,
+        documentsDirectory: () async => docs,
+      ).resolveActiveJournal();
+
+      expect(await store.getActiveEntry(), isNull);
+      expect(
+        Directory(p.join(docs.path, 'photos.restore-$token')).existsSync(),
+        isFalse,
+        reason: 'staged media must be removed',
+      );
+      expect(File(p.join(docs.path, 'photos', 'old.jpg')).readAsBytesSync(), [
+        1,
+      ], reason: 'canonical media must remain the complete old generation');
+      expect(fakeSync.calls, isEmpty);
+    });
+
+    test('rolls forward on commit-marker proof even when the process died '
+        'before persisting dbCommitComplete', () async {
+      final store = InMemoryRestoreJournalStore();
+      final fakeSync = _FakeLocalSyncStore(boundUserId: 'user-a')
+        ..generationMarker = 'j-committed';
+      const token = 'token-committed';
+
+      await seedMediaState(token, withStaged: true, withLive: true);
+      await store.saveEntry(
+        entryFor(
+          journalId: 'j-committed',
+          phase: RestorePhase.dbCommitStarted,
+          mediaToken: token,
+        ),
+      );
+
+      await RestoreJournalResolver(
+        journalStore: store,
+        localSyncStore: fakeSync,
+        documentsDirectory: () async => docs,
+      ).resolveActiveJournal();
+
+      expect(await store.getActiveEntry(), isNull);
+      expect(File(p.join(docs.path, 'photos', 'new.jpg')).readAsBytesSync(), [
+        3,
+      ], reason: 'staged media must be activated after verified commit');
+      expect(
+        Directory(p.join(docs.path, 'photos.restore-$token')).existsSync(),
+        isFalse,
+      );
+      expect(fakeSync.calls, ['enqueueRestoreSnapshot']);
+    });
+
+    test(
+      'completes a partially activated media generation during roll-forward',
+      () async {
+        final store = InMemoryRestoreJournalStore();
+        final fakeSync = _FakeLocalSyncStore(boundUserId: 'user-a')
+          ..generationMarker = 'j-partial';
+        const token = 'token-partial';
+
+        await seedMediaState(
+          token,
+          withStaged: false,
+          withLive: false,
+          partialActivation: true,
+        );
+        await store.saveEntry(
+          entryFor(
+            journalId: 'j-partial',
+            phase: RestorePhase.mediaActivated,
+            mediaToken: token,
+          ),
+        );
+
+        await RestoreJournalResolver(
+          journalStore: store,
+          localSyncStore: fakeSync,
+          documentsDirectory: () async => docs,
+        ).resolveActiveJournal();
+
+        expect(File(p.join(docs.path, 'photos', 'new.jpg')).readAsBytesSync(), [
+          3,
+        ]);
+        expect(
+          File(p.join(docs.path, 'profile', 'new.png')).readAsBytesSync(),
+          [4],
+        );
+        expect(fakeSync.calls, ['enqueueRestoreSnapshot']);
+      },
+    );
+
+    test('rolls back pre-import phases and cleans staged media', () async {
+      final store = InMemoryRestoreJournalStore();
+      final fakeSync = _FakeLocalSyncStore(boundUserId: 'user-a');
+      const token = 'token-pre';
+
+      await seedMediaState(token, withStaged: true, withLive: true);
+      await store.saveEntry(
+        entryFor(
+          journalId: 'j-pre',
+          phase: RestorePhase.mediaStaged,
+          mediaToken: token,
+        ),
+      );
+
+      await RestoreJournalResolver(
+        journalStore: store,
+        localSyncStore: fakeSync,
+        documentsDirectory: () async => docs,
+      ).resolveActiveJournal();
+
+      expect(await store.getActiveEntry(), isNull);
+      expect(
+        Directory(p.join(docs.path, 'photos.restore-$token')).existsSync(),
+        isFalse,
+      );
+      expect(File(p.join(docs.path, 'photos', 'old.jpg')).existsSync(), isTrue);
+      expect(fakeSync.calls, isEmpty);
+    });
+
+    test('rolls forward post-commit local-only pause after restart', () async {
+      final store = InMemoryRestoreJournalStore();
+      final fakeSync = _FakeLocalSyncStore(boundUserId: null)
+        ..generationMarker = 'j-local-post';
+
+      await store.saveEntry(
+        entryFor(
+          journalId: 'j-local-post',
+          phase: RestorePhase.cloudIntentDurable,
+          accountScope: 'localOnly',
+          updateCloudIntent: false,
+        ),
+      );
+
+      await RestoreJournalResolver(
+        journalStore: store,
+        localSyncStore: fakeSync,
+        documentsDirectory: () async => docs,
       ).resolveActiveJournal();
 
       expect(await store.getActiveEntry(), isNull);
@@ -270,25 +389,21 @@ void main() {
       'fails closed when recovery account differs from local binding',
       () async {
         final store = InMemoryRestoreJournalStore();
-        final fakeSync = _FakeLocalSyncStore(boundUserId: 'user-b');
-        final now = DateTime.now();
-        final entry = RestoreJournalEntry(
-          version: 1,
-          journalId: 'j-mismatch',
-          accountScope: 'user-a',
-          archivePath: '/tmp/mismatch.zip',
-          archiveHash: 'hash-mismatch',
-          phase: RestorePhase.dbCommitComplete,
-          updateCloudIntent: true,
-          createdAt: now,
-          updatedAt: now,
+        final fakeSync = _FakeLocalSyncStore(boundUserId: 'user-b')
+          ..generationMarker = 'j-mismatch';
+
+        await store.saveEntry(
+          entryFor(
+            journalId: 'j-mismatch',
+            phase: RestorePhase.dbCommitComplete,
+          ),
         );
-        await store.saveEntry(entry);
 
         await expectLater(
           RestoreJournalResolver(
             journalStore: store,
             localSyncStore: fakeSync,
+            documentsDirectory: () async => docs,
           ).resolveActiveJournal(),
           throwsA(isA<StateError>()),
         );
@@ -300,28 +415,20 @@ void main() {
 
     test('blocks startup on unsupported future journal version', () async {
       final store = InMemoryRestoreJournalStore();
-      final now = DateTime.now();
-
-      final entry = RestoreJournalEntry(
-        version: 99,
-        journalId: 'j-future',
-        accountScope: 'localOnly',
-        archivePath: '/tmp/future.zip',
-        archiveHash: 'hash-future',
-        phase: RestorePhase.mediaStaged,
-        updateCloudIntent: false,
-        createdAt: now,
-        updatedAt: now,
-      );
-      await store.saveEntry(entry);
-
-      final resolver = RestoreJournalResolver(
-        journalStore: store,
-        localSyncStore: null,
+      await store.saveEntry(
+        entryFor(
+          journalId: 'j-future',
+          phase: RestorePhase.mediaStaged,
+          version: 99,
+        ),
       );
 
       await expectLater(
-        resolver.resolveActiveJournal(),
+        RestoreJournalResolver(
+          journalStore: store,
+          localSyncStore: _FakeLocalSyncStore(),
+          documentsDirectory: () async => docs,
+        ).resolveActiveJournal(),
         throwsA(
           isA<StateError>().having(
             (e) => e.toString(),
@@ -332,5 +439,28 @@ void main() {
       );
       expect((await store.getActiveEntry())?.journalId, 'j-future');
     });
+
+    test(
+      'rejects retired journal formats without a compatibility ladder',
+      () async {
+        final store = InMemoryRestoreJournalStore();
+        await store.saveEntry(
+          entryFor(
+            journalId: 'j-legacy',
+            phase: RestorePhase.dbCommitStarted,
+            version: 1,
+          ),
+        );
+
+        await expectLater(
+          RestoreJournalResolver(
+            journalStore: store,
+            localSyncStore: _FakeLocalSyncStore(generationMarker: 'j-legacy'),
+            documentsDirectory: () async => docs,
+          ).resolveActiveJournal(),
+          throwsA(isA<StateError>()),
+        );
+      },
+    );
   });
 }

@@ -16,9 +16,9 @@ const read = async (path) =>
 test('GitHub Actions use only reviewed immutable references', async () => {
   const result = await validateRepositoryActionReferences();
   assert.deepEqual(result.errors, []);
-  assert.equal(result.externalReferences, 58);
+  assert.equal(result.externalReferences, 61);
   assert.equal(result.localReferences, 0);
-  assert.equal(result.files.length, 9);
+  assert.equal(result.files.length, 8);
 });
 
 test('GitHub Actions policy rejects mutable, shortened, and unowned references', () => {
@@ -183,21 +183,24 @@ test('Shorebird patch rail rejects unsafe diffs and publishes production directl
   assert.match(patchScript, /legacy-generated-shorebird-yaml-only/);
 });
 
-test('promotion script and workflow are marked deprecated for normal production patches', async () => {
-  const workflow = await read('.github/workflows/shorebird-promote-patch.yml');
-  const script = await read('tool/promote_shorebird_patch.ps1');
-  assert.match(workflow, /DEPRECATED/);
-  assert.match(script, /DEPRECATED/);
-  assert.match(workflow, /environment: production/);
-  assert.match(workflow, /SHOREBIRD_PRODUCTION_PROMOTIONS_ENABLED/);
-  assert.match(workflow, /secrets\.SHOREBIRD_TOKEN/);
-  assert.match(script, /PREVIEWED PATCH \$ReleaseVersion#\$PatchNumber/);
-  assert.match(script, /is_rolled_back/);
-  assert.match(script, /channel -ne 'staging'/);
-  assert.match(script, /patches set-track --release \$ReleaseVersion --patch \$PatchNumber --track stable/);
-  assert.match(script, /shorebird-promotion-evidence\.json/);
-  assert.match(workflow, /Upload immutable promotion evidence/);
-  assert.doesNotMatch(script, /patches promote|rollback/);
+test('deprecated promotion path is fully removed from the repository', async () => {
+  // WP-020: the emergency Shorebird promotion workflow/script were deleted.
+  // Standard protected release/patch tracks are the only code-push paths.
+  const { access } = await import('node:fs/promises');
+  const { constants } = await import('node:fs');
+  for (const removed of [
+    '.github/workflows/shorebird-promote-patch.yml',
+    'tool/promote_shorebird_patch.ps1',
+  ]) {
+    await assert.rejects(
+      access(new URL(`../${removed}`, import.meta.url), constants.F_OK),
+      `${removed} must not exist`,
+    );
+  }
+  // WP-001: validation workflows must not reference the deleted script in any
+  // parse/verify list, or they fail at runtime on a missing file.
+  const validateWorkflow = await read('.github/workflows/validate-flutter.yml');
+  assert.doesNotMatch(validateWorkflow, /promote_shorebird_patch/);
 });
 test('backend gate covers formatting, type safety, functions, and database', async () => {
   const workflow = await read('.github/workflows/validate-google-backend.yml');
@@ -210,7 +213,7 @@ test('backend gate covers formatting, type safety, functions, and database', asy
   assert.doesNotMatch(triggers, /paths:/);
   assert.match(workflow, /name: Deno SSV tests/);
   assert.match(workflow, /name: Google contract\/static checks/);
-  assert.match(workflow, /name: Supabase database tests/);
+  assert.match(workflow, /name: Blank-baseline database and Edge endpoint integration/);
   assert.match(workflow, /name: Hosted Supabase Advisors/);
   assert.match(workflow, /deno fmt --check/);
   assert.match(workflow, /deno check --frozen/);
@@ -218,9 +221,11 @@ test('backend gate covers formatting, type safety, functions, and database', asy
   assert.match(workflow, /admob-ssv-handler\/index_test\.ts/);
   assert.match(workflow, /delete-account\/index_test\.ts/);
   assert.match(workflow, /account-deletion-status\/index_test\.ts/);
-  assert.match(workflow, /npx supabase start/);
-  assert.match(workflow, /npm run supabase:lint/);
-  assert.match(workflow, /npm run supabase:test/);
+  assert.match(workflow, /npm run test:backend-integration/);
+  // WP-001: npm matches script names literally; a malformed invocation such as
+  // `test:backend-integration/..` resolves to a missing script and must fail
+  // this contract instead of surfacing only as a broken CI job.
+  assert.doesNotMatch(workflow, /npm run [^\s`'"]*\/(?:\.\.|[^\s`'"/])/);
   assert.match(workflow, /node tool\/audit_supabase_advisors\.mjs/);
   assert.match(workflow, /environment: production-supabase-advisors/);
   assert.match(workflow, /needs: validate-advisor-source/);

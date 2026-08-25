@@ -5,7 +5,7 @@ import 'package:permission_handler/permission_handler.dart';
 
 import '../database/app_database.dart';
 
-enum AppPermissionKind { notifications, location, exactAlarms }
+enum AppPermissionKind { notifications, location }
 
 enum AppPermissionState {
   granted,
@@ -48,9 +48,6 @@ class AppPermissionCoordinator
   @override
   Future<AppPermissionState> check(AppPermissionKind kind) async {
     try {
-      if (kind == AppPermissionKind.exactAlarms) {
-        return AppPermissionState.unavailable;
-      }
       if (kind == AppPermissionKind.location &&
           !await Geolocator.isLocationServiceEnabled()) {
         return AppPermissionState.serviceDisabled;
@@ -63,9 +60,6 @@ class AppPermissionCoordinator
 
   @override
   Future<AppPermissionState> request(AppPermissionKind kind) async {
-    if (kind == AppPermissionKind.exactAlarms) {
-      return AppPermissionState.unavailable;
-    }
     final current = await check(kind);
     if (current == AppPermissionState.granted ||
         current == AppPermissionState.permanentlyDenied ||
@@ -144,8 +138,6 @@ class AppPermissionCoordinator
             return await openLocationServiceSettings();
           }
           return await openAppPermissionSettings();
-        case AppPermissionKind.exactAlarms:
-          return false;
       }
     } on MissingPluginException {
       return false;
@@ -157,7 +149,6 @@ class AppPermissionCoordinator
   Permission _permission(AppPermissionKind kind) => switch (kind) {
     AppPermissionKind.notifications => Permission.notification,
     AppPermissionKind.location => Permission.locationWhenInUse,
-    AppPermissionKind.exactAlarms => Permission.scheduleExactAlarm,
   };
 
   AppPermissionState _mapStatus(PermissionStatus status) => switch (status) {

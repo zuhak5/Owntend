@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math' as math;
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
@@ -35,6 +34,7 @@ class UserChangeFeedPage {
     required this.nextSeq,
     required this.hasMore,
     required this.resnapshotRequired,
+    this.feedGeneration = 1,
   });
 
   final List<ChangeFeedEntry> entries;
@@ -42,6 +42,7 @@ class UserChangeFeedPage {
   final int nextSeq;
   final bool hasMore;
   final bool resnapshotRequired;
+  final int feedGeneration;
 }
 
 enum MaintenanceCompletionStatus {
@@ -219,18 +220,6 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
     });
   }
 
-  Future<int> syncHead(String userId) async {
-    try {
-      final heads = await Future.wait([
-        for (final spec in [...syncEntitySpecs, profileSyncSpec])
-          _tableUpdatedHead(spec, userId),
-      ]);
-      return heads.fold<int>(0, math.max);
-    } on Object catch (error) {
-      throw SupabaseFailure.from(error);
-    }
-  }
-
   @override
   Future<void> stopRealtime() async {
     final channel = _realtimeChannel;
@@ -249,19 +238,6 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
       );
       await _client.removeChannel(channel);
     }
-  }
-
-  Future<int> _tableUpdatedHead(SyncEntitySpec spec, String userId) async {
-    var query = _client
-        .from(spec.remoteTable)
-        .select('updated_at')
-        .eq('user_id', userId);
-    final response = await _withDataTimeout(
-      () async => query.order('updated_at', ascending: false).limit(1),
-    );
-    if (response.isEmpty) return 0;
-    final updatedAt = _parseUtc(response.first['updated_at']);
-    return updatedAt?.microsecondsSinceEpoch ?? 0;
   }
 
   Future<List<SyncRecord>> pullAuthoritativeSnapshotPage({
@@ -366,12 +342,17 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
       }
       final rows = await _withDataTimeout(() => ordered.limit(pageSize));
       if (rows.isEmpty) break;
+      // The pagination cursor must come from the final row of THIS fetched
+      // page, never from accumulated set ordering.
+      String? pageLastKey;
       for (final row in rows) {
-        keys.add(
-          spec.keyColumns.map((column) => row[column].toString()).join('|'),
-        );
+        final key = spec.keyColumns
+            .map((column) => row[column].toString())
+            .join('|');
+        keys.add(key);
+        pageLastKey = key;
       }
-      afterRecordKey = keys.last;
+      afterRecordKey = pageLastKey;
       if (rows.length < pageSize) break;
     }
     return keys;
@@ -404,13 +385,79 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
     required int? expectedRevision,
   }) async {
     try {
-      final payload = await _preparePayload(
-        record,
-        userId,
-        deviceId,
-        uploadMedia:
-            !(record.spec.entity == 'asset_photo' && expectedRevision != null),
-      );
+      if (record.spec.entity == 'asset_photo') {
+        final photoId = record.values['id'] as String;
+        final assetId = record.values['asset_id'] as String;
+        if (record.isDeleted) {
+          final deleteRes = await _withDataTimeout(
+            () => _client.rpc<Map<String, dynamic>>(
+              'delete_asset_photo',
+              params: {'p_asset_id': assetId, 'p_photo_id': photoId},
+            ),
+          );
+          final deletedPath = deleteRes['object_path'] as String?;
+          return _appliedDeleteResult(
+            record: record,
+            userId: userId,
+            deletedValues: {
+              'id': photoId,
+              'asset_id': assetId,
+              'user_id': userId,
+              'object_path': ?deletedPath,
+            },
+          );
+        }
+        if (expectedRevision == null ||
+            record.values['relative_path'] != null) {
+          final localPath = record.values['relative_path'] as String?;
+          if (localPath != null && localPath.isNotEmpty) {
+            final caption = record.values['caption'] as String?;
+            final isPrimary = record.values['is_primary'] == true;
+            final canonical = await _uploadMedia(
+              userId: userId,
+              localRelativePath: localPath,
+              assetId: assetId,
+              photoId: photoId,
+              revision: record.revision,
+              caption: caption,
+              isPrimary: isPrimary,
+            );
+            return RemoteWriteResult.applied(
+              canonical,
+              cleanupObjectPaths: const [],
+            );
+          }
+        }
+        if (record.values['is_primary'] == true) {
+          await _withDataTimeout(
+            () => _client.rpc<Map<String, dynamic>>(
+              'set_primary_asset_photo',
+              params: {'p_asset_id': assetId, 'p_photo_id': photoId},
+            ),
+          );
+          final canonical = await fetch(
+            spec: record.spec,
+            userId: userId,
+            deviceId: deviceId,
+            recordKey: record.recordKey,
+          );
+          if (canonical != null) {
+            return RemoteWriteResult.applied(canonical);
+          }
+        }
+      }
+
+      // MON-001: asset creation has no direct INSERT authority. A queued
+      // creation (including offline drafts replayed by sync) routes through
+      // the idempotent aggregate RPC so bundled invariants and the
+      // creation ledger stay authoritative.
+      if (record.spec.entity == 'asset' &&
+          !record.isDeleted &&
+          expectedRevision == null) {
+        return await _createAssetThroughAggregateRpc(record, userId);
+      }
+
+      final payload = await _preparePayload(record, userId, deviceId);
       if (record.isDeleted) {
         if (expectedRevision == null) {
           final existing = await fetch(
@@ -759,34 +806,76 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
     }
   }
 
+  /// Creates an asset through the server-authoritative idempotent aggregate
+  /// RPC. The operation id is the canonical asset identifier, so retries and
+  /// response-loss replays converge on the same ledger entry instead of
+  /// duplicating rows.
+  Future<RemoteWriteResult> _createAssetThroughAggregateRpc(
+    SyncRecord record,
+    String userId,
+  ) async {
+    final assetValues = <String, dynamic>{};
+    for (final entry in record.values.entries) {
+      final remoteKey = record.spec.remoteColumnFor(entry.key);
+      if (entry.value == null &&
+          const {'id', 'name', 'asset_type', 'room_id'}.contains(remoteKey)) {
+        continue;
+      }
+      assetValues[remoteKey] = entry.value;
+    }
+    final unsignedPayload = <String, dynamic>{
+      'operation_id': record.recordKey,
+      'asset': assetValues,
+      'details': <String, dynamic>{},
+      'initial_plans': <Map<String, dynamic>>[],
+    };
+    final requestHash = sha256
+        .convert(utf8.encode(jsonEncode(unsignedPayload)))
+        .toString();
+    final data = await _withDataTimeout(
+      () => _client.rpc<Map<String, dynamic>>(
+        'create_asset',
+        params: {
+          'p_operation': {...unsignedPayload, 'request_hash': requestHash},
+        },
+      ),
+    );
+    final remoteAsset = data['asset'];
+    if (remoteAsset is Map) {
+      final canonical = SyncRecord.fromRemote(
+        record.spec,
+        Map<String, dynamic>.from(remoteAsset),
+      );
+      return RemoteWriteResult.applied(canonical);
+    }
+    // Idempotent replay without a canonical row payload: fetch the row.
+    final canonical = await fetch(
+      spec: record.spec,
+      userId: userId,
+      deviceId: '',
+      recordKey: record.recordKey,
+    );
+    if (canonical == null) {
+      throw const SupabaseFailure(
+        kind: SupabaseFailureKind.incompatibleSchema,
+        message:
+            'The cloud did not confirm asset creation with its canonical row.',
+      );
+    }
+    return RemoteWriteResult.applied(canonical);
+  }
+
   Future<Map<String, dynamic>> _preparePayload(
     SyncRecord record,
     String userId,
-    String deviceId, {
-    bool uploadMedia = true,
-  }) async {
+    String deviceId,
+  ) async {
     final payload = record.toRemotePayload(userId, deviceId: deviceId);
     if (record.isDeleted) {
       return payload;
     }
     if (record.spec.entity == 'asset_photo') {
-      if (uploadMedia) {
-        final localPath = record.values['relative_path'] as String;
-        final assetId = record.values['asset_id'] as String;
-        final photoId = record.values['id'] as String;
-        final upload = await _uploadMedia(
-          userId: userId,
-          localRelativePath: localPath,
-          assetId: assetId,
-          photoId: photoId,
-          revision: record.revision,
-        );
-        payload['object_path'] = upload.objectPath;
-      } else {
-        // The local relative path is device-specific and must never overwrite
-        // the immutable cloud object path during a metadata-only update.
-        payload.remove('object_path');
-      }
+      payload.remove('object_path');
     }
     return payload;
   }
@@ -798,10 +887,23 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
     if (record.spec.entity != 'asset_photo') {
       return record;
     }
-    const key = 'relative_path';
-    final objectPath = record.values[key] as String?;
+    final objectPath =
+        (record.values['cloud_object_path'] ?? record.values['relative_path'])
+            as String?;
     if (objectPath == null || objectPath.isEmpty) {
-      return record;
+      // A photo row without a cloud object carries no file to download. The
+      // local schema requires a non-empty relative path, so persist an empty
+      // placeholder that renders as "no image" instead of failing the pull.
+      return SyncRecord(
+        spec: record.spec,
+        recordKey: record.recordKey,
+        values: {...record.values, 'relative_path': ''},
+        clientModifiedAt: record.clientModifiedAt,
+        originDeviceId: record.originDeviceId,
+        revision: record.revision,
+        serverUpdatedAt: record.serverUpdatedAt,
+        deletedAt: record.deletedAt,
+      );
     }
     if (!objectPath.startsWith('$userId/')) {
       throw const SupabaseFailure(
@@ -821,7 +923,11 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
     return SyncRecord(
       spec: record.spec,
       recordKey: record.recordKey,
-      values: {...record.values, key: cached.relativePath},
+      values: {
+        ...record.values,
+        'relative_path': cached.relativePath,
+        'cloud_object_path': objectPath,
+      },
       clientModifiedAt: record.clientModifiedAt,
       originDeviceId: record.originDeviceId,
       revision: record.revision,
@@ -849,12 +955,14 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
     }
   }
 
-  Future<_MediaUpload> _uploadMedia({
+  Future<SyncRecord> _uploadMedia({
     required String userId,
     required String localRelativePath,
     required String assetId,
     required String photoId,
     required int? revision,
+    String? caption,
+    bool isPrimary = false,
   }) async {
     final documents = await getApplicationDocumentsDirectory();
     final file = File(
@@ -909,7 +1017,7 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
     if (stagingId is! String ||
         stagingId.isEmpty ||
         stagingPath is! String ||
-        !stagingPath.startsWith('$userId/staging/') ||
+        !stagingPath.startsWith('$userId/media/') ||
         (stagingStatus != 'staged' && stagingStatus != 'finalized')) {
       throw const SupabaseFailure(
         kind: SupabaseFailureKind.incompatibleSchema,
@@ -937,6 +1045,8 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
           'p_asset_id': assetId,
           'p_photo_id': photoId,
           'p_expected_revision': revision ?? 1,
+          'p_caption': caption,
+          'p_is_primary': isPrimary,
         },
       ),
     );
@@ -947,17 +1057,33 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
         message: 'The cloud returned an invalid media finalization contract.',
       );
     }
-    return _MediaUpload(objectPath: finalizedPath as String);
+    final photoRow = <String, dynamic>{
+      'id': photoId,
+      'asset_id': assetId,
+      'user_id': userId,
+      'object_path': finalizedPath as String,
+      'caption': finalizeRes['caption'] ?? caption,
+      'is_primary': finalizeRes['is_primary'] ?? isPrimary,
+      'revision': finalizeRes['revision'] ?? revision ?? 1,
+      'created_at': DateTime.now().toUtc().toIso8601String(),
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    };
+    return SyncRecord.fromRemote(syncSpecByEntity['asset_photo']!, photoRow);
   }
 
   Future<UserChangeFeedPage> fetchUserChangeFeed({
     int sinceSeq = 0,
     int limit = 100,
+    int? expectedGeneration,
   }) async {
     final response = await _withDataTimeout(
       () => _client.rpc<Map<String, dynamic>>(
         'fetch_user_change_feed',
-        params: {'p_since_seq': sinceSeq, 'p_limit': limit},
+        params: {
+          'p_since_seq': sinceSeq,
+          'p_limit': limit,
+          'p_expected_generation': expectedGeneration ?? 1,
+        },
       ),
     );
     requireSyncFeedContractVersion(response['contract_version']);
@@ -965,7 +1091,9 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
     final highWaterSeq = response['high_water_seq'];
     final nextSeq = response['next_seq'];
     final hasMore = response['has_more'];
-    final resnapshotRequired = response['resnapshot_required'];
+    final resnapshotRequired =
+        response['resnapshot_required'] ?? response['snapshot_required'];
+    final feedGeneration = response['feed_generation'] as int? ?? 1;
     if (rawChanges is! List ||
         highWaterSeq is! int ||
         nextSeq is! int ||
@@ -1007,6 +1135,7 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
       nextSeq: nextSeq,
       hasMore: hasMore,
       resnapshotRequired: resnapshotRequired,
+      feedGeneration: feedGeneration,
     );
   }
 
@@ -1203,10 +1332,4 @@ MaintenanceCompletionStatus _maintenanceCompletionStatus(Object? value) {
       'The maintenance completion RPC returned an unknown status.',
     ),
   };
-}
-
-class _MediaUpload {
-  const _MediaUpload({required this.objectPath});
-
-  final String objectPath;
 }

@@ -17,6 +17,11 @@ This directory is the canonical entry point for product, architecture, developme
 - [`architecture/monetization.md`](architecture/monetization.md): ads, points, charged creation, and SSV.
 - [`architecture/backup-and-restore.md`](architecture/backup-and-restore.md): archive format and restore safety.
 
+## Backend
+
+- [`backend/supabase.md`](backend/supabase.md): local Supabase stack, authentication, RLS, RPCs, Storage, Realtime, Edge Functions, and Advisor audits.
+- [`backend/migrations-and-functions.md`](backend/migrations-and-functions.md): migration baseline policy and Edge Function contracts.
+
 ## Development
 
 - [`development/getting-started.md`](development/getting-started.md): workstation setup and local execution.
@@ -54,6 +59,10 @@ This directory is the canonical entry point for product, architecture, developme
 - [`adr/ADR-SENTRY-OBSERVABILITY.md`](adr/ADR-SENTRY-OBSERVABILITY.md)
 - [`adr/0002-versiondeck-release-verification.md`](adr/0002-versiondeck-release-verification.md)
 - [`adr/ADR-SHOREBIRD-CODE-PUSH.md`](adr/ADR-SHOREBIRD-CODE-PUSH.md)
+
+## Plans
+
+- [`plans/`](plans/): working planning documents for pre-launch hardening, including the implementation plan and its report.
 
 ## Agent workflows
 

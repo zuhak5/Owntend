@@ -51,7 +51,7 @@ void main() {
 
       when(
         () => client.rpc<Map<String, dynamic>>(
-          'create_asset_with_point_debit',
+          'create_asset',
           params: any(named: 'params'),
         ),
       ).thenAnswer(
@@ -72,7 +72,7 @@ void main() {
 
       final captured = verify(
         () => client.rpc<Map<String, dynamic>>(
-          'create_asset_with_point_debit',
+          'create_asset',
           params: captureAny(named: 'params'),
         ),
       ).captured;
@@ -111,7 +111,7 @@ void main() {
 
       when(
         () => client.rpc<Map<String, dynamic>>(
-          'create_asset_with_point_debit',
+          'create_asset',
           params: any(named: 'params'),
         ),
       ).thenAnswer(
@@ -129,7 +129,7 @@ void main() {
 
       final captured = verify(
         () => client.rpc<Map<String, dynamic>>(
-          'create_asset_with_point_debit',
+          'create_asset',
           params: captureAny(named: 'params'),
         ),
       ).captured;

@@ -186,6 +186,9 @@ extension _SyncPushCoordinator on SyncCoordinator {
           final spec = syncSpecByEntity[mutation.entity];
           if (shadow == null &&
               spec != null &&
+              // Asset creation is server-authoritative and must go through
+              // the idempotent aggregate RPC one operation at a time.
+              spec.entity != 'asset' &&
               spec.entity != 'asset_photo' &&
               spec.entity != 'profile') {
             final batchMutations = <LocalSyncMutation>[];
@@ -316,11 +319,13 @@ extension _SyncPushCoordinator on SyncCoordinator {
         }
         final record = await _localStore.readMutation(mutation, deviceId);
         if (record == null) {
-          await _localStore.discardMutation(
-            mutation.entity,
-            mutation.recordKey,
+          // The local row vanished without a delete intent. Never silently
+          // discard queued work; surface it for explicit resolution instead.
+          await _localStore.markMutationTerminal(
+            mutation,
+            'The local record for a queued change is missing. '
+            'Review or dismiss the change manually.',
           );
-          if (trackHydration) await _localStore.addHydrationUnits(1);
           index++;
           continue;
         }
@@ -643,9 +648,19 @@ extension _SyncPushCoordinator on SyncCoordinator {
       await _ensureActiveAccountScope(scope);
     } else if (localFutureClock) {
       // A fast local clock must not make an older local edit win solely by
-      // timestamp. Keep the server-authoritative conflicting revision.
+      // timestamp. Keep the server-authoritative revision locally, but the
+      // local payload stays durable in the outbox `conflict` state until it
+      // is acknowledged or explicitly resolved.
+      await _ensureActiveAccountScope(scope);
       await _localStore.applyRemoteRecords([remote]);
-      await _localStore.markMutationSucceeded(mutation, remote);
+      await _localStore.markMutationConflicted(
+        mutation,
+        accountId: userId,
+        reason: 'remote_clock_skew_winner',
+        localPayloadJson: _localSyncConflictPayload(mutation, local),
+        remotePayloadJson: jsonEncode(remote.values),
+        remoteRevision: remote.revision,
+      );
       return;
     } else if (remoteFutureClock) {
       // Conversely, do not let a remote client's future clock dominate a
@@ -668,9 +683,20 @@ extension _SyncPushCoordinator on SyncCoordinator {
       );
       await _ensureActiveAccountScope(scope);
     } else {
+      // The remote revision/timestamp wins this round. Apply the canonical
+      // row locally, but never delete or resolve the local intent: it stays
+      // in the outbox `conflict` state across restarts until the exact
+      // server acknowledges a newer generation or the user resolves it.
       await _ensureActiveAccountScope(scope);
       await _localStore.applyRemoteRecords([remote]);
-      await _localStore.markMutationSucceeded(mutation, remote);
+      await _localStore.markMutationConflicted(
+        mutation,
+        accountId: userId,
+        reason: 'remote_revision_winner',
+        localPayloadJson: _localSyncConflictPayload(mutation, local),
+        remotePayloadJson: jsonEncode(remote.values),
+        remoteRevision: remote.revision,
+      );
       return;
     }
     if (result.conflict) {
@@ -685,6 +711,16 @@ extension _SyncPushCoordinator on SyncCoordinator {
     }
     await _ensureActiveAccountScope(scope);
     await _completeMutation(userId, mutation, result);
+  }
+
+  String _localSyncConflictPayload(
+    LocalSyncMutation mutation,
+    SyncRecord local,
+  ) {
+    return _localStore.encodeConflictPayload(
+      operation: mutation.operation,
+      values: local.values,
+    );
   }
 
   bool _isFutureClockSkew(DateTime clientTime, DateTime referenceTime) {

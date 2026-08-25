@@ -38,14 +38,26 @@ Deno.test("rejects non-POST methods before reading credentials", async () => {
   assertEquals(response.headers.get("access-control-allow-origin"), null);
 });
 
-Deno.test("answers preflight for each exact browser origin", async () => {
-  for (
-    const origin of [
-      productionOrigin,
-      "http://localhost:4173",
-      "http://127.0.0.1:4173",
-    ]
-  ) {
+Deno.test("answers preflight for exact browser origins in their environment", async () => {
+  const developmentEnvironment = {
+    get: (key: string): string | undefined =>
+      key === "OWNTEND_FUNCTIONS_ENV" ? "development" : undefined,
+  };
+  const cases: Array<{
+    origin: string;
+    environment: typeof emptyEnvironment;
+  }> = [
+    { origin: productionOrigin, environment: emptyEnvironment },
+    {
+      origin: "http://localhost:4173",
+      environment: developmentEnvironment as never,
+    },
+    {
+      origin: "http://127.0.0.1:4173",
+      environment: developmentEnvironment as never,
+    },
+  ];
+  for (const { origin, environment } of cases) {
     const response = await handleDeleteAccount(
       new Request("http://localhost/delete-account", {
         method: "OPTIONS",
@@ -55,7 +67,7 @@ Deno.test("answers preflight for each exact browser origin", async () => {
           "Access-Control-Request-Headers": "authorization,apikey,content-type",
         },
       }),
-      emptyEnvironment,
+      environment,
     );
 
     assertEquals(response.status, 204);
@@ -69,6 +81,25 @@ Deno.test("answers preflight for each exact browser origin", async () => {
       "authorization, apikey, content-type, x-client-info",
     );
     assertEquals(response.headers.get("vary"), "Origin");
+  }
+});
+
+Deno.test("development origins fail closed under the default production environment", async () => {
+  for (const origin of ["http://localhost:4173", "http://127.0.0.1:4173"]) {
+    const response = await handleDeleteAccount(
+      new Request("http://localhost/delete-account", {
+        method: "OPTIONS",
+        headers: {
+          Origin: origin,
+          "Access-Control-Request-Method": "POST",
+        },
+      }),
+      emptyEnvironment,
+    );
+
+    assertEquals(response.status, 403);
+    assertEquals(await response.json(), { error: "origin_not_allowed" });
+    assertEquals(response.headers.get("access-control-allow-origin"), null);
   }
 });
 

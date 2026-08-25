@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(21);
+select plan(23);
 
 select has_table(
   'owntend_private',
@@ -77,6 +77,26 @@ select ok(
       and confdeltype = 'c'
   ),
   'cleanup jobs cannot outlive the Auth user'
+);
+select ok(
+  exists (
+    select 1
+    from pg_class
+    where oid = 'owntend_private.account_deletion_cleanup_jobs'::regclass
+      and relrowsecurity
+  ),
+  'cleanup jobs enable Row Level Security'
+);
+select ok(
+  exists (
+    select 1
+    from pg_policies
+    where schemaname = 'owntend_private'
+      and tablename = 'account_deletion_cleanup_jobs'
+      and policyname = 'account_deletion_cleanup_jobs_service_role_all'
+      and roles @> array['service_role'::name]
+  ),
+  'cleanup jobs are writable only by the service role'
 );
 select ok(
   not has_function_privilege(

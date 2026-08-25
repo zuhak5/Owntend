@@ -1,60 +1,45 @@
 part of '../local_sync_store.dart';
 
 mixin _LocalSyncRemoteStore on _LocalSyncStoreBase {
-  Future<int> cursor(String entity) async {
-    return (await cursorCheckpoint(entity)).$1;
-  }
+  // WP-010 (D4): the legacy per-entity cursor API (cursor/cursorCheckpoint/
+  // setCursor/applyRemoteRecordsAndCheckpoints) was production-dead after the
+  // contract-1 change-feed became the only pull path; it was deleted rather
+  // than carried. Tests arrange or read cursor rows directly through Drift.
 
-  Future<(int, String?)> cursorCheckpoint(String entity) async {
-    final row = await (db.select(
-      db.syncCursors,
-    )..where((item) => item.entity.equals(entity))).getSingleOrNull();
-    return (row?.lastSyncSeq ?? 0, row?.lastRecordKey);
-  }
-
-  Future<void> setCursor(
-    String entity,
-    int lastSyncSeq, {
-    String? lastRecordKey,
-  }) async {
-    final current = await cursorCheckpoint(entity);
-    final currentSeq = current.$1;
-    final currentKey = current.$2;
-    if (lastSyncSeq < currentSeq) return;
-    if (lastSyncSeq == currentSeq &&
-        currentKey != null &&
-        lastRecordKey != null &&
-        lastRecordKey.compareTo(currentKey) <= 0) {
-      return;
-    }
-    await db
-        .into(db.syncCursors)
-        .insertOnConflictUpdate(
-          SyncCursorsCompanion.insert(
-            entity: entity,
-            lastSyncSeq: Value(lastSyncSeq),
-            lastRecordKey: Value(lastRecordKey),
-          ),
-        );
+  Future<SyncCursor?> getFeedCursorRow() async {
+    return (db.select(db.syncCursors)
+          ..where((item) => item.entity.equals('server_change_feed')))
+        .getSingleOrNull();
   }
 
   Future<int> getFeedCursor() async {
-    final row =
-        await (db.select(db.syncCursors)
-              ..where((item) => item.entity.equals('server_change_feed')))
-            .getSingleOrNull();
+    final row = await getFeedCursorRow();
     return row?.lastSyncSeq ?? 0;
   }
 
-  Future<void> setFeedCursor(int lastSyncSeq) async {
-    final current = await getFeedCursor();
-    if (lastSyncSeq < current) return;
+  Future<int> getFeedGeneration() async {
+    final row = await getFeedCursorRow();
+    return row?.feedGeneration ?? 1;
+  }
+
+  Future<void> setFeedCursor(
+    int lastSyncSeq, {
+    int? feedGeneration,
+    int? highWaterSeq,
+  }) async {
+    final current = await getFeedCursorRow();
+    final currentSeq = current?.lastSyncSeq ?? 0;
+    final currentGen = current?.feedGeneration ?? 1;
+    final targetGen = feedGeneration ?? currentGen;
+    if (targetGen == currentGen && lastSyncSeq < currentSeq) return;
     await db
         .into(db.syncCursors)
         .insertOnConflictUpdate(
           SyncCursorsCompanion.insert(
             entity: 'server_change_feed',
             lastSyncSeq: Value(lastSyncSeq),
+            feedGeneration: Value(targetGen),
+            highWaterSeq: Value(highWaterSeq ?? current?.highWaterSeq ?? 0),
           ),
         );
   }
@@ -68,29 +53,110 @@ mixin _LocalSyncRemoteStore on _LocalSyncStoreBase {
     return row != null;
   }
 
+  /// WP-004 (F-006): classifies the outbox intent that masks a remote feed
+  /// record, or returns null when no intent exists. Active intents
+  /// (pending/inFlight/conflictRecovery) may still win; conflict/terminal
+  /// intents are user-owned but their local rows must eventually converge.
+  Future<String?> _maskingOutboxIntentState(String entity, String key) async {
+    final row =
+        await (db.select(db.syncOutbox)
+              ..where((r) => r.entity.equals(entity) & r.recordKey.equals(key)))
+            .getSingleOrNull();
+    return row?.state;
+  }
+
+  bool _isActiveIntentState(String? state) =>
+      state == 'pending' || state == 'inFlight' || state == 'conflictRecovery';
+
+  Future<void> _recordSkippedFeedEntry(
+    String entity,
+    String recordKey, {
+    required bool active,
+  }) async {
+    await db
+        .into(db.syncSkippedFeedEntries)
+        .insertOnConflictUpdate(
+          SyncSkippedFeedEntriesCompanion.insert(
+            entity: entity,
+            recordKey: recordKey,
+            reason: active ? 'active_intent' : 'conflict_or_terminal',
+          ),
+        );
+  }
+
+  @override
+  Future<void> clearSkippedFeedEntry(String entity, String recordKey) {
+    return (db.delete(db.syncSkippedFeedEntries)..where(
+          (row) => row.entity.equals(entity) & row.recordKey.equals(recordKey),
+        ))
+        .go();
+  }
+
+  /// Skipped-feed promises whose masking intent is gone. Each returned entry
+  /// needs one targeted remote fetch to converge; entries whose intent still
+  /// exists stay bookkept.
+  @override
+  Future<List<SyncSkippedFeedEntryRow>> skippedFeedEntriesForDrain() async {
+    final rows = await db.select(db.syncSkippedFeedEntries).get();
+    if (rows.isEmpty) return const [];
+    final masked = await db.select(db.syncOutbox).get();
+    final maskKeys = {
+      for (final row in masked) '${row.entity}\u0000${row.recordKey}',
+    };
+    return [
+      for (final row in rows)
+        if (!maskKeys.contains('${row.entity}\u0000${row.recordKey}')) row,
+    ];
+  }
+
   Future<void> applyRemoteFeedRecord(SyncRecord record) async {
-    final hasPending = await hasPendingLocalMutation(
+    final maskingState = await _maskingOutboxIntentState(
       record.spec.entity,
       record.recordKey,
     );
     await db.transaction(() async {
       await withOutboxSuppressed(() async {
-        if (!hasPending) {
+        if (maskingState == null) {
           await _saveShadow(record);
           await _upsertLocal(record);
+          // Any earlier skip promise for this key is fulfilled by applying.
+          await (db.delete(db.syncSkippedFeedEntries)..where(
+                (row) =>
+                    row.entity.equals(record.spec.entity) &
+                    row.recordKey.equals(record.recordKey),
+              ))
+              .go();
+        } else if (_isActiveIntentState(maskingState)) {
+          // The pending intent may still win; promise a refetch once it
+          // resolves so the cursor can advance without losing this change.
+          await _recordSkippedFeedEntry(
+            record.spec.entity,
+            record.recordKey,
+            active: true,
+          );
+        } else {
+          // Conflict/terminal intents never overwrite the local row here, but
+          // the shadow stays truth-adjacent for revision checks and the
+          // durable promise guarantees post-dismissal convergence (F-006).
+          await _saveShadow(record);
+          await _recordSkippedFeedEntry(
+            record.spec.entity,
+            record.recordKey,
+            active: false,
+          );
         }
       });
     });
   }
 
   Future<void> applyRemoteFeedDelete(SyncRecord record) async {
-    final hasPending = await hasPendingLocalMutation(
+    final maskingState = await _maskingOutboxIntentState(
       record.spec.entity,
       record.recordKey,
     );
     await db.transaction(() async {
       await withOutboxSuppressed(() async {
-        if (!hasPending) {
+        if (maskingState == null) {
           await (db.delete(db.syncShadows)..where(
                 (row) =>
                     row.entity.equals(record.spec.entity) &
@@ -98,6 +164,21 @@ mixin _LocalSyncRemoteStore on _LocalSyncStoreBase {
               ))
               .go();
           await _deleteLocal(record);
+          await (db.delete(db.syncSkippedFeedEntries)..where(
+                (row) =>
+                    row.entity.equals(record.spec.entity) &
+                    row.recordKey.equals(record.recordKey),
+              ))
+              .go();
+        } else {
+          // Deletions behind any intent are only promised, never guessed:
+          // applying a shadow for a delete would erase the evidence needed by
+          // conflict resolution. Drain refetches after the intent clears.
+          await _recordSkippedFeedEntry(
+            record.spec.entity,
+            record.recordKey,
+            active: _isActiveIntentState(maskingState),
+          );
         }
       });
     });
@@ -106,6 +187,8 @@ mixin _LocalSyncRemoteStore on _LocalSyncStoreBase {
   Future<void> applyRemoteFeedPageAndCheckpoint({
     required List<SyncRecord> records,
     required int lastSyncSeq,
+    int? feedGeneration,
+    int? highWaterSeq,
   }) async {
     await db.transaction(() async {
       for (final record in records) {
@@ -115,20 +198,11 @@ mixin _LocalSyncRemoteStore on _LocalSyncStoreBase {
           await applyRemoteFeedRecord(record);
         }
       }
-      await setFeedCursor(lastSyncSeq);
-    });
-  }
-
-  Future<void> applyRemoteRecordsAndCheckpoints({
-    required List<SyncRecord> records,
-    required Map<String, (int, String?)> checkpoints,
-  }) async {
-    await db.transaction(() async {
-      await applyRemoteRecords(records);
-      for (final entry in checkpoints.entries) {
-        final checkpoint = entry.value;
-        await setCursor(entry.key, checkpoint.$1, lastRecordKey: checkpoint.$2);
-      }
+      await setFeedCursor(
+        lastSyncSeq,
+        feedGeneration: feedGeneration,
+        highWaterSeq: highWaterSeq,
+      );
     });
   }
 
@@ -250,6 +324,7 @@ WHERE id NOT IN (
     }
   }
 
+  @override
   Future<void> _upsertLocal(SyncRecord record) async {
     if (record.spec.entity == 'profile') {
       final current = await db
@@ -494,7 +569,10 @@ ON CONFLICT(key) DO UPDATE SET
               hasLaterPendingPlanMutation = true;
               break;
             }
-          } catch (_) {}
+          } on Object {
+            // WP-006 (F-015): unreadable payloads are counted, never silent.
+            payloadParseFailures++;
+          }
         }
       }
 

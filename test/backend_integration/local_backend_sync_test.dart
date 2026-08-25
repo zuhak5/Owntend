@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:crypto/crypto.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:owntend/src/core/data/repositories.dart';
@@ -11,6 +13,7 @@ import 'package:owntend/src/core/sync/supabase_sync_gateway.dart';
 import 'package:owntend/src/core/sync/sync_coordinator.dart';
 import 'package:owntend/src/features/auth/domain/auth_repository.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 
 const _url = String.fromEnvironment('OWNTEND_TEST_SUPABASE_URL');
 const _anonKey = String.fromEnvironment('OWNTEND_TEST_SUPABASE_ANON_KEY');
@@ -236,13 +239,32 @@ void main() {
         'name': 'Backend Room',
         'sort_order': 0,
       });
-      await userADevice1.from('assets').insert({
-        'user_id': userAId,
-        'id': 'backend-asset',
-        'room_id': 'backend-room',
-        'name': 'Backend Asset',
-        'asset_type': 'general',
-      });
+      // Asset creation has no direct client INSERT authority (MON-001): the
+      // fixture must use the same server-authoritative aggregate RPC the app
+      // uses, so the baseline privilege revocation is exercised end to end.
+      final operationId = const Uuid().v4();
+      final unsignedOperation = <String, dynamic>{
+        'operation_id': operationId,
+        'asset': {
+          'id': 'backend-asset',
+          'room_id': 'backend-room',
+          'name': 'Backend Asset',
+          'asset_type': 'general',
+        },
+        'details': <String, dynamic>{},
+        'initial_plans': <Map<String, dynamic>>[],
+      };
+      await userADevice1.rpc<dynamic>(
+        'create_asset',
+        params: {
+          'p_operation': {
+            ...unsignedOperation,
+            'request_hash': sha256
+                .convert(utf8.encode(jsonEncode(unsignedOperation)))
+                .toString(),
+          },
+        },
+      );
 
       const digest =
           '9f64a747e1b97f131fabb6b447296c9b6f0201e79fb3c5356e6c77e89b6a806a';

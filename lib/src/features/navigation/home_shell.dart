@@ -10,20 +10,16 @@ class HomeShell extends ConsumerStatefulWidget {
 }
 
 class _HomeShellState extends ConsumerState<HomeShell> {
+  // WP-018 (F-033): single source for the tab paths (was duplicated).
   static const _paths = ['/', '/assets', '/maintenance', '/calendar', '/more'];
+  static final _bottomNavPaths = _paths.toSet();
 
   @override
   Widget build(BuildContext context) {
     final uri = GoRouterState.of(context).uri;
     final path = uri.path;
     final selectedIndex = _selectedIndex(path);
-    final showBottomNav = const {
-      '/',
-      '/assets',
-      '/maintenance',
-      '/calendar',
-      '/more',
-    }.contains(path);
+    final showBottomNav = _bottomNavPaths.contains(path);
     return Scaffold(
       extendBody: showBottomNav,
       body: widget.child,

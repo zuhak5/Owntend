@@ -3,7 +3,18 @@ set local search_path = public, extensions;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(2);
+select plan(3);
+
+select is(
+  (
+    select count(*)::integer
+    from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+  ),
+  18,
+  'the publication carries exactly the 17 synced app tables plus point_wallets'
+);
 
 select is(
   (

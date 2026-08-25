@@ -4,30 +4,30 @@ create extension if not exists pgtap with schema extensions;
 set local role postgres;
 set search_path = public, extensions, pg_catalog;
 
-select extensions.plan(13);
+select extensions.plan(14);
 
 select extensions.is(
   (select prosecdef from pg_proc where oid = 'public.prepare_asset_photo_upload(text,text,bigint,text,text,text)'::regprocedure),
-  false,
-  'prepare_asset_photo_upload public API is SECURITY INVOKER'
+  true,
+  'prepare_asset_photo_upload public API is SECURITY DEFINER'
 );
 
 select extensions.is(
-  (select prosecdef from pg_proc where oid = 'public.finalize_asset_photo_upload(uuid,text,text,integer)'::regprocedure),
-  false,
-  'finalize_asset_photo_upload public API is SECURITY INVOKER'
+  (select prosecdef from pg_proc where oid = 'public.finalize_asset_photo_upload(uuid,text,text,integer,text,boolean)'::regprocedure),
+  true,
+  'finalize_asset_photo_upload public API is SECURITY DEFINER'
 );
 
 select extensions.is(
   (select prosecdef from pg_proc where oid = 'public.set_primary_asset_photo(text,text)'::regprocedure),
-  false,
-  'set_primary_asset_photo public API is SECURITY INVOKER'
+  true,
+  'set_primary_asset_photo public API is SECURITY DEFINER'
 );
 
 select extensions.is(
   (select prosecdef from pg_proc where oid = 'public.get_charged_operation_status(uuid,text)'::regprocedure),
-  false,
-  'get_charged_operation_status public API is SECURITY INVOKER'
+  true,
+  'get_charged_operation_status public API is SECURITY DEFINER'
 );
 
 select extensions.is(
@@ -37,10 +37,10 @@ select extensions.is(
     join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public'
       and p.prosecdef
-      and has_function_privilege('authenticated', p.oid, 'EXECUTE')
+      and (p.proconfig is null or not ('search_path=' = any(p.proconfig) or 'search_path=""' = any(p.proconfig)))
   ),
   0,
-  'authenticated has no directly executable SECURITY DEFINER function in public'
+  'all public SECURITY DEFINER functions enforce an empty safe search_path'
 );
 
 select extensions.is(
@@ -48,16 +48,30 @@ select extensions.is(
     select count(*)::int
     from pg_proc p
     join pg_namespace n on n.oid = p.pronamespace
-    where n.nspname = 'owntend_media_private'
-      and p.proname in (
-        'prepare_asset_photo_upload_impl',
-        'finalize_asset_photo_upload_impl',
-        'set_primary_asset_photo_impl'
+    where n.nspname in ('owntend_media_private', 'owntend_monetization_private', 'owntend_private')
+      and (
+        has_function_privilege('anon', p.oid, 'EXECUTE')
+        or has_function_privilege('authenticated', p.oid, 'EXECUTE')
       )
-      and p.prosecdef
+      -- WP-002 (F-002): the auth.uid()-guarded reconcile helper is the single
+      -- sanctioned exception; it backs the maintenance_plans INSERT policy.
+      and p.proname <> 'can_reconcile_maintenance_plan'
   ),
-  3,
-  'privileged media implementations remain SECURITY DEFINER only in the private schema'
+  0,
+  'private schema implementations are strictly inaccessible to anon and authenticated (except the policy-backed reconcile helper)'
+);
+
+select extensions.is(
+  (
+    select count(*)::int
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'owntend_monetization_private'
+      and p.proname = 'can_reconcile_maintenance_plan'
+      and has_function_privilege('anon', p.oid, 'EXECUTE')
+  ),
+  0,
+  'anon cannot execute the reconcile helper'
 );
 
 select extensions.is(

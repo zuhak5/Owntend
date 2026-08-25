@@ -34,6 +34,7 @@ Sensitive session material is stored through platform secure storage where suppo
 
 Supabase provides authentication, Postgres storage, private media Storage, Realtime invalidation, RPCs, Edge Functions, contract-1 server change-feed ordering (`server_change_feed`, `fetch_user_change_feed`, `get_user_change_feed_watermark`), service-only parity validation, media staging and cleanup ledgers (`media_staging_objects`, `media_cleanup_queue`, `prepare_asset_photo_upload`, `finalize_asset_photo_upload`), and the transactional primary-photo RPC (`set_primary_asset_photo`). Client media uploads generate local SHA-256 digests, create a durable owner-scoped staging operation before upload, use only the server-returned path, and then finalize. Realtime events serve strictly as non-authoritative invalidation hints. Row Level Security and ownership checks isolate user data, media staging objects, cleanup records, and change log entries (`user_id = auth.uid()`). Direct client modifications to feed entries are prohibited; changes are logged automatically through database triggers. Feed parity is protected service/CI evidence rather than a client healing or capability-discovery API.
 
+- The protected media-cleanup worker persists only bounded technical error codes for failed object deletions; raw storage messages, object paths, and request payloads are never recorded. Operator observability for this worker consists of counts and codes only.
 ### Google Sign-In
 
 Production authentication uses Google sign-in. Google and Supabase process identity and session information needed to authenticate the user. The local loopback integration environment permits disposable email identities only to test two-user isolation; Flutter exposes no email-and-password production flow.
@@ -58,7 +59,7 @@ Release and patch tooling uploads compiled application/release artifacts and pat
 
 ### Location and network services
 
-Owntend sends a manually selected or privacy-reduced approximate weather coordinate to Open-Meteo for forecasts. Manual place searches send the entered search text to Open-Meteo's geocoding service. Device location is obtained only after the user chooses that option and Android location permission and services allow it; Owntend does not continuously track location in the background. Changes that introduce a new external service require a privacy review and an update to this document.
+Owntend sends a manually selected or privacy-reduced approximate weather coordinate to Open-Meteo for forecasts. Manual place searches send the entered search text to Open-Meteo's geocoding service. When a device-derived weather area resolves its place name, Owntend sends the same privacy-reduced approximate coordinate to Nominatim (OpenStreetMap) for one reverse-geocoding lookup; no other device data accompanies that request, and the coordinate is rounded before transmission. Device location is obtained only after the user chooses that option and Android location permission and services allow it; Owntend does not continuously track location in the background. Changes that introduce a new external service require a privacy review and an update to this document.
 
 ## Notifications and background work
 

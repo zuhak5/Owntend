@@ -100,7 +100,9 @@ mixin _LocalSyncMutationStore on _LocalSyncStoreBase {
     final rows =
         await (db.select(db.syncOutbox)..where(
               (row) =>
-                  row.state.equals('failedVisible') | row.attempts.equals(-1),
+                  row.state.equals('failedVisible') |
+                  row.state.equals('conflict') |
+                  row.attempts.equals(-1),
             ))
             .get();
     return [
@@ -121,7 +123,9 @@ mixin _LocalSyncMutationStore on _LocalSyncStoreBase {
           'payload_hash': row.payloadJson != null
               ? sha256.convert(utf8.encode(row.payloadJson!)).toString()
               : null,
-          'supported_actions': const ['retry', 'acknowledge', 'dismiss'],
+          'supported_actions': row.state == 'conflict'
+              ? const ['retry', 'keep_local', 'keep_remote']
+              : const ['retry', 'acknowledge', 'dismiss'],
         },
     ];
   }
@@ -130,7 +134,9 @@ mixin _LocalSyncMutationStore on _LocalSyncStoreBase {
     final rows =
         await (db.select(db.syncOutbox)..where(
               (row) =>
-                  row.state.equals('failedVisible') | row.attempts.equals(-1),
+                  row.state.equals('failedVisible') |
+                  row.state.equals('conflict') |
+                  row.attempts.equals(-1),
             ))
             .get();
     return [
@@ -143,16 +149,32 @@ mixin _LocalSyncMutationStore on _LocalSyncStoreBase {
     ];
   }
 
-  Future<int> abandonStaleFailedVisibleMutations({
-    Duration maxAge = const Duration(days: 7),
+  Future<List<SyncConflictRow>> listSyncConflicts({
+    String? accountId,
+    String? resolutionStatus,
   }) async {
-    final cutoff = DateTime.now().subtract(maxAge);
-    return (db.delete(db.syncOutbox)..where(
-          (row) =>
-              (row.state.equals('failedVisible') | row.attempts.equals(-1)) &
-              row.changedAt.isSmallerThanValue(cutoff),
-        ))
-        .go();
+    final query = db.select(db.syncConflicts);
+    if (accountId != null) {
+      query.where((row) => row.accountId.equals(accountId));
+    }
+    if (resolutionStatus != null) {
+      query.where((row) => row.resolutionStatus.equals(resolutionStatus));
+    }
+    return query.get();
+  }
+
+  /// Reads the transactional restore-generation marker written inside the
+  /// restore import transaction. The value equals the active journal id only
+  /// when SQLite actually committed; recovery must consult this instead of
+  /// trusting journal phase labels.
+  Future<String?> readRestoreGenerationMarker() async {
+    final row = await db
+        .customSelect(
+          'SELECT value FROM settings WHERE key = ? LIMIT 1',
+          variables: [Variable<String>(restoreGenerationSettingKey)],
+        )
+        .getSingleOrNull();
+    return row?.read<String?>('value');
   }
 
   Future<void> resolveFailedMutation({
@@ -162,7 +184,9 @@ mixin _LocalSyncMutationStore on _LocalSyncStoreBase {
   }) async {
     await db.transaction(() async {
       Expression<bool> target(SyncOutbox row) =>
-          row.entity.equals(entity) & row.recordKey.equals(recordKey);
+          row.entity.equals(entity) &
+          row.recordKey.equals(recordKey) &
+          row.state.isNotIn([SyncMutationState.conflict.name]);
       if (action == 'dismiss' || action == 'acknowledge') {
         await (db.delete(db.syncOutbox)..where(target)).go();
       } else if (action == 'retry') {
@@ -357,7 +381,15 @@ mixin _LocalSyncMutationStore on _LocalSyncStoreBase {
       final decoded = jsonDecode(mutation.payloadJson!) as Map<String, dynamic>;
       return decoded['plan_id'] as String? ??
           (decoded['plan'] as Map<String, dynamic>?)?['id'] as String?;
-    } catch (_) {
+    } on Object {
+      // WP-006 (F-015): unreadable payloads are observable, never silent.
+      // The plan id stays unknown (matching prior behaviour) so callers
+      // treat the mutation conservatively.
+      payloadParseFailures++;
+      AppLogger.warning(
+        'sync_mutation_payload_unreadable',
+        fields: {'entity': mutation.entity},
+      );
       return null;
     }
   }
@@ -452,6 +484,10 @@ mixin _LocalSyncMutationStore on _LocalSyncStoreBase {
     SyncRecord? canonical,
   ) async {
     return await db.transaction(() async {
+      await _resolveConflictsForAcknowledgedKey(
+        mutation.entity,
+        mutation.recordKey,
+      );
       if (canonical != null) {
         await _saveShadow(canonical);
       }
@@ -504,6 +540,10 @@ mixin _LocalSyncMutationStore on _LocalSyncStoreBase {
         throw StateError('Queued mutation belongs to another cloud account.');
       }
 
+      await _resolveConflictsForAcknowledgedKey(
+        mutation.entity,
+        mutation.recordKey,
+      );
       if (canonical != null) {
         await _saveShadow(canonical);
       }
@@ -541,11 +581,318 @@ mixin _LocalSyncMutationStore on _LocalSyncStoreBase {
     });
   }
 
-  Future<void> discardMutation(String entity, String recordKey) async {
-    await (db.delete(db.syncOutbox)..where(
-          (row) => row.entity.equals(entity) & row.recordKey.equals(recordKey),
+  /// Preserves an unresolved push conflict without deleting the durable local
+  /// intent. The outbox row enters the `conflict` state and stays there across
+  /// restarts until the exact server acknowledges a newer generation or the
+  /// user explicitly resolves the conflict. `resolvedAt` remains null until
+  /// that explicit resolution.
+  Future<bool> markMutationConflicted(
+    LocalSyncMutation mutation, {
+    required String accountId,
+    required String reason,
+    String? localPayloadJson,
+    String? remotePayloadJson,
+    int? remoteRevision,
+  }) async {
+    return _preserveConflictIntent(
+      entity: mutation.entity,
+      recordKey: mutation.recordKey,
+      accountId: accountId,
+      reason: reason,
+      localPayloadJson: localPayloadJson ?? mutation.payloadJson,
+      remotePayloadJson: remotePayloadJson,
+      remoteRevision: remoteRevision,
+      expectedGeneration: mutation.generation,
+    );
+  }
+
+  /// Pull-path variant of [markMutationConflicted] for callers that only know
+  /// the entity key. The current local record values are snapshotted so an
+  /// explicit keep-local resolution can still restore the user's edit after
+  /// the canonical remote row has been applied, and the outbox generation is
+  /// read transactionally so a newer same-key edit can never be clobbered by
+  /// stale pull evidence.
+  Future<bool> markEntityMutationConflicted({
+    required String entity,
+    required String recordKey,
+    required String accountId,
+    required String deviceId,
+    required String reason,
+    String? remotePayloadJson,
+    int? remoteRevision,
+  }) async {
+    return db.transaction(() async {
+      final row =
+          await (db.select(db.syncOutbox)..where(
+                (candidate) =>
+                    candidate.entity.equals(entity) &
+                    candidate.recordKey.equals(recordKey),
+              ))
+              .getSingleOrNull();
+      if (row == null) return false;
+      String? localPayloadJson = row.payloadJson;
+      if (localPayloadJson == null || localPayloadJson.trim().isEmpty) {
+        try {
+          final record = await readMutation(
+            LocalSyncMutation(
+              entity: row.entity,
+              recordKey: row.recordKey,
+              operation: row.operation,
+              changedAt: row.changedAt,
+              attempts: row.attempts,
+              generation: row.generation,
+              payloadJson: row.payloadJson,
+              userId: row.userId,
+              createdAt: row.createdAt,
+              state: SyncMutationState.fromStorage(row.state),
+            ),
+            deviceId,
+          );
+          if (record != null) {
+            localPayloadJson = encodeConflictPayload(
+              operation: row.operation,
+              values: record.values,
+            );
+          }
+        } on Object {
+          localPayloadJson = row.payloadJson;
+        }
+      }
+      return _preserveConflictIntent(
+        entity: entity,
+        recordKey: recordKey,
+        accountId: accountId,
+        reason: reason,
+        localPayloadJson: localPayloadJson,
+        remotePayloadJson: remotePayloadJson,
+        remoteRevision: remoteRevision,
+        expectedGeneration: row.generation,
+        skipIfAlreadyConflicted: true,
+      );
+    });
+  }
+
+  String encodeConflictPayload({
+    required String operation,
+    required Map<String, dynamic> values,
+  }) {
+    return jsonEncode({'operation': operation, 'record': values});
+  }
+
+  Future<bool> _preserveConflictIntent({
+    required String entity,
+    required String recordKey,
+    required String accountId,
+    required String reason,
+    required String? localPayloadJson,
+    required String? remotePayloadJson,
+    required int? remoteRevision,
+    required int expectedGeneration,
+    bool skipIfAlreadyConflicted = false,
+  }) async {
+    return db.transaction(() async {
+      final currentState =
+          await (db.select(db.syncOutbox)..where(
+                (row) =>
+                    row.entity.equals(entity) & row.recordKey.equals(recordKey),
+              ))
+              .getSingleOrNull();
+      if (currentState == null) return false;
+      final alreadyConflicted =
+          currentState.state == SyncMutationState.conflict.name;
+      if (!alreadyConflicted ||
+          !skipIfAlreadyConflicted ||
+          remoteRevision != null) {
+        final existingUnresolved =
+            await (db.select(db.syncConflicts)..where(
+                  (row) =>
+                      row.accountId.equals(accountId) &
+                      row.entity.equals(entity) &
+                      row.recordKey.equals(recordKey) &
+                      row.resolutionStatus.equals('unresolved') &
+                      row.resolvedAt.isNull(),
+                ))
+                .get();
+        final alreadyRecorded = existingUnresolved.any(
+          (row) => row.remoteRevision == remoteRevision,
+        );
+        if (!alreadyRecorded) {
+          await db
+              .into(db.syncConflicts)
+              .insert(
+                SyncConflictsCompanion.insert(
+                  id: _localSyncUuid.v4(),
+                  accountId: accountId,
+                  entity: entity,
+                  recordKey: recordKey,
+                  operationId: Value(currentState.recordKey),
+                  localPayloadJson: Value(localPayloadJson),
+                  remotePayloadJson: Value(remotePayloadJson),
+                  remoteRevision: Value(remoteRevision),
+                  resolutionStatus: const Value('unresolved'),
+                  createdAt: Value(DateTime.now().toUtc()),
+                ),
+              );
+        }
+      }
+      if (alreadyConflicted) return true;
+      final updated =
+          await (db.update(db.syncOutbox)..where(
+                (row) =>
+                    row.entity.equals(entity) &
+                    row.recordKey.equals(recordKey) &
+                    row.generation.equals(expectedGeneration),
+              ))
+              .write(
+                SyncOutboxCompanion(
+                  state: const Value('conflict'),
+                  nextAttemptAt: const Value(null),
+                  lastErrorCode: const Value('conflict_unresolved'),
+                  lastError: Value(
+                    'Sync conflict ($reason): the local change is '
+                    'preserved for review.',
+                  ),
+                ),
+              );
+      return updated > 0;
+    });
+  }
+
+  /// Explicit user resolution of preserved conflicts. `keepLocal` restores
+  /// the newest preserved local payload into the local table and returns the
+  /// mutation to the automatic push queue; `keepRemote` discards the outbox
+  /// intent. Only this method (or exact server acknowledgement) may clear
+  /// unresolved conflicts.
+  Future<bool> resolveSyncConflict({
+    required String entity,
+    required String recordKey,
+    required String accountId,
+    required String deviceId,
+    required bool keepLocal,
+  }) async {
+    return db.transaction(() async {
+      final resolvedAt = DateTime.now().toUtc();
+      final unresolved =
+          await (db.select(db.syncConflicts)..where(
+                (row) =>
+                    row.accountId.equals(accountId) &
+                    row.entity.equals(entity) &
+                    row.recordKey.equals(recordKey) &
+                    row.resolutionStatus.equals('unresolved') &
+                    row.resolvedAt.isNull(),
+              ))
+              .get();
+      if (unresolved.isEmpty) {
+        // A non-owning account has nothing to resolve and must never touch
+        // another account's preserved intent.
+        return false;
+      }
+      await (db.update(db.syncConflicts)..where(
+            (row) =>
+                row.accountId.equals(accountId) &
+                row.entity.equals(entity) &
+                row.recordKey.equals(recordKey) &
+                row.resolutionStatus.equals('unresolved') &
+                row.resolvedAt.isNull(),
+          ))
+          .write(
+            SyncConflictsCompanion(
+              resolutionStatus: Value(
+                keepLocal ? 'resolved_keep_local' : 'resolved_keep_remote',
+              ),
+              resolvedAt: Value(resolvedAt),
+            ),
+          );
+      if (!keepLocal) {
+        final deleted =
+            await (db.delete(db.syncOutbox)..where(
+                  (row) =>
+                      row.entity.equals(entity) &
+                      row.recordKey.equals(recordKey) &
+                      row.state.equals(SyncMutationState.conflict.name),
+                ))
+                .go();
+        return deleted > 0;
+      }
+      String? newestLocalPayload;
+      for (final conflict in unresolved) {
+        final payload = conflict.localPayloadJson;
+        if (payload != null && payload.trim().isNotEmpty) {
+          newestLocalPayload = payload;
+        }
+      }
+      if (newestLocalPayload != null) {
+        try {
+          final decoded = jsonDecode(newestLocalPayload);
+          if (decoded is Map &&
+              decoded['operation'] == 'upsert' &&
+              decoded['record'] is Map) {
+            final spec = syncSpecByEntity[entity];
+            if (spec != null) {
+              await withOutboxSuppressed<void>(() {
+                return _upsertLocal(
+                  SyncRecord(
+                    spec: spec,
+                    recordKey: recordKey,
+                    values: Map<String, dynamic>.from(decoded['record'] as Map),
+                    clientModifiedAt: resolvedAt,
+                    originDeviceId: deviceId,
+                  ),
+                );
+              });
+            }
+          }
+        } on Object {
+          // A malformed preserved payload must not block resolution; the
+          // queued mutation remains available for retry or dismissal.
+        }
+      }
+      final restored =
+          await (db.update(db.syncOutbox)..where(
+                (row) =>
+                    row.entity.equals(entity) &
+                    row.recordKey.equals(recordKey) &
+                    row.state.equals(SyncMutationState.conflict.name),
+              ))
+              .write(
+                const SyncOutboxCompanion(
+                  state: Value('pending'),
+                  attempts: Value(0),
+                  nextAttemptAt: Value(null),
+                  lastErrorCode: Value(null),
+                  lastError: Value(null),
+                ),
+              );
+      return restored > 0;
+    });
+  }
+
+  Future<void> _resolveConflictsForAcknowledgedKey(
+    String entity,
+    String recordKey,
+  ) async {
+    await (db.update(db.syncConflicts)..where(
+          (row) =>
+              row.entity.equals(entity) &
+              row.recordKey.equals(recordKey) &
+              row.resolutionStatus.equals('unresolved') &
+              row.resolvedAt.isNull(),
         ))
-        .go();
+        .write(
+          const SyncConflictsCompanion(
+            resolutionStatus: Value('resolved_server_acknowledged'),
+          ),
+        );
+    await (db.update(db.syncConflicts)..where(
+          (row) =>
+              row.entity.equals(entity) &
+              row.recordKey.equals(recordKey) &
+              row.resolutionStatus.equals('resolved_server_acknowledged') &
+              row.resolvedAt.isNull(),
+        ))
+        .write(
+          SyncConflictsCompanion(resolvedAt: Value(DateTime.now().toUtc())),
+        );
   }
 
   Future<bool> markMutationFailed(

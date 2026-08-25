@@ -34,6 +34,17 @@ jobs:
       - name: Install workflow contract dependencies
         run: npm ci
 
+      - name: Set up canonical Java toolchain
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Deno
+        uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          deno-version: "2.9.3"
+
       - name: Validate immutable GitHub Actions and release workflow contracts
         run: npm run test:release-workflows
 
@@ -122,14 +133,17 @@ jobs:
             "tool/install_shorebird.ps1",
             "tool/invoke_shorebird_patch.ps1",
             "tool/invoke_shorebird_release.ps1",
-            "tool/promote_shorebird_patch.ps1",
             "tool/verify_android_release_registrants.ps1",
             "tool/publish_sentry_release.ps1"
           )) {
+            $Path = Join-Path $PWD $Script
+            if (-not (Test-Path -LiteralPath $Path)) {
+              throw "Required PowerShell script is missing: $Script"
+            }
             $Tokens = $null
             $Errors = $null
             [System.Management.Automation.Language.Parser]::ParseFile(
-              (Join-Path $PWD $Script),
+              $Path,
               [ref]$Tokens,
               [ref]$Errors
             ) | Out-Null

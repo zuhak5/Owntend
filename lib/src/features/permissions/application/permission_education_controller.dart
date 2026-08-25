@@ -368,89 +368,12 @@ class PermissionEducationController
     });
   }
 
-  Future<void> enableExactTiming() {
-    return _runUserAction(PermissionCapability.exactReminderTiming, () async {
-      final currentPermission = state
-          .capabilityStatuses[PermissionCapability.exactReminderTiming]
-          ?.permissionState;
-      if (currentPermission == AppPermissionState.permanentlyDenied) {
-        await _openSettingsNow(PermissionCapability.exactReminderTiming);
-        return;
-      }
-      if (currentPermission == AppPermissionState.restricted ||
-          currentPermission == AppPermissionState.unavailable) {
-        await _recordAndRefresh(
-          PermissionCapability.exactReminderTiming,
-          PermissionEducationOutcome.unavailable,
-        );
-        return;
-      }
-
-      final preferences = await _settingsRepository.notificationPreferences();
-      if (!preferences.allowsLocalReminders) {
-        await _recordAndRefresh(
-          PermissionCapability.exactReminderTiming,
-          PermissionEducationOutcome.failed,
-        );
-        return;
-      }
-
-      final requested = await _gateway.request(
-        PermissionCapability.exactReminderTiming,
-      );
-      if (requested == AppPermissionState.permanentlyDenied) {
-        await _recordAndRefresh(
-          PermissionCapability.exactReminderTiming,
-          PermissionEducationOutcome.blocked,
-        );
-        await _openSettingsNow(PermissionCapability.exactReminderTiming);
-        return;
-      }
-      if (requested != AppPermissionState.granted) {
-        await _notificationScheduler.refreshSchedules();
-        await _recordAndRefresh(
-          PermissionCapability.exactReminderTiming,
-          requested == AppPermissionState.restricted ||
-                  requested == AppPermissionState.unavailable
-              ? PermissionEducationOutcome.unavailable
-              : PermissionEducationOutcome.blocked,
-        );
-        return;
-      }
-
-      await _settingsRepository.setNotificationPreferences(
-        preferences.copyWith(preferExactReminders: true),
-      );
-      await _notificationScheduler.refreshSchedules();
-      await _recordAndRefresh(
-        PermissionCapability.exactReminderTiming,
-        PermissionEducationOutcome.granted,
-      );
-      if (_isResolvedForAdvancement(
-        PermissionCapability.exactReminderTiming,
-        state.setupSnapshot,
-      )) {
-        await _advanceNextStepNow(PermissionCapability.exactReminderTiming);
-      }
-    });
-  }
-
   Future<void> deferCurrentStep() {
     final capability = state.activeCapability;
     if (capability == null) {
       return Future<void>.value();
     }
     return _runUserAction(capability, () async {
-      if (capability == PermissionCapability.exactReminderTiming) {
-        final preferences = await _settingsRepository.notificationPreferences();
-        if (preferences.preferExactReminders) {
-          await _settingsRepository.setNotificationPreferences(
-            preferences.copyWith(preferExactReminders: false),
-          );
-        }
-        await _notificationScheduler.refreshSchedules();
-      }
-
       final updatedDeviceState = _deviceStateWithOutcome(
         state.deviceState,
         capability,
@@ -518,22 +441,6 @@ class PermissionEducationController
           snapshot.notifications.preferences.copyWith(
             enabled: true,
             localReminders: true,
-          ),
-        );
-        await _notificationScheduler.refreshSchedules();
-        snapshot = await _readCapabilitySetup(deviceState);
-        outcome = PermissionEducationOutcome.granted;
-      }
-
-      if (awaitedCapability == PermissionCapability.exactReminderTiming &&
-          snapshot.notifications.exactAlarmPermission ==
-              AppPermissionState.granted &&
-          snapshot.notifications.canActuallyScheduleExact &&
-          snapshot.notifications.preferences.allowsLocalReminders &&
-          !snapshot.notifications.preferences.preferExactReminders) {
-        await _settingsRepository.setNotificationPreferences(
-          snapshot.notifications.preferences.copyWith(
-            preferExactReminders: true,
           ),
         );
         await _notificationScheduler.refreshSchedules();
@@ -609,25 +516,11 @@ class PermissionEducationController
         return const [PermissionCapability.deviceLocation];
       case PermissionEducationSource.reminderSettings:
       case PermissionEducationSource.taskScheduling:
-        final exact = snapshot.statusFor(
-          PermissionCapability.exactReminderTiming,
-        );
-        if (exact.permissionState == AppPermissionState.unavailable ||
-            (!forceShow &&
-                !snapshot.notifications.preferences.preferExactReminders) ||
-            exact.effectiveState == EffectiveCapabilityState.active) {
-          return const [];
-        }
-        return const [PermissionCapability.exactReminderTiming];
+        return const [];
       case PermissionEducationSource.settings:
-        return [
+        return const [
           PermissionCapability.deviceLocation,
           PermissionCapability.notifications,
-          if (snapshot
-                  .statusFor(PermissionCapability.exactReminderTiming)
-                  .permissionState !=
-              AppPermissionState.unavailable)
-            PermissionCapability.exactReminderTiming,
         ];
     }
   }
@@ -649,10 +542,6 @@ class PermissionEducationController
       () => _gateway.check(PermissionCapability.notifications),
       AppPermissionState.unavailable,
     );
-    final exactPermissionFuture = _readOr(
-      () => _gateway.check(PermissionCapability.exactReminderTiming),
-      AppPermissionState.unavailable,
-    );
     final homeLocationFuture = _readOr(
       _settingsRepository.homeLocation,
       previous?.weather.selectedArea,
@@ -666,8 +555,6 @@ class PermissionEducationController
       NotificationPermissionState(
         notificationsEnabled:
             previous?.notifications.notificationsActuallyEnabled ?? false,
-        canScheduleExact:
-            previous?.notifications.canActuallyScheduleExact ?? false,
       ),
     );
 
@@ -677,7 +564,6 @@ class PermissionEducationController
       deviceLocationPermission: (await locationAccessFuture).permissionState,
       locationServiceEnabled: (await locationAccessFuture).serviceEnabled,
       notificationPermission: await notificationPermissionFuture,
-      exactAlarmPermission: await exactPermissionFuture,
       schedulerState: await schedulerStateFuture,
       educationOutcomes: _educationOutcomes(deviceState),
     );
@@ -806,9 +692,6 @@ class PermissionEducationController
       PermissionCapability.deviceLocation => snapshot.weather.isConfigured,
       PermissionCapability.notifications =>
         snapshot.notifications.deviceReminderState ==
-            EffectiveCapabilityState.active,
-      PermissionCapability.exactReminderTiming =>
-        snapshot.notifications.exactTimingState ==
             EffectiveCapabilityState.active,
     };
   }

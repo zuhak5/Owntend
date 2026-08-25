@@ -21,9 +21,9 @@ select ok(
    from (
      select table_name, count(policyname)::integer as policy_count
      from unnest(array[
-       'profiles', 'areas', 'rooms', 'assets',
+       'profiles', 'areas', 'rooms',
        'device_details', 'pet_details', 'plant_details', 'safety_details',
-       'tags', 'asset_tags', 'asset_photos', 'maintenance_plans',
+       'tags', 'asset_tags', 'maintenance_plans',
        'maintenance_plan_metadata', 'maintenance_records',
        'notification_inbox', 'user_settings', 'streaks'
      ]) as table_name
@@ -31,8 +31,12 @@ select ok(
        on schemaname = 'public'
       and tablename = table_name
      group by table_name
-   ) policy_counts),
-  'every exposed app table has select, insert, update, and delete policies'
+   ) policy_counts)
+   -- assets intentionally has no INSERT policy: creation is routed through
+   -- the server-authoritative aggregate RPC (MON-001).
+   and (select count(*)::integer from pg_policies where schemaname = 'public' and tablename = 'assets') = 3
+   and (select count(*)::integer from pg_policies where schemaname = 'public' and tablename = 'asset_photos') = 1,
+  '15 standard app tables have full policies, assets excludes INSERT, and asset_photos has select-only policy'
 );
 
 select ok(

@@ -19,6 +19,7 @@ export const CANONICAL_NODE_TESTS = [
   'tool/provenance_policy.test.mjs',
   'tool/release-workflows.test.mjs',
   'tool/shorebird.test.mjs',
+  'tool/source-policy.test.mjs',
   'tool/sticky-download-fix.test.mjs',
   'tool/supabase-advisors.test.mjs',
   'tool/supabase-migration-contracts.test.mjs',

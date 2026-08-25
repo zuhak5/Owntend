@@ -4,9 +4,11 @@
 
 - Flutter 3.47.0 stable or the version currently pinned in [`config/toolchain.json`](../../config/toolchain.json).
 - Dart included with Flutter.
+- Temurin JDK 21 as the canonical Java runtime; `JAVA_HOME` must resolve to it or the toolchain gate fails (see [`toolchain.md`](toolchain.md)).
 - Android SDK and a supported emulator or device.
 - PowerShell for repository build scripts.
 - Node.js and npm for Supabase tooling.
+- Deno 2.9.3 for Edge Function checks and formatting.
 - Supabase CLI through the pinned npm dependency.
 - Git.
 
@@ -85,6 +87,18 @@ flutter gen-l10n
 
 Generated files must remain deterministic and should not be manually edited.
 
+## Source and line-ending policy
+
+All text sources (Dart, TypeScript, JavaScript, JSON, YAML, TOML, SQL, Markdown, ARB, Android XML) are stored with LF endings; `.gitattributes` enforces this on checkout and commit, and binary artifacts are excluded from normalization. On Windows, keep `core.autocrlf` enabled or rely on `.gitattributes`; either way the formatter gates must stay green from a fresh clone:
+
+```powershell
+deno fmt --check
+dart format --output=none --set-exit-if-changed lib test
+node --test tool/source-policy.test.mjs
+```
+
+If a formatter reports "differed by line endings", run the canonical formatter over that file (`deno fmt <file>`); never hand-convert endings.
+
 ## Standard validation
 
 ```powershell
@@ -105,7 +119,7 @@ flutter test --no-pub test/prod_build_config_test.dart `
 
 - Signed-out local behavior and signed-in sync behavior are distinct states.
 - Google sign-in requires correctly configured OAuth clients and redirect/package identity.
-- Notifications, exact alarms, and background work require device-level testing.
+- Notifications, approximate reminder scheduling, and background work require device-level testing.
 - Sentry and ads should use safe non-production configuration during development.
 - Production AABs and derived APKs must come from the protected `Shorebird Android Release` workflow, not ordinary local commands.
 

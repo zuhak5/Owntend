@@ -2,7 +2,7 @@
 
 **Product:** Owntend Android Application
 **Version:** 1.0.0 (Build 1)
-**Generated:** 2026-08-22T14:18:46.211Z
+**Generated:** 2026-08-25T11:08:34.567Z
 
 > Owntend uses and redistributes open-source software packages under their respective upstream licenses.
 > This document contains third-party notices, attribution statements, and full license texts for all direct and
@@ -19,7 +19,7 @@
 
 ## 1. Dart and Flutter Dependencies
 
-Total resolved packages: **250**
+Total resolved packages: **255**
 
 | Package | Version | Type | License | Upstream Link |
 | :--- | :--- | :--- | :--- | :--- |
@@ -31,7 +31,7 @@ Total resolved packages: **250**
 | `app_links_linux` | `1.0.3` | transitive | Apache-2.0 | [pub.dev/app_links_linux](https://pub.dev/packages/app_links_linux) |
 | `app_links_platform_interface` | `2.0.4` | transitive | Apache-2.0 | [pub.dev/app_links_platform_interface](https://pub.dev/packages/app_links_platform_interface) |
 | `app_links_web` | `1.0.4` | transitive | Apache-2.0 | [pub.dev/app_links_web](https://pub.dev/packages/app_links_web) |
-| `archive` | `4.1.0` | direct main | Apache-2.0 | [pub.dev/archive](https://pub.dev/packages/archive) |
+| `archive` | `4.2.0` | transitive | Apache-2.0 | [pub.dev/archive](https://pub.dev/packages/archive) |
 | `args` | `2.7.0` | transitive | BSD-3-Clause | [pub.dev/args](https://pub.dev/packages/args) |
 | `async` | `2.13.1` | transitive | BSD-3-Clause | [pub.dev/async](https://pub.dev/packages/async) |
 | `audioplayers` | `6.8.1` | direct main | MIT | [pub.dev/audioplayers](https://pub.dev/packages/audioplayers) |
@@ -55,15 +55,15 @@ Total resolved packages: **250**
 | `cli_util` | `0.5.2` | transitive | BSD-3-Clause | [pub.dev/cli_util](https://pub.dev/packages/cli_util) |
 | `clock` | `1.1.2` | transitive | Apache-2.0 | [pub.dev/clock](https://pub.dev/packages/clock) |
 | `code_assets` | `2.0.0` | transitive | MIT | [pub.dev/code_assets](https://pub.dev/packages/code_assets) |
-| `collection` | `1.19.1` | direct main | BSD-3-Clause | [pub.dev/collection](https://pub.dev/packages/collection) |
+| `collection` | `1.19.1` | transitive | BSD-3-Clause | [pub.dev/collection](https://pub.dev/packages/collection) |
 | `connectivity_plus` | `7.3.1` | direct main | BSD-3-Clause | [pub.dev/connectivity_plus](https://pub.dev/packages/connectivity_plus) |
 | `connectivity_plus_platform_interface` | `2.1.0` | transitive | BSD-3-Clause | [pub.dev/connectivity_plus_platform_interface](https://pub.dev/packages/connectivity_plus_platform_interface) |
 | `convert` | `3.1.2` | transitive | BSD-3-Clause | [pub.dev/convert](https://pub.dev/packages/convert) |
 | `coverage` | `1.15.1` | direct dev | BSD-3-Clause | [pub.dev/coverage](https://pub.dev/packages/coverage) |
 | `cross_file` | `0.3.5+4` | transitive | BSD-3-Clause | [pub.dev/cross_file](https://pub.dev/packages/cross_file) |
 | `crypto` | `3.0.7` | direct main | BSD-3-Clause | [pub.dev/crypto](https://pub.dev/packages/crypto) |
+| `cryptography` | `2.9.0` | direct main | MIT | [pub.dev/cryptography](https://pub.dev/packages/cryptography) |
 | `csslib` | `1.0.2` | transitive | BSD-3-Clause | [pub.dev/csslib](https://pub.dev/packages/csslib) |
-| `cupertino_icons` | `1.0.9` | direct main | MIT | [pub.dev/cupertino_icons](https://pub.dev/packages/cupertino_icons) |
 | `dart_jsonwebtoken` | `3.4.1` | transitive | MIT | [pub.dev/dart_jsonwebtoken](https://pub.dev/packages/dart_jsonwebtoken) |
 | `dart_style` | `3.1.12` | transitive | BSD-3-Clause | [pub.dev/dart_style](https://pub.dev/packages/dart_style) |
 | `dbus` | `0.7.15` | transitive | LGPL-3.0-or-later | [pub.dev/dbus](https://pub.dev/packages/dbus) |
@@ -87,6 +87,7 @@ Total resolved packages: **250**
 | `fixnum` | `1.1.1` | transitive | BSD-3-Clause | [pub.dev/fixnum](https://pub.dev/packages/fixnum) |
 | `fl_chart` | `1.2.0` | direct main | MIT | [pub.dev/fl_chart](https://pub.dev/packages/fl_chart) |
 | `flutter` | `0.0.0` | direct main | BSD-3-Clause | [pub.dev/flutter](https://pub.dev/packages/flutter) |
+| `flutter_driver` | `0.0.0` | transitive | BSD-3-Clause | [pub.dev/flutter_driver](https://pub.dev/packages/flutter_driver) |
 | `flutter_foreground_task` | `11.0.1` | direct main | MIT | [pub.dev/flutter_foreground_task](https://pub.dev/packages/flutter_foreground_task) |
 | `flutter_lints` | `6.0.0` | direct dev | BSD-3-Clause | [pub.dev/flutter_lints](https://pub.dev/packages/flutter_lints) |
 | `flutter_local_notifications` | `22.3.0` | direct main | BSD-3-Clause | [pub.dev/flutter_local_notifications](https://pub.dev/packages/flutter_local_notifications) |
@@ -107,6 +108,7 @@ Total resolved packages: **250**
 | `flutter_test` | `0.0.0` | direct dev | BSD-3-Clause | [pub.dev/flutter_test](https://pub.dev/packages/flutter_test) |
 | `flutter_web_plugins` | `0.0.0` | transitive | BSD-3-Clause | [pub.dev/flutter_web_plugins](https://pub.dev/packages/flutter_web_plugins) |
 | `frontend_server_client` | `4.0.0` | transitive | BSD-3-Clause | [pub.dev/frontend_server_client](https://pub.dev/packages/frontend_server_client) |
+| `fuchsia_remote_debug_protocol` | `0.0.0` | transitive | MIT | [pub.dev/fuchsia_remote_debug_protocol](https://pub.dev/packages/fuchsia_remote_debug_protocol) |
 | `functions_client` | `2.7.1` | transitive | MIT | [pub.dev/functions_client](https://pub.dev/packages/functions_client) |
 | `geoclue` | `0.1.1` | transitive | MIT | [pub.dev/geoclue](https://pub.dev/packages/geoclue) |
 | `geolocator` | `14.0.3` | direct main | MIT | [pub.dev/geolocator](https://pub.dev/packages/geolocator) |
@@ -145,6 +147,7 @@ Total resolved packages: **250**
 | `image_picker_platform_interface` | `2.11.1` | transitive | BSD-3-Clause | [pub.dev/image_picker_platform_interface](https://pub.dev/packages/image_picker_platform_interface) |
 | `image_picker_windows` | `0.2.2` | transitive | BSD-3-Clause | [pub.dev/image_picker_windows](https://pub.dev/packages/image_picker_windows) |
 | `injector` | `3.0.0` | transitive | MIT | [pub.dev/injector](https://pub.dev/packages/injector) |
+| `integration_test` | `0.0.0` | direct dev | BSD-3-Clause | [pub.dev/integration_test](https://pub.dev/packages/integration_test) |
 | `intl` | `0.20.3` | direct main | BSD-3-Clause | [pub.dev/intl](https://pub.dev/packages/intl) |
 | `io` | `1.0.5` | transitive | BSD-3-Clause | [pub.dev/io](https://pub.dev/packages/io) |
 | `jni` | `0.14.2` | transitive | MIT | [pub.dev/jni](https://pub.dev/packages/jni) |
@@ -232,6 +235,7 @@ Total resolved packages: **250**
 | `supabase` | `2.16.1` | transitive | MIT | [pub.dev/supabase](https://pub.dev/packages/supabase) |
 | `supabase_common` | `0.1.2` | transitive | MIT | [pub.dev/supabase_common](https://pub.dev/packages/supabase_common) |
 | `supabase_flutter` | `2.17.2` | direct main | MIT | [pub.dev/supabase_flutter](https://pub.dev/packages/supabase_flutter) |
+| `sync_http` | `0.3.1` | transitive | BSD-3-Clause | [pub.dev/sync_http](https://pub.dev/packages/sync_http) |
 | `synchronized` | `3.4.1+2` | transitive | MIT | [pub.dev/synchronized](https://pub.dev/packages/synchronized) |
 | `system_info2` | `4.1.0` | transitive | MIT | [pub.dev/system_info2](https://pub.dev/packages/system_info2) |
 | `term_glyph` | `1.2.2` | transitive | BSD-3-Clause | [pub.dev/term_glyph](https://pub.dev/packages/term_glyph) |
@@ -256,6 +260,7 @@ Total resolved packages: **250**
 | `web` | `1.1.1` | transitive | BSD-3-Clause | [pub.dev/web](https://pub.dev/packages/web) |
 | `web_socket` | `1.0.1` | transitive | BSD-3-Clause | [pub.dev/web_socket](https://pub.dev/packages/web_socket) |
 | `web_socket_channel` | `3.0.3` | transitive | BSD-3-Clause | [pub.dev/web_socket_channel](https://pub.dev/packages/web_socket_channel) |
+| `webdriver` | `3.1.0` | transitive | MIT | [pub.dev/webdriver](https://pub.dev/packages/webdriver) |
 | `webkit_inspection_protocol` | `1.2.1` | transitive | BSD-3-Clause | [pub.dev/webkit_inspection_protocol](https://pub.dev/packages/webkit_inspection_protocol) |
 | `webview_flutter` | `4.14.1` | transitive | MIT | [pub.dev/webview_flutter](https://pub.dev/packages/webview_flutter) |
 | `webview_flutter_android` | `4.14.0` | transitive | BSD-3-Clause | [pub.dev/webview_flutter_android](https://pub.dev/packages/webview_flutter_android) |
@@ -339,14 +344,12 @@ Total resolved packages: **52**
 
 ## 3. Deno and Supabase Edge Function Dependencies
 
-Total resolved specifiers: **10**
+Total resolved specifiers: **8**
 
 | Package | Version | Source | License | Upstream Link |
 | :--- | :--- | :--- | :--- | :--- |
 | `@sentry/deno` | `10.70.0` | npm | MIT | [https://www.npmjs.com/package/@sentry/deno](https://www.npmjs.com/package/@sentry/deno) |
-| `@std/assert` | `1.0.19` | jsr | MIT | [https://jsr.io/@std/assert](https://jsr.io/@std/assert) |
 | `@std/assert` | `1.0.16` | jsr | MIT | [https://jsr.io/@std/assert](https://jsr.io/@std/assert) |
-| `@std/assert` | `1.0.19` | jsr | MIT | [https://jsr.io/@std/assert](https://jsr.io/@std/assert) |
 | `@std/internal` | `1.0.14` | jsr | MIT | [https://jsr.io/@std/internal](https://jsr.io/@std/internal) |
 | `@supabase/supabase-js` | `2.112.3` | npm | MIT | [https://www.npmjs.com/package/@supabase/supabase-js](https://www.npmjs.com/package/@supabase/supabase-js) |
 | `@supabase/supabase-js` | `2.112.3` | npm | MIT | [https://www.npmjs.com/package/@supabase/supabase-js](https://www.npmjs.com/package/@supabase/supabase-js) |

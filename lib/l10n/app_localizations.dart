@@ -2385,12 +2385,6 @@ abstract class AppLocalizations {
   /// **'Export diagnostics'**
   String get exportDiagnostics;
 
-  /// No description provided for @diagnosticExportDisclosure.
-  ///
-  /// In en, this message translates to:
-  /// **'This bundle contains only Owntend events and redacted technical metadata. It does not include full system logs, account emails, tokens, device serials, coordinates, or media paths.'**
-  String get diagnosticExportDisclosure;
-
   /// No description provided for @exportingDiagnostics.
   ///
   /// In en, this message translates to:
@@ -2402,12 +2396,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Owntend privacy-safe diagnostics'**
   String get owntendDiagnosticsShareText;
-
-  /// No description provided for @diagnosticExportFailed.
-  ///
-  /// In en, this message translates to:
-  /// **'Diagnostics could not be exported.'**
-  String get diagnosticExportFailed;
 
   /// No description provided for @notRecorded.
   ///
@@ -3725,6 +3713,12 @@ abstract class AppLocalizations {
   /// **'This build is not configured correctly.'**
   String get thisBuildIsNotConfiguredCorrectly;
 
+  /// No description provided for @databaseUnrecoverableBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Owntend cannot start because the local database on this device is from an unsupported pre-release version. Clear the app storage or reinstall to continue. Local data that was not exported as a backup cannot be recovered.'**
+  String get databaseUnrecoverableBody;
+
   /// No description provided for @activeTaskCount.
   ///
   /// In en, this message translates to:
@@ -4732,6 +4726,72 @@ abstract class AppLocalizations {
   /// **'{greeting}, {name}.'**
   String personalGreeting(String greeting, String name);
 
+  /// No description provided for @backupPassphraseDialogTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Protect your backup'**
+  String get backupPassphraseDialogTitle;
+
+  /// No description provided for @backupPassphraseLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Passphrase (optional)'**
+  String get backupPassphraseLabel;
+
+  /// No description provided for @backupPassphraseHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave empty to protect the backup with a key that stays on this device, or set a passphrase of at least 8 characters to open it on any device.'**
+  String get backupPassphraseHelp;
+
+  /// No description provided for @backupPassphraseConfirmLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm passphrase'**
+  String get backupPassphraseConfirmLabel;
+
+  /// No description provided for @backupPassphraseMismatch.
+  ///
+  /// In en, this message translates to:
+  /// **'Passphrases do not match.'**
+  String get backupPassphraseMismatch;
+
+  /// No description provided for @backupPassphraseTooShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Use at least 8 characters.'**
+  String get backupPassphraseTooShort;
+
+  /// No description provided for @backupEnterPassphraseTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Backup passphrase'**
+  String get backupEnterPassphraseTitle;
+
+  /// No description provided for @backupPassphraseNeededError.
+  ///
+  /// In en, this message translates to:
+  /// **'This backup needs its passphrase.'**
+  String get backupPassphraseNeededError;
+
+  /// No description provided for @routeErrorTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Page not available'**
+  String get routeErrorTitle;
+
+  /// No description provided for @routeErrorMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This link could not be opened. It may be mistyped or no longer exists.'**
+  String get routeErrorMessage;
+
+  /// No description provided for @routeErrorAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Back to home'**
+  String get routeErrorAction;
+
   /// No description provided for @creatingBackup.
   ///
   /// In en, this message translates to:
@@ -5253,18 +5313,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Notifications are used only for task reminders and the alerts you enable.'**
   String get notificationsPermissionBody;
-
-  /// No description provided for @preciseAlarmsPermissionBody.
-  ///
-  /// In en, this message translates to:
-  /// **'Precise alarms let Owntend deliver enabled reminders at the exact selected time.'**
-  String get preciseAlarmsPermissionBody;
-
-  /// No description provided for @approximateReminderTimingWarning.
-  ///
-  /// In en, this message translates to:
-  /// **'Reminders will use approximate timing until precise alarms are allowed.'**
-  String get approximateReminderTimingWarning;
 
   /// No description provided for @automaticBackupsDescription.
   ///
@@ -6016,18 +6064,6 @@ abstract class AppLocalizations {
   /// **'Step {current} of {total}'**
   String permissionStep(int current, int total);
 
-  /// No description provided for @exactAlarmEducationTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Keep reminders on time'**
-  String get exactAlarmEducationTitle;
-
-  /// No description provided for @enableAlarmsAndRemindersOnboarding.
-  ///
-  /// In en, this message translates to:
-  /// **'Enable reminders'**
-  String get enableAlarmsAndRemindersOnboarding;
-
   /// No description provided for @permissionSetup.
   ///
   /// In en, this message translates to:
@@ -6037,7 +6073,7 @@ abstract class AppLocalizations {
   /// No description provided for @permissionSetupSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Choose a weather area, then control device reminders and optional precise timing.'**
+  /// **'Choose a weather area and control device reminders.'**
   String get permissionSetupSubtitle;
 
   /// No description provided for @permissionsAlreadyEnabled.
@@ -6081,30 +6117,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'If you use current location, Owntend saves an approximate home area. It does not continuously collect your location in the background.'**
   String get permissionSetupWeatherPrivacy;
-
-  /// No description provided for @permissionSetupExactOptionalTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Use precise reminder timing'**
-  String get permissionSetupExactOptionalTitle;
-
-  /// No description provided for @permissionSetupExactOptionalBody.
-  ///
-  /// In en, this message translates to:
-  /// **'Android requires special access for reminders at the exact selected time. Without it, Owntend will use approximate timing.'**
-  String get permissionSetupExactOptionalBody;
-
-  /// No description provided for @permissionSetupUseApproximateTiming.
-  ///
-  /// In en, this message translates to:
-  /// **'Use approximate timing'**
-  String get permissionSetupUseApproximateTiming;
-
-  /// No description provided for @permissionSetupAllowPreciseTiming.
-  ///
-  /// In en, this message translates to:
-  /// **'Allow precise timing'**
-  String get permissionSetupAllowPreciseTiming;
 
   /// No description provided for @permissionSetupManageInSettings.
   ///
@@ -6153,12 +6165,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Device reminders are off in Owntend.'**
   String get permissionDeviceRemindersOff;
-
-  /// No description provided for @permissionExactRequiresDeviceReminders.
-  ///
-  /// In en, this message translates to:
-  /// **'Turn on device reminders before enabling precise timing.'**
-  String get permissionExactRequiresDeviceReminders;
 
   /// No description provided for @permissionActionCouldNotComplete.
   ///

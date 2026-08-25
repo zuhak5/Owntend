@@ -581,33 +581,6 @@ String _shortWeatherLocationLabel(BuildContext context, String label) {
   return firstPart.isEmpty ? trimmed : firstPart;
 }
 
-IconData weatherIcon(int code) {
-  return switch (code) {
-    0 => Symbols.sunny_rounded,
-    1 || 2 || 3 => Symbols.partly_cloudy_day_rounded,
-    45 || 48 => Symbols.foggy_rounded,
-    51 || 53 || 55 || 56 || 57 => Symbols.rainy_light_rounded,
-    61 || 63 || 65 || 66 || 67 || 80 || 81 || 82 => Symbols.rainy_rounded,
-    71 || 73 || 75 || 77 || 85 || 86 => Symbols.weather_snowy_rounded,
-    95 || 96 || 99 => Symbols.thunderstorm_rounded,
-    _ => Symbols.cloud_rounded,
-  };
-}
-
-String localizedWeatherSummary(BuildContext context, int code) {
-  return switch (code) {
-    0 => context.l10n.clearWeather,
-    1 || 2 => context.l10n.partlyCloudy,
-    3 => context.l10n.cloudy,
-    45 || 48 => context.l10n.fog,
-    51 || 53 || 55 || 56 || 57 => context.l10n.drizzle,
-    61 || 63 || 65 || 66 || 67 || 80 || 81 || 82 => context.l10n.rain,
-    71 || 73 || 75 || 77 || 85 || 86 => context.l10n.snow,
-    95 || 96 || 99 => context.l10n.storms,
-    _ => context.l10n.weather,
-  };
-}
-
 String _greetingName(
   BuildContext context,
   AppProfile profile,

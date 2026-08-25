@@ -36,7 +36,7 @@ Future<void> _insertRequest(
         NotificationReconciliationRequestsCompanion.insert(
           scopeKey: scopeKey,
           planId: Value(scopeKey.replaceFirst('plan:', '')),
-          reason: 'test',
+          reason: 'local_completion',
           createdAt: Value(updatedAt),
           updatedAt: Value(updatedAt),
         ),
@@ -269,5 +269,20 @@ void main() {
         );
       },
     );
+  });
+
+  group('NotificationChannelRegistry frozen contract', () {
+    test('freezes canonical channel IDs', () {
+      expect(NotificationChannelRegistry.dueChannelId, 'owntend_due');
+      expect(NotificationChannelRegistry.overdueChannelId, 'owntend_overdue');
+      expect(NotificationChannelRegistry.criticalChannelId, 'owntend_critical');
+      expect(NotificationChannelRegistry.digestChannelId, 'owntend_digest');
+      expect(NotificationChannelRegistry.allChannelIds, [
+        'owntend_due',
+        'owntend_overdue',
+        'owntend_critical',
+        'owntend_digest',
+      ]);
+    });
   });
 }

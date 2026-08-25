@@ -108,7 +108,6 @@ class FakeSettingsRepository implements SettingsRepository {
 class FakeNotificationScheduler implements NotificationScheduler {
   NotificationPermissionState state = const NotificationPermissionState(
     notificationsEnabled: false,
-    canScheduleExact: false,
   );
   int refreshCount = 0;
 
@@ -181,6 +180,8 @@ ProviderContainer _makeContainer({
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   late FakeDevicePermissionGateway gateway;
   late FakePermissionEducationRepository repository;
   late FakeSettingsRepository settingsRepository;
@@ -194,7 +195,6 @@ void main() {
       states: {
         PermissionCapability.deviceLocation: AppPermissionState.denied,
         PermissionCapability.notifications: AppPermissionState.denied,
-        PermissionCapability.exactReminderTiming: AppPermissionState.denied,
       },
     );
     repository = FakePermissionEducationRepository();
@@ -213,21 +213,18 @@ void main() {
 
   tearDown(() => container.dispose());
 
-  test(
-    'first dashboard includes weather and notifications but never exact',
-    () async {
-      await notifier.initialize();
+  test('first dashboard includes weather and notifications', () async {
+    await notifier.initialize();
 
-      final state = container.read(permissionEducationControllerProvider);
-      expect(state.relevantCapabilities, [
-        PermissionCapability.deviceLocation,
-        PermissionCapability.notifications,
-      ]);
-      expect(state.activeCapability, PermissionCapability.deviceLocation);
-      expect(state.isVisible, isTrue);
-      expect(state.setupSnapshot, isNotNull);
-    },
-  );
+    final state = container.read(permissionEducationControllerProvider);
+    expect(state.relevantCapabilities, [
+      PermissionCapability.deviceLocation,
+      PermissionCapability.notifications,
+    ]);
+    expect(state.activeCapability, PermissionCapability.deviceLocation);
+    expect(state.isVisible, isTrue);
+    expect(state.setupSnapshot, isNotNull);
+  });
 
   test('manual weather area suppresses first-run location education', () async {
     settingsRepository.location = const HomeLocation(
@@ -347,31 +344,6 @@ void main() {
     );
   });
 
-  test('reminder source targets exact timing only when requested', () async {
-    await notifier.initialize(
-      source: PermissionEducationSource.reminderSettings,
-    );
-    expect(
-      container
-          .read(permissionEducationControllerProvider)
-          .relevantCapabilities,
-      isEmpty,
-    );
-
-    settingsRepository.preferences = settingsRepository.preferences.copyWith(
-      preferExactReminders: true,
-    );
-    await notifier.initialize(
-      source: PermissionEducationSource.reminderSettings,
-    );
-    expect(
-      container
-          .read(permissionEducationControllerProvider)
-          .relevantCapabilities,
-      [PermissionCapability.exactReminderTiming],
-    );
-  });
-
   test(
     'settings source includes configured and missing applicable cards',
     () async {
@@ -383,11 +355,8 @@ void main() {
       );
       gateway.states[PermissionCapability.notifications] =
           AppPermissionState.granted;
-      gateway.states[PermissionCapability.exactReminderTiming] =
-          AppPermissionState.unavailable;
       scheduler.state = const NotificationPermissionState(
         notificationsEnabled: true,
-        canScheduleExact: false,
       );
 
       await notifier.initialize(
@@ -419,14 +388,14 @@ void main() {
         PermissionCapability.deviceLocation,
       );
 
-      await notifier.openSettingsFor(PermissionCapability.exactReminderTiming);
+      await notifier.openSettingsFor(PermissionCapability.notifications);
 
-      expect(gateway.settingsOpens, [PermissionCapability.exactReminderTiming]);
+      expect(gateway.settingsOpens, [PermissionCapability.notifications]);
       expect(
         container
             .read(permissionEducationControllerProvider)
             .awaitingSettingsCapability,
-        PermissionCapability.exactReminderTiming,
+        PermissionCapability.notifications,
       );
     },
   );
@@ -554,38 +523,6 @@ void main() {
       expect(
         published.single.setupSnapshot?.weather.deviceLocationPermission,
         AppPermissionState.denied,
-      );
-    },
-  );
-
-  test(
-    'choosing approximate timing clears exact intent and reconciles',
-    () async {
-      gateway.states[PermissionCapability.notifications] =
-          AppPermissionState.granted;
-      scheduler.state = const NotificationPermissionState(
-        notificationsEnabled: true,
-        canScheduleExact: false,
-      );
-      settingsRepository.preferences = settingsRepository.preferences.copyWith(
-        preferExactReminders: true,
-      );
-      await notifier.initialize(
-        source: PermissionEducationSource.reminderSettings,
-      );
-
-      await notifier.deferCurrentStep();
-
-      expect(settingsRepository.preferences.preferExactReminders, isFalse);
-      expect(scheduler.refreshCount, 1);
-      expect(repository.deviceState.completedAt, isNotNull);
-      expect(
-        container
-            .read(permissionEducationControllerProvider)
-            .setupSnapshot
-            ?.notifications
-            .usesApproximateTiming,
-        isTrue,
       );
     },
   );

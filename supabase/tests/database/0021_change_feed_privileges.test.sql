@@ -9,7 +9,7 @@ select extensions.plan(23);
 -- ENV-004 public API shape: client RPCs are owner-scoped and no longer accept
 -- a caller-selected user id.
 select extensions.has_function('owntend_private', 'fn_log_server_change_feed', ARRAY[]::text[], 'private feed trigger exists');
-select extensions.has_function('public', 'fetch_user_change_feed', ARRAY['bigint', 'integer'], 'feed pull RPC exists');
+select extensions.has_function('public', 'fetch_user_change_feed', ARRAY['bigint', 'integer', 'bigint'], 'feed pull RPC exists');
 select extensions.has_function('public', 'validate_change_feed_parity', ARRAY[]::text[], 'operator parity RPC exists');
 select extensions.has_function('public', 'get_user_change_feed_watermark', ARRAY[]::text[], 'owner-scoped watermark RPC exists');
 select extensions.hasnt_function('public', 'fn_log_server_change_feed', ARRAY[]::text[], 'the trigger is absent from the Data API schema');
@@ -19,7 +19,7 @@ select extensions.hasnt_function('public', 'get_user_change_feed_watermark', ARR
 -- Client-facing feed RPCs do not need definer privileges because the underlying
 -- tables already expose the required authenticated SELECT surface under RLS.
 select extensions.ok(
-  not (select p.prosecdef from pg_proc p where p.oid = 'public.fetch_user_change_feed(bigint,integer)'::regprocedure),
+  not (select p.prosecdef from pg_proc p where p.oid = 'public.fetch_user_change_feed(bigint,integer,bigint)'::regprocedure),
   'fetch_user_change_feed is SECURITY INVOKER'
 );
 select extensions.ok(
@@ -37,7 +37,7 @@ select extensions.ok(
 
 -- Anonymous callers cannot invoke any feed RPC or the trigger function.
 select extensions.ok(
-  not has_function_privilege('anon', 'public.fetch_user_change_feed(bigint,integer)', 'execute'),
+  not has_function_privilege('anon', 'public.fetch_user_change_feed(bigint,integer,bigint)', 'execute'),
   'anon cannot execute feed pull RPC'
 );
 select extensions.ok(
@@ -56,7 +56,7 @@ select extensions.ok(
 -- Authenticated clients receive only the intended read RPCs, never direct
 -- trigger-function execution.
 select extensions.ok(
-  has_function_privilege('authenticated', 'public.fetch_user_change_feed(bigint,integer)', 'execute'),
+  has_function_privilege('authenticated', 'public.fetch_user_change_feed(bigint,integer,bigint)', 'execute'),
   'authenticated can execute feed pull RPC'
 );
 select extensions.ok(
@@ -75,7 +75,7 @@ select extensions.ok(
 -- service_role is not part of the mobile feed surface. It receives only the
 -- parity invariant used by protected operator and CI checks.
 select extensions.ok(
-  not has_function_privilege('service_role', 'public.fetch_user_change_feed(bigint,integer)', 'execute'),
+  not has_function_privilege('service_role', 'public.fetch_user_change_feed(bigint,integer,bigint)', 'execute'),
   'service_role cannot execute feed pull RPC'
 );
 select extensions.ok(

@@ -76,7 +76,7 @@ select extensions.is(
 
 select extensions.is(
   (
-    select public.create_asset_with_point_debit(jsonb_build_object(
+    select public.create_asset(jsonb_build_object(
       'operation_id', 'a1111111-1111-1111-1111-111111111111',
       'request_hash', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       'asset', jsonb_build_object(
@@ -108,7 +108,7 @@ select extensions.is(
 
 select extensions.is(
   (
-    select public.create_asset_with_point_debit(jsonb_build_object(
+    select public.create_asset(jsonb_build_object(
       'operation_id', 'a1111111-1111-1111-1111-111111111111',
       'request_hash', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       'asset', jsonb_build_object(
@@ -131,7 +131,7 @@ select extensions.is(
 
 select extensions.throws_ok(
   $$
-    select public.create_asset_with_point_debit(jsonb_build_object(
+    select public.create_asset(jsonb_build_object(
       'operation_id', 'a1111111-1111-1111-1111-111111111111',
       'request_hash', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       'asset', jsonb_build_object(

@@ -16,7 +16,7 @@ OwntendProcessSplash (first runApp child; stable process owner)
   -> Supabase Auth, Postgres, Storage, Realtime, RPCs, Edge Functions
 
 Flutter services
-  -> Local notifications, exact alarms, foreground tasks, Workmanager
+  -> Local notifications, approximate alarms, foreground tasks, WorkManager
   -> Google Sign-In
   -> Google Mobile Ads
   -> Sentry
@@ -92,10 +92,10 @@ Permission education does not treat an application preference as proof that a fe
 
 1. user intent, such as reminders enabled or exact timing preferred;
 2. Android permission, special-access, and location-service state;
-3. runtime service truth, such as whether notification delivery is enabled and exact alarms can actually be scheduled; and
+3. runtime service truth, such as whether notification delivery is enabled and alarm scheduling is available; and
 4. the derived effective capability: active, degraded, blocked, disabled by the user, unavailable, or not configured.
 
-A manually chosen weather area is active without changing the real OS location state. Device-derived weather requires current approximate-location access and an available location service. Exact alarm access is an optional timing enhancement: when it is not selected or available, reminder scheduling uses the inexact allow-while-idle mode rather than disabling reminders. The canonical permission coordinator owns checks, requests, prompt history, and targeted settings actions. Physical-device behavior across Android variants remains required evidence.
+A manually chosen weather area is active without changing the real OS location state. Device-derived weather requires current approximate-location access and an available location service. Reminder timing is deliberately approximate: scheduling always uses the inexact allow-while-idle mode because the binary does not request restricted exact-alarm access (NOTIF-001). The canonical permission coordinator owns checks, requests, prompt history, and targeted settings actions. Physical-device behavior across Android variants remains required evidence.
 
 ## Transient feedback
 
@@ -103,13 +103,13 @@ Application SnackBars are coordinated through one protected queue. An active Und
 
 ## Notifications and background execution
 
-The Android host declares permissions and components required for internet access, optional approximate location, notifications, optional exact alarms, boot handling, wake locks, vibration, foreground data synchronization, and local notification receivers. Notification plugin initialization is separate from account-scoped periodic registration: after authenticated readiness, `NotificationBootstrap` verifies that the active Supabase session matches the bound local account before it registers or updates the unique daily WorkManager refresh. The worker independently reloads and revalidates the same account boundary before reading or scheduling anything.
+The Android host declares permissions and components required for internet access, optional approximate location, notifications, boot handling, wake locks, vibration, foreground data synchronization, and local notification receivers. Notification plugin initialization is separate from account-scoped periodic registration: after authenticated readiness, `NotificationBootstrap` verifies that the active Supabase session matches the bound local account before it registers or updates the unique daily WorkManager refresh. The worker independently reloads and revalidates the same account boundary before reading or scheduling anything.
 
 Durable notification-reconciliation requests live in Drift and are consumed after authenticated notification bootstrap, after relevant foreground maintenance reconciliation, and by the daily WorkManager path. A consumer coalesces pending requests into one schedule refresh and removes only the exact request versions covered by a successful refresh; failures retain the request with bounded retry metadata, so restart or a later trigger can replay it safely. Background work restores or reconciles reminders and synchronization without introducing fine or background location.
 
 ## Backup and restore
 
-Owntend produces versioned ZIP archives with a manifest and hashes. Restore treats archives as untrusted input, validates compatibility and extraction bounds, creates a safety backup, stages media, applies data, and rolls back on failure. Derived search state is not imported as user authority; restored searchable rows invalidate the local FTS generation and are rebuilt before search results are returned.
+Owntend produces versioned, authenticated `.owntend-backup` containers — an `OWNTDBK1` header with Argon2id key derivation and AES-256-GCM framing; there is no plaintext ZIP reader. Restore treats every imported container as untrusted input, validates compatibility and extraction bounds, creates a safety backup, stages media, applies data, and rolls back on failure. Derived search state is not imported as user authority; restored searchable rows invalidate the local FTS generation and are rebuilt before search results are returned.
 
 ## Observability
 

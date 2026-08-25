@@ -6,8 +6,8 @@ import 'package:go_router/go_router.dart';
 import 'package:owntend/l10n/app_localizations_ext.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
-import '../../../../src/core/domain/models.dart';
-import '../../../../src/ui/app_theme.dart';
+import '../../../core/domain/models.dart';
+import '../../../ui/app_theme.dart';
 import '../application/permission_education_controller.dart';
 import '../domain/capability_snapshots.dart';
 import '../domain/permission_capability.dart';
@@ -75,6 +75,9 @@ class _PermissionSetupScreenState extends ConsumerState<PermissionSetupScreen>
         title: Text(context.l10n.permissionSetup),
         leading: IconButton(
           icon: const Icon(Symbols.arrow_back_rounded),
+          // WP-012 (F-032): custom AppBar leading buttons receive no
+          // automatic back tooltip; screen readers need the explicit label.
+          tooltip: context.l10n.back,
           onPressed: () {
             if (context.canPop()) {
               context.pop();
@@ -99,41 +102,35 @@ class _PermissionSetupScreenState extends ConsumerState<PermissionSetupScreen>
                 ),
                 const SizedBox(height: HkSpacing.md),
                 for (final cap in PermissionCapability.values) ...[
-                  if (cap != PermissionCapability.exactReminderTiming ||
-                      state.capabilityStatuses[cap]?.permissionState !=
-                          AppPermissionState.unavailable)
-                    _CapabilityStatusCard(
-                      capability: cap,
-                      status: state.capabilityStatuses[cap],
-                      weather: state.setupSnapshot?.weather,
-                      notifications: state.setupSnapshot?.notifications,
-                      operationFailure:
-                          state.operationFailure?.capability == cap
-                          ? state.operationFailure
-                          : null,
-                      isBusy: state.isBusy,
-                      onAction: () async {
-                        switch (cap) {
-                          case PermissionCapability.deviceLocation:
-                            await notifier.useCurrentLocation();
-                          case PermissionCapability.notifications:
-                            await notifier.enableNotifications();
-                          case PermissionCapability.exactReminderTiming:
-                            await notifier.enableExactTiming();
+                  _CapabilityStatusCard(
+                    capability: cap,
+                    status: state.capabilityStatuses[cap],
+                    weather: state.setupSnapshot?.weather,
+                    notifications: state.setupSnapshot?.notifications,
+                    operationFailure: state.operationFailure?.capability == cap
+                        ? state.operationFailure
+                        : null,
+                    isBusy: state.isBusy,
+                    onAction: () async {
+                      switch (cap) {
+                        case PermissionCapability.deviceLocation:
+                          await notifier.useCurrentLocation();
+                        case PermissionCapability.notifications:
+                          await notifier.enableNotifications();
+                      }
+                    },
+                    onChooseManual: () async {
+                      if (widget.onChooseLocationManually != null) {
+                        final chosen = await widget.onChooseLocationManually!(
+                          context,
+                        );
+                        if (chosen != null) {
+                          await notifier.chooseLocationManually(chosen);
                         }
-                      },
-                      onChooseManual: () async {
-                        if (widget.onChooseLocationManually != null) {
-                          final chosen = await widget.onChooseLocationManually!(
-                            context,
-                          );
-                          if (chosen != null) {
-                            await notifier.chooseLocationManually(chosen);
-                          }
-                        }
-                      },
-                      onOpenSettings: () => notifier.openSettingsFor(cap),
-                    ),
+                      }
+                    },
+                    onOpenSettings: () => notifier.openSettingsFor(cap),
+                  ),
                   const SizedBox(height: HkSpacing.sm),
                 ],
               ],
@@ -174,24 +171,18 @@ class _CapabilityStatusCard extends StatelessWidget {
     final effectiveState =
         status?.effectiveState ?? EffectiveCapabilityState.notConfigured;
     final isActive = effectiveState == EffectiveCapabilityState.active;
-    final isDegraded = effectiveState == EffectiveCapabilityState.degraded;
     final nextAction = status?.nextAction ?? PermissionNextAction.none;
     final opensSettings = switch (nextAction) {
       PermissionNextAction.openAppSettings ||
-      PermissionNextAction.openLocationSettings ||
-      PermissionNextAction.openExactAlarmSettings => true,
+      PermissionNextAction.openLocationSettings => true,
       _ => false,
     };
     final enablesPreference =
         effectiveState == EffectiveCapabilityState.disabledByUser &&
         capability != PermissionCapability.deviceLocation;
-    final exactCanBeEnabled =
-        notifications?.preferences.allowsLocalReminders ?? false;
     final showsPrimaryAction =
         nextAction == PermissionNextAction.request ||
-        (enablesPreference &&
-            (capability != PermissionCapability.exactReminderTiming ||
-                exactCanBeEnabled)) ||
+        enablesPreference ||
         (capability == PermissionCapability.deviceLocation &&
             weather?.mode == WeatherAreaMode.manual);
     final showsManualAction = capability == PermissionCapability.deviceLocation;
@@ -201,8 +192,6 @@ class _CapabilityStatusCard extends StatelessWidget {
       PermissionCapability.deviceLocation =>
         context.l10n.permissionSetupWeatherTitle,
       PermissionCapability.notifications => context.l10n.notifications,
-      PermissionCapability.exactReminderTiming =>
-        context.l10n.permissionSetupExactOptionalTitle,
     };
 
     final body = switch (capability) {
@@ -210,8 +199,6 @@ class _CapabilityStatusCard extends StatelessWidget {
         context.l10n.permissionSetupWeatherBody,
       PermissionCapability.notifications =>
         context.l10n.notificationEducationBody,
-      PermissionCapability.exactReminderTiming =>
-        context.l10n.permissionSetupExactOptionalBody,
     };
 
     return Card(
@@ -238,8 +225,6 @@ class _CapabilityStatusCard extends StatelessWidget {
                       Symbols.location_on_rounded,
                     PermissionCapability.notifications =>
                       Symbols.notifications_active_rounded,
-                    PermissionCapability.exactReminderTiming =>
-                      Symbols.alarm_on_rounded,
                   },
                   color: isActive
                       ? HkColors.appPrimary
@@ -271,10 +256,6 @@ class _CapabilityStatusCard extends StatelessWidget {
                       configuredManually:
                           status?.outcome ==
                           PermissionEducationOutcome.configuredManually,
-                      approximateTiming:
-                          capability ==
-                              PermissionCapability.exactReminderTiming &&
-                          isDegraded,
                     ),
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
                       color: isActive
@@ -317,17 +298,6 @@ class _CapabilityStatusCard extends StatelessWidget {
                 ),
               ),
             ],
-            if (capability == PermissionCapability.exactReminderTiming &&
-                !exactCanBeEnabled) ...[
-              const SizedBox(height: HkSpacing.xs),
-              Text(
-                context.l10n.permissionExactRequiresDeviceReminders,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
             const SizedBox(height: HkSpacing.sm),
             if (opensSettings || showsPrimaryAction || showsManualAction)
               Wrap(
@@ -352,16 +322,12 @@ class _CapabilityStatusCard extends StatelessWidget {
                           Symbols.my_location_rounded,
                         PermissionCapability.notifications =>
                           Symbols.notifications_active_rounded,
-                        PermissionCapability.exactReminderTiming =>
-                          Symbols.alarm_on_rounded,
                       }, size: 18),
                       label: Text(switch (capability) {
                         PermissionCapability.deviceLocation =>
                           context.l10n.permissionSetupUseCurrentLocation,
                         PermissionCapability.notifications =>
                           context.l10n.enableNotificationsOnboarding,
-                        PermissionCapability.exactReminderTiming =>
-                          context.l10n.permissionSetupAllowPreciseTiming,
                       }),
                     ),
                   if (showsManualAction)
@@ -386,13 +352,9 @@ class _CapabilityStatusCard extends StatelessWidget {
     BuildContext context,
     EffectiveCapabilityState state, {
     required bool configuredManually,
-    required bool approximateTiming,
   }) {
     if (configuredManually) {
       return context.l10n.configuredManually;
-    }
-    if (approximateTiming) {
-      return context.l10n.approximateTiming;
     }
     return switch (state) {
       EffectiveCapabilityState.active => context.l10n.allowed,
@@ -441,16 +403,6 @@ class _CapabilityStatusCard extends StatelessWidget {
                 AppPermissionState.permanentlyDenied
             ? context.l10n.blocked
             : context.l10n.permissionNotificationAccessRequired;
-      case PermissionCapability.exactReminderTiming:
-        final value = notifications;
-        if (value == null) return null;
-        if (!value.preferences.allowsLocalReminders) return null;
-        if (value.usesApproximateTiming) {
-          return context.l10n.approximateTiming;
-        }
-        return value.exactTimingState == EffectiveCapabilityState.active
-            ? context.l10n.allowed
-            : null;
     }
   }
 }

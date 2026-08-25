@@ -1,5 +1,16 @@
 # Monetization Architecture
 
+### Journaled charged creation (WP-003)
+
+Charged asset creation mirrors tasks: `AssetCreationController`
+(features/assets/application) persists a durable operation journal entry
+(shared `TaskCreationOperationStore`, payload discriminator `asset`) BEFORE the
+`createAsset` RPC. Insufficient points and operation-id reuse are terminal;
+transport ambiguity is `outcomeUnknown` and is reconciled at startup by
+`ChargedOperationResolver` using the server's idempotent status lookup — the
+same recovery walk tasks use. A new charged operation is blocked while any
+ambiguous one awaits recovery.
+
 ## Scope and sources of truth
 
 Owntend uses Google Mobile Ads for native, interstitial, rewarded, and rewarded-interstitial presentation, while Supabase remains authoritative for points, charged creation, reward claims, and reward settlement. Ads can become unavailable without making core asset or maintenance data inconsistent.
@@ -140,7 +151,7 @@ ordinary content cards in both light and dark themes.
 
 In the Owntend points economy, points are spent **only when creating a new standalone maintenance task** (1 point). All asset/item creation (across general, device, pet, plant, and safety categories) is completely free (0 points), including any bundled initial maintenance plans created as part of an asset creation operation.
 
-Standalone task creation uses an authenticated, idempotent backend RPC (`create_task_with_point_debit`). The transaction checks configuration and wallet state, debits 1 point from the wallet, creates the target plan and metadata rows, records the operation and ledger entry, and returns the authoritative result—or commits none of those steps. Asset creation uses `create_asset_with_point_debit` with a zero-point charge, atomic entity and initial plans creation, and replay protection without deducting wallet points or inserting negative ledger rows.
+Standalone task creation uses an authenticated, idempotent backend RPC (`create_task_with_point_debit`). The transaction checks configuration and wallet state, debits 1 point from the wallet, creates the target plan and metadata rows, records the operation and ledger entry, and returns the authoritative result—or commits none of those steps. Asset creation uses `create_asset` with a zero-point charge, atomic entity and initial plans creation, and replay protection without deducting wallet points or inserting negative ledger rows.
 
 RLS denies direct authenticated insertion of a new charged plan. Ordinary synchronization may reconcile only a plan already created by the atomic task-creation RPC; the maintenance-completion RPC uses a transaction-scoped internal authorization marker when it must establish the first canonical plan row. This prevents a Data API insert from bypassing the wallet transaction without blocking post-RPC convergence.
 

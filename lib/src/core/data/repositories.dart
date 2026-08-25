@@ -19,6 +19,7 @@ import '../domain/task_selectors.dart';
 import '../services/health_score_calculator.dart';
 import '../services/recurrence_engine.dart';
 import '../utils/date_utils.dart';
+import '../utils/redacting_logger.dart';
 import 'reactive_stream.dart';
 
 part 'row_mappers.dart';

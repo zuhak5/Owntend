@@ -163,64 +163,50 @@ class _MoveCopyItemDialogState extends ConsumerState<MoveCopyItemDialog> {
               .read(syncConnectivityInstanceProvider)
               .isOnline();
           if (online) {
-            try {
-              final walletUserId = monetization.currentUserId;
-              final unsignedPayload = <String, dynamic>{
-                'operation_id': copyOperationId,
-                'asset': {
-                  'id': copiedAssetId,
-                  'name': widget.asset.name,
-                  'asset_type': widget.asset.assetType.name,
-                  'room_id': roomId,
-                  'placement': widget.asset.placement,
-                  'notes': widget.asset.notes,
-                  'purchase_date': widget.asset.purchaseDate
-                      ?.toUtc()
-                      .toIso8601String(),
-                },
-                'details': _assetDetailsPayload(widget.asset),
-                'initial_plans': [
-                  for (final task in sourceTasks)
-                    {
-                      'id': copiedTaskIds[task.plan.id],
-                      'asset_id': copiedAssetId,
-                      'title': task.plan.title,
-                      'instructions': task.plan.instructions,
-                      'recurrence_interval': task.plan.recurrence.interval,
-                      'recurrence_unit': task.plan.recurrence.unit.name,
-                      'priority': task.plan.priority.name,
-                      'next_due_date': task.plan.nextDueDate
-                          .toUtc()
-                          .toIso8601String(),
-                      'reminder_days_before': task.plan.reminderDaysBefore,
-                      'is_enabled': true,
-                      'metadata': _taskMetadataPayload(task.plan.metadata),
-                    },
-                ],
-              };
-              final debit = await monetization.createAsset(unsignedPayload);
-              if (walletUserId != null) {
-                ref
-                    .read(pointWalletControllerProvider.notifier)
-                    .adoptAuthoritativeMutationResult(
-                      debit.balance,
-                      userId: walletUserId,
-                    );
-              }
-              if (debit.charged == 1) {
-                unawaited(
-                  monetization.recordEvent('points_debited', {
-                    'entity_type': 'asset_copy',
-                    'entity_id': copiedAssetId,
-                    'cost': debit.charged,
-                    'new_balance': debit.balance,
-                    'included_task_count': sourceTasks.length,
-                  }),
-                );
-              }
-            } catch (_) {
-              // Local save and offline sync coordinator will handle durability.
+            // WP-003 (F-001): the copy flow is charged creation too; it is
+            // journaled and recovered exactly like the editor flow instead of
+            // best-effort with a swallowed failure.
+            final walletUserId = monetization.currentUserId;
+            if (walletUserId == null) {
+              throw StateError('Cloud points service is unavailable.');
             }
+            await ref
+                .read(assetCreationControllerProvider)
+                .createChargedAsset(
+                  assetId: copiedAssetId,
+                  assetPayload: {
+                    'id': copiedAssetId,
+                    'name': widget.asset.name,
+                    'asset_type': widget.asset.assetType.name,
+                    'room_id': roomId,
+                    'placement': widget.asset.placement,
+                    'notes': widget.asset.notes,
+                    'purchase_date': widget.asset.purchaseDate
+                        ?.toUtc()
+                        .toIso8601String(),
+                  },
+                  detailsPayload: _assetDetailsPayload(widget.asset),
+                  initialPlans: [
+                    for (final task in sourceTasks)
+                      {
+                        'id': copiedTaskIds[task.plan.id],
+                        'asset_id': copiedAssetId,
+                        'title': task.plan.title,
+                        'instructions': task.plan.instructions,
+                        'recurrence_interval': task.plan.recurrence.interval,
+                        'recurrence_unit': task.plan.recurrence.unit.name,
+                        'priority': task.plan.priority.name,
+                        'next_due_date': task.plan.nextDueDate
+                            .toUtc()
+                            .toIso8601String(),
+                        'reminder_days_before': task.plan.reminderDaysBefore,
+                        'is_enabled': true,
+                        'metadata': _taskMetadataPayload(task.plan.metadata),
+                      },
+                  ],
+                  accountScope: walletUserId,
+                  operationIdOverride: copyOperationId,
+                );
           }
         }
         await repository.copyAsset(
@@ -1241,7 +1227,6 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
     try {
       final isCreating = widget.asset == null;
       final assetId = widget.asset?.id ?? (_creationAssetId ??= _uuid.v7());
-      PointDebitResult? debitResult;
       if (isCreating) {
         final online = await ref
             .read(syncConnectivityInstanceProvider)
@@ -1257,34 +1242,26 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
           return;
         }
         final monetization = ref.read(monetizationRepositoryProvider);
-        if (monetization == null) {
+        if (monetization == null || monetization.currentUserId == null) {
           throw StateError('Cloud points service is unavailable.');
         }
-        final walletUserId = monetization.currentUserId;
-        final unsignedPayload = <String, dynamic>{
-          'operation_id': _creationOperationId ??= _uuid.v7(),
-          'asset': {
-            'id': assetId,
-            'name': _nameController.text.trim(),
-            'asset_type': _assetType.name,
-            'room_id': roomId,
-            'placement': _placementController.text.trim(),
-            'notes': _notesController.text.trim(),
-            'purchase_date': _purchaseDate?.toUtc().toIso8601String(),
-          },
-          'details': _pointAssetDetailsPayload(),
-          'initial_plans': const <Map<String, dynamic>>[],
-        };
-        final debit = await monetization.createAsset(unsignedPayload);
-        debitResult = debit;
-        if (walletUserId != null) {
-          ref
-              .read(pointWalletControllerProvider.notifier)
-              .adoptAuthoritativeMutationResult(
-                debit.balance,
-                userId: walletUserId,
-              );
-        }
+        await ref
+            .read(assetCreationControllerProvider)
+            .createChargedAsset(
+              assetId: assetId,
+              assetPayload: {
+                'id': assetId,
+                'name': _nameController.text.trim(),
+                'asset_type': _assetType.name,
+                'room_id': roomId,
+                'placement': _placementController.text.trim(),
+                'notes': _notesController.text.trim(),
+                'purchase_date': _purchaseDate?.toUtc().toIso8601String(),
+              },
+              detailsPayload: _pointAssetDetailsPayload(),
+              accountScope: monetization.currentUserId!,
+              operationIdOverride: _creationOperationId ??= _uuid.v7(),
+            );
       }
       await ref
           .read(assetRepositoryProvider)
@@ -1354,27 +1331,6 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
         await ref
             .read(offlineCreationDraftStoreProvider)
             .clear(_offlineDraftKey);
-        if (debitResult?.asset != null) {
-          await ref
-              .read(localSyncStoreProvider)
-              ?.reconcileAssetCreationComposite(
-                assetId: assetId,
-                assetJson: debitResult!.asset,
-              );
-        }
-      }
-      if (debitResult?.charged == 1) {
-        unawaited(
-          ref.read(monetizationRepositoryProvider)?.recordEvent(
-            'points_debited',
-            {
-              'entity_type': 'asset',
-              'entity_id': assetId,
-              'cost': debitResult!.charged,
-              'new_balance': debitResult.balance,
-            },
-          ),
-        );
       }
       if (mounted) {
         Navigator.of(context).pop();

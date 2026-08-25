@@ -33,33 +33,21 @@ class NotificationCapabilitySnapshot {
     required this.preferences,
     required this.notificationPermission,
     required this.notificationsActuallyEnabled,
-    required this.exactAlarmPermission,
-    required this.canActuallyScheduleExact,
     required this.effectiveState,
     required this.deviceReminderState,
-    required this.exactTimingState,
     required this.inboxState,
     required this.weatherAlertState,
     required this.notificationNextAction,
-    required this.exactTimingNextAction,
   });
 
   final NotificationPreferences preferences;
   final AppPermissionState notificationPermission;
   final bool notificationsActuallyEnabled;
-  final AppPermissionState exactAlarmPermission;
-  final bool canActuallyScheduleExact;
   final EffectiveCapabilityState effectiveState;
   final EffectiveCapabilityState deviceReminderState;
-  final EffectiveCapabilityState exactTimingState;
   final EffectiveCapabilityState inboxState;
   final EffectiveCapabilityState weatherAlertState;
   final PermissionNextAction notificationNextAction;
-  final PermissionNextAction exactTimingNextAction;
-
-  bool get usesApproximateTiming =>
-      deviceReminderState == EffectiveCapabilityState.active &&
-      exactTimingState != EffectiveCapabilityState.active;
 }
 
 @immutable
@@ -86,12 +74,6 @@ class CapabilitySetupSnapshot {
       notifications.deviceReminderState == EffectiveCapabilityState.active ||
           notifications.deviceReminderState ==
               EffectiveCapabilityState.disabledByUser,
-    PermissionCapability.exactReminderTiming =>
-      notifications.exactTimingState == EffectiveCapabilityState.active ||
-          notifications.exactTimingState ==
-              EffectiveCapabilityState.disabledByUser ||
-          notifications.exactTimingState ==
-              EffectiveCapabilityState.unavailable,
   };
 
   CapabilitySetupSnapshot withEducationOutcomes(
@@ -144,18 +126,12 @@ WeatherAreaCapabilitySnapshot deriveWeatherAreaCapability({
 NotificationCapabilitySnapshot deriveNotificationCapability({
   required NotificationPreferences preferences,
   required AppPermissionState notificationPermission,
-  required AppPermissionState exactAlarmPermission,
   required NotificationPermissionState schedulerState,
 }) {
   final deviceReminderState = _deriveDeviceReminderState(
     preferences,
     notificationPermission,
     schedulerState.notificationsEnabled,
-  );
-  final exactTimingState = _deriveExactTimingState(
-    preferences,
-    exactAlarmPermission,
-    schedulerState.canScheduleExact,
   );
   final inboxState = preferences.allowsInbox
       ? EffectiveCapabilityState.active
@@ -170,16 +146,11 @@ NotificationCapabilitySnapshot deriveNotificationCapability({
   final requestedChannelIsImpaired =
       preferences.allowsLocalReminders &&
       deviceReminderState != EffectiveCapabilityState.active;
-  final requestedExactIsImpaired =
-      preferences.allowsLocalReminders &&
-      preferences.preferExactReminders &&
-      exactTimingState != EffectiveCapabilityState.active;
 
   final EffectiveCapabilityState effectiveState;
   if (!preferences.enabled) {
     effectiveState = EffectiveCapabilityState.disabledByUser;
-  } else if (hasWorkingChannel &&
-      (requestedChannelIsImpaired || requestedExactIsImpaired)) {
+  } else if (hasWorkingChannel && requestedChannelIsImpaired) {
     effectiveState = EffectiveCapabilityState.degraded;
   } else if (hasWorkingChannel) {
     effectiveState = EffectiveCapabilityState.active;
@@ -195,20 +166,13 @@ NotificationCapabilitySnapshot deriveNotificationCapability({
     preferences: preferences,
     notificationPermission: notificationPermission,
     notificationsActuallyEnabled: schedulerState.notificationsEnabled,
-    exactAlarmPermission: exactAlarmPermission,
-    canActuallyScheduleExact: schedulerState.canScheduleExact,
     effectiveState: effectiveState,
     deviceReminderState: deviceReminderState,
-    exactTimingState: exactTimingState,
     inboxState: inboxState,
     weatherAlertState: weatherAlertState,
     notificationNextAction: _notificationNextAction(
       notificationPermission,
       deviceReminderState,
-    ),
-    exactTimingNextAction: _exactTimingNextAction(
-      exactAlarmPermission,
-      exactTimingState,
     ),
   );
 }
@@ -219,7 +183,6 @@ CapabilitySetupSnapshot deriveCapabilitySetupSnapshot({
   required AppPermissionState deviceLocationPermission,
   required bool? locationServiceEnabled,
   required AppPermissionState notificationPermission,
-  required AppPermissionState exactAlarmPermission,
   required NotificationPermissionState schedulerState,
   Map<PermissionCapability, PermissionEducationOutcome> educationOutcomes =
       const {},
@@ -233,7 +196,6 @@ CapabilitySetupSnapshot deriveCapabilitySetupSnapshot({
     notifications: deriveNotificationCapability(
       preferences: notificationPreferences,
       notificationPermission: notificationPermission,
-      exactAlarmPermission: exactAlarmPermission,
       schedulerState: schedulerState,
     ),
     educationOutcomes: educationOutcomes,
@@ -257,24 +219,6 @@ EffectiveCapabilityState _deriveDeviceReminderState(
     return EffectiveCapabilityState.active;
   }
   return EffectiveCapabilityState.blocked;
-}
-
-EffectiveCapabilityState _deriveExactTimingState(
-  NotificationPreferences preferences,
-  AppPermissionState permission,
-  bool canActuallyScheduleExact,
-) {
-  if (!preferences.allowsLocalReminders || !preferences.preferExactReminders) {
-    return EffectiveCapabilityState.disabledByUser;
-  }
-  if (permission == AppPermissionState.restricted ||
-      permission == AppPermissionState.unavailable) {
-    return EffectiveCapabilityState.unavailable;
-  }
-  if (permission == AppPermissionState.granted && canActuallyScheduleExact) {
-    return EffectiveCapabilityState.active;
-  }
-  return EffectiveCapabilityState.degraded;
 }
 
 PermissionNextAction _locationNextAction(
@@ -316,23 +260,6 @@ PermissionNextAction _notificationNextAction(
     AppPermissionState.denied => PermissionNextAction.request,
     AppPermissionState.permanentlyDenied =>
       PermissionNextAction.openAppSettings,
-    _ => PermissionNextAction.none,
-  };
-}
-
-PermissionNextAction _exactTimingNextAction(
-  AppPermissionState permission,
-  EffectiveCapabilityState state,
-) {
-  if (state == EffectiveCapabilityState.active ||
-      state == EffectiveCapabilityState.disabledByUser ||
-      state == EffectiveCapabilityState.unavailable) {
-    return PermissionNextAction.none;
-  }
-  return switch (permission) {
-    AppPermissionState.denied => PermissionNextAction.request,
-    AppPermissionState.permanentlyDenied =>
-      PermissionNextAction.openExactAlarmSettings,
     _ => PermissionNextAction.none,
   };
 }
@@ -387,18 +314,6 @@ Map<PermissionCapability, CapabilityStatus> _deriveStatuses(
       nextAction: notifications.notificationNextAction,
       userPreferenceEnabled: notifications.preferences.allowsLocalReminders,
       effectiveState: notifications.deviceReminderState,
-    ),
-    PermissionCapability.exactReminderTiming: CapabilityStatus(
-      capability: PermissionCapability.exactReminderTiming,
-      permissionState: notifications.exactAlarmPermission,
-      outcome: currentOutcome(
-        PermissionCapability.exactReminderTiming,
-        notifications.exactTimingState,
-        PermissionEducationOutcome.granted,
-      ),
-      nextAction: notifications.exactTimingNextAction,
-      userPreferenceEnabled: notifications.preferences.preferExactReminders,
-      effectiveState: notifications.exactTimingState,
     ),
   };
 }

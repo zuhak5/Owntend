@@ -322,15 +322,12 @@ String _safePackageUri(String uri) {
   return sanitized.length <= 120 ? sanitized : sanitized.substring(0, 120);
 }
 
+/// Exception payloads never reach Sentry: only a sanitized, bounded
+/// exception TYPE is reported, because free-form values may embed user
+/// content, paths, or tokens that pattern-based redaction cannot guarantee
+/// to catch.
 String _safeExceptionValue(String? value, String? type) {
-  if (value == null || value.trim().isEmpty) {
-    return 'Owntend ${_safeToken(type ?? 'exception')}';
-  }
-  final redacted = redactDiagnosticValue(value);
-  if (redacted is! String || redacted.startsWith('[redacted')) {
-    return 'Owntend ${_safeToken(type ?? 'exception')}';
-  }
-  return redacted.length <= 120 ? redacted : '${redacted.substring(0, 117)}...';
+  return 'Owntend ${_safeToken(type ?? 'exception')}';
 }
 
 String? _nullableSafeText(String? value) =>

@@ -1063,7 +1063,6 @@ void main() {
           reminderHour: 8,
           maxRemindersPerDay: 3,
           defaultSnoozeMinutes: 180,
-          preferExactReminders: false,
         ),
       );
 
@@ -1079,7 +1078,6 @@ void main() {
       expect(preferences.reminderHour, 8);
       expect(preferences.maxRemindersPerDay, 3);
       expect(preferences.defaultSnoozeMinutes, 180);
-      expect(preferences.preferExactReminders, isFalse);
     });
 
     test('notification preferences default missing new JSON fields', () async {
@@ -1100,7 +1098,6 @@ void main() {
       expect(preferences.localReminders, isTrue);
       expect(preferences.maxRemindersPerDay, 4);
       expect(preferences.defaultSnoozeMinutes, 60);
-      expect(preferences.preferExactReminders, isFalse);
     });
 
     test('disabled notification preference is observed canonically', () async {

@@ -9,8 +9,8 @@ import 'package:owntend/src/core/database/app_database.dart';
 import 'package:owntend/src/core/domain/models.dart';
 import 'package:owntend/src/core/sync/local_sync_store.dart';
 import 'package:owntend/src/features/maintenance/application/task_creation_controller.dart';
-import 'package:owntend/src/features/maintenance/data/task_creation_operation_store.dart';
-import 'package:owntend/src/features/maintenance/domain/task_creation.dart';
+import 'package:owntend/src/core/services/charged_operation_journal/charged_operation_store.dart';
+import 'package:owntend/src/core/services/charged_operation_journal/charged_operation_contracts.dart';
 import 'package:owntend/src/features/monetization/monetization.dart';
 
 class _ZeroPointsMonetizationRepository implements MonetizationRepository {

@@ -1201,17 +1201,10 @@ class AppLocalizationsAr extends AppLocalizations {
   String get exportDiagnostics => 'تصدير التشخيصات';
 
   @override
-  String get diagnosticExportDisclosure =>
-      'تحتوي هذه الحزمة على أحداث Owntend والبيانات التقنية المنقحة فقط. ولا تتضمن سجلات النظام الكاملة أو رسائل البريد الإلكتروني للحساب أو الرموز أو أرقام الأجهزة أو الإحداثيات أو مسارات الوسائط.';
-
-  @override
   String get exportingDiagnostics => 'جارٍ إعداد تشخيصات خاصة…';
 
   @override
   String get owntendDiagnosticsShareText => 'تشخيصات Owntend الآمنة للخصوصية';
-
-  @override
-  String get diagnosticExportFailed => 'تعذر تصدير التشخيصات.';
 
   @override
   String get notRecorded => 'غير مسجل';
@@ -2010,6 +2003,10 @@ class AppLocalizationsAr extends AppLocalizations {
   String get thisBuildIsNotConfiguredCorrectly => 'إعداد هذا الإصدار غير صحيح.';
 
   @override
+  String get databaseUnrecoverableBody =>
+      'لا يمكن تشغيل Owntend لأن قاعدة البيانات المحلية على هذا الجهاز من إصدار تجريبي غير مدعوم. امسح بيانات التطبيق (أو أعد تثبيته) للمتابعة؛ ولا يمكن استرداد البيانات المحلية التي لم يتم تصديرها كنسخة احتياطية.';
+
+  @override
   String activeTaskCount(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
@@ -2726,6 +2723,42 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String get backupPassphraseDialogTitle => 'حماية نسختك الاحتياطية';
+
+  @override
+  String get backupPassphraseLabel => 'عبارة المرور (اختياري)';
+
+  @override
+  String get backupPassphraseHelp =>
+      'اتركها فارغة لحماية النسخة بمفتاح يبقى على هذا الجهاز، أو عيّن عبارة مرور من 8 أحرف على الأقل لفتحها على أي جهاز.';
+
+  @override
+  String get backupPassphraseConfirmLabel => 'تأكيد عبارة المرور';
+
+  @override
+  String get backupPassphraseMismatch => 'عبارتا المرور غير متطابقتين.';
+
+  @override
+  String get backupPassphraseTooShort => 'استخدم 8 أحرف على الأقل.';
+
+  @override
+  String get backupEnterPassphraseTitle => 'عبارة مرور النسخة الاحتياطية';
+
+  @override
+  String get backupPassphraseNeededError =>
+      'تحتاج هذه النسخة الاحتياطية إلى عبارة المرور الخاصة بها.';
+
+  @override
+  String get routeErrorTitle => 'الصفحة غير متوفرة';
+
+  @override
+  String get routeErrorMessage =>
+      'تعذّر فتح هذا الرابط. قد يكون غير صحيح أو لم يعد موجودًا.';
+
+  @override
+  String get routeErrorAction => 'العودة إلى الرئيسية';
+
+  @override
   String get creatingBackup => 'جارٍ إنشاء النسخة الاحتياطية...';
 
   @override
@@ -3165,14 +3198,6 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get notificationsPermissionBody =>
       'تُستخدم الإشعارات فقط لتذكيرات المهام والتنبيهات التي تفعلها.';
-
-  @override
-  String get preciseAlarmsPermissionBody =>
-      'تتيح المنبهات الدقيقة لـ Owntend إرسال التذكيرات المفعلة في الوقت المحدد بدقة.';
-
-  @override
-  String get approximateReminderTimingWarning =>
-      'ستستخدم التذكيرات توقيتًا تقريبيًا حتى يتم السماح بالمنبهات الدقيقة.';
 
   @override
   String get automaticBackupsDescription =>
@@ -3621,17 +3646,11 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get exactAlarmEducationTitle => 'حافظ على التذكيرات في وقتها';
-
-  @override
-  String get enableAlarmsAndRemindersOnboarding => 'تفعيل التذكيرات';
-
-  @override
   String get permissionSetup => 'الأذونات والإعداد';
 
   @override
   String get permissionSetupSubtitle =>
-      'اختر منطقة الطقس، ثم تحكم في تذكيرات الجهاز والتوقيت الدقيق الاختياري.';
+      'اختر منطقة الطقس، ثم تحكم في تذكيرات الجهاز.';
 
   @override
   String get permissionsAlreadyEnabled =>
@@ -3656,20 +3675,6 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get permissionSetupWeatherPrivacy =>
       'إذا استخدمت الموقع الحالي، يحفظ Owntend منطقة منزلية تقريبية. لا يتم جمع موقعك باستمرار في الخلفية.';
-
-  @override
-  String get permissionSetupExactOptionalTitle =>
-      'استخدام التوقيت الدقيق للتذكير';
-
-  @override
-  String get permissionSetupExactOptionalBody =>
-      'يتطلب أندرويد إذنًا خاصًا للتذكير في الوقت المحدد تمامًا. بدونه، سيعتمد Owntend التوقيت التقريبي.';
-
-  @override
-  String get permissionSetupUseApproximateTiming => 'استخدام التوقيت التقريبي';
-
-  @override
-  String get permissionSetupAllowPreciseTiming => 'السماح بالتوقيت الدقيق';
 
   @override
   String get permissionSetupManageInSettings => 'إدارة في الإعدادات';
@@ -3699,10 +3704,6 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get permissionDeviceRemindersOff =>
       'تذكيرات الجهاز متوقفة في Owntend.';
-
-  @override
-  String get permissionExactRequiresDeviceReminders =>
-      'شغّل تذكيرات الجهاز قبل تفعيل التوقيت الدقيق.';
 
   @override
   String get permissionActionCouldNotComplete =>

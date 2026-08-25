@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../ui/widgets/notification_route_validation.dart';
+
+export '../../ui/widgets/notification_route_validation.dart'
+    show validatedNotificationRoute;
+
 final rootNavigatorKey = GlobalKey<NavigatorState>();
 
 const routeTransitionDuration = Duration(milliseconds: 260);
@@ -11,6 +16,10 @@ void openNotificationPayload(String payload) {
   if (route == null) {
     return;
   }
+  // WP-011 (F-019): remember the intended destination so the startup
+  // finalization can honor it after authentication/hydration completes
+  // instead of forcing every early tap back to home.
+  PendingNotificationRoute.pending = route;
   WidgetsBinding.instance.addPostFrameCallback((_) {
     final context = rootNavigatorKey.currentContext;
     if (context == null || !context.mounted) {
@@ -20,31 +29,16 @@ void openNotificationPayload(String payload) {
   });
 }
 
-String? validatedNotificationRoute(String payload) {
-  final route = payload.trim();
-  if (route.isEmpty || !route.startsWith('/')) {
-    return null;
+/// Destination captured from a notification tapped before the startup gate
+/// finished. Consumed exactly once by the startup finalization.
+class PendingNotificationRoute {
+  PendingNotificationRoute._();
+
+  static String? pending;
+
+  static String? take() {
+    final route = pending;
+    pending = null;
+    return route;
   }
-  final uri = Uri.tryParse(route);
-  if (uri == null || uri.hasFragment) {
-    return null;
-  }
-  const allowedPrefixes = [
-    '/maintenance',
-    '/notifications',
-    '/assets',
-    '/calendar',
-    '/search',
-    '/settings',
-    '/account',
-    '/backup',
-    '/trash',
-    '/statistics',
-    '/more',
-    '/permissions/setup',
-  ];
-  if (!allowedPrefixes.any((prefix) => uri.path.startsWith(prefix))) {
-    return null;
-  }
-  return uri.toString();
 }

@@ -1,7 +1,8 @@
 import '../../../ui/components.dart' as hk_ui;
 import '../../../ui/presentation_support.dart';
 import '../../maintenance/presentation/task_actions.dart';
-import 'trash_actions.dart';
+import '../../monetization/monetization.dart';
+import '../../maintenance/presentation/task_disposal_actions.dart';
 
 class TrashScreen extends ConsumerWidget {
   const TrashScreen({super.key});

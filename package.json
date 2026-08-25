@@ -22,8 +22,10 @@
     "generate:sbom-and-notices": "node tool/generate_sbom_and_notices.mjs",
     "supabase:lint": "supabase db lint --local --level error --fail-on error",
     "supabase:test": "supabase test db --local supabase/tests/database",
+    "test:backend-integration": "powershell -NoProfile -ExecutionPolicy Bypass -File tool/run_local_backend_integration.ps1",
     "test:release-workflows": "node --test tool/release-workflows.test.mjs",
     "test:shorebird": "node --test tool/shorebird.test.mjs",
+    "test:source-policy": "node --test tool/source-policy.test.mjs",
     "validate:shorebird-patch": "node tool/shorebird_patch_eligibility.mjs"
   },
   "devDependencies": {

@@ -2,6 +2,9 @@ import 'dart:async';
 
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'support/wait_for.dart';
+
 import 'package:mocktail/mocktail.dart';
 import 'package:owntend/src/core/database/app_database.dart';
 import 'package:owntend/src/core/supabase/supabase_failure.dart';
@@ -303,10 +306,10 @@ Future<void> _waitForPhase(
   SyncCoordinator coordinator,
   SyncPhase expected,
 ) async {
-  final deadline = DateTime.now().add(const Duration(seconds: 1));
-  while (DateTime.now().isBefore(deadline)) {
-    if ((await coordinator.status()).phase == expected) return;
-    await Future<void>.delayed(const Duration(milliseconds: 5));
-  }
-  fail('Sync phase did not become ${expected.name} before the timeout.');
+  // WP-015 (F-024): shared bounded helper replaces the wall-clock loop.
+  await waitFor(
+    () async => (await coordinator.status()).phase == expected,
+    timeout: const Duration(seconds: 5),
+    because: 'Sync phase did not become ${expected.name} before the timeout.',
+  );
 }

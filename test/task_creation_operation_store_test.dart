@@ -1,7 +1,7 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:owntend/src/features/maintenance/data/task_creation_operation_store.dart';
-import 'package:owntend/src/features/maintenance/domain/task_creation.dart';
+import 'package:owntend/src/core/services/charged_operation_journal/charged_operation_store.dart';
+import 'package:owntend/src/core/services/charged_operation_journal/charged_operation_contracts.dart';
 import 'package:mocktail/mocktail.dart';
 
 class _MockSecureStorage extends Mock implements FlutterSecureStorage {}

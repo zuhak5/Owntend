@@ -14,13 +14,12 @@ void main() {
         expect(digest.length, 64);
 
         const userId = '00000000-0000-0000-0000-00000000000a';
-        const assetId = '00000000-0000-0000-0000-000000000111';
         const photoId = '00000000-0000-0000-0000-000000000999';
         const ext = '.jpg';
-        final stagingPath = '$userId/assets/$assetId/$photoId$ext';
+        final stagingPath = '$userId/media/$photoId$ext';
         expect(
           stagingPath,
-          '00000000-0000-0000-0000-00000000000a/assets/00000000-0000-0000-0000-000000000111/00000000-0000-0000-0000-000000000999.jpg',
+          '00000000-0000-0000-0000-00000000000a/media/00000000-0000-0000-0000-000000000999.jpg',
         );
       },
     );

@@ -47,7 +47,14 @@ COMMENT ON SCHEMA "public" IS 'standard public schema';
 
 
 
-CREATE OR REPLACE FUNCTION "owntend_media_private"."finalize_asset_photo_upload_impl"("p_staging_id" "uuid", "p_asset_id" "text", "p_photo_id" "text", "p_expected_revision" integer DEFAULT 1) RETURNS "jsonb"
+CREATE OR REPLACE FUNCTION "owntend_media_private"."finalize_asset_photo_upload_impl"(
+  "p_staging_id" "uuid",
+  "p_asset_id" "text",
+  "p_photo_id" "text",
+  "p_expected_revision" integer DEFAULT 1,
+  "p_caption" "text" DEFAULT NULL,
+  "p_is_primary" boolean DEFAULT false
+) RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -79,7 +86,11 @@ begin
       'success', true,
       'idempotent', true,
       'photo_id', p_photo_id,
-      'object_path', v_photo.object_path
+      'asset_id', p_asset_id,
+      'object_path', v_photo.object_path,
+      'caption', v_photo.caption,
+      'is_primary', v_photo.is_primary,
+      'revision', v_photo.revision
     );
   end if;
   if v_stage.expires_at <= clock_timestamp() then
@@ -115,24 +126,39 @@ begin
       values (v_user_id, v_photo.object_path, 'replaced');
     end if;
   end if;
+
+  if coalesce(p_is_primary, false) then
+    update public.asset_photos
+    set is_primary = false, revision = revision + 1, updated_at = clock_timestamp()
+    where user_id = v_user_id and asset_id = p_asset_id and id <> p_photo_id and is_primary = true;
+  end if;
+
   insert into public.asset_photos(
-    id, asset_id, user_id, object_path, revision, created_at, updated_at
+    id, asset_id, user_id, object_path, caption, is_primary, revision, created_at, updated_at
   ) values (
-    p_photo_id, p_asset_id, v_user_id, v_stage.staging_path,
+    p_photo_id, p_asset_id, v_user_id, v_stage.staging_path, p_caption, coalesce(p_is_primary, false),
     coalesce(p_expected_revision, 1), clock_timestamp(), clock_timestamp()
   ) on conflict (user_id, id) do update set
     object_path = excluded.object_path,
+    caption = coalesce(excluded.caption, asset_photos.caption),
+    is_primary = case when excluded.is_primary then true else asset_photos.is_primary end,
     revision = case when asset_photos.object_path is distinct from excluded.object_path
       then asset_photos.revision + 1 else asset_photos.revision end,
     updated_at = clock_timestamp();
+
   update public.media_staging_objects
   set status = 'finalized', finalized_at = clock_timestamp()
   where id = p_staging_id;
+
   return jsonb_build_object(
     'success', true,
     'idempotent', false,
     'photo_id', p_photo_id,
+    'asset_id', p_asset_id,
     'object_path', v_stage.staging_path,
+    'caption', p_caption,
+    'is_primary', coalesce(p_is_primary, false),
+    'revision', coalesce(p_expected_revision, 1),
     'verified_size', v_object_size,
     'verified_mime_type', v_object_mime,
     'digest_verification', 'client_advisory'
@@ -140,8 +166,38 @@ begin
 end;
 $$;
 
+ALTER FUNCTION "owntend_media_private"."finalize_asset_photo_upload_impl"("p_staging_id" "uuid", "p_asset_id" "text", "p_photo_id" "text", "p_expected_revision" integer, "p_caption" "text", "p_is_primary" boolean) OWNER TO "postgres";
 
-ALTER FUNCTION "owntend_media_private"."finalize_asset_photo_upload_impl"("p_staging_id" "uuid", "p_asset_id" "text", "p_photo_id" "text", "p_expected_revision" integer) OWNER TO "postgres";
+CREATE OR REPLACE FUNCTION "owntend_media_private"."delete_asset_photo_impl"("p_asset_id" "text", "p_photo_id" "text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+DECLARE
+  v_user_id uuid := auth.uid();
+  v_photo public.asset_photos%rowtype;
+BEGIN
+  IF v_user_id IS NULL THEN
+    RAISE EXCEPTION 'AUTH_REQUIRED' USING ERRCODE = '42501';
+  END IF;
+
+  DELETE FROM public.asset_photos
+  WHERE user_id = v_user_id AND asset_id = p_asset_id AND id = p_photo_id
+  RETURNING * INTO v_photo;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', true, 'idempotent', true, 'photo_id', p_photo_id);
+  END IF;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'idempotent', false,
+    'photo_id', p_photo_id,
+    'object_path', v_photo.object_path
+  );
+END;
+$$;
+
+ALTER FUNCTION "owntend_media_private"."delete_asset_photo_impl"("p_asset_id" "text", "p_photo_id" "text") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "owntend_media_private"."prepare_asset_photo_upload_impl"("p_asset_id" "text", "p_photo_id" "text", "p_object_size" bigint, "p_mime_type" "text", "p_client_sha256_digest" "text", "p_idempotency_key" "text") RETURNS "jsonb"
@@ -191,7 +247,7 @@ begin
       idempotency_key, asset_id, photo_id, status
     ) values (
       v_user_id,
-      v_user_id::text || '/staging/' || gen_random_uuid()::text || '.' || v_extension,
+      v_user_id::text || '/media/' || p_photo_id || '.' || v_extension,
       p_object_size,
       p_mime_type,
       p_client_sha256_digest,
@@ -290,7 +346,7 @@ $$;
 ALTER FUNCTION "owntend_monetization_private"."can_reconcile_maintenance_plan"("p_user_id" "uuid", "p_plan_id" "text") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "owntend_monetization_private"."create_asset_with_point_debit_impl"("p_operation" "jsonb") RETURNS "jsonb"
+CREATE OR REPLACE FUNCTION "owntend_monetization_private"."create_asset_impl"("p_operation" "jsonb") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -569,7 +625,7 @@ END;
 $$;
 
 
-ALTER FUNCTION "owntend_monetization_private"."create_asset_with_point_debit_impl"("p_operation" "jsonb") OWNER TO "postgres";
+ALTER FUNCTION "owntend_monetization_private"."create_asset_impl"("p_operation" "jsonb") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "owntend_monetization_private"."create_reward_claim_request_impl"("p_reward_type" "text", "p_time_zone" "text" DEFAULT NULL::"text") RETURNS "jsonb"
@@ -1044,46 +1100,14 @@ $$;
 ALTER FUNCTION "owntend_monetization_private"."get_charged_operation_status"("p_operation_id" "uuid", "p_request_hash" "text") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "owntend_monetization_private"."is_authorized_point_creation_impl"("p_user_id" "uuid", "p_entity_type" "text", "p_entity_id" "text") RETURNS boolean
-    LANGUAGE "sql" STABLE SECURITY DEFINER
-    SET "search_path" TO ''
-    AS $$
-  SELECT (SELECT auth.uid()) = p_user_id
-    AND (
-      EXISTS (
-        SELECT 1
-        FROM public.creation_point_operations
-        WHERE user_id = p_user_id
-          AND entity_type = p_entity_type
-          AND entity_id = p_entity_id
-      )
-      OR (
-        p_entity_type = 'asset'
-        AND EXISTS (
-          SELECT 1 FROM public.assets
-          WHERE user_id = p_user_id AND id = p_entity_id
-        )
-      )
-      OR (
-        p_entity_type = 'task'
-        AND EXISTS (
-          SELECT 1 FROM public.maintenance_plans
-          WHERE user_id = p_user_id AND id = p_entity_id
-        )
-      )
-    );
-$$;
-
-
-ALTER FUNCTION "owntend_monetization_private"."is_authorized_point_creation_impl"("p_user_id" "uuid", "p_entity_type" "text", "p_entity_id" "text") OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "owntend_monetization_private"."record_monetization_event_impl"("p_event_name" "text", "p_properties" "jsonb" DEFAULT '{}'::"jsonb") RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
 DECLARE
   caller_id UUID := auth.uid();
+  v_key TEXT;
+  v_value JSONB;
 BEGIN
   IF caller_id IS NULL THEN
     RAISE EXCEPTION USING errcode = '42501', message = 'AUTH_REQUIRED';
@@ -1097,10 +1121,108 @@ BEGIN
     'points_debited'
   ) OR p_properties IS NULL
     OR jsonb_typeof(p_properties) <> 'object'
-    OR pg_column_size(p_properties) > 8192
+    OR pg_column_size(p_properties) > 4096
   THEN
     RAISE EXCEPTION USING errcode = '22023', message = 'INVALID_EVENT';
   END IF;
+
+  -- Event-specific allowlist of technical keys only. Unknown keys are
+  -- rejected outright so user content or identifying fields can never be
+  -- smuggled into the ledger, and every value is bounded and typed.
+  FOR v_key, v_value IN
+    SELECT * FROM jsonb_each(p_properties)
+  LOOP
+    CASE p_event_name
+      WHEN 'ad_native_impression', 'ad_native_click' THEN
+        IF v_key NOT IN ('screen_name', 'ad_unit_id')
+          OR v_key = 'screen_name' AND (
+            jsonb_typeof(v_value) <> 'string'
+            OR v_value #>> '{}' !~ '^[a-z0-9_]{1,32}$'
+          )
+          OR v_key = 'ad_unit_id' AND (
+            jsonb_typeof(v_value) <> 'string'
+            OR v_value #>> '{}' !~ '^[a-z0-9_]{1,64}$'
+          )
+        THEN
+          RAISE EXCEPTION USING errcode = '22023', message = 'INVALID_EVENT_PROPERTY';
+        END IF;
+      WHEN 'ad_interstitial_shown' THEN
+        IF v_key NOT IN ('cooldown_remaining_sec', 'session_ad_count')
+          OR jsonb_typeof(v_value) <> 'number'
+        THEN
+          RAISE EXCEPTION USING errcode = '22023', message = 'INVALID_EVENT_PROPERTY';
+        END IF;
+        IF v_key = 'cooldown_remaining_sec' AND (
+          (v_value #>> '{}')::numeric <> floor((v_value #>> '{}')::numeric)
+          OR (v_value #>> '{}')::int NOT BETWEEN 0 AND 86400
+        ) OR v_key = 'session_ad_count' AND (
+          (v_value #>> '{}')::numeric <> floor((v_value #>> '{}')::numeric)
+          OR (v_value #>> '{}')::int NOT BETWEEN 0 AND 100
+        ) THEN
+          RAISE EXCEPTION USING errcode = '22023', message = 'INVALID_EVENT_PROPERTY';
+        END IF;
+      WHEN 'ad_rewarded_watched' THEN
+        IF v_key NOT IN ('reward_amount', 'entry_point', 'verification') THEN
+          RAISE EXCEPTION USING errcode = '22023', message = 'INVALID_EVENT_PROPERTY';
+        END IF;
+        IF v_key = 'reward_amount' AND (
+          jsonb_typeof(v_value) <> 'number'
+          OR (v_value #>> '{}')::numeric <> floor((v_value #>> '{}')::numeric)
+          OR (v_value #>> '{}')::int NOT BETWEEN 1 AND 100
+        ) THEN
+          RAISE EXCEPTION USING errcode = '22023', message = 'INVALID_EVENT_PROPERTY';
+        END IF;
+        IF v_key = 'entry_point' AND (
+          jsonb_typeof(v_value) <> 'string'
+          OR v_value #>> '{}' !~ '^[a-z0-9_]{1,32}$'
+        ) THEN
+          RAISE EXCEPTION USING errcode = '22023', message = 'INVALID_EVENT_PROPERTY';
+        END IF;
+        IF v_key = 'verification' AND (
+          jsonb_typeof(v_value) <> 'string'
+          OR v_value #>> '{}' NOT IN ('server_pending')
+        ) THEN
+          RAISE EXCEPTION USING errcode = '22023', message = 'INVALID_EVENT_PROPERTY';
+        END IF;
+      WHEN 'point_shortage_encountered' THEN
+        IF v_key NOT IN ('attempted_action')
+          OR jsonb_typeof(v_value) <> 'string'
+          OR v_value #>> '{}' NOT IN ('asset', 'task')
+        THEN
+          RAISE EXCEPTION USING errcode = '22023', message = 'INVALID_EVENT_PROPERTY';
+        END IF;
+      WHEN 'points_debited' THEN
+        IF v_key NOT IN ('entity_type', 'entity_id', 'cost', 'new_balance', 'included_task_count') THEN
+          RAISE EXCEPTION USING errcode = '22023', message = 'INVALID_EVENT_PROPERTY';
+        END IF;
+        IF v_key = 'entity_type' AND (
+          jsonb_typeof(v_value) <> 'string'
+          OR v_value #>> '{}' NOT IN ('asset', 'asset_copy', 'task')
+        ) THEN
+          RAISE EXCEPTION USING errcode = '22023', message = 'INVALID_EVENT_PROPERTY';
+        END IF;
+        IF v_key = 'entity_id' AND (
+          jsonb_typeof(v_value) <> 'string'
+          OR v_value #>> '{}' !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+        ) THEN
+          RAISE EXCEPTION USING errcode = '22023', message = 'INVALID_EVENT_PROPERTY';
+        END IF;
+        IF v_key IN ('cost', 'new_balance', 'included_task_count') AND (
+          jsonb_typeof(v_value) <> 'number'
+          OR (v_value #>> '{}')::numeric <> floor((v_value #>> '{}')::numeric)
+          OR (v_value #>> '{}')::int < 0
+          OR (v_value #>> '{}')::int > CASE
+            WHEN v_key = 'cost' THEN 1000
+            WHEN v_key = 'new_balance' THEN 100000
+            ELSE 50
+          END
+        ) THEN
+          RAISE EXCEPTION USING errcode = '22023', message = 'INVALID_EVENT_PROPERTY';
+        END IF;
+      ELSE
+        RAISE EXCEPTION USING errcode = '22023', message = 'INVALID_EVENT';
+    END CASE;
+  END LOOP;
 
   INSERT INTO public.monetization_events (user_id, event_name, properties)
   VALUES (caller_id, p_event_name, p_properties);
@@ -1119,6 +1241,7 @@ declare
   v_row jsonb;
   v_identity jsonb;
   v_user_id uuid;
+  v_seq bigint;
 begin
   v_row := case when tg_op = 'DELETE' then to_jsonb(old) else to_jsonb(new) end;
   v_user_id := nullif(v_row ->> 'user_id', '')::uuid;
@@ -1145,20 +1268,36 @@ begin
     v_identity ->> 'record_id',
     v_identity -> 'key_data',
     tg_op,
-    case tg_table_name
-      when 'profiles' then nullif(v_row ->> 'client_modified_at', '')::timestamptz
-      else coalesce(nullif(v_row ->> 'updated_at', '')::timestamptz, clock_timestamp())
-    end,
+    coalesce(
+      nullif(v_row ->> 'client_modified_at', '')::timestamptz,
+      nullif(v_row ->> 'updated_at', '')::timestamptz,
+      nullif(v_row ->> 'created_at', '')::timestamptz,
+      clock_timestamp()
+    ),
     coalesce(nullif(v_row ->> 'revision', '')::bigint, 1),
     1,
     case when tg_op = 'DELETE' then null else v_row end
-  );
+  ) returning change_seq into v_seq;
+
+  insert into public.owner_feed_state (
+    user_id, feed_generation, high_water_seq, retained_min_seq, updated_at
+  ) values (
+    v_user_id, 1, v_seq, v_seq, clock_timestamp()
+  ) on conflict (user_id) do update set
+    high_water_seq = greatest(owner_feed_state.high_water_seq, excluded.high_water_seq),
+    retained_min_seq = case
+      when owner_feed_state.retained_min_seq = 0 then excluded.retained_min_seq
+      else owner_feed_state.retained_min_seq
+    end,
+    updated_at = clock_timestamp();
+
   return null;
 end;
 $$;
 
 
 ALTER FUNCTION "owntend_private"."fn_log_server_change_feed"() OWNER TO "postgres";
+REVOKE ALL ON FUNCTION "owntend_private"."fn_log_server_change_feed"() FROM PUBLIC;
 
 
 CREATE OR REPLACE FUNCTION "owntend_private"."initialize_owntend_profile_for_user"() RETURNS "trigger"
@@ -1999,25 +2138,35 @@ $$;
 ALTER FUNCTION "public"."complete_owntend_account_deletion_operation"("p_operation_id" "uuid", "p_user_id" "uuid", "p_subject_binding" "text") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."create_asset_with_point_debit"("p_operation" "jsonb") RETURNS "jsonb"
-    LANGUAGE "sql"
+CREATE OR REPLACE FUNCTION "public"."create_asset"("p_operation" "jsonb") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
-  select owntend_monetization_private.create_asset_with_point_debit_impl(p_operation);
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION USING errcode = '42501', message = 'AUTH_REQUIRED';
+  END IF;
+  RETURN owntend_monetization_private.create_asset_impl(p_operation);
+END;
 $$;
 
 
-ALTER FUNCTION "public"."create_asset_with_point_debit"("p_operation" "jsonb") OWNER TO "postgres";
+ALTER FUNCTION "public"."create_asset"("p_operation" "jsonb") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."create_reward_claim_request"("p_reward_type" "text", "p_time_zone" "text" DEFAULT NULL::"text") RETURNS "jsonb"
-    LANGUAGE "sql"
+    LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
-  SELECT owntend_monetization_private.create_reward_claim_request_impl(
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION USING errcode = '42501', message = 'AUTH_REQUIRED';
+  END IF;
+  RETURN owntend_monetization_private.create_reward_claim_request_impl(
     p_reward_type,
     p_time_zone
   );
+END;
 $$;
 
 
@@ -2025,45 +2174,75 @@ ALTER FUNCTION "public"."create_reward_claim_request"("p_reward_type" "text", "p
 
 
 CREATE OR REPLACE FUNCTION "public"."create_task_with_point_debit"("p_operation" "jsonb") RETURNS "jsonb"
-    LANGUAGE "sql"
+    LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
-  select owntend_monetization_private.create_task_with_point_debit_impl(p_operation);
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION USING errcode = '42501', message = 'AUTH_REQUIRED';
+  END IF;
+  RETURN owntend_monetization_private.create_task_with_point_debit_impl(p_operation);
+END;
 $$;
 
 
 ALTER FUNCTION "public"."create_task_with_point_debit"("p_operation" "jsonb") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."fetch_user_change_feed"("p_since_seq" bigint DEFAULT 0, "p_limit" integer DEFAULT 100) RETURNS "jsonb"
-    LANGUAGE "plpgsql"
+CREATE OR REPLACE FUNCTION "public"."fetch_user_change_feed"("p_since_seq" bigint DEFAULT 0, "p_limit" integer DEFAULT 100, "p_expected_generation" bigint DEFAULT 1) RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE
     SET "search_path" TO ''
     AS $$
 declare
   v_user_id uuid := auth.uid();
-  v_high_water bigint;
-  v_min_retained bigint;
   v_limit integer;
-  v_changes jsonb;
+  v_state public.owner_feed_state%rowtype;
+  v_changes jsonb := '[]'::jsonb;
   v_next_seq bigint;
 begin
   if v_user_id is null then
     raise exception 'AUTH_REQUIRED' using errcode = '42501';
   end if;
-  if p_since_seq < 0 or p_limit < 1 then
+  if p_since_seq < 0 or p_limit < 1 or coalesce(p_expected_generation, 1) < 1 then
     raise exception 'INVALID_FEED_CURSOR' using errcode = '22023';
   end if;
   v_limit := least(p_limit, 100);
-  select coalesce(min(change_seq), 0), coalesce(max(change_seq), 0)
-  into v_min_retained, v_high_water
-  from public.server_change_feed where user_id = v_user_id;
+
+  select * into v_state from public.owner_feed_state where user_id = v_user_id;
+  if not found then
+    return jsonb_build_object(
+      'contract_version', 1,
+      'feed_generation', 1,
+      'changes', '[]'::jsonb,
+      'high_water_seq', 0,
+      'next_seq', 0,
+      'has_more', false,
+      'resnapshot_required', false,
+      'snapshot_required', false
+    );
+  end if;
+
+  if (p_expected_generation is distinct from v_state.feed_generation)
+    or (p_since_seq > 0 and v_state.retained_min_seq > 0 and p_since_seq < v_state.retained_min_seq)
+  then
+    return jsonb_build_object(
+      'contract_version', 1,
+      'feed_generation', v_state.feed_generation,
+      'changes', '[]'::jsonb,
+      'high_water_seq', v_state.high_water_seq,
+      'next_seq', v_state.retained_min_seq,
+      'has_more', false,
+      'resnapshot_required', true,
+      'snapshot_required', true
+    );
+  end if;
 
   with page_data as (
     select change_seq, entity_type, record_id, key_data, op_type,
            client_updated_at, revision, created_at, contract_version, payload
     from public.server_change_feed
     where user_id = v_user_id and change_seq > p_since_seq
-      and change_seq <= v_high_water
+      and change_seq <= v_state.high_water_seq
     order by change_seq
     limit v_limit
   )
@@ -2074,88 +2253,110 @@ begin
 
   return jsonb_build_object(
     'contract_version', 1,
+    'feed_generation', v_state.feed_generation,
     'changes', v_changes,
-    'high_water_seq', v_high_water,
+    'high_water_seq', v_state.high_water_seq,
     'next_seq', v_next_seq,
-    'has_more', v_next_seq < v_high_water,
-    'resnapshot_required', p_since_seq > 0 and v_min_retained > 0
-      and p_since_seq < v_min_retained
+    'has_more', v_next_seq < v_state.high_water_seq,
+    'resnapshot_required', false,
+    'snapshot_required', false
   );
 end;
 $$;
 
 
-ALTER FUNCTION "public"."fetch_user_change_feed"("p_since_seq" bigint, "p_limit" integer) OWNER TO "postgres";
+ALTER FUNCTION "public"."fetch_user_change_feed"("p_since_seq" bigint, "p_limit" integer, "p_expected_generation" bigint) OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."finalize_asset_photo_upload"("p_staging_id" "uuid", "p_asset_id" "text", "p_photo_id" "text", "p_expected_revision" integer DEFAULT 1) RETURNS "jsonb"
-    LANGUAGE "sql"
+CREATE OR REPLACE FUNCTION "public"."finalize_asset_photo_upload"(
+  "p_staging_id" "uuid",
+  "p_asset_id" "text",
+  "p_photo_id" "text",
+  "p_expected_revision" integer DEFAULT 1,
+  "p_caption" "text" DEFAULT NULL,
+  "p_is_primary" boolean DEFAULT false
+) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
-  SELECT owntend_media_private.finalize_asset_photo_upload_impl(
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION USING errcode = '42501', message = 'AUTHENTICATION_REQUIRED';
+  END IF;
+  RETURN owntend_media_private.finalize_asset_photo_upload_impl(
     p_staging_id,
     p_asset_id,
     p_photo_id,
-    p_expected_revision
+    p_expected_revision,
+    p_caption,
+    p_is_primary
   );
+END;
 $$;
 
+ALTER FUNCTION "public"."finalize_asset_photo_upload"("p_staging_id" "uuid", "p_asset_id" "text", "p_photo_id" "text", "p_expected_revision" integer, "p_caption" "text", "p_is_primary" boolean) OWNER TO "postgres";
 
-ALTER FUNCTION "public"."finalize_asset_photo_upload"("p_staging_id" "uuid", "p_asset_id" "text", "p_photo_id" "text", "p_expected_revision" integer) OWNER TO "postgres";
+CREATE OR REPLACE FUNCTION "public"."delete_asset_photo"("p_asset_id" "text", "p_photo_id" "text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION USING errcode = '42501', message = 'AUTHENTICATION_REQUIRED';
+  END IF;
+  RETURN owntend_media_private.delete_asset_photo_impl(p_asset_id, p_photo_id);
+END;
+$$;
+
+ALTER FUNCTION "public"."delete_asset_photo"("p_asset_id" "text", "p_photo_id" "text") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."get_charged_operation_status"("p_operation_id" "uuid", "p_request_hash" "text") RETURNS "jsonb"
-    LANGUAGE "sql"
+    LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
-  select owntend_monetization_private.get_charged_operation_status(
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION USING errcode = '42501', message = 'AUTH_REQUIRED';
+  END IF;
+  RETURN owntend_monetization_private.get_charged_operation_status(
     p_operation_id,
     p_request_hash
   );
+END;
 $$;
 
 
 ALTER FUNCTION "public"."get_charged_operation_status"("p_operation_id" "uuid", "p_request_hash" "text") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."get_user_change_feed_watermark"() RETURNS TABLE("min_change_seq" bigint, "max_change_seq" bigint, "total_changes" bigint)
+CREATE OR REPLACE FUNCTION "public"."get_user_change_feed_watermark"() RETURNS TABLE("min_change_seq" bigint, "max_change_seq" bigint, "total_changes" bigint, "feed_generation" bigint)
     LANGUAGE "plpgsql" STABLE
     SET "search_path" TO ''
     AS $$
 DECLARE
   v_target_user UUID := auth.uid();
+  v_state public.owner_feed_state%ROWTYPE;
+  v_count BIGINT;
 BEGIN
   IF v_target_user IS NULL THEN
     RAISE EXCEPTION 'AUTH_REQUIRED' USING ERRCODE = '42501';
   END IF;
 
+  SELECT * INTO v_state FROM public.owner_feed_state WHERE user_id = v_target_user;
+  SELECT count(*) INTO v_count FROM public.server_change_feed WHERE user_id = v_target_user;
+
   RETURN QUERY
   SELECT
-    COALESCE(MIN(sf.change_seq), 0),
-    COALESCE(MAX(sf.change_seq), 0),
-    COUNT(*)
-  FROM public.server_change_feed AS sf
-  WHERE sf.user_id = v_target_user;
+    COALESCE(v_state.retained_min_seq, 0::bigint),
+    COALESCE(v_state.high_water_seq, 0::bigint),
+    COALESCE(v_count, 0::bigint),
+    COALESCE(v_state.feed_generation, 1::bigint);
 END;
 $$;
 
 
 ALTER FUNCTION "public"."get_user_change_feed_watermark"() OWNER TO "postgres";
-
-
-CREATE OR REPLACE FUNCTION "public"."is_authorized_point_creation"("p_user_id" "uuid", "p_entity_type" "text", "p_entity_id" "text") RETURNS boolean
-    LANGUAGE "sql" STABLE
-    SET "search_path" TO ''
-    AS $$
-  SELECT owntend_monetization_private.is_authorized_point_creation_impl(
-    p_user_id,
-    p_entity_type,
-    p_entity_id
-  );
-$$;
-
-
-ALTER FUNCTION "public"."is_authorized_point_creation"("p_user_id" "uuid", "p_entity_type" "text", "p_entity_id" "text") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."is_recent_owntend_session"("p_user_id" "uuid", "p_session_id" "uuid") RETURNS boolean
@@ -2219,13 +2420,18 @@ ALTER FUNCTION "public"."lookup_owntend_account_deletion_operation"("p_request_h
 
 
 CREATE OR REPLACE FUNCTION "public"."prepare_asset_photo_upload"("p_asset_id" "text", "p_photo_id" "text", "p_object_size" bigint, "p_mime_type" "text", "p_client_sha256_digest" "text", "p_idempotency_key" "text") RETURNS "jsonb"
-    LANGUAGE "sql"
+    LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
-  select owntend_media_private.prepare_asset_photo_upload_impl(
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION USING errcode = '42501', message = 'AUTHENTICATION_REQUIRED';
+  END IF;
+  RETURN owntend_media_private.prepare_asset_photo_upload_impl(
     p_asset_id, p_photo_id, p_object_size, p_mime_type,
     p_client_sha256_digest, p_idempotency_key
   );
+END;
 $$;
 
 
@@ -2440,13 +2646,18 @@ ALTER FUNCTION "public"."prune_owntend_account_deletion_operations"() OWNER TO "
 
 
 CREATE OR REPLACE FUNCTION "public"."record_monetization_event"("p_event_name" "text", "p_properties" "jsonb" DEFAULT '{}'::"jsonb") RETURNS "void"
-    LANGUAGE "sql"
+    LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
-  SELECT owntend_monetization_private.record_monetization_event_impl(
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION USING errcode = '42501', message = 'AUTH_REQUIRED';
+  END IF;
+  PERFORM owntend_monetization_private.record_monetization_event_impl(
     p_event_name,
     p_properties
   );
+END;
 $$;
 
 
@@ -2505,6 +2716,31 @@ BEGIN
     END;
   END IF;
 
+  -- Server-side safe default coalescing for synchronized columns
+  IF to_jsonb(NEW) ? 'sort_order' THEN
+    NEW.sort_order := COALESCE(NEW.sort_order, 0);
+  END IF;
+
+  IF to_jsonb(NEW) ? 'required_materials_json' THEN
+    NEW.required_materials_json := COALESCE(NEW.required_materials_json, '[]');
+  END IF;
+
+  IF to_jsonb(NEW) ? 'reminder_days_before' THEN
+    NEW.reminder_days_before := COALESCE(NEW.reminder_days_before, 0);
+  END IF;
+
+  IF to_jsonb(NEW) ? 'is_enabled' THEN
+    NEW.is_enabled := COALESCE(NEW.is_enabled, true);
+  END IF;
+
+  IF to_jsonb(NEW) ? 'is_primary' THEN
+    NEW.is_primary := COALESCE(NEW.is_primary, false);
+  END IF;
+
+  IF to_jsonb(NEW) ? 'created_at' THEN
+    NEW.created_at := COALESCE(NEW.created_at, clock_timestamp());
+  END IF;
+
   RETURN NEW;
 END;
 $$;
@@ -2514,13 +2750,18 @@ ALTER FUNCTION "public"."set_owntend_row_metadata"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."set_primary_asset_photo"("p_asset_id" "text", "p_photo_id" "text") RETURNS "jsonb"
-    LANGUAGE "sql"
+    LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
-  SELECT owntend_media_private.set_primary_asset_photo_impl(
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION USING errcode = '42501', message = 'AUTHENTICATION_REQUIRED';
+  END IF;
+  RETURN owntend_media_private.set_primary_asset_photo_impl(
     p_asset_id,
     p_photo_id
   );
+END;
 $$;
 
 
@@ -2766,6 +3007,10 @@ CREATE TABLE IF NOT EXISTS "owntend_private"."account_deletion_cleanup_jobs" (
 
 ALTER TABLE "owntend_private"."account_deletion_cleanup_jobs" OWNER TO "postgres";
 
+ALTER TABLE "owntend_private"."account_deletion_cleanup_jobs" ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "account_deletion_cleanup_jobs_service_role_all" ON "owntend_private"."account_deletion_cleanup_jobs" TO "service_role" USING (true) WITH CHECK (true);
+
 
 CREATE TABLE IF NOT EXISTS "owntend_private"."account_deletion_operations" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
@@ -2835,7 +3080,6 @@ CREATE TABLE IF NOT EXISTS "public"."asset_photos" (
     "user_id" "uuid" NOT NULL,
     "id" "text" NOT NULL,
     "asset_id" "text" NOT NULL,
-    "storage_path" "text",
     "object_path" "text",
     "caption" "text",
     "is_primary" boolean DEFAULT false NOT NULL,
@@ -2977,7 +3221,6 @@ CREATE TABLE IF NOT EXISTS "public"."maintenance_plans" (
     "instructions" "text",
     "recurrence_interval" integer DEFAULT 1 NOT NULL,
     "recurrence_unit" "text" DEFAULT 'months'::"text" NOT NULL,
-    "season_flags" integer DEFAULT 0 NOT NULL,
     "priority" "text" DEFAULT 'medium'::"text" NOT NULL,
     "next_due_date" timestamp with time zone NOT NULL,
     "is_enabled" boolean DEFAULT true NOT NULL,
@@ -3029,11 +3272,13 @@ CREATE TABLE IF NOT EXISTS "public"."media_cleanup_queue" (
     "reason" "text" NOT NULL,
     "status" "text" DEFAULT 'pending'::"text" NOT NULL,
     "attempts" integer DEFAULT 0 NOT NULL,
-    "last_error" "text",
+    "last_error_code" "text",
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "processed_at" timestamp with time zone,
     CONSTRAINT "media_cleanup_queue_reason_check" CHECK (("reason" = ANY (ARRAY['replaced'::"text", 'deleted'::"text", 'expired_staging'::"text", 'account_deleted'::"text"]))),
-    CONSTRAINT "media_cleanup_queue_status_check" CHECK (("status" = ANY (ARRAY['pending'::"text", 'processing'::"text", 'completed'::"text", 'failed_terminal'::"text"])))
+    CONSTRAINT "media_cleanup_queue_status_check" CHECK (("status" = ANY (ARRAY['pending'::"text", 'processing'::"text", 'completed'::"text", 'failed_terminal'::"text"]))),
+    CONSTRAINT "media_cleanup_queue_attempts_check" CHECK (("attempts" >= 0)),
+    CONSTRAINT "media_cleanup_queue_last_error_code_check" CHECK (("last_error_code" IS NULL OR (("char_length"("last_error_code") <= 64) AND "last_error_code" ~ '^[a-z0-9_]+$')))
 );
 
 
@@ -3068,7 +3313,7 @@ CREATE TABLE IF NOT EXISTS "public"."media_staging_objects" (
     CONSTRAINT "media_staging_objects_digest_check" CHECK (("client_sha256_digest" ~ '^[0-9a-f]{64}$'::"text")),
     CONSTRAINT "media_staging_objects_expiry_check" CHECK (("expires_at" > "created_at")),
     CONSTRAINT "media_staging_objects_idempotency_check" CHECK (("idempotency_key" ~ '^[A-Za-z0-9_-]{16,120}$'::"text")),
-    CONSTRAINT "media_staging_objects_path_check" CHECK (("staging_path" ~~ (("user_id")::"text" || '/staging/%'::"text"))),
+    CONSTRAINT "media_staging_objects_path_check" CHECK (("staging_path" ~~ (("user_id")::"text" || '/media/%'::"text"))),
     CONSTRAINT "media_staging_objects_size_check" CHECK ((("object_size" >= 1) AND ("object_size" <= 10485760))),
     CONSTRAINT "media_staging_objects_status_check" CHECK (("status" = ANY (ARRAY['staged'::"text", 'finalized'::"text", 'expired'::"text", 'failed'::"text"])))
 );
@@ -3347,7 +3592,7 @@ CREATE TABLE IF NOT EXISTS "public"."server_change_feed" (
     "entity_type" "text" NOT NULL,
     "record_id" "text" NOT NULL,
     "op_type" "text" NOT NULL,
-    "client_updated_at" timestamp with time zone,
+    "client_updated_at" timestamp with time zone NOT NULL,
     "revision" bigint DEFAULT 1 NOT NULL,
     "created_at" timestamp with time zone DEFAULT "clock_timestamp"() NOT NULL,
     "key_data" "jsonb" NOT NULL,
@@ -3362,6 +3607,24 @@ CREATE TABLE IF NOT EXISTS "public"."server_change_feed" (
 
 
 ALTER TABLE "public"."server_change_feed" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."owner_feed_state" (
+    "user_id" "uuid" NOT NULL,
+    "feed_generation" bigint DEFAULT 1 NOT NULL,
+    "high_water_seq" bigint DEFAULT 0 NOT NULL,
+    "retained_min_seq" bigint DEFAULT 0 NOT NULL,
+    "last_compacted_at" timestamp with time zone,
+    "created_at" timestamp with time zone DEFAULT "clock_timestamp"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "clock_timestamp"() NOT NULL,
+    CONSTRAINT "owner_feed_state_pkey" PRIMARY KEY ("user_id"),
+    CONSTRAINT "owner_feed_state_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE,
+    CONSTRAINT "owner_feed_state_generation_check" CHECK (("feed_generation" >= 1)),
+    CONSTRAINT "owner_feed_state_high_water_check" CHECK (("high_water_seq" >= 0)),
+    CONSTRAINT "owner_feed_state_retained_min_check" CHECK (("retained_min_seq" >= 0))
+);
+
+ALTER TABLE "public"."owner_feed_state" OWNER TO "postgres";
 
 
 ALTER TABLE "public"."server_change_feed" ALTER COLUMN "change_seq" ADD GENERATED ALWAYS AS IDENTITY (
@@ -3380,15 +3643,13 @@ CREATE TABLE IF NOT EXISTS "public"."streaks" (
     "id" "text" DEFAULT 'default'::"text" NOT NULL,
     "current_streak" integer DEFAULT 0 NOT NULL,
     "longest_streak" integer DEFAULT 0 NOT NULL,
-    "total_completions" integer DEFAULT 0 NOT NULL,
     "last_completion_date" "date",
     "revision" bigint DEFAULT 1 NOT NULL,
     "created_at" timestamp with time zone DEFAULT "clock_timestamp"() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "clock_timestamp"() NOT NULL,
     CONSTRAINT "streaks_check" CHECK ((("longest_streak" >= 0) AND ("longest_streak" >= "current_streak"))),
     CONSTRAINT "streaks_current_streak_check" CHECK (("current_streak" >= 0)),
-    CONSTRAINT "streaks_revision_check" CHECK (("revision" > 0)),
-    CONSTRAINT "streaks_total_completions_check" CHECK (("total_completions" >= 0))
+    CONSTRAINT "streaks_revision_check" CHECK (("revision" > 0))
 );
 
 ALTER TABLE ONLY "public"."streaks" REPLICA IDENTITY FULL;
@@ -4107,19 +4368,7 @@ CREATE POLICY "areas_update_own" ON "public"."areas" FOR UPDATE TO "authenticate
 ALTER TABLE "public"."asset_photos" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "asset_photos_delete_own" ON "public"."asset_photos" FOR DELETE TO "authenticated" USING ((( SELECT "auth"."uid"() AS "uid") = "user_id"));
-
-
-
-CREATE POLICY "asset_photos_insert_own" ON "public"."asset_photos" FOR INSERT TO "authenticated" WITH CHECK ((( SELECT "auth"."uid"() AS "uid") = "user_id"));
-
-
-
 CREATE POLICY "asset_photos_select_own" ON "public"."asset_photos" FOR SELECT TO "authenticated" USING ((( SELECT "auth"."uid"() AS "uid") = "user_id"));
-
-
-
-CREATE POLICY "asset_photos_update_own" ON "public"."asset_photos" FOR UPDATE TO "authenticated" USING ((( SELECT "auth"."uid"() AS "uid") = "user_id")) WITH CHECK ((( SELECT "auth"."uid"() AS "uid") = "user_id"));
 
 
 
@@ -4146,10 +4395,6 @@ ALTER TABLE "public"."assets" ENABLE ROW LEVEL SECURITY;
 
 
 CREATE POLICY "assets_delete_own" ON "public"."assets" FOR DELETE TO "authenticated" USING ((( SELECT "auth"."uid"() AS "uid") = "user_id"));
-
-
-
-CREATE POLICY "assets_insert_own" ON "public"."assets" FOR INSERT TO "authenticated" WITH CHECK ((( SELECT "auth"."uid"() AS "uid") = "user_id"));
 
 
 
@@ -4299,6 +4544,13 @@ CREATE POLICY "pet_details_select_own" ON "public"."pet_details" FOR SELECT TO "
 
 
 CREATE POLICY "pet_details_update_own" ON "public"."pet_details" FOR UPDATE TO "authenticated" USING ((( SELECT "auth"."uid"() AS "uid") = "user_id")) WITH CHECK ((( SELECT "auth"."uid"() AS "uid") = "user_id"));
+
+
+
+ALTER TABLE "public"."owner_feed_state" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "owner_feed_state_select_own" ON "public"."owner_feed_state" FOR SELECT TO "authenticated" USING ((( SELECT "auth"."uid"() AS "uid") = "user_id"));
 
 
 
@@ -4459,13 +4711,12 @@ CREATE POLICY "user_settings_update_own" ON "public"."user_settings" FOR UPDATE 
 
 
 
-GRANT USAGE ON SCHEMA "owntend_media_private" TO "authenticated";
 GRANT USAGE ON SCHEMA "owntend_media_private" TO "service_role";
 
 
 
-GRANT USAGE ON SCHEMA "owntend_monetization_private" TO "authenticated";
 GRANT USAGE ON SCHEMA "owntend_monetization_private" TO "service_role";
+GRANT USAGE ON SCHEMA "owntend_monetization_private" TO "authenticated";
 
 
 
@@ -4491,58 +4742,48 @@ REVOKE ALL ON ALL SEQUENCES IN SCHEMA "public" FROM "authenticated";
 
 
 
-REVOKE ALL ON FUNCTION "owntend_media_private"."finalize_asset_photo_upload_impl"("p_staging_id" "uuid", "p_asset_id" "text", "p_photo_id" "text", "p_expected_revision" integer) FROM PUBLIC;
-GRANT ALL ON FUNCTION "owntend_media_private"."finalize_asset_photo_upload_impl"("p_staging_id" "uuid", "p_asset_id" "text", "p_photo_id" "text", "p_expected_revision" integer) TO "authenticated";
-
-
-
-REVOKE ALL ON FUNCTION "owntend_media_private"."prepare_asset_photo_upload_impl"("p_asset_id" "text", "p_photo_id" "text", "p_object_size" bigint, "p_mime_type" "text", "p_client_sha256_digest" "text", "p_idempotency_key" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "owntend_media_private"."prepare_asset_photo_upload_impl"("p_asset_id" "text", "p_photo_id" "text", "p_object_size" bigint, "p_mime_type" "text", "p_client_sha256_digest" "text", "p_idempotency_key" "text") TO "authenticated";
-
-
-
-REVOKE ALL ON FUNCTION "owntend_media_private"."set_primary_asset_photo_impl"("p_asset_id" "text", "p_photo_id" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "owntend_media_private"."set_primary_asset_photo_impl"("p_asset_id" "text", "p_photo_id" "text") TO "authenticated";
-
-
+REVOKE ALL ON ALL FUNCTIONS IN SCHEMA "owntend_media_private" FROM PUBLIC, "anon", "authenticated";
+REVOKE ALL ON ALL FUNCTIONS IN SCHEMA "owntend_monetization_private" FROM PUBLIC, "anon", "authenticated";
+REVOKE ALL ON ALL FUNCTIONS IN SCHEMA "owntend_private" FROM PUBLIC, "anon", "authenticated";
 
 REVOKE ALL ON FUNCTION "owntend_monetization_private"."can_reconcile_maintenance_plan"("p_user_id" "uuid", "p_plan_id" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "owntend_monetization_private"."can_reconcile_maintenance_plan"("p_user_id" "uuid", "p_plan_id" "text") TO "authenticated";
 
+REVOKE ALL ON FUNCTION "owntend_media_private"."finalize_asset_photo_upload_impl"("p_staging_id" "uuid", "p_asset_id" "text", "p_photo_id" "text", "p_expected_revision" integer, "p_caption" "text", "p_is_primary" boolean) FROM PUBLIC;
+
+REVOKE ALL ON FUNCTION "owntend_media_private"."delete_asset_photo_impl"("p_asset_id" "text", "p_photo_id" "text") FROM PUBLIC;
+
+REVOKE ALL ON FUNCTION "owntend_media_private"."prepare_asset_photo_upload_impl"("p_asset_id" "text", "p_photo_id" "text", "p_object_size" bigint, "p_mime_type" "text", "p_client_sha256_digest" "text", "p_idempotency_key" "text") FROM PUBLIC;
+
+REVOKE ALL ON FUNCTION "owntend_media_private"."set_primary_asset_photo_impl"("p_asset_id" "text", "p_photo_id" "text") FROM PUBLIC;
+
+REVOKE ALL ON FUNCTION "owntend_private"."initialize_point_wallet_for_user"() FROM PUBLIC;
+
+REVOKE ALL ON FUNCTION "owntend_private"."sync_feed_identity"("p_table_name" "text", "p_row" "jsonb") FROM PUBLIC;
 
 
-REVOKE ALL ON FUNCTION "owntend_monetization_private"."create_asset_with_point_debit_impl"("p_operation" "jsonb") FROM PUBLIC;
-GRANT ALL ON FUNCTION "owntend_monetization_private"."create_asset_with_point_debit_impl"("p_operation" "jsonb") TO "authenticated";
-GRANT ALL ON FUNCTION "owntend_monetization_private"."create_asset_with_point_debit_impl"("p_operation" "jsonb") TO "service_role";
+
+REVOKE ALL ON FUNCTION "owntend_monetization_private"."create_asset_impl"("p_operation" "jsonb") FROM PUBLIC;
+GRANT ALL ON FUNCTION "owntend_monetization_private"."create_asset_impl"("p_operation" "jsonb") TO "service_role";
 
 
 
 REVOKE ALL ON FUNCTION "owntend_monetization_private"."create_reward_claim_request_impl"("p_reward_type" "text", "p_time_zone" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "owntend_monetization_private"."create_reward_claim_request_impl"("p_reward_type" "text", "p_time_zone" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "owntend_monetization_private"."create_reward_claim_request_impl"("p_reward_type" "text", "p_time_zone" "text") TO "service_role";
 
 
 
 REVOKE ALL ON FUNCTION "owntend_monetization_private"."create_task_with_point_debit_impl"("p_operation" "jsonb") FROM PUBLIC;
-GRANT ALL ON FUNCTION "owntend_monetization_private"."create_task_with_point_debit_impl"("p_operation" "jsonb") TO "authenticated";
 GRANT ALL ON FUNCTION "owntend_monetization_private"."create_task_with_point_debit_impl"("p_operation" "jsonb") TO "service_role";
 
 
 
 REVOKE ALL ON FUNCTION "owntend_monetization_private"."get_charged_operation_status"("p_operation_id" "uuid", "p_request_hash" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "owntend_monetization_private"."get_charged_operation_status"("p_operation_id" "uuid", "p_request_hash" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "owntend_monetization_private"."get_charged_operation_status"("p_operation_id" "uuid", "p_request_hash" "text") TO "service_role";
 
 
 
-REVOKE ALL ON FUNCTION "owntend_monetization_private"."is_authorized_point_creation_impl"("p_user_id" "uuid", "p_entity_type" "text", "p_entity_id" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "owntend_monetization_private"."is_authorized_point_creation_impl"("p_user_id" "uuid", "p_entity_type" "text", "p_entity_id" "text") TO "authenticated";
-GRANT ALL ON FUNCTION "owntend_monetization_private"."is_authorized_point_creation_impl"("p_user_id" "uuid", "p_entity_type" "text", "p_entity_id" "text") TO "service_role";
-
-
-
 REVOKE ALL ON FUNCTION "owntend_monetization_private"."record_monetization_event_impl"("p_event_name" "text", "p_properties" "jsonb") FROM PUBLIC;
-GRANT ALL ON FUNCTION "owntend_monetization_private"."record_monetization_event_impl"("p_event_name" "text", "p_properties" "jsonb") TO "authenticated";
 GRANT ALL ON FUNCTION "owntend_monetization_private"."record_monetization_event_impl"("p_event_name" "text", "p_properties" "jsonb") TO "service_role";
 
 
@@ -4596,9 +4837,9 @@ GRANT ALL ON FUNCTION "public"."complete_owntend_account_deletion_operation"("p_
 
 
 
-REVOKE ALL ON FUNCTION "public"."create_asset_with_point_debit"("p_operation" "jsonb") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."create_asset_with_point_debit"("p_operation" "jsonb") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."create_asset_with_point_debit"("p_operation" "jsonb") TO "service_role";
+REVOKE ALL ON FUNCTION "public"."create_asset"("p_operation" "jsonb") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."create_asset"("p_operation" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."create_asset"("p_operation" "jsonb") TO "service_role";
 
 
 
@@ -4613,13 +4854,16 @@ GRANT ALL ON FUNCTION "public"."create_task_with_point_debit"("p_operation" "jso
 
 
 
-REVOKE ALL ON FUNCTION "public"."fetch_user_change_feed"("p_since_seq" bigint, "p_limit" integer) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."fetch_user_change_feed"("p_since_seq" bigint, "p_limit" integer) TO "authenticated";
+REVOKE ALL ON FUNCTION "public"."fetch_user_change_feed"("p_since_seq" bigint, "p_limit" integer, "p_expected_generation" bigint) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fetch_user_change_feed"("p_since_seq" bigint, "p_limit" integer, "p_expected_generation" bigint) TO "authenticated";
 
 
 
-REVOKE ALL ON FUNCTION "public"."finalize_asset_photo_upload"("p_staging_id" "uuid", "p_asset_id" "text", "p_photo_id" "text", "p_expected_revision" integer) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."finalize_asset_photo_upload"("p_staging_id" "uuid", "p_asset_id" "text", "p_photo_id" "text", "p_expected_revision" integer) TO "authenticated";
+REVOKE ALL ON FUNCTION "public"."finalize_asset_photo_upload"("p_staging_id" "uuid", "p_asset_id" "text", "p_photo_id" "text", "p_expected_revision" integer, "p_caption" "text", "p_is_primary" boolean) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."finalize_asset_photo_upload"("p_staging_id" "uuid", "p_asset_id" "text", "p_photo_id" "text", "p_expected_revision" integer, "p_caption" "text", "p_is_primary" boolean) TO "authenticated";
+
+REVOKE ALL ON FUNCTION "public"."delete_asset_photo"("p_asset_id" "text", "p_photo_id" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."delete_asset_photo"("p_asset_id" "text", "p_photo_id" "text") TO "authenticated";
 
 
 
@@ -4631,11 +4875,6 @@ GRANT ALL ON FUNCTION "public"."get_charged_operation_status"("p_operation_id" "
 
 REVOKE ALL ON FUNCTION "public"."get_user_change_feed_watermark"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."get_user_change_feed_watermark"() TO "authenticated";
-
-
-
-REVOKE ALL ON FUNCTION "public"."is_authorized_point_creation"("p_user_id" "uuid", "p_entity_type" "text", "p_entity_id" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."is_authorized_point_creation"("p_user_id" "uuid", "p_entity_type" "text", "p_entity_id" "text") TO "authenticated";
 
 
 
@@ -4706,7 +4945,7 @@ GRANT ALL ON TABLE "public"."areas" TO "service_role";
 
 
 
-GRANT SELECT,INSERT,UPDATE,DELETE ON TABLE "public"."asset_photos" TO "authenticated";
+GRANT SELECT ON TABLE "public"."asset_photos" TO "authenticated";
 GRANT ALL ON TABLE "public"."asset_photos" TO "service_role";
 
 
@@ -4716,7 +4955,11 @@ GRANT ALL ON TABLE "public"."asset_tags" TO "service_role";
 
 
 
-GRANT SELECT,INSERT,UPDATE,DELETE ON TABLE "public"."assets" TO "authenticated";
+-- MON-001: asset creation is server-authoritative through
+-- create_asset; direct client INSERT is revoked so no
+-- caller can bypass the atomic aggregate contract. Ordinary synchronized
+-- updates and deletes keep their deliberate owner-scoped policies.
+GRANT SELECT,UPDATE,DELETE ON TABLE "public"."assets" TO "authenticated";
 GRANT ALL ON TABLE "public"."assets" TO "service_role";
 
 
@@ -4838,29 +5081,34 @@ GRANT ALL ON TABLE "public"."tags" TO "service_role";
 GRANT SELECT,INSERT,UPDATE,DELETE ON TABLE "public"."user_settings" TO "authenticated";
 GRANT ALL ON TABLE "public"."user_settings" TO "service_role";
 
+GRANT SELECT ON TABLE "public"."owner_feed_state" TO "authenticated";
+GRANT ALL ON TABLE "public"."owner_feed_state" TO "service_role";
 
 
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON SEQUENCES TO "postgres";
-ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT UPDATE ON SEQUENCES TO "anon";
-ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT UPDATE ON SEQUENCES TO "authenticated";
-ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT UPDATE ON SEQUENCES TO "service_role";
-
-
-
-
-
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON SEQUENCES TO "service_role";
 
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON FUNCTIONS TO "postgres";
 
-
-
-
-
-
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "postgres";
-ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLES TO "anon";
-ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLES TO "authenticated";
-ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLES TO "service_role";
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "service_role";
+
+-- Restrict elevated server-only RPCs to service_role
+REVOKE EXECUTE ON FUNCTION "public"."begin_owntend_account_cleanup"("uuid", "text"[]) FROM PUBLIC, "anon", "authenticated";
+GRANT EXECUTE ON FUNCTION "public"."begin_owntend_account_cleanup"("uuid", "text"[]) TO "service_role";
+
+REVOKE EXECUTE ON FUNCTION "public"."complete_owntend_account_cleanup"("uuid", "text") FROM PUBLIC, "anon", "authenticated";
+GRANT EXECUTE ON FUNCTION "public"."complete_owntend_account_cleanup"("uuid", "text") TO "service_role";
+
+REVOKE EXECUTE ON FUNCTION "public"."is_recent_owntend_session"("uuid", "uuid") FROM PUBLIC, "anon", "authenticated";
+GRANT EXECUTE ON FUNCTION "public"."is_recent_owntend_session"("uuid", "uuid") TO "service_role";
+
+REVOKE EXECUTE ON FUNCTION "public"."process_admob_ssv_reward"(
+  "text", "uuid", "uuid", "text", integer, "text", timestamp with time zone
+) FROM PUBLIC, "anon", "authenticated";
+GRANT EXECUTE ON FUNCTION "public"."process_admob_ssv_reward"(
+  "text", "uuid", "uuid", "text", integer, "text", timestamp with time zone
+) TO "service_role";
 
 
 -- Supabase-owned boundary configuration is not emitted by the application
@@ -4898,7 +5146,7 @@ FOR INSERT TO "authenticated"
 WITH CHECK (
   "bucket_id" = 'user-media'
   AND ("storage"."foldername"("name"))[1] = (SELECT "auth"."uid"())::text
-  AND "name" LIKE (SELECT "auth"."uid"())::text || '/staging/%'
+  AND "name" LIKE (SELECT "auth"."uid"())::text || '/media/%'
   AND "owntend_security"."current_owntend_session_is_active"()
 );
 
@@ -4953,6 +5201,270 @@ BEGIN
 END
 $$;
 
+CREATE OR REPLACE FUNCTION "owntend_private"."compact_user_change_feed"("p_retention_days" integer DEFAULT 30, "p_max_retained_rows_per_user" integer DEFAULT 1000) RETURNS integer
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+DECLARE
+  v_user RECORD;
+  v_deleted integer := 0;
+  v_total_deleted integer := 0;
+  v_min_seq bigint;
+  v_locked public.owner_feed_state%rowtype;
+BEGIN
+  FOR v_user IN
+    SELECT user_id FROM public.owner_feed_state ORDER BY user_id
+  LOOP
+    -- Serialize against concurrent compaction runs and owner-state writers:
+    -- the row lock is held while rows are removed and the state advances.
+    SELECT * INTO v_locked
+    FROM public.owner_feed_state
+    WHERE user_id = v_user.user_id
+    FOR UPDATE;
+
+    -- Retained boundary: newest rows inside the retention window, capped per
+    -- user; everything strictly below it becomes removable history.
+    SELECT coalesce(min(change_seq), v_locked.high_water_seq)
+    INTO v_min_seq
+    FROM (
+      SELECT change_seq
+      FROM public.server_change_feed
+      WHERE user_id = v_user.user_id
+        AND created_at >= clock_timestamp() - make_interval(days => p_retention_days)
+      ORDER BY change_seq DESC
+      LIMIT p_max_retained_rows_per_user
+    ) retained;
+
+    IF v_min_seq IS NULL OR v_min_seq <= 1 THEN
+      UPDATE public.owner_feed_state
+      SET last_compacted_at = clock_timestamp(),
+          updated_at = clock_timestamp()
+      WHERE user_id = v_user.user_id;
+      CONTINUE;
+    END IF;
+
+    WITH deleted AS (
+      DELETE FROM public.server_change_feed
+      WHERE user_id = v_user.user_id
+        AND change_seq < v_min_seq
+      RETURNING 1
+    )
+    SELECT count(*) INTO v_deleted FROM deleted;
+
+    IF v_deleted > 0 THEN
+      -- Advancing the durable generation together with the retained boundary
+      -- makes every pre-compaction cursor deterministically receive a
+      -- resnapshot_required response instead of a silent gap.
+      UPDATE public.owner_feed_state
+      SET feed_generation = feed_generation + 1,
+          retained_min_seq = v_min_seq,
+          last_compacted_at = clock_timestamp(),
+          updated_at = clock_timestamp()
+      WHERE user_id = v_user.user_id;
+    ELSE
+      UPDATE public.owner_feed_state
+      SET last_compacted_at = clock_timestamp(),
+          updated_at = clock_timestamp()
+      WHERE user_id = v_user.user_id;
+    END IF;
+
+    v_total_deleted := v_total_deleted + v_deleted;
+  END LOOP;
+
+  RETURN v_total_deleted;
+END;
+$$;
+
+ALTER FUNCTION "owntend_private"."compact_user_change_feed"("p_retention_days" integer, "p_max_retained_rows_per_user" integer) OWNER TO "postgres";
+REVOKE ALL ON FUNCTION "owntend_private"."compact_user_change_feed"("p_retention_days" integer, "p_max_retained_rows_per_user" integer) FROM PUBLIC;
+
+CREATE OR REPLACE FUNCTION "owntend_media_private"."sweep_expired_media_staging"() RETURNS integer
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+DECLARE
+  v_count integer := 0;
+BEGIN
+  WITH expired AS (
+    UPDATE public.media_staging_objects
+    SET status = 'expired'
+    WHERE status = 'staged'
+      AND expires_at <= clock_timestamp()
+    RETURNING user_id, staging_path
+  ),
+  queued AS (
+    INSERT INTO public.media_cleanup_queue(user_id, object_path, reason)
+    SELECT user_id, staging_path, 'expired_staging'
+    FROM expired
+    RETURNING 1
+  )
+  SELECT count(*) INTO v_count FROM queued;
+
+  RETURN v_count;
+END;
+$$;
+
+ALTER FUNCTION "owntend_media_private"."sweep_expired_media_staging"() OWNER TO "postgres";
+REVOKE ALL ON FUNCTION "owntend_media_private"."sweep_expired_media_staging"() FROM PUBLIC;
+
+CREATE OR REPLACE FUNCTION "owntend_media_private"."claim_media_cleanup_batch"("p_batch_size" integer DEFAULT 25)
+RETURNS TABLE("id" bigint, "user_id" uuid, "object_path" text, "attempts" integer)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+BEGIN
+  RETURN QUERY
+  WITH claimed AS (
+    SELECT q.id
+    FROM public.media_cleanup_queue q
+    WHERE q.status IN ('pending', 'processing')
+      AND (q.processed_at IS NULL OR q.processed_at <= clock_timestamp() - interval '5 minutes')
+    ORDER BY q.created_at
+    -- The worker budget assumes small batches; the hard cap keeps a single
+    -- invocation bounded regardless of the caller-provided size.
+    LIMIT least(p_batch_size, 25)
+    FOR UPDATE SKIP LOCKED
+  )
+  UPDATE public.media_cleanup_queue q
+  SET status = 'processing',
+      attempts = q.attempts + 1,
+      processed_at = clock_timestamp()
+  FROM claimed
+  WHERE q.id = claimed.id
+  RETURNING q.id, q.user_id, q.object_path, q.attempts;
+END;
+$$;
+
+ALTER FUNCTION "owntend_media_private"."claim_media_cleanup_batch"("p_batch_size" integer) OWNER TO "postgres";
+REVOKE ALL ON FUNCTION "owntend_media_private"."claim_media_cleanup_batch"("p_batch_size" integer) FROM PUBLIC;
+
+CREATE OR REPLACE FUNCTION "owntend_media_private"."acknowledge_media_cleanup"("p_id" bigint)
+RETURNS boolean
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+BEGIN
+  DELETE FROM public.media_cleanup_queue
+  WHERE id = p_id;
+  RETURN true;
+END;
+$$;
+
+ALTER FUNCTION "owntend_media_private"."acknowledge_media_cleanup"("p_id" bigint) OWNER TO "postgres";
+REVOKE ALL ON FUNCTION "owntend_media_private"."acknowledge_media_cleanup"("p_id" bigint) FROM PUBLIC;
+
+CREATE OR REPLACE FUNCTION "owntend_media_private"."record_media_cleanup_failure"(
+  "p_id" bigint,
+  "p_error_code" text,
+  "p_terminal" boolean DEFAULT false
+) RETURNS boolean
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+BEGIN
+  -- Only bounded, allowlisted technical codes may be recorded; raw error
+  -- text, paths, and provider messages are never persisted.
+  IF p_error_code IS NULL OR char_length(p_error_code) > 64
+     OR p_error_code !~ '^[a-z0-9_]+$' THEN
+    p_error_code := 'unknown';
+  END IF;
+  UPDATE public.media_cleanup_queue
+  SET status = CASE WHEN p_terminal OR attempts >= 5 THEN 'failed_terminal' ELSE 'pending' END,
+      last_error_code = p_error_code,
+      processed_at = clock_timestamp()
+  WHERE id = p_id;
+  RETURN true;
+END;
+$$;
+
+ALTER FUNCTION "owntend_media_private"."record_media_cleanup_failure"("p_id" bigint, "p_error_code" text, "p_terminal" boolean) OWNER TO "postgres";
+REVOKE ALL ON FUNCTION "owntend_media_private"."record_media_cleanup_failure"("p_id" bigint, "p_error_code" text, "p_terminal" boolean) FROM PUBLIC;
+
+CREATE OR REPLACE FUNCTION "public"."claim_media_cleanup_batch"("p_batch_size" integer DEFAULT 25)
+RETURNS TABLE("id" bigint, "user_id" uuid, "object_path" text, "attempts" integer)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+BEGIN
+  IF COALESCE(auth.jwt()->>'role', '') <> 'service_role' THEN
+    RAISE EXCEPTION USING errcode = '42501', message = 'SERVICE_ROLE_REQUIRED';
+  END IF;
+  RETURN QUERY SELECT * FROM owntend_media_private.claim_media_cleanup_batch(p_batch_size);
+END;
+$$;
+
+ALTER FUNCTION "public"."claim_media_cleanup_batch"("p_batch_size" integer) OWNER TO "postgres";
+REVOKE ALL ON FUNCTION "public"."claim_media_cleanup_batch"("p_batch_size" integer) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION "public"."claim_media_cleanup_batch"("p_batch_size" integer) TO "service_role";
+
+CREATE OR REPLACE FUNCTION "public"."acknowledge_media_cleanup"("p_id" bigint)
+RETURNS boolean
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+BEGIN
+  IF COALESCE(auth.jwt()->>'role', '') <> 'service_role' THEN
+    RAISE EXCEPTION USING errcode = '42501', message = 'SERVICE_ROLE_REQUIRED';
+  END IF;
+  RETURN owntend_media_private.acknowledge_media_cleanup(p_id);
+END;
+$$;
+
+ALTER FUNCTION "public"."acknowledge_media_cleanup"("p_id" bigint) OWNER TO "postgres";
+REVOKE ALL ON FUNCTION "public"."acknowledge_media_cleanup"("p_id" bigint) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION "public"."acknowledge_media_cleanup"("p_id" bigint) TO "service_role";
+
+CREATE OR REPLACE FUNCTION "public"."record_media_cleanup_failure"(
+  "p_id" bigint,
+  "p_error_code" text,
+  "p_terminal" boolean DEFAULT false
+) RETURNS boolean
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+BEGIN
+  IF COALESCE(auth.jwt()->>'role', '') <> 'service_role' THEN
+    RAISE EXCEPTION USING errcode = '42501', message = 'SERVICE_ROLE_REQUIRED';
+  END IF;
+  RETURN owntend_media_private.record_media_cleanup_failure(p_id, p_error_code, p_terminal);
+END;
+$$;
+
+ALTER FUNCTION "public"."record_media_cleanup_failure"("p_id" bigint, "p_error_code" text, "p_terminal" boolean) OWNER TO "postgres";
+REVOKE ALL ON FUNCTION "public"."record_media_cleanup_failure"("p_id" bigint, "p_error_code" text, "p_terminal" boolean) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION "public"."record_media_cleanup_failure"("p_id" bigint, "p_error_code" text, "p_terminal" boolean) TO "service_role";
+
+CREATE OR REPLACE FUNCTION "owntend_media_private"."fn_enqueue_deleted_photo_cleanup"() RETURNS trigger
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+BEGIN
+  IF OLD.object_path IS NULL THEN
+    RETURN OLD;
+  END IF;
+  -- During auth-user deletion cascades the owner row is already gone, so
+  -- queueing would violate the ownership foreign key and deleting the user
+  -- would otherwise fail. Account removal cleans storage through its own
+  -- dedicated owntend_private.account_deletion_cleanup_jobs workflow instead.
+  IF NOT EXISTS (
+    SELECT 1 FROM "auth"."users" WHERE "id" = OLD."user_id"
+  ) THEN
+    RETURN OLD;
+  END IF;
+  INSERT INTO public.media_cleanup_queue(user_id, object_path, reason)
+  VALUES (OLD.user_id, OLD.object_path, 'deleted');
+  RETURN OLD;
+END;
+$$;
+
+ALTER FUNCTION "owntend_media_private"."fn_enqueue_deleted_photo_cleanup"() OWNER TO "postgres";
+REVOKE ALL ON FUNCTION "owntend_media_private"."fn_enqueue_deleted_photo_cleanup"() FROM PUBLIC;
+
+DROP TRIGGER IF EXISTS "trg_asset_photos_delete_cleanup" ON "public"."asset_photos";
+CREATE TRIGGER "trg_asset_photos_delete_cleanup"
+AFTER DELETE ON "public"."asset_photos"
+FOR EACH ROW EXECUTE FUNCTION "owntend_media_private"."fn_enqueue_deleted_photo_cleanup"();
+
 DO $$
 DECLARE
   existing_job_id bigint;
@@ -4968,6 +5480,74 @@ BEGIN
       '17 * * * *',
       'SELECT public.prune_owntend_account_deletion_operations();'
     );
+
+    SELECT jobid INTO existing_job_id FROM cron.job
+    WHERE jobname = 'owntend-change-feed-compact';
+    IF existing_job_id IS NOT NULL THEN
+      PERFORM cron.unschedule(existing_job_id);
+    END IF;
+    PERFORM cron.schedule(
+      'owntend-change-feed-compact',
+      '23 3 * * *',
+      'SELECT owntend_private.compact_user_change_feed();'
+    );
+
+    SELECT jobid INTO existing_job_id FROM cron.job
+    WHERE jobname = 'owntend-media-staging-sweep';
+    IF existing_job_id IS NOT NULL THEN
+      PERFORM cron.unschedule(existing_job_id);
+    END IF;
+    PERFORM cron.schedule(
+      'owntend-media-staging-sweep',
+      '47 * * * *',
+      'SELECT owntend_media_private.sweep_expired_media_staging();'
+    );
+
+    -- Protected media-cleanup worker invocation. Three operator-provisioned
+    -- inputs are required and none is ever committed to the repository:
+    --   1. Vault secret  media_cleanup_worker_authorization  (dedicated worker
+    --      capability; the service-role key is never sent by the scheduler),
+    --   2. database setting owntend.media_cleanup_function_url holding the
+    --      EXACT function endpoint (not a base URL), and
+    --   3. the deployed function contract that authenticates this capability.
+    -- When any input is missing, no schedule is created and the queue is
+    -- drained only by explicitly authorized invocations. The request budget
+    -- matches the worker's bounded batch and internal deadline.
+    IF EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'vault')
+       AND EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'net') THEN
+      IF EXISTS (
+        SELECT 1 FROM vault.decrypted_secrets WHERE name = 'media_cleanup_worker_authorization'
+      ) AND current_setting('owntend.media_cleanup_function_url', true) IS NOT NULL THEN
+        SELECT jobid INTO existing_job_id FROM cron.job
+        WHERE jobname = 'owntend-media-cleanup-worker';
+        IF existing_job_id IS NOT NULL THEN
+          PERFORM cron.unschedule(existing_job_id);
+        END IF;
+        PERFORM cron.schedule(
+          'owntend-media-cleanup-worker',
+          '31 * * * *',
+          $cron$SELECT net.http_post(
+            url := current_setting('owntend.media_cleanup_function_url', true),
+            headers := jsonb_build_object(
+              'X-Owntend-Worker-Token',
+              (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'media_cleanup_worker_authorization'),
+              'Content-Type', 'application/json'
+            ),
+            body := '{}'::jsonb,
+            timeout_milliseconds := 30000
+          );$cron$
+        );
+      ELSE
+        -- Fail safe: no worker credential or exact endpoint provisioned means
+        -- no automatic invocation is scheduled; the queue drains only through
+        -- explicitly authorized operator/service invocations.
+        SELECT jobid INTO existing_job_id FROM cron.job
+        WHERE jobname = 'owntend-media-cleanup-worker';
+        IF existing_job_id IS NOT NULL THEN
+          PERFORM cron.unschedule(existing_job_id);
+        END IF;
+      END IF;
+    END IF;
   END IF;
 END
 $$;

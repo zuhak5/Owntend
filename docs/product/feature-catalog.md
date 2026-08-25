@@ -74,7 +74,7 @@ The first-dashboard education flow considers weather-area and notification setup
 
 ## Backup and restore
 
-- Production-v1 ZIP backups with one format contract.
+- Production-v1 authenticated `.owntend-backup` containers (Argon2id + AES-256-GCM; no plaintext reader) with one format contract.
 - Manifest and cryptographic hash validation.
 - Media inclusion and staging.
 - Retention of automatic backups.

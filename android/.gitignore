@@ -1,8 +1,8 @@
-gradle-wrapper.jar
+# Gradle wrapper bootstrap files are tracked and integrity-checked
+# (see config/toolchain.json gradleWrapperJarSha256 and WP-002 policy).
+# Only build state and local properties stay ignored.
 /.gradle
 /captures/
-/gradlew
-/gradlew.bat
 /local.properties
 .cxx/
 

@@ -1,6 +1,6 @@
 import 'package:drift/drift.dart';
 
-import '../../../../src/core/database/app_database.dart';
+import '../../../core/database/app_database.dart';
 import '../domain/permission_capability.dart';
 import '../domain/permission_education_state.dart';
 

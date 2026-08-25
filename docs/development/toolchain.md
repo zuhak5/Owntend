@@ -2,19 +2,41 @@
 
 [`config/toolchain.json`](../../config/toolchain.json) is the machine-readable source of truth. Do not copy mutable versions into new scripts or workflows without validating them against that file.
 
+## Build verification evidence (WP-013)
+
+Recorded 2026-08-25 on Windows with the pinned manifest: `flutter build apk
+--flavor dev --debug` compiles cleanly through AGP 9.3.0 / Gradle
+9.6.1 / Kotlin 2.4.10 with compileSdk 37 / buildTools 36.0.0 (see the
+implementation report for the exact invocation and result). This is local
+build evidence only; protected release builds remain governed by
+`docs/operations/release-runbook.md`.
+
 ## Canonical matrix
 
 | Component | Pin |
 | --- | --- |
 | Flutter / Dart | `3.47.0` stable / `^3.13.0` |
-| Java / Node / Deno | Temurin `21` / `24` / `2.9.3` |
-| Android | compile SDK `37`, target `36`, min `24`, build tools `36.0.0` |
-| Gradle / AGP / Kotlin | `9.6.1-bin` with committed SHA-256 / `9.3.0` / `2.4.10` |
+| Java / Node / Deno | Temurin `21` / `24` (npm major `11`) / `2.9.3` |
+| Android | compile SDK `37`, target `36`, min `26`, build tools `36.0.0` |
+| Gradle / AGP / Kotlin | `9.6.1-bin` with committed distribution SHA-256 and tracked wrapper bootstrap JAR SHA-256 / `9.3.0` / `2.4.10` |
 | Shorebird | CLI `1.6.119` at exact repository commit; bundled fork `3.47.1`; releases forced to canonical `3.47.0` with exact fork/engine revisions |
-| Bundletool / gcloud | `1.18.3` with committed download SHA-256 / `581.0.0` |
-| Sentry CLI / Supabase CLI | `2.58.6` / `2.115.0` |
+| Bundletool / gcloud | `1.18.3` with committed download SHA-256 / `581.0.0` (protected release tools) |
+| Sentry CLI / Supabase CLI | `2.58.6` (protected release tool) / `2.115.0` |
 
 The JSON file, Gradle configuration, lockfiles, and tests hold the complete hashes/revisions.
+
+## Enforcement policy
+
+`npm run validate:toolchain` evaluates **every** declared field against the resolved local/CI environment:
+
+- Enforced in ordinary validation: Flutter exact version + stable channel, Dart SDK compatibility with the pubspec constraint, Java major version and Temurin distribution, Node/npm majors, exact Deno, exact installed Supabase CLI (from `node_modules`), AGP/Kotlin/Gradle distribution/distribution checksum/wrapper JAR checksum, compile/target/min SDK and build-tools.
+- Enforced only with `--require-shorebird` (protected release/patch evidence): exact Shorebird CLI commit, bundled Flutter revision, and cached engine revision.
+- Descriptive-only (verified by their own release verifiers): Bundletool, gcloud, and Sentry CLI pins.
+- A missing required tool fails closed with an install hint instead of being skipped.
+
+## Gradle wrapper bootstrap
+
+`android/gradlew`, `android/gradlew.bat`, and `android/gradle/wrapper/gradle-wrapper.jar` are tracked source files. The wrapper JAR SHA-256 is pinned as `gradleWrapperJarSha256` in [`config/toolchain.json`](../../config/toolchain.json); regeneration from the checksum-verified `9.6.1-bin` distribution is byte-deterministic, so any substituted bootstrap executable fails the policy gate before a build can start. The distribution itself is additionally verified through `distributionSha256Sum` at download time.
 
 ## Shorebird resolution
 

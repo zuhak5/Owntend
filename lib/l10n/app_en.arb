@@ -460,10 +460,8 @@
   "retryIncrementalSync": "Retry incremental sync",
   "fullReconciliation": "Full reconciliation",
   "exportDiagnostics": "Export diagnostics",
-  "diagnosticExportDisclosure": "This bundle contains only Owntend events and redacted technical metadata. It does not include full system logs, account emails, tokens, device serials, coordinates, or media paths.",
   "exportingDiagnostics": "Preparing private diagnostics…",
   "owntendDiagnosticsShareText": "Owntend privacy-safe diagnostics",
-  "diagnosticExportFailed": "Diagnostics could not be exported.",
   "notRecorded": "Not recorded",
   "removeAvatar": "Remove avatar",
   "avatarRemovalFailed": "Avatar removal failed",
@@ -889,6 +887,7 @@
   "undoFailedPleaseTryAgain": "Undo failed. Please try again.",
   "cloudServicesAreUnavailablePleaseTryAgainLater": "Cloud services are unavailable. Please try again later.",
   "thisBuildIsNotConfiguredCorrectly": "This build is not configured correctly.",
+  "databaseUnrecoverableBody": "Owntend cannot start because the local database on this device is from an unsupported pre-release version. Clear the app storage or reinstall to continue. Local data that was not exported as a backup cannot be recovered.",
   "activeTaskCount": "{count, plural, =0{No active tasks} =1{1 active task} other{{count} active tasks}}",
   "@activeTaskCount": {
     "placeholders": {
@@ -1188,7 +1187,27 @@
   "there": "there",
   "personalGreeting": "{greeting}, {name}.",
   "@personalGreeting": {"placeholders": {"greeting": {"type": "String"}, "name": {"type": "String"}}},
-  "creatingBackup": "Creating backup...",
+  "backupPassphraseDialogTitle": "Protect your backup",
+  "@backupPassphraseDialogTitle": {},
+  "backupPassphraseLabel": "Passphrase (optional)",
+  "@backupPassphraseLabel": {},
+  "backupPassphraseHelp": "Leave empty to protect the backup with a key that stays on this device, or set a passphrase of at least 8 characters to open it on any device.",
+  "@backupPassphraseHelp": {},
+  "backupPassphraseConfirmLabel": "Confirm passphrase",
+  "@backupPassphraseConfirmLabel": {},
+  "backupPassphraseMismatch": "Passphrases do not match.",
+  "@backupPassphraseMismatch": {},
+  "backupPassphraseTooShort": "Use at least 8 characters.",
+  "@backupPassphraseTooShort": {},
+  "backupEnterPassphraseTitle": "Backup passphrase",
+  "@backupEnterPassphraseTitle": {},
+  "backupPassphraseNeededError": "This backup needs its passphrase.",
+  "@backupPassphraseNeededError": {},  "routeErrorTitle": "Page not available",
+  "@routeErrorTitle": {},
+  "routeErrorMessage": "This link could not be opened. It may be mistyped or no longer exists.",
+  "@routeErrorMessage": {},
+  "routeErrorAction": "Back to home",
+  "@routeErrorAction": {},  "creatingBackup": "Creating backup...",
   "updatingBackupSettings": "Updating backup settings...",
   "checkingBackup": "Checking backup...",
   "restoringBackup": "Restoring backup...",
@@ -1320,8 +1339,6 @@
   "@reminderCountLabel": {"placeholders": {"count": {"type": "int"}}},
   "locationPermissionBody": "Owntend uses your location only to select local weather for household planning.",
   "notificationsPermissionBody": "Notifications are used only for task reminders and the alerts you enable.",
-  "preciseAlarmsPermissionBody": "Precise alarms let Owntend deliver enabled reminders at the exact selected time.",
-  "approximateReminderTimingWarning": "Reminders will use approximate timing until precise alarms are allowed.",
   "automaticBackupsDescription": "Creates one local backup per day when the app opens. Older automatic backups may be rotated by storage cleanup.",
   "restorePreviewDescription": "Restoring will replace your current local data after you review the preview.",
   "snoozeReminderDescription": "Delay the reminder without changing the due date.",
@@ -1471,10 +1488,8 @@
       "total": {"type": "int", "format": "decimalPattern"}
     }
   },
-  "exactAlarmEducationTitle": "Keep reminders on time",
-  "enableAlarmsAndRemindersOnboarding": "Enable reminders",
   "permissionSetup": "Permissions & setup",
-  "permissionSetupSubtitle": "Choose a weather area, then control device reminders and optional precise timing.",
+  "permissionSetupSubtitle": "Choose a weather area and control device reminders.",
   "permissionsAlreadyEnabled": "Location, notifications, and reminders are already set up.",
   "permissionSetupFinishLater": "Finish later",
   "permissionSetupChooseLocation": "Choose location",
@@ -1482,10 +1497,6 @@
   "permissionSetupWeatherTitle": "Set your weather area",
   "permissionSetupWeatherBody": "Choose a city or use your current approximate location to show local weather for maintenance planning.",
   "permissionSetupWeatherPrivacy": "If you use current location, Owntend saves an approximate home area. It does not continuously collect your location in the background.",
-  "permissionSetupExactOptionalTitle": "Use precise reminder timing",
-  "permissionSetupExactOptionalBody": "Android requires special access for reminders at the exact selected time. Without it, Owntend will use approximate timing.",
-  "permissionSetupUseApproximateTiming": "Use approximate timing",
-  "permissionSetupAllowPreciseTiming": "Allow precise timing",
   "permissionSetupManageInSettings": "Manage in settings"
   ,"permissionSetupChangeLocation": "Change location"
   ,"permissionSelectedArea": "Selected area: {area}"
@@ -1495,7 +1506,6 @@
   ,"permissionLocationAccessRequired": "Location access is required to use the current location."
   ,"permissionNotificationAccessRequired": "Android notification access is required for device reminders."
   ,"permissionDeviceRemindersOff": "Device reminders are off in Owntend."
-  ,"permissionExactRequiresDeviceReminders": "Turn on device reminders before enabling precise timing."
   ,"permissionActionCouldNotComplete": "That action could not be completed. Try again."
   ,"permissionSettingsCouldNotOpen": "Android settings could not be opened. Try again from device settings."
   ,"owntendAlerts": "Owntend alerts"

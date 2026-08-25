@@ -64,6 +64,10 @@ final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     navigatorKey: rootNavigatorKey,
     observers: [owntendSentryNavigatorObserver()],
+    // Unknown, malformed, or failed routes render a localized recovery
+    // surface. Raw URIs and exceptions are never shown to the user; the
+    // single recovery action returns to the shell home.
+    errorBuilder: (context, state) => const RouteNotFoundScreen(),
     routes: [
       ShellRoute(
         builder: (context, state, child) => HomeShell(child: child),

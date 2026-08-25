@@ -42,7 +42,7 @@ void main() {
 
     test('push ACK does not move any inbound pull cursor', () async {
       await store.setFeedCursor(100);
-      await store.setCursor('area', 100, lastRecordKey: 'area-existing');
+      await setCursorRow(db, 'area', 100, 'area-existing');
 
       final now = DateTime.now();
       final spec = syncEntitySpecs.firstWhere((s) => s.entity == 'area');
@@ -76,22 +76,14 @@ void main() {
       await store.markMutationSucceeded(mutation, canonical);
 
       expect(await store.getFeedCursor(), 100);
-      expect(await store.cursorCheckpoint('area'), (100, 'area-existing'));
+      expect(await readCursorRow(db, 'area'), (100, 'area-existing'));
     });
 
     test(
       'maintenance completion ACK records canonical shadows without cursors',
       () async {
-        await store.setCursor(
-          'maintenance_plan',
-          10,
-          lastRecordKey: 'plan-before',
-        );
-        await store.setCursor(
-          'maintenance_record',
-          11,
-          lastRecordKey: 'record-before',
-        );
+        await setCursorRow(db, 'maintenance_plan', 10, 'plan-before');
+        await setCursorRow(db, 'maintenance_record', 11, 'record-before');
         final now = DateTime.utc(2026, 8, 17, 8);
         final mutation = LocalSyncMutation(
           entity: 'maintenance_completion',
@@ -130,11 +122,11 @@ void main() {
           record: record,
         );
 
-        expect(await store.cursorCheckpoint('maintenance_plan'), (
+        expect(await readCursorRow(db, 'maintenance_plan'), (
           10,
           'plan-before',
         ));
-        expect(await store.cursorCheckpoint('maintenance_record'), (
+        expect(await readCursorRow(db, 'maintenance_record'), (
           11,
           'record-before',
         ));
@@ -145,82 +137,6 @@ void main() {
         );
       },
     );
-
-    test('snapshot mutations roll back when checkpoint commit fails', () async {
-      final now = DateTime.utc(2026, 8, 17, 9);
-      await db
-          .into(db.areas)
-          .insert(
-            AreasCompanion.insert(
-              id: 'atomic-existing-area',
-              name: 'Existing area',
-              kind: 'indoor',
-              createdAt: Value(now),
-              updatedAt: Value(now),
-            ),
-          );
-      await db.delete(db.syncOutbox).go();
-      final spec = syncEntitySpecs.firstWhere((s) => s.entity == 'area');
-      final deletion = SyncRecord(
-        spec: spec,
-        recordKey: 'atomic-existing-area',
-        clientModifiedAt: now,
-        originDeviceId: 'remote-device',
-        revision: 2,
-        serverUpdatedAt: now,
-        deletedAt: now,
-        values: const {'id': 'atomic-existing-area'},
-      );
-      final upsert = SyncRecord(
-        spec: spec,
-        recordKey: 'atomic-new-area',
-        clientModifiedAt: now,
-        originDeviceId: 'remote-device',
-        revision: 3,
-        serverUpdatedAt: now,
-        values: {
-          'id': 'atomic-new-area',
-          'name': 'Atomic new area',
-          'kind': 'indoor',
-          'sort_order': 0,
-          'created_at': now.toIso8601String(),
-          'updated_at': now.toIso8601String(),
-          'archived_at': null,
-        },
-      );
-      await db.customStatement('''
-CREATE TRIGGER fail_area_checkpoint
-BEFORE INSERT ON sync_cursors
-WHEN NEW.entity = 'area'
-BEGIN
-  SELECT RAISE(ABORT, 'forced checkpoint failure');
-END;
-''');
-
-      await expectLater(
-        store.applyRemoteRecordsAndCheckpoints(
-          records: [deletion, upsert],
-          checkpoints: const {'area': (41, 'atomic-new-area')},
-        ),
-        throwsA(anything),
-      );
-
-      expect(await store.cursor('area'), 0);
-      expect(
-        await (db.select(db.areas)
-              ..where((row) => row.id.equals('atomic-existing-area')))
-            .getSingleOrNull(),
-        isNotNull,
-      );
-      expect(
-        await (db.select(
-          db.areas,
-        )..where((row) => row.id.equals('atomic-new-area'))).getSingleOrNull(),
-        isNull,
-      );
-      expect(await store.shadow('area', 'atomic-existing-area'), isNull);
-      expect(await store.shadow('area', 'atomic-new-area'), isNull);
-    });
 
     test('feed page mutations roll back when feed checkpoint fails', () async {
       final now = DateTime.utc(2026, 8, 17, 10);
@@ -326,4 +242,30 @@ END;
       },
     );
   });
+}
+
+// WP-010: legacy per-entity cursor API was deleted from LocalSyncStore; tests
+// arrange and assert cursor rows directly through Drift.
+Future<void> setCursorRow(
+  AppDatabase db,
+  String entity,
+  int seq,
+  String? recordKey,
+) {
+  return db
+      .into(db.syncCursors)
+      .insertOnConflictUpdate(
+        SyncCursorsCompanion.insert(
+          entity: entity,
+          lastSyncSeq: Value(seq),
+          lastRecordKey: Value(recordKey),
+        ),
+      );
+}
+
+Future<(int, String?)> readCursorRow(AppDatabase db, String entity) async {
+  final row = await (db.select(
+    db.syncCursors,
+  )..where((item) => item.entity.equals(entity))).getSingleOrNull();
+  return (row?.lastSyncSeq ?? 0, row?.lastRecordKey);
 }

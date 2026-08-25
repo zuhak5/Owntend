@@ -27,4 +27,22 @@ void main() {
       'last_completion_date',
     );
   });
+
+  test(
+    'authoritative-key pagination advances from the fetched page boundary',
+    () {
+      // F-030: the cursor must be the last row of THIS page, not an implicit
+      // accumulated-set ordering property.
+      final source = File('lib/src/core/sync/supabase_sync_gateway.dart')
+          .readAsStringSync();
+
+      expect(source, isNot(contains('afterRecordKey = keys.last')));
+      expect(source, contains('pageLastKey = key;'));
+      expect(source, contains('afterRecordKey = pageLastKey;'));
+      expect(
+        source.indexOf('pageLastKey = key;'),
+        lessThan(source.indexOf('afterRecordKey = pageLastKey;')),
+      );
+    },
+  );
 }

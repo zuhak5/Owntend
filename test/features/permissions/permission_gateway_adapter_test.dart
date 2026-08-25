@@ -10,7 +10,6 @@ class _FakeAppPermissionGateway
   final Map<AppPermissionKind, AppPermissionState> states = {
     AppPermissionKind.location: AppPermissionState.denied,
     AppPermissionKind.notifications: AppPermissionState.denied,
-    AppPermissionKind.exactAlarms: AppPermissionState.denied,
   };
   final List<AppPermissionKind> checks = [];
   final List<AppPermissionKind> requests = [];
@@ -61,11 +60,11 @@ void main() {
 
       await gateway.check(PermissionCapability.deviceLocation);
       await gateway.request(PermissionCapability.notifications);
-      await gateway.openSettings(PermissionCapability.exactReminderTiming);
+      await gateway.openSettings(PermissionCapability.notifications);
 
       expect(coordinator.checks, [AppPermissionKind.location]);
       expect(coordinator.requests, [AppPermissionKind.notifications]);
-      expect(coordinator.settingsTargets, [AppPermissionKind.exactAlarms]);
+      expect(coordinator.settingsTargets, [AppPermissionKind.notifications]);
     },
   );
 
@@ -78,12 +77,9 @@ void main() {
         permissionGateway: coordinator,
       );
 
-      await scheduler.requestPermissions(exactAlarms: true);
+      await scheduler.requestPermissions();
 
-      expect(coordinator.requests, [
-        AppPermissionKind.notifications,
-        AppPermissionKind.exactAlarms,
-      ]);
+      expect(coordinator.requests, [AppPermissionKind.notifications]);
     },
   );
 

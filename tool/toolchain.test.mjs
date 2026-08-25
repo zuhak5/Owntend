@@ -4,9 +4,11 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import {
+  dartSatisfiesCaret,
   evaluateToolchainPolicy,
   generateToolchainManifest,
   loadCanonicalToolchain,
+  parseJavaDistribution,
   sanitizePath,
 } from './toolchain_manifest.mjs';
 
@@ -41,6 +43,8 @@ test('Canonical toolchain configuration is complete and valid', async () => {
     tc.android.gradleDistributionSha256,
     '9c0f7faeeb306cb14e4279a3e084ca6b596894089a0638e68a07c945a32c9e14'
   );
+  assert.match(tc.android.gradleWrapperJarSha256, /^[0-9a-f]{64}$/);
+  assert.equal(tc.node.npmMajor, 11);
   assert.equal(tc.tools.sentryCli, '2.58.6');
   assert.equal(tc.tools.supabaseCli, '2.115.0');
   assert.equal(tc.tools.shorebirdCli.version, '1.6.119');
@@ -83,42 +87,115 @@ test('Toolchain policy evaluation detects mismatches and fails closed', async ()
   const canonical = await loadCanonicalToolchain();
 
   const matchingResolved = {
+    java: { version: '21.0.5', distribution: 'temurin' },
+    dart: { version: '3.13.0' },
+    node: { version: '24.11.1', npmVersion: '11.7.0' },
+    deno: { version: '2.9.3' },
+    supabaseCli: { resolvedVersion: '2.115.0' },
     android: {
       agpVersion: '9.3.0',
       kotlinVersion: '2.4.10',
       gradleDistribution: '9.6.1-bin',
       gradleDistributionSha256: '9c0f7faeeb306cb14e4279a3e084ca6b596894089a0638e68a07c945a32c9e14',
+      gradleWrapperJarSha256: canonical.canonicalToolchain.android.gradleWrapperJarSha256,
       compileSdkVersion: 37,
       targetSdkVersion: 36,
+      minSdkVersion: 26,
+      buildToolsVersion: '36.0.0',
     },
-    node: { version: '24.11.1' },
-    flutter: { version: '3.47.0' },
+    flutter: { version: '3.47.0', channel: 'stable' },
   };
 
   const passResult = evaluateToolchainPolicy(canonical, matchingResolved);
-  assert.equal(passResult.status, 'PASS');
+  assert.equal(passResult.status, 'PASS', `Expected PASS, got errors: ${passResult.errors.join('; ')}`);
   assert.equal(passResult.errors.length, 0);
 
-  // Test Flutter version mismatch
-  const mismatchedFlutter = {
-    ...matchingResolved,
-    flutter: { version: '3.44.7' },
-  };
-  const failFlutter = evaluateToolchainPolicy(canonical, mismatchedFlutter);
-  assert.equal(failFlutter.status, 'FAIL');
-  assert.ok(failFlutter.errors.some(e => e.includes('Flutter version mismatch')));
+  // Every canonical field must have an executable check in ordinary mode.
+  const checkNames = passResult.checks.map(check => check.name);
+  for (const required of [
+    'Java major version',
+    'Java distribution',
+    'Dart SDK compatibility',
+    'Node.js major version',
+    'npm major version',
+    'Deno version',
+    'Supabase CLI',
+    'Android Gradle Plugin (AGP)',
+    'Kotlin Plugin',
+    'Gradle Distribution',
+    'Gradle Distribution SHA-256',
+    'Gradle wrapper JAR SHA-256',
+    'Android compileSdk',
+    'Android targetSdk',
+    'Android minSdk',
+    'Android build tools',
+    'Flutter Version',
+    'Flutter channel',
+  ]) {
+    assert.ok(
+      checkNames.includes(required),
+      `Policy must evaluate "${required}" explicitly.`,
+    );
+  }
 
-  // Test Gradle checksum mismatch
-  const mismatchedGradleSha = {
-    ...matchingResolved,
-    android: {
-      ...matchingResolved.android,
-      gradleDistributionSha256: '0000000000000000000000000000000000000000000000000000000000000000',
-    },
-  };
-  const failGradle = evaluateToolchainPolicy(canonical, mismatchedGradleSha);
-  assert.equal(failGradle.status, 'FAIL');
-  assert.ok(failGradle.errors.some(e => e.includes('Gradle distribution checksum mismatch')));
+  // Per-field mismatch fixtures: each enforced field fails when wrong.
+  const mismatchFixtures = [
+    ['java', { version: '17.0.17' }, /Java major version/],
+    ['javaDistribution', null, /Java distribution/],
+    ['dart', { version: '3.12.9' }, /Dart SDK mismatch/],
+    ['nodeVersion', '23.5.0', /Node\.js major version/],
+    ['npmVersion', '10.9.2', /npm major version/],
+    ['deno', { version: '2.8.0' }, /Deno version mismatch/],
+    ['supabaseCli', { resolvedVersion: '2.114.0' }, /Supabase CLI mismatch/],
+    ['agp', '8.9.0', /Android Gradle Plugin \(AGP\)/],
+    ['kotlin', '2.3.21', /Kotlin Plugin/],
+    ['gradleDist', '9.5.0-bin', /Gradle Distribution/],
+    ['gradleSha', '0000000000000000000000000000000000000000000000000000000000000000', /Gradle Distribution SHA-256/],
+    ['wrapperJar', 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef', /Gradle wrapper JAR SHA-256/],
+    ['compileSdk', 35, /Android compileSdk/],
+    ['targetSdk', 35, /Android targetSdk/],
+    ['minSdk', 24, /Android minSdk/],
+    ['buildTools', '35.0.0', /Android build tools/],
+    ['flutter', { version: '3.44.7', channel: 'stable' }, /Flutter Version/],
+    ['flutterChannel', { version: '3.47.0', channel: 'beta' }, /Flutter channel/],
+  ];
+
+  for (const [fixtureName, override, expectedError] of mismatchFixtures) {
+    const broken = structuredClone(matchingResolved);
+    switch (fixtureName) {
+      case 'java': Object.assign(broken.java, override); break;
+      case 'javaDistribution': broken.java.distribution = override; break;
+      case 'dart': Object.assign(broken.dart, override); break;
+      case 'nodeVersion': broken.node.version = override; break;
+      case 'npmVersion': broken.node.npmVersion = override; break;
+      case 'deno': Object.assign(broken.deno, override); break;
+      case 'supabaseCli': Object.assign(broken.supabaseCli, override); break;
+      case 'agp': broken.android.agpVersion = override; break;
+      case 'kotlin': broken.android.kotlinVersion = override; break;
+      case 'gradleDist': broken.android.gradleDistribution = override; break;
+      case 'gradleSha': broken.android.gradleDistributionSha256 = override; break;
+      case 'wrapperJar': broken.android.gradleWrapperJarSha256 = override; break;
+      case 'compileSdk': broken.android.compileSdkVersion = override; break;
+      case 'targetSdk': broken.android.targetSdkVersion = override; break;
+      case 'minSdk': broken.android.minSdkVersion = override; break;
+      case 'buildTools': broken.android.buildToolsVersion = override; break;
+      case 'flutter': case 'flutterChannel': Object.assign(broken.flutter, override); break;
+      default: throw new Error(`Unknown fixture ${fixtureName}`);
+    }
+    const result = evaluateToolchainPolicy(canonical, broken);
+    assert.equal(result.status, 'FAIL', `Expected FAIL for fixture ${fixtureName}`);
+    assert.ok(
+      result.errors.some(error => expectedError.test(error)),
+      `Expected error matching ${expectedError} for fixture ${fixtureName}; got: ${result.errors.join('; ')}`,
+    );
+  }
+
+  // Missing tools fail closed instead of being skipped silently.
+  const missingDeno = structuredClone(matchingResolved);
+  missingDeno.deno.version = null;
+  const missingResult = evaluateToolchainPolicy(canonical, missingDeno);
+  assert.equal(missingResult.status, 'FAIL');
+  assert.ok(missingResult.errors.some(error => error.includes('Deno version missing')));
 
   const missingShorebird = evaluateToolchainPolicy(canonical, matchingResolved, {
     requireShorebird: true,
@@ -140,6 +217,33 @@ test('Toolchain policy evaluation detects mismatches and fails closed', async ()
     requireShorebird: true,
   });
   assert.equal(shorebirdPass.status, 'PASS');
+});
+
+test('Java distribution parsing recognizes Temurin and unknown vendors', () => {
+  const temurinOutput = [
+    'openjdk version "21.0.5" 2026-01-20 LTS',
+    'OpenJDK Runtime Environment Temurin-21.0.5+9 (build 21.0.5+9)',
+    'OpenJDK 64-Bit Server VM Temurin-21.0.5+9 (build 21.0.5+9, mixed mode)',
+  ].join('\n');
+  assert.equal(parseJavaDistribution(temurinOutput), 'temurin');
+
+  const plainOpenJdkOutput = [
+    'openjdk version "21" 2026-01-20',
+    'OpenJDK Runtime Environment (build 21+35)',
+    'OpenJDK 64-Bit Server VM (build 21+35, mixed mode)',
+  ].join('\n');
+  assert.equal(parseJavaDistribution(plainOpenJdkOutput), null);
+
+  assert.equal(parseJavaDistribution(null), null);
+});
+
+test('Dart caret constraint compatibility is evaluated correctly', () => {
+  assert.equal(dartSatisfiesCaret('3.13.0', '^3.13.0'), true);
+  assert.equal(dartSatisfiesCaret('3.13.9', '^3.13.0'), true);
+  assert.equal(dartSatisfiesCaret('3.14.1', '^3.13.0'), true);
+  assert.equal(dartSatisfiesCaret('3.12.9', '^3.13.0'), false);
+  assert.equal(dartSatisfiesCaret('4.0.0', '^3.13.0'), false);
+  assert.equal(dartSatisfiesCaret(null, '^3.13.0'), false);
 });
 
 test('Sanitizer redacts personal usernames and sensitive path roots', () => {

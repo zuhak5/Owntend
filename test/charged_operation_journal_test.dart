@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:owntend/src/core/sync/local_sync_store.dart';
-import 'package:owntend/src/features/maintenance/data/task_creation_operation_store.dart';
-import 'package:owntend/src/features/maintenance/domain/task_creation.dart';
+import 'package:owntend/src/core/services/charged_operation_journal/charged_operation_store.dart';
+import 'package:owntend/src/core/services/charged_operation_journal/charged_operation_contracts.dart';
 import 'package:owntend/src/features/monetization/charged_operation_resolver.dart';
 import 'package:owntend/src/features/monetization/monetization.dart';
 
@@ -504,6 +504,115 @@ void main() {
         expect(rejected!.state, TaskCreationOperationState.permanentRejected);
         expect(rejected.lastErrorCode, 'unqualified_request_hash');
         expect(rejected.requestPayload, isEmpty);
+      },
+    );
+
+    test('a charged asset creation lost after debit is recovered through the '
+        'server status lookup and reconciled locally (F-001)', () async {
+      final store = TaskCreationOperationStore();
+      final fakeSyncStore = _FakeLocalSyncStore();
+      const assetId = 'asset-crash-1';
+      const requestHash =
+          'b5a31c1ab8a4aff792d16ba9f6ec52f22d7e2a3d47726a8f5e0f2152412c6a91';
+      final now = DateTime.now();
+      await store.saveOperation(
+        TaskCreationOperation(
+          operationId: 'op-asset-crash-1',
+          planId: assetId,
+          accountScope: 'user-a',
+          requestPayload: {
+            'operation_id': 'op-asset-crash-1',
+            'request_hash': requestHash,
+            'asset': {'id': assetId, 'name': 'Recovered Sofa'},
+            'initial_plans': const <Map<String, dynamic>>[],
+          },
+          requestHash: requestHash,
+          state: TaskCreationOperationState.outcomeUnknown,
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+      final fakeMonetization = _FakeMonetizationRepository(
+        statusToReturn: ChargedOperationStatusResult(
+          status: 'completed',
+          entityType: 'asset',
+          entityId: assetId,
+          balance: 7,
+          asset: {'id': assetId, 'name': 'Recovered Sofa'},
+        ),
+      );
+
+      final resolver = ChargedOperationResolver(
+        monetizationRepo: fakeMonetization,
+        localSyncStore: fakeSyncStore,
+        operationStore: store,
+        adoptAuthoritativeBalance: (userId, balance) {
+          expect(userId, 'user-a');
+          expect(balance, 7);
+        },
+      );
+      await resolver.resolvePendingOperations('user-a');
+
+      // The server was asked about the retained idempotency identity.
+      expect(fakeMonetization.statusCalls, hasLength(1));
+      expect(
+        fakeMonetization.statusCalls.single['operation_id'],
+        'op-asset-crash-1',
+      );
+      // The canonical composite reached the local store; no replay charge
+      // occurred because the server already processed the operation.
+      expect(fakeSyncStore.reconciledAssetIds, equals([assetId]));
+      expect(fakeMonetization.createAssetCalls, isEmpty);
+      final resolved = await store.getOperation('op-asset-crash-1');
+      expect(resolved!.state, TaskCreationOperationState.reconciled);
+      expect(resolved.requestPayload, isEmpty);
+    });
+
+    test(
+      'an asset creation never seen by the server is safely resubmitted with '
+      'the same idempotency key during recovery',
+      () async {
+        final store = TaskCreationOperationStore();
+        final fakeSyncStore = _FakeLocalSyncStore();
+        const assetId = 'asset-lost-1';
+        const requestHash =
+            'cf2f7a4bd1e0a54bbcc53f6d18ea9f21d0aa4b7f5b6c3d2e1f0a9b8c7d6e5f40';
+        final now = DateTime.now();
+        await store.saveOperation(
+          TaskCreationOperation(
+            operationId: 'op-asset-lost-1',
+            planId: assetId,
+            accountScope: 'user-a',
+            requestPayload: {
+              'operation_id': 'op-asset-lost-1',
+              'request_hash': requestHash,
+              'asset': {'id': assetId, 'name': 'Lost Sofa'},
+              'initial_plans': const <Map<String, dynamic>>[],
+            },
+            requestHash: requestHash,
+            state: TaskCreationOperationState.submitting,
+            createdAt: now,
+            updatedAt: now,
+          ),
+        );
+        final fakeMonetization = _FakeMonetizationRepository();
+
+        final resolver = ChargedOperationResolver(
+          monetizationRepo: fakeMonetization,
+          localSyncStore: fakeSyncStore,
+          operationStore: store,
+          adoptAuthoritativeBalance: (_, _) {},
+        );
+        await resolver.resolvePendingOperations('user-a');
+
+        expect(fakeMonetization.createAssetCalls, hasLength(1));
+        expect(
+          fakeMonetization.createAssetCalls.single['operation_id'],
+          'op-asset-lost-1',
+        );
+        expect(fakeSyncStore.reconciledAssetIds, equals([assetId]));
+        final resolved = await store.getOperation('op-asset-lost-1');
+        expect(resolved!.state, TaskCreationOperationState.reconciled);
       },
     );
   });

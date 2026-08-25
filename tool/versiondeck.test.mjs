@@ -9,6 +9,7 @@ import {
   buildManifest,
   compareVersionBuild,
   extractBodySha,
+  loadVersionDeckControl,
   normalizeRelease,
   parseChecksumText,
   selectProductionApk,
@@ -421,3 +422,23 @@ test("service worker never caches releases.json", async () => {
   assert.match(serviceWorker, /fetch\(request, \{ cache: "no-store" \}\)/);
 });
 
+test("committed VersionDeck control is fail-closed disabled and builds a valid manifest", async () => {
+  const testNow = Date.parse("2026-08-21T14:30:00.000Z");
+  const control = await loadVersionDeckControl(
+    path.join(root, "tool", "versiondeck-control.json"),
+    { now: testNow },
+  );
+  assert.equal(control.publication.status, VersionDeckPublicationStatus.DISABLED);
+  assert.equal(control.publication.reasonCode, "pre-release");
+
+  const { manifest } = await buildManifest([], {
+    control,
+    generatorCommit: COMMIT,
+    now: testNow,
+  });
+
+  assert.equal(manifest.publication.status, VersionDeckPublicationStatus.DISABLED);
+  assert.equal(manifest.releases.length, 0);
+  assert.equal(manifest.latestStableReleaseId, null);
+  assert.deepEqual(validateVersionDeckManifest(manifest, { now: testNow }), []);
+});

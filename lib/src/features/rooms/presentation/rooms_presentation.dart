@@ -1,5 +1,7 @@
 library;
 
+import '../../monetization/monetization.dart';
+
 import '../../../core/services/feature_selectors.dart' as feature_selectors;
 import '../../../ui/components.dart' as hk_ui;
 import '../../../ui/presentation_support.dart';

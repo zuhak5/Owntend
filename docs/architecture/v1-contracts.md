@@ -10,7 +10,7 @@ not compatibility promises to unpublished implementations.
 
 | Concern | Authority | Baseline |
 | --- | --- | --- |
-| Product version and Android build | `pubspec.yaml` | `1.0.0+1` |
+| Product version and Android build | [`pubspec.yaml`](../../pubspec.yaml) | not copied here; the authoritative version/build live in [`pubspec.yaml`](../../pubspec.yaml) |
 | Local SQLite schema | `AppDatabase.currentSchemaVersion` | `1` |
 | Backup archive and embedded database | backup manifest constants | `1` |
 | Mobile/backend sync boundary | change-feed response contract | `1` |

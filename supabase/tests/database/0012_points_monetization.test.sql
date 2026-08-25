@@ -27,7 +27,7 @@ select extensions.ok(
 select extensions.ok(
   pg_catalog.strpos(
     pg_catalog.pg_get_functiondef(
-      'owntend_monetization_private.create_asset_with_point_debit_impl(jsonb)'::regprocedure
+      'owntend_monetization_private.create_asset_impl(jsonb)'::regprocedure
     ),
     'dependency_plan_ids'
   ) = 0,
@@ -89,17 +89,16 @@ select extensions.is(
     join pg_namespace schemas on schemas.oid = functions.pronamespace
     where schemas.nspname = 'public'
       and functions.proname in (
-        'create_asset_with_point_debit',
+        'create_asset',
         'create_reward_claim_request',
         'create_task_with_point_debit',
-        'is_authorized_point_creation',
         'record_monetization_event'
       )
       and functions.prosecdef
       and has_function_privilege('authenticated', functions.oid, 'EXECUTE')
   ),
-  0,
-  'authenticated point RPCs are not security definer functions in public'
+  4,
+  'authenticated point RPCs are secure security definer boundaries in public'
 );
 select extensions.is(
   (
@@ -108,15 +107,14 @@ select extensions.is(
     join pg_namespace schemas on schemas.oid = functions.pronamespace
     where schemas.nspname = 'owntend_monetization_private'
       and functions.proname in (
-        'create_asset_with_point_debit_impl',
+        'create_asset_impl',
         'create_reward_claim_request_impl',
         'create_task_with_point_debit_impl',
-        'is_authorized_point_creation_impl',
         'record_monetization_event_impl'
       )
       and functions.prosecdef
   ),
-  5,
+  4,
   'privileged point implementations live in the private schema'
 );
 select extensions.ok(
@@ -153,11 +151,11 @@ select extensions.ok(
   'clients cannot alter monetization kill switches or limits'
 );
 select extensions.ok(
-  has_table_privilege('authenticated', 'public.assets', 'INSERT'),
-  'sync retains INSERT privilege while RLS requires an authorized debit'
+  not (has_table_privilege('authenticated', 'public.assets', 'INSERT')),
+  'direct asset INSERT is revoked; creation goes through the aggregate RPC'
 );
 select extensions.has_function(
-  'public', 'create_asset_with_point_debit', array['jsonb'],
+  'public', 'create_asset', array['jsonb'],
   'atomic asset creation RPC exists'
 );
 select extensions.has_function(
@@ -240,7 +238,7 @@ select extensions.is(
 
 select extensions.is(
   (
-    public.create_asset_with_point_debit(
+    public.create_asset(
       jsonb_build_object(
         'operation_id', '44444444-0000-0000-0000-000000000001',
         'request_hash', 'c813adc62ab3f9d608220e84a969c7055803e54847eb667ece9e427f498a0b7d',
@@ -299,7 +297,7 @@ select extensions.is(
 );
 select extensions.is(
   (
-    public.create_asset_with_point_debit(
+    public.create_asset(
       jsonb_build_object(
         'operation_id', '44444444-0000-0000-0000-000000000001',
         'request_hash', 'c813adc62ab3f9d608220e84a969c7055803e54847eb667ece9e427f498a0b7d',
@@ -367,7 +365,7 @@ select extensions.is(
 );
 select extensions.is(
   (
-    public.create_asset_with_point_debit(
+    public.create_asset(
       jsonb_build_object(
         'operation_id', '44444444-0000-0000-0000-000000000009',
         'request_hash', 'a0bdc12ffb7f4d8ccbc5063a44b3745937acce7ce89a27f5ca4b8e5ae9d970aa',
@@ -436,7 +434,7 @@ select extensions.is(
 
 select extensions.is(
   (
-    public.create_asset_with_point_debit(
+    public.create_asset(
       jsonb_build_object(
         'operation_id', '44444444-0000-0000-0000-000000000003',
         'request_hash', '7f7756932bfdfe6138ec4be10299f6e345b7b073e2396f9e11284a054491443d',
@@ -700,7 +698,8 @@ select set_config(
 );
 select extensions.lives_ok(
   $$select public.record_monetization_event(
-      'points_debited', '{"source":"database_test"}'::jsonb
+      'points_debited', jsonb_build_object('entity_type','asset_copy','entity_id',
+        '11111111-1111-5111-8111-111111111111','cost',0,'new_balance',0,'included_task_count',0)
     )$$,
   'allowlisted analytics events can be recorded'
 );
@@ -788,7 +787,7 @@ select extensions.is(
 );
 select extensions.is(
   (
-    public.create_asset_with_point_debit(
+    public.create_asset(
       jsonb_build_object(
         'operation_id', '44444444-0000-0000-0000-000000000008',
         'request_hash', 'fb8baaa2045157233d22b1d6b5d19a2d0ace94ff77405be3db2f6dce6da81a86',
@@ -1035,6 +1034,7 @@ select extensions.is(
   'maintenance_plans no longer persists health_group'
 );
 
+set local role postgres;
 select extensions.ok(
   position(
     'plan_json ? ''health_group''' in

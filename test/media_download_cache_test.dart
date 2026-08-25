@@ -34,12 +34,12 @@ void main() {
       );
 
       final first = cache.materialize(
-        objectPath: 'user/assets/a/photo.jpg',
+        objectPath: 'user/media/photo.jpg',
         version: '1',
         assetId: 'asset-a',
       );
       final second = cache.materialize(
-        objectPath: 'user/assets/a/photo.jpg',
+        objectPath: 'user/media/photo.jpg',
         version: '1',
         assetId: 'asset-a',
       );
@@ -52,7 +52,7 @@ void main() {
       expect(downloads, 1);
 
       final cached = await cache.materialize(
-        objectPath: 'user/assets/a/photo.jpg',
+        objectPath: 'user/media/photo.jpg',
         version: '1',
         assetId: 'asset-a',
       );
@@ -72,12 +72,12 @@ void main() {
     );
 
     final first = await cache.materialize(
-      objectPath: 'user/assets/a/photo.jpg',
+      objectPath: 'user/media/photo.jpg',
       version: '1',
       assetId: 'asset-a',
     );
     final second = await cache.materialize(
-      objectPath: 'user/assets/a/photo.jpg',
+      objectPath: 'user/media/photo.jpg',
       version: '2',
       assetId: 'asset-a',
     );
@@ -99,7 +99,7 @@ void main() {
 
     await expectLater(
       cache.materialize(
-        objectPath: 'user/assets/a/photo.jpg',
+        objectPath: 'user/media/photo.jpg',
         version: '1',
         assetId: 'asset-a',
       ),
@@ -114,7 +114,7 @@ void main() {
     );
 
     final retried = await cache.materialize(
-      objectPath: 'user/assets/a/photo.jpg',
+      objectPath: 'user/media/photo.jpg',
       version: '1',
       assetId: 'asset-a',
     );

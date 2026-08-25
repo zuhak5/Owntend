@@ -253,12 +253,18 @@ abstract interface class WeatherRepository {
 }
 
 abstract interface class BackupRepository {
-  Future<String> exportBackup({BackupTrigger trigger = BackupTrigger.manual});
+  /// Exports an encrypted `.owntend-backup` container. When [passphrase] is
+  /// null (automatic and pre-restore safety exports) the container is
+  /// protected by a device-local key held in platform secure storage.
+  Future<String> exportBackup({
+    BackupTrigger trigger = BackupTrigger.manual,
+    String? passphrase,
+  });
   Future<String?> exportAutomaticBackupIfDue();
   Future<BackupState> backupState();
   Future<void> setAutomaticBackupsEnabled(bool enabled);
-  Future<BackupPreview> inspectBackup(String zipPath);
-  Future<void> restoreBackup(String zipPath);
+  Future<BackupPreview> inspectBackup(String backupPath, {String? passphrase});
+  Future<void> restoreBackup(String backupPath, {String? passphrase});
 }
 
 enum BackupTrigger { manual, automatic, preRestore }
@@ -345,7 +351,7 @@ abstract interface class StreakService {
 
 abstract interface class NotificationScheduler {
   Future<void> initialize();
-  Future<void> requestPermissions({bool exactAlarms = false});
+  Future<void> requestPermissions();
   Future<NotificationPermissionState> permissionState();
   Future<void> refreshSchedules();
   Future<void> clearAllScheduledReminders();
@@ -355,22 +361,21 @@ abstract interface class NotificationScheduler {
 }
 
 class NotificationPermissionState {
-  const NotificationPermissionState({
-    required this.notificationsEnabled,
-    required this.canScheduleExact,
-  });
+  const NotificationPermissionState({required this.notificationsEnabled});
 
   final bool notificationsEnabled;
-  final bool canScheduleExact;
 }
 
 abstract interface class BackupService {
-  Future<String> exportZip({BackupTrigger trigger = BackupTrigger.manual});
-  Future<void> restoreZip(String zipPath);
+  Future<String> exportZip({
+    BackupTrigger trigger = BackupTrigger.manual,
+    String? passphrase,
+  });
+  Future<void> restoreZip(String backupPath, {String? passphrase});
 }
 
 abstract interface class RestoreService {
-  Future<void> restore(String zipPath);
+  Future<void> restore(String backupPath, {String? passphrase});
 }
 
 abstract interface class CrashReporter {

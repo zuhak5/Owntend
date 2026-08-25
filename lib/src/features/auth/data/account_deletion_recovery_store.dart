@@ -10,15 +10,20 @@ typedef AccountDeletionRecoveryKeyFactory = String Function();
 
 final RegExp _recoveryKeyPattern = RegExp(r'^[A-Za-z0-9_-]{43}$');
 
+/// Durable phases of the account-deletion cleanup protocol.
+///
+/// Every phase is actually written by [the repository]
+/// (`supabase_auth_repository.dart`) before the next transition; there are no
+/// speculative intermediate states. `acknowledgementPending` records that
+/// local cleanup finished but the server has not yet proven the terminal
+/// acknowledgment, so a restart must retry only that step.
 enum AccountDeletionJournalPhase {
   prepared,
   remoteCompleted,
   localDatabaseCleared,
-  localFilesCleared,
-  localDraftsAndWorkCleared,
   localProviderCleared,
-  acknowledged,
-  terminal;
+  acknowledgementPending,
+  acknowledged;
 
   static AccountDeletionJournalPhase parse(String? value) {
     if (value == null) return prepared;

@@ -18,12 +18,9 @@ void main() {
           "@pragma('vm:entry-point')\nvoid owntendWorkManagerCallback()",
         ),
       );
-      expect(
-        notifService,
-        contains(
-          "@pragma('vm:entry-point')\nvoid homeKeeperWorkManagerCallback()",
-        ),
-      );
+      // WP-010 (D2): the legacy homeKeeper alias is deleted; only the
+      // canonical entry point may exist.
+      expect(notifService, isNot(contains('homeKeeperWorkManagerCallback')));
       expect(
         notifService,
         contains(

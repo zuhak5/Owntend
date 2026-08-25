@@ -415,7 +415,7 @@ void main() {
             NotificationReconciliationRequestsCompanion.insert(
               scopeKey: 'plan:$planId',
               planId: Value(planId),
-              reason: 'test_reason',
+              reason: 'local_completion',
             ),
           );
 

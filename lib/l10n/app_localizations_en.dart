@@ -1199,17 +1199,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get exportDiagnostics => 'Export diagnostics';
 
   @override
-  String get diagnosticExportDisclosure =>
-      'This bundle contains only Owntend events and redacted technical metadata. It does not include full system logs, account emails, tokens, device serials, coordinates, or media paths.';
-
-  @override
   String get exportingDiagnostics => 'Preparing private diagnostics…';
 
   @override
   String get owntendDiagnosticsShareText => 'Owntend privacy-safe diagnostics';
-
-  @override
-  String get diagnosticExportFailed => 'Diagnostics could not be exported.';
 
   @override
   String get notRecorded => 'Not recorded';
@@ -1998,6 +1991,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'This build is not configured correctly.';
 
   @override
+  String get databaseUnrecoverableBody =>
+      'Owntend cannot start because the local database on this device is from an unsupported pre-release version. Clear the app storage or reinstall to continue. Local data that was not exported as a backup cannot be recovered.';
+
+  @override
   String activeTaskCount(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
@@ -2685,6 +2682,41 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get backupPassphraseDialogTitle => 'Protect your backup';
+
+  @override
+  String get backupPassphraseLabel => 'Passphrase (optional)';
+
+  @override
+  String get backupPassphraseHelp =>
+      'Leave empty to protect the backup with a key that stays on this device, or set a passphrase of at least 8 characters to open it on any device.';
+
+  @override
+  String get backupPassphraseConfirmLabel => 'Confirm passphrase';
+
+  @override
+  String get backupPassphraseMismatch => 'Passphrases do not match.';
+
+  @override
+  String get backupPassphraseTooShort => 'Use at least 8 characters.';
+
+  @override
+  String get backupEnterPassphraseTitle => 'Backup passphrase';
+
+  @override
+  String get backupPassphraseNeededError => 'This backup needs its passphrase.';
+
+  @override
+  String get routeErrorTitle => 'Page not available';
+
+  @override
+  String get routeErrorMessage =>
+      'This link could not be opened. It may be mistyped or no longer exists.';
+
+  @override
+  String get routeErrorAction => 'Back to home';
+
+  @override
   String get creatingBackup => 'Creating backup...';
 
   @override
@@ -3092,14 +3124,6 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get notificationsPermissionBody =>
       'Notifications are used only for task reminders and the alerts you enable.';
-
-  @override
-  String get preciseAlarmsPermissionBody =>
-      'Precise alarms let Owntend deliver enabled reminders at the exact selected time.';
-
-  @override
-  String get approximateReminderTimingWarning =>
-      'Reminders will use approximate timing until precise alarms are allowed.';
 
   @override
   String get automaticBackupsDescription =>
@@ -3556,17 +3580,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get exactAlarmEducationTitle => 'Keep reminders on time';
-
-  @override
-  String get enableAlarmsAndRemindersOnboarding => 'Enable reminders';
-
-  @override
   String get permissionSetup => 'Permissions & setup';
 
   @override
   String get permissionSetupSubtitle =>
-      'Choose a weather area, then control device reminders and optional precise timing.';
+      'Choose a weather area and control device reminders.';
 
   @override
   String get permissionsAlreadyEnabled =>
@@ -3591,19 +3609,6 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get permissionSetupWeatherPrivacy =>
       'If you use current location, Owntend saves an approximate home area. It does not continuously collect your location in the background.';
-
-  @override
-  String get permissionSetupExactOptionalTitle => 'Use precise reminder timing';
-
-  @override
-  String get permissionSetupExactOptionalBody =>
-      'Android requires special access for reminders at the exact selected time. Without it, Owntend will use approximate timing.';
-
-  @override
-  String get permissionSetupUseApproximateTiming => 'Use approximate timing';
-
-  @override
-  String get permissionSetupAllowPreciseTiming => 'Allow precise timing';
 
   @override
   String get permissionSetupManageInSettings => 'Manage in settings';
@@ -3633,10 +3638,6 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get permissionDeviceRemindersOff =>
       'Device reminders are off in Owntend.';
-
-  @override
-  String get permissionExactRequiresDeviceReminders =>
-      'Turn on device reminders before enabling precise timing.';
 
   @override
   String get permissionActionCouldNotComplete =>

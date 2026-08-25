@@ -249,6 +249,25 @@ class AppDiagnosticFileStore {
     return result;
   }
 
+  /// Owner-level retention: deletes diagnostic files older than [retention].
+  /// Called by startup; the store owns its own expiry.
+  Future<void> cleanupExpired({
+    DateTime? now,
+    Duration retention = const Duration(hours: 24),
+  }) async {
+    final cutoff = (now ?? DateTime.now()).toUtc().subtract(retention);
+    for (final file in await files()) {
+      try {
+        final modified = await file.lastModified();
+        if (modified.isBefore(cutoff)) {
+          await file.delete();
+        }
+      } on Object {
+        // Best-effort expiry must never break startup.
+      }
+    }
+  }
+
   Future<void> _append(AppDiagnosticEvent event) async {
     final current = File(p.join(directory.path, 'events.0.jsonl'));
     final line = '${jsonEncode(event.toJson())}\n';

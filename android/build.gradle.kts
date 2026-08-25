@@ -41,20 +41,6 @@ subprojects {
     }
 }
 
-// file_picker 12.0.0 assumes AGP 9 built-in Kotlin, while other current
-// plugins still require the temporary legacy-KGP compatibility mode. Apply
-// KGP only to file_picker until the remaining plugins support built-in Kotlin.
-subprojects {
-    if (name == "file_picker") {
-        pluginManager.apply("org.jetbrains.kotlin.android")
-        tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile>().configureEach {
-            compilerOptions.jvmTarget.set(
-                org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17,
-            )
-        }
-    }
-}
-
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)
     delete(externalPluginBuildRoot)

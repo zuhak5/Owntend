@@ -309,6 +309,21 @@ void main() {
           status: 200,
         ),
       );
+      when(
+        () => functions.invoke(
+          'account-deletion-status',
+          body: any(named: 'body'),
+        ),
+      ).thenAnswer(
+        (_) async => FunctionResponse(
+          data: const {
+            'deleted': true,
+            'status': 'acknowledged',
+            'user_id': 'user-1',
+          },
+          status: 200,
+        ),
+      );
       when(() => auth.signOut(scope: SignOutScope.local))
           .thenAnswer((_) async {});
       googleSignIn.silentReauthenticationTokens = const GoogleSignInTokens(
@@ -388,6 +403,21 @@ void main() {
           status: 200,
         ),
       );
+      when(
+        () => functions.invoke(
+          'account-deletion-status',
+          body: any(named: 'body'),
+        ),
+      ).thenAnswer(
+        (_) async => FunctionResponse(
+          data: const {
+            'deleted': true,
+            'status': 'acknowledged',
+            'user_id': 'user-1',
+          },
+          status: 200,
+        ),
+      );
       when(() => auth.signOut(scope: SignOutScope.local))
           .thenAnswer((_) async {});
       googleSignIn.disconnectError = StateError('provider details');
@@ -451,6 +481,21 @@ void main() {
           data: const {
             'deleted': true,
             'status': 'deleted',
+            'user_id': 'user-1',
+          },
+          status: 200,
+        ),
+      );
+      when(
+        () => functions.invoke(
+          'account-deletion-status',
+          body: any(named: 'body'),
+        ),
+      ).thenAnswer(
+        (_) async => FunctionResponse(
+          data: const {
+            'deleted': true,
+            'status': 'acknowledged',
             'user_id': 'user-1',
           },
           status: 200,
@@ -687,6 +732,260 @@ void main() {
     },
   );
 
+  test('acknowledgment failure persists acknowledgementPending and restart retries only acknowledgment', () async {
+    final client = _MockSupabaseClient();
+    final auth = _MockGoTrueClient();
+    final functions = _MockFunctionsClient();
+    final session = _MockSession();
+    final user = _MockUser();
+    when(() => client.auth).thenReturn(auth);
+    when(() => client.functions).thenReturn(functions);
+    when(() => auth.currentSession).thenReturn(session);
+    when(() => session.user).thenReturn(user);
+    when(() => user.id).thenReturn('user-1');
+    when(
+      () => auth.signInWithIdToken(
+        provider: OAuthProvider.google,
+        idToken: 'google-id-token',
+        accessToken: 'google-access-token',
+      ),
+    ).thenAnswer((_) async => AuthResponse(session: session));
+    var cleanedCount = 0;
+    var deleteInvocations = 0;
+    var ackInvocations = 0;
+    when(
+      () => functions.invoke('delete-account', body: any(named: 'body')),
+    ).thenAnswer((_) async {
+      deleteInvocations++;
+      return FunctionResponse(
+        data: const {'deleted': true, 'status': 'deleted', 'user_id': 'user-1'},
+        status: 200,
+      );
+    });
+    when(
+      () =>
+          functions.invoke('account-deletion-status', body: any(named: 'body')),
+    ).thenAnswer((_) async {
+      ackInvocations++;
+      if (ackInvocations == 1) throw StateError('ack response lost');
+      return FunctionResponse(
+        data: const {
+          'deleted': true,
+          'status': 'acknowledged',
+          'user_id': 'user-1',
+        },
+        status: 200,
+      );
+    });
+    when(() => auth.signOut(scope: SignOutScope.local))
+        .thenAnswer((_) async {});
+    final repository = SupabaseAuthRepository(
+      client,
+      googleSignIn,
+      onAccountDeletionPrepared: (_) async {},
+      onAccountDeletionCancelled: (_) async {},
+      onAccountDeleted: (_) async => cleanedCount++,
+      accountDeletionRecoveryStore: recoveryStore,
+      accountDeletionRecoveryKeyFactory: () => recoveryKey,
+    );
+
+    // First attempt: cloud deletion succeeded, local cleanup succeeded, but
+    // the acknowledgment was lost. The journal must retain the capability in
+    // acknowledgementPending and the failure must demand a restart.
+    await expectLater(
+      repository.deleteAccount(),
+      throwsA(
+        isA<SupabaseFailure>()
+            .having((failure) => failure.retryable, 'retryable', isTrue)
+            .having(
+              (failure) => failure.message,
+              'message',
+              contains('not yet confirmed'),
+            ),
+      ),
+    );
+    final pending = recoveryStore.operation;
+    expect(pending, isNotNull);
+    expect(pending!.phase, AccountDeletionJournalPhase.acknowledgementPending);
+    expect(cleanedCount, 1);
+
+    // Restart recovery: only the acknowledgment step runs again; local
+    // cleanup is not repeated and no second cloud deletion is attempted.
+    await repository.resumePendingAccountDeletion();
+
+    expect(deleteInvocations, 1);
+    expect(ackInvocations, 2);
+    expect(cleanedCount, 1);
+    expect(recoveryStore.operation, isNull);
+  });
+
+  test(
+    'WP-016/F-028 orchestration: cloud success with local cleanup failure '
+    'keeps durable intent and a simulated restart finishes the walk',
+    () async {
+      final client = _MockSupabaseClient();
+      final auth = _MockGoTrueClient();
+      final functions = _MockFunctionsClient();
+      final session = _MockSession();
+      final user = _MockUser();
+      when(() => client.auth).thenReturn(auth);
+      when(() => client.functions).thenReturn(functions);
+      when(() => auth.currentSession).thenReturn(session);
+      when(() => session.user).thenReturn(user);
+      when(() => user.id).thenReturn('user-1');
+      when(
+        () => auth.signInWithIdToken(
+          provider: OAuthProvider.google,
+          idToken: 'google-id-token',
+          accessToken: 'google-access-token',
+        ),
+      ).thenAnswer((_) async => AuthResponse(session: session));
+      var localCleanupAttempts = 0;
+      var deleteInvocations = 0;
+      when(() => functions.invoke('delete-account', body: any(named: 'body')))
+          .thenAnswer((_) async {
+            deleteInvocations++;
+            return FunctionResponse(
+              data: const {
+                'deleted': true,
+                'status': 'deleted',
+                'user_id': 'user-1',
+              },
+              status: 200,
+            );
+          });
+      when(
+        () => functions.invoke(
+          'account-deletion-status',
+          body: any(named: 'body'),
+        ),
+      ).thenAnswer(
+        (_) async => FunctionResponse(
+          data: const {
+            'deleted': true,
+            'status': 'acknowledged',
+            'user_id': 'user-1',
+          },
+          status: 200,
+        ),
+      );
+      when(() => auth.signOut(scope: SignOutScope.local))
+          .thenAnswer((_) async {});
+
+      // Attempt one: the server deletes the account, but local cleanup fails.
+      final failingRepository = SupabaseAuthRepository(
+        client,
+        googleSignIn,
+        onAccountDeletionPrepared: (_) async {},
+        onAccountDeletionCancelled: (_) async {},
+        onAccountDeleted: (_) async {
+          localCleanupAttempts++;
+          throw StateError('local database busy');
+        },
+        accountDeletionRecoveryStore: recoveryStore,
+        accountDeletionRecoveryKeyFactory: () => recoveryKey,
+      );
+
+      await expectLater(
+        failingRepository.deleteAccount(),
+        throwsA(
+          isA<SupabaseFailure>().having(
+            (failure) => failure.retryable,
+            'retryable',
+            isTrue,
+          ),
+        ),
+      );
+      expect(localCleanupAttempts, 1);
+      final retained = recoveryStore.operation;
+      expect(retained, isNotNull);
+      // The durable journal proves the cloud deletion happened so no retry
+      // re-charges the deletion endpoint blindly.
+      expect(retained!.phase, AccountDeletionJournalPhase.remoteCompleted);
+      expect(deleteInvocations, 1);
+
+      // Restart: a fresh repository over the same store resumes exactly where
+      // the journal stopped and walks to acknowledged + cleared.
+      localCleanupAttempts = 0;
+      final restartedRepository = SupabaseAuthRepository(
+        client,
+        googleSignIn,
+        onAccountDeletionPrepared: (_) async {},
+        onAccountDeletionCancelled: (_) async {},
+        onAccountDeleted: (_) async => localCleanupAttempts++,
+        accountDeletionRecoveryStore: recoveryStore,
+        accountDeletionRecoveryKeyFactory: () => recoveryKey,
+      );
+      await restartedRepository.resumePendingAccountDeletion();
+
+      expect(localCleanupAttempts, 1);
+      expect(recoveryStore.operation, isNull);
+      // The delete-account endpoint is NOT invoked again on restart.
+      expect(deleteInvocations, 1);
+    },
+  );
+
+  test('a mismatched or incomplete acknowledgment receipt never clears the journal', () async {
+    final client = _MockSupabaseClient();
+    final auth = _MockGoTrueClient();
+    final functions = _MockFunctionsClient();
+    final session = _MockSession();
+    final user = _MockUser();
+    when(() => client.auth).thenReturn(auth);
+    when(() => client.functions).thenReturn(functions);
+    when(() => auth.currentSession).thenReturn(session);
+    when(() => session.user).thenReturn(user);
+    when(() => user.id).thenReturn('user-1');
+    when(
+      () => auth.signInWithIdToken(
+        provider: OAuthProvider.google,
+        idToken: 'google-id-token',
+        accessToken: 'google-access-token',
+      ),
+    ).thenAnswer((_) async => AuthResponse(session: session));
+    when(
+      () => functions.invoke('delete-account', body: any(named: 'body')),
+    ).thenAnswer(
+      (_) async => FunctionResponse(
+        data: const {'deleted': true, 'status': 'deleted', 'user_id': 'user-1'},
+        status: 200,
+      ),
+    );
+    // Server answers success but with the wrong user identity.
+    when(
+      () =>
+          functions.invoke('account-deletion-status', body: any(named: 'body')),
+    ).thenAnswer(
+      (_) async => FunctionResponse(
+        data: const {
+          'deleted': true,
+          'status': 'acknowledged',
+          'user_id': 'someone-else',
+        },
+        status: 200,
+      ),
+    );
+    when(() => auth.signOut(scope: SignOutScope.local))
+        .thenAnswer((_) async {});
+    final repository = SupabaseAuthRepository(
+      client,
+      googleSignIn,
+      onAccountDeletionPrepared: (_) async {},
+      onAccountDeletionCancelled: (_) async {},
+      onAccountDeleted: (_) async {},
+      accountDeletionRecoveryStore: recoveryStore,
+      accountDeletionRecoveryKeyFactory: () => recoveryKey,
+    );
+
+    await expectLater(
+      repository.deleteAccount(),
+      throwsA(isA<SupabaseFailure>()),
+    );
+    expect(
+      recoveryStore.operation?.phase,
+      AccountDeletionJournalPhase.acknowledgementPending,
+    );
+  });
   test(
     'storage cleanup failure keeps the recoverable deletion prepared',
     () async {
@@ -820,6 +1119,21 @@ void main() {
           status: 200,
         ),
       );
+      when(
+        () => functions.invoke(
+          'account-deletion-status',
+          body: any(named: 'body'),
+        ),
+      ).thenAnswer(
+        (_) async => FunctionResponse(
+          data: const {
+            'deleted': true,
+            'status': 'acknowledged',
+            'user_id': 'user-1',
+          },
+          status: 200,
+        ),
+      );
       when(() => auth.signOut(scope: SignOutScope.local))
           .thenAnswer((_) async {});
       String? cancelledUserId;
@@ -887,6 +1201,25 @@ void main() {
       (_) async => FunctionResponse(
         data: const {'deleted': false, 'status': 'pending'},
         status: 202,
+      ),
+    );
+    when(
+      () => functions.invoke(
+        'account-deletion-status',
+        body: const {
+          'recovery_key': recoveryKey,
+          'expected_user_id': 'user-1',
+          'action': 'acknowledge',
+        },
+      ),
+    ).thenAnswer(
+      (_) async => FunctionResponse(
+        data: const {
+          'deleted': true,
+          'status': 'acknowledged',
+          'user_id': 'user-1',
+        },
+        status: 200,
       ),
     );
     when(() => auth.signOut(scope: SignOutScope.local))
@@ -1020,6 +1353,21 @@ void main() {
           data: const {
             'deleted': true,
             'status': 'deleted',
+            'user_id': 'user-1',
+          },
+          status: 200,
+        ),
+      );
+      when(
+        () => functions.invoke(
+          'account-deletion-status',
+          body: any(named: 'body'),
+        ),
+      ).thenAnswer(
+        (_) async => FunctionResponse(
+          data: const {
+            'deleted': true,
+            'status': 'acknowledged',
             'user_id': 'user-1',
           },
           status: 200,

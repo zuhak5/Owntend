@@ -1,5 +1,15 @@
 # Configuration Reference
 
+### AdMob application IDs (WP-012 decision D2)
+
+Per-flavor AdMob application IDs are declared as Gradle
+`manifestPlaceholders["admobAppId"]` in `android/app/build.gradle.kts`
+(Google sample ID for dev/staging; the production ID for prod). These values are
+public — they ship inside every APK and `download-site/app-ads.txt` — and the
+protected release-evidence tooling independently pins the exact expected
+production ID, so a single source of truth is deliberately split into
+"build input" and "fail-closed verification expectation".
+
 ## Principles
 
 - Commit examples and schemas, not real environment values.

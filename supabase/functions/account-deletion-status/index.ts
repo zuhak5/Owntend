@@ -14,11 +14,27 @@ const recoveryKeyPattern = /^[A-Za-z0-9_-]{43}$/;
 const maxRecoveryBodyBytes = 768;
 const userIdPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const allowedBrowserOrigins = new Set([
+const productionBrowserOrigins = new Set([
   "https://owntend.app",
+]);
+const developmentBrowserOrigins = new Set([
   "http://localhost:4173",
   "http://127.0.0.1:4173",
 ]);
+
+// WP-002 (F-034): development origins are served only when the function
+// explicitly runs in a non-production environment; unset defaults to
+// production so hosted deployments fail closed.
+export function browserOriginsForEnvironment(
+  environment: Pick<typeof Deno.env, "get">,
+): Set<string> {
+  if (
+    (environment.get("OWNTEND_FUNCTIONS_ENV") ?? "production") === "production"
+  ) {
+    return productionBrowserOrigins;
+  }
+  return new Set([...productionBrowserOrigins, ...developmentBrowserOrigins]);
+}
 
 type EnvironmentReader = Pick<typeof Deno.env, "get">;
 
@@ -63,6 +79,7 @@ export async function handleAccountDeletionStatus(
 ): Promise<Response> {
   const reportException = runtime.reportException ??
     createEdgeExceptionReporter("account-deletion-status", environment);
+  const allowedBrowserOrigins = browserOriginsForEnvironment(environment);
   const origin = request.headers.get("Origin");
   if (origin != null && !allowedBrowserOrigins.has(origin)) {
     return jsonResponse(403, { error: "origin_not_allowed" });

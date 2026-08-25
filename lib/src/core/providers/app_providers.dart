@@ -106,9 +106,13 @@ final restoreJournalStoreProvider = Provider<RestoreJournalStore>(
 );
 
 final backupRepositoryProvider = Provider<BackupRepository>(
-  (ref) => ZipBackupService(
+  (ref) => OwntendBackupService(
     ref.watch(databaseProvider),
     journalStore: ref.watch(restoreJournalStoreProvider),
+    // WP-005 (F-007): the service reports verified restore commits; the
+    // provider layer owns the single epoch publication boundary.
+    onRestoreCommit: () =>
+        ref.read(databaseRestoreEpochProvider.notifier).bump(),
   ),
 );
 

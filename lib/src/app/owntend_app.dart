@@ -26,16 +26,16 @@ export '../features/assets/presentation/assets_presentation.dart';
 export '../features/dashboard/presentation/dashboard_presentation.dart';
 import '../features/monetization/monetization.dart';
 export '../features/monetization/presentation/monetization_presentation.dart';
-export '../features/rooms/presentation/room_dialogs.dart';
+export '../ui/widgets/room_dialogs.dart';
 export '../features/rooms/presentation/rooms_presentation.dart';
-export '../features/maintenance/presentation/daily_completion_reward_sheet.dart';
+export '../features/monetization/presentation/daily_completion_reward_sheet.dart';
 export '../features/maintenance/presentation/complete_task_dialog.dart';
 export '../features/maintenance/presentation/task_actions.dart';
 export '../features/maintenance/presentation/maintenance_dialogs.dart';
 export '../features/maintenance/presentation/maintenance_presentation.dart';
 export '../features/more/presentation/more_screen.dart';
 export '../features/search/presentation/search_screen.dart';
-export '../features/settings/presentation/location_picker_sheet.dart';
+export '../ui/widgets/location_picker_sheet.dart';
 export '../features/settings/presentation/settings_screen.dart';
 export '../features/notifications/presentation/notifications_screen.dart';
 export '../features/statistics/presentation/statistics_screen.dart';
@@ -76,6 +76,24 @@ Future<void> runOwntendApplication() async {
 
   Future<void> runOwntend() async {
     final database = AppDatabase();
+    // WP-008 (F-008): fail fast on a pre-baseline local database with an
+    // actionable, localized surface instead of failing later inside feature
+    // streams. Fresh installs always create the full v1 baseline; only an
+    // unsupported pre-release file can land here.
+    try {
+      await database.select(database.syncRuntime).get();
+    } on StateError catch (error, stackTrace) {
+      AppLogger.warning(
+        'startup_database_baseline_mismatch',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      await database.close();
+      _runOwntendProcess(
+        const OwntendStartupFailure(databaseUnrecoverable: true),
+      );
+      return;
+    }
     final restoreJournalStore = RestoreJournalStore();
     _runOwntendProcess(
       _RestoreRecoveryGate(
@@ -258,7 +276,6 @@ class _OwntendAppState extends ConsumerState<OwntendApp>
     ref.listenManual(syncStatusProvider, (previous, next) {
       startup.handleSyncStatusValue(next);
     }, fireImmediately: true);
-    ref.listenManual(streakRefreshProvider, (_, _) {});
   }
 
   void _handleAutomaticBackupStartupState() {

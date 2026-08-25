@@ -1,5 +1,47 @@
 # Testing Strategy
 
+### Widget suite layout and shared helpers (WP-014/WP-015)
+
+The former 7,000-line `test/widget_test.dart` is split into themed suites under
+`test/widgets/` with shared fakes in `test/support/widget_test_fakes.dart`
+(121 tests, count-preserving). Async conditions use the single bounded helper
+`waitFor` from `test/support/wait_for.dart` — wall-clock busy-wait loops are
+gone. `dart_test.yaml` pins `concurrency: 1` (matching the documented
+full-suite command) and a 2-minute per-test timeout. Golden tests render with
+Flutter's synthetic Ahem-style test font; no font loader is configured, so
+regressions in real font metrics must be caught on device.
+
+### Integration-evidence lanes (WP-016)
+
+Two gated suites exist by design and run in CI, not the default lane:
+`npm run test:backend-integration` provisions an isolated disposable Supabase
+stack (blank-baseline pgTAP + Edge Functions + worker contract) in the
+`Blank-baseline database and Edge endpoint integration` job of
+`.github/workflows/validate-google-backend.yml`; the Dart-side two-user loopback
+suite `test/backend_integration/local_backend_sync_test.dart` runs only with
+loopback dart-defines. Skips are honest gates, not rot.
+
+## Launch evidence ladder
+
+Launch claims map to named lanes; a claim without its lane is not evidenced:
+
+| Lane | Command / owner | Evidence class |
+| --- | --- | --- |
+| Fast focused | `flutter test --no-pub <files>` | Local/CI, mocked |
+| Full Flutter | `flutter test --no-pub --concurrency=1 --timeout 3m --exclude-tags production-config` | Local/CI |
+| Production example contract | documented production-config command | Local/CI, example only |
+| Node/tooling | `npm run validate:test-inventory`; `npm run test:all` | Local/CI |
+| Deno functions | per-function frozen fmt/check/test | Local/CI |
+| Blank-baseline database + endpoint integration | `npm run test:backend-integration` (isolated disposable stack) | Disposable local/CI |
+| Two-user application/backend | `test/backend_integration/local_backend_sync_test.dart` via backend workflow | Disposable local/CI |
+| Emulator/device integration | `flutter test integration_test --flavor dev --dart-define-from-file=config/dev.json` | Emulator/device |
+| Physical-device matrix | API 26/33/35/36 + OEM matrix: permissions, reboot/timezone, process death, TalkBack | Device (external) |
+| Hosted staging | disposable hosted Supabase, cron, Storage with authorization | Hosted (external) |
+| Protected release rehearsal | release workflow dry runs, signing, Sentry symbols, VersionDeck derivation | Protected (external) |
+
+Flaky retry never converts a failure into success: a red lane is disclosed,
+never silently rerun to green.
+
 ## Goals
 
 Owntend tests should protect user data, offline behavior, account isolation, backend authorization, monetization integrity, backup safety, localization, and release trust—not only line coverage.
@@ -28,7 +70,11 @@ Use for cross-layer application journeys that cannot be proven by isolated tests
 
 ### Edge Function tests
 
-Functions require formatting, locked type-checking, unit/request-validation tests, and explicit negative-security cases. Canonical Deno checks cover AdMob SSV, account deletion, and deletion-status recovery. These isolated tests do not prove that the reviewed function revision or secrets are deployed to a hosted project.
+Functions require formatting, locked type-checking, unit/request-validation tests, and explicit negative-security cases. Canonical Deno checks cover AdMob SSV, account deletion, deletion-status recovery, and the media-cleanup worker. These isolated tests do not prove that the reviewed function revision or secrets are deployed to a hosted project.
+
+### Disposable backend endpoint integration
+
+`npm run test:backend-integration` provisions an isolated, disposable local Supabase stack on shifted ports inside a temporary workspace, replays deterministic fixtures through `supabase db reset`, serves every configured Edge Function over real HTTP, runs `supabase/tests/integration/*.test.ts` against the actual `/functions/v1/...` gateway (including missing/invalid/valid credentials), and tears down users-free resources in every outcome. The runner refuses to run when the repository is linked to a remote project, never targets a developer-started stack, keeps credentials in memory, and prints no secrets. CI executes the same lane in the `edge-endpoint-integration` job of the Google backend workflow.
 
 ### Browser deletion and Google/Android contract tests
 
@@ -125,7 +171,7 @@ npm run validate:dependency-policy
 npm run validate:google-contracts
 ```
 
-This runs all 12 canonical Node test suites, validates the complete test inventory, evaluates toolchain consistency, checks dependency license policies against the exception registry, and validates static Google/Android release contracts.
+This runs all 20 canonical Node test suites registered in [`tool/test_inventory.mjs`](../../tool/test_inventory.mjs) — the `CANONICAL_NODE_TESTS` list there is authoritative for the count and membership — validates the complete test inventory, evaluates toolchain consistency, checks dependency license policies against the exception registry, and validates static Google/Android release contracts.
 
 ## Focused remediation contracts
 
@@ -176,6 +222,7 @@ deno install --frozen --config deno.json
 Push-Location supabase/functions/admob-ssv-handler; deno install --frozen; Pop-Location
 Push-Location supabase/functions/delete-account; deno install --frozen; Pop-Location
 Push-Location supabase/functions/account-deletion-status; deno install --frozen; Pop-Location
+Push-Location supabase/functions/process-media-cleanup; deno install --frozen; Pop-Location
 
 deno fmt --check `
   supabase/functions/_shared/request.ts `
@@ -186,17 +233,21 @@ deno fmt --check `
   supabase/functions/delete-account/index.ts `
   supabase/functions/delete-account/index_test.ts `
   supabase/functions/account-deletion-status/index.ts `
-  supabase/functions/account-deletion-status/index_test.ts
+  supabase/functions/account-deletion-status/index_test.ts `
+  supabase/functions/process-media-cleanup/index.ts `
+  supabase/functions/process-media-cleanup/index_test.ts
 
 deno check --frozen supabase/functions/admob-ssv-handler/index.ts
 deno check --frozen supabase/functions/delete-account/index.ts
 deno check --frozen supabase/functions/account-deletion-status/index.ts
+deno check --frozen supabase/functions/process-media-cleanup/index.ts
 
 deno test --frozen --allow-env --allow-net --config deno.json `
   supabase/functions/_shared/sentry_test.ts
 Push-Location supabase/functions/admob-ssv-handler; deno test --frozen --allow-env --allow-net index_test.ts; Pop-Location
 Push-Location supabase/functions/delete-account; deno test --frozen --allow-env --allow-net index_test.ts; Pop-Location
 Push-Location supabase/functions/account-deletion-status; deno test --frozen --allow-env --allow-net index_test.ts; Pop-Location
+Push-Location supabase/functions/process-media-cleanup; deno test --frozen --allow-env --allow-net index_test.ts; Pop-Location
 
 node --test `
   tool/account-deletion-site.test.mjs `
@@ -206,6 +257,12 @@ node --test `
   tool/toolchain.test.mjs
 
 node tool/validate_google_release_contracts.mjs
+```
+
+Disposable backend endpoint integration (isolated stack, real gateway):
+
+```powershell
+npm run test:backend-integration
 ```
 
 VersionDeck packaging and static validation:
@@ -250,7 +307,7 @@ Test valid format-1/schema-1 backups, unsupported versions, path traversal, dupl
 
 ### Notifications
 
-Test the separation of user preference, OS/service/special-access state, scheduler truth, and effective capability. Include manual weather with denied location, service-disabled location, notification denial and disabled channel, exact preference off, exact denial with inexact fallback, settings-return refresh, time-zone change, reboot, application update, stale snapshots, completion rescheduling, and duplicate prevention. For background notification work, cover matching versus mismatched account identity, idempotent unique periodic registration across restart, cancellation/rejection on sign-out or account switch, durable reconciliation surviving process restart, coalescing duplicate requests, ACK only after successful refresh, retry state after failure, and replay when a worker/foreground consumer restarts mid-reconciliation.
+Test the separation of user preference, OS/service/special-access state, scheduler truth, and effective capability. Include manual weather with denied location, service-disabled location, notification denial and disabled channel, settings-return refresh, time-zone change, reboot, application update, stale snapshots, completion rescheduling, and duplicate prevention. For background notification work, cover matching versus mismatched account identity, idempotent unique periodic registration across restart, cancellation/rejection on sign-out or account switch, durable reconciliation surviving process restart, coalescing duplicate requests, ACK only after successful refresh, retry state after failure, and replay when a worker/foreground consumer restarts mid-reconciliation.
 
 ### Startup and transient feedback
 

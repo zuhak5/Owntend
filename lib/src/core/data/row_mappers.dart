@@ -313,7 +313,6 @@ domain.NotificationPreferences _notificationPreferencesFromValue(
         reminderHour: _jsonInt(decoded, 'reminderHour'),
         maxRemindersPerDay: _jsonInt(decoded, 'maxRemindersPerDay'),
         defaultSnoozeMinutes: _jsonInt(decoded, 'defaultSnoozeMinutes'),
-        preferExactReminders: _jsonBool(decoded, 'preferExactReminders'),
       ),
     );
   } catch (_) {
@@ -361,7 +360,6 @@ Map<String, Object> _notificationPreferencesToJson(
     'reminderHour': normalized.reminderHour,
     'maxRemindersPerDay': normalized.maxRemindersPerDay,
     'defaultSnoozeMinutes': normalized.defaultSnoozeMinutes,
-    'preferExactReminders': normalized.preferExactReminders,
   };
 }
 

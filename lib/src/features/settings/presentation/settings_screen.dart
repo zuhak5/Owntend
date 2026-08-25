@@ -1,8 +1,9 @@
 import '../../../ui/components.dart' as hk_ui;
 import '../../../ui/presentation_support.dart';
-import '../../dashboard/presentation/dashboard_presentation.dart';
 import '../../maintenance/presentation/task_actions.dart';
-import 'location_picker_sheet.dart';
+import '../../../ui/widgets/location_picker_sheet.dart';
+import '../../monetization/monetization.dart';
+import '../../../ui/widgets/weather_presentation.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -417,22 +418,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                                     EffectiveCapabilityState.active,
                               ),
                               _NotificationStatusRow(
-                                icon: Symbols.alarm_on_rounded,
-                                label: context.l10n.alarmsAndReminders,
-                                value: _effectiveCapabilityLabel(
-                                  context,
-                                  capabilitySetup
-                                      .notifications
-                                      .exactTimingState,
-                                  approximateWhenDegraded: true,
-                                ),
-                                good:
-                                    capabilitySetup
-                                        .notifications
-                                        .exactTimingState ==
-                                    EffectiveCapabilityState.active,
-                              ),
-                              _NotificationStatusRow(
                                 icon: Symbols.inbox_rounded,
                                 label: context.l10n.inAppInbox,
                                 value: _effectiveCapabilityLabel(
@@ -558,59 +543,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                                               notificationPreferences,
                                               notificationPreferences.copyWith(
                                                 localReminders: false,
-                                                preferExactReminders: false,
-                                              ),
-                                            )
-                                    : null,
-                              ),
-                            if (capabilitySetup != null &&
-                                notificationPreferences.preferExactReminders &&
-                                capabilitySetup
-                                        .notifications
-                                        .exactTimingState !=
-                                    EffectiveCapabilityState.active)
-                              _EffectiveCapabilityPreferenceTile(
-                                key: const ValueKey('exact-reminders-recovery'),
-                                icon: Symbols.alarm_on_rounded,
-                                title: context.l10n.preciseReminderAlarms,
-                                subtitle: context
-                                    .l10n
-                                    .askAndroidForAlarmsAndRemindersAccess,
-                                state: capabilitySetup
-                                    .notifications
-                                    .exactTimingState,
-                                approximateWhenDegraded: true,
-                                onFix:
-                                    notificationPreferences.allowsLocalReminders
-                                    ? () => _enableExactTiming(context, ref)
-                                    : null,
-                              )
-                            else
-                              SwitchListTile(
-                                contentPadding: EdgeInsets.zero,
-                                secondary: const _SettingsPlainIcon(
-                                  icon: Symbols.alarm_on_rounded,
-                                ),
-                                title: Text(context.l10n.preciseReminderAlarms),
-                                subtitle: Text(
-                                  context
-                                      .l10n
-                                      .askAndroidForAlarmsAndRemindersAccess,
-                                ),
-                                value:
-                                    notificationPreferences.enabled &&
-                                    notificationPreferences
-                                        .preferExactReminders,
-                                onChanged:
-                                    notificationPreferences.allowsLocalReminders
-                                    ? (value) => value
-                                          ? _enableExactTiming(context, ref)
-                                          : _saveNotificationPreferences(
-                                              context,
-                                              ref,
-                                              notificationPreferences,
-                                              notificationPreferences.copyWith(
-                                                preferExactReminders: false,
                                               ),
                                             )
                                     : null,
@@ -1270,42 +1202,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     }
   }
 
-  Future<void> _enableExactTiming(BuildContext context, WidgetRef ref) async {
-    try {
-      final controller = ref.read(
-        permissionEducationControllerProvider.notifier,
-      );
-      await controller.refreshCapabilities();
-      await controller.enableExactTiming();
-      ref.invalidate(notificationPreferencesProvider);
-      ref.invalidate(notificationPermissionStateProvider);
-      if (!context.mounted) return;
-      final effective =
-          controller.currentState.setupSnapshot?.notifications.exactTimingState;
-      hk_ui.showToast(
-        context,
-        content: Text(
-          effective == EffectiveCapabilityState.active
-              ? context.l10n.notificationSettingsUpdated
-              : context.l10n.approximateReminderTimingWarning,
-        ),
-      );
-    } catch (error) {
-      if (!context.mounted) return;
-      hk_ui.showToast(
-        context,
-        content: Text(
-          failureMessage(
-            context,
-            error,
-            fallback: AppFailureCode.notificationSetup,
-          ),
-        ),
-        severity: hk_ui.HkToastSeverity.error,
-      );
-    }
-  }
-
   Future<void> _sendTestNotification(
     BuildContext context,
     WidgetRef ref,
@@ -1682,7 +1578,6 @@ class _EffectiveCapabilityPreferenceTile extends StatelessWidget {
     required this.subtitle,
     required this.state,
     required this.onFix,
-    this.approximateWhenDegraded = false,
     super.key,
   });
 
@@ -1691,7 +1586,6 @@ class _EffectiveCapabilityPreferenceTile extends StatelessWidget {
   final String subtitle;
   final EffectiveCapabilityState state;
   final VoidCallback? onFix;
-  final bool approximateWhenDegraded;
 
   @override
   Widget build(BuildContext context) {
@@ -1748,11 +1642,7 @@ class _EffectiveCapabilityPreferenceTile extends StatelessWidget {
                 runSpacing: HkSpacing.space4,
                 children: [
                   hk_ui.StatusPill(
-                    label: _effectiveCapabilityLabel(
-                      context,
-                      state,
-                      approximateWhenDegraded: approximateWhenDegraded,
-                    ),
+                    label: _effectiveCapabilityLabel(context, state),
                     color: color,
                     compact: true,
                   ),
@@ -1770,15 +1660,11 @@ class _EffectiveCapabilityPreferenceTile extends StatelessWidget {
 
 String _effectiveCapabilityLabel(
   BuildContext context,
-  EffectiveCapabilityState state, {
-  bool approximateWhenDegraded = false,
-}) {
+  EffectiveCapabilityState state,
+) {
   return switch (state) {
     EffectiveCapabilityState.active => context.l10n.allowed,
-    EffectiveCapabilityState.degraded =>
-      approximateWhenDegraded
-          ? context.l10n.approximateTiming
-          : context.l10n.limited,
+    EffectiveCapabilityState.degraded => context.l10n.limited,
     EffectiveCapabilityState.blocked => context.l10n.blocked,
     EffectiveCapabilityState.disabledByUser => context.l10n.disabled,
     EffectiveCapabilityState.notConfigured => context.l10n.notSet,

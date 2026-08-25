@@ -36,21 +36,26 @@ jobs:
           supabase/functions/delete-account/index_test.ts
           supabase/functions/account-deletion-status/index.ts
           supabase/functions/account-deletion-status/index_test.ts
+          supabase/functions/process-media-cleanup/index.ts
+          supabase/functions/process-media-cleanup/index_test.ts
       - name: Type-check locked Edge Functions
         run: |
           deno install --frozen --config deno.json
           cd supabase/functions/admob-ssv-handler && deno install --frozen && cd ../../..
           cd supabase/functions/delete-account && deno install --frozen && cd ../../..
           cd supabase/functions/account-deletion-status && deno install --frozen && cd ../../..
-          cd supabase/functions/admob-ssv-handler && deno check --frozen index.ts && cd ../../..
-          cd supabase/functions/delete-account && deno check --frozen index.ts && cd ../../..
-          cd supabase/functions/account-deletion-status && deno check --frozen index.ts && cd ../../..
+          cd supabase/functions/process-media-cleanup && deno install --frozen && cd ../../..
+          cd supabase/functions/admob-ssv-handler && deno check --frozen index.ts index_test.ts && cd ../../..
+          cd supabase/functions/delete-account && deno check --frozen index.ts index_test.ts && cd ../../..
+          cd supabase/functions/account-deletion-status && deno check --frozen index.ts index_test.ts && cd ../../..
+          cd supabase/functions/process-media-cleanup && deno check --frozen index.ts index_test.ts && cd ../../..
       - name: Test locked Edge Functions
         run: |
           deno test --frozen --allow-env --allow-net --config deno.json supabase/functions/_shared/sentry_test.ts
           cd supabase/functions/admob-ssv-handler && deno test --frozen --allow-env --allow-net index_test.ts && cd ../../..
           cd supabase/functions/delete-account && deno test --frozen --allow-env --allow-net index_test.ts && cd ../../..
           cd supabase/functions/account-deletion-status && deno test --frozen --allow-env --allow-net index_test.ts && cd ../../..
+          cd supabase/functions/process-media-cleanup && deno test --frozen --allow-env --allow-net index_test.ts && cd ../..
 
   web-and-static-contracts:
     name: Google contract/static checks
@@ -71,26 +76,23 @@ jobs:
       - name: Validate Google and Android contracts
         run: node tool/validate_google_release_contracts.mjs
 
-  database-security:
-    name: Supabase database tests
+  database-and-endpoint-integration:
+    name: Blank-baseline database and Edge endpoint integration
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: "24"
           cache: npm
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          deno-version: "2.9.3"
       - run: npm ci
-      - name: Start local Supabase stack
-        run: npx supabase start
-      - name: Lint database schema
-        run: npm run supabase:lint
-      - name: Run database authorization and monetization tests
-        run: npm run supabase:test
-      - name: Stop local Supabase stack
-        if: always()
-        run: npx supabase stop --no-backup
+      - name: Run isolated database and endpoint integration lane
+        shell: pwsh
+        run: npm run test:backend-integration
 
   application-backend-integration:
     name: Two-user application/backend integration

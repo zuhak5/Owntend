@@ -422,7 +422,14 @@ class DriftMaintenanceRepository
             predecessorId = comp.recordKey;
             break;
           }
-        } catch (_) {}
+        } on Object {
+          // WP-006 (F-015): unreadable queue payloads are logged without
+          // content; predecessor detection simply skips the row.
+          AppLogger.warning(
+            'sync_completion_payload_unreadable',
+            fields: const {'entity': 'maintenance_completion'},
+          );
+        }
       }
 
       final planShadow =

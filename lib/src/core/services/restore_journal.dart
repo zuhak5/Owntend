@@ -10,7 +10,15 @@ import '../sync/local_sync_store.dart';
 import '../utils/redacting_logger.dart';
 import 'sidecar_registry.dart';
 
-const int kCurrentRestoreJournalVersion = 1;
+/// Journal format 2 stores advisory progress only. Whether the SQLite import
+/// actually committed is proven by reading the restore-generation marker that
+/// was written inside the import transaction itself
+/// (`LocalSyncStore.restoreGenerationSettingKey == journalId`). A pre-commit
+/// journal label can therefore never claim an uncommitted database.
+const int kCurrentRestoreJournalVersion = 2;
+
+/// Canonical media roots restored as one generation.
+const List<String> kRestoreMediaRoots = ['photos', 'profile', 'cloud_media'];
 
 enum RestorePhase {
   validated,
@@ -19,7 +27,7 @@ enum RestorePhase {
   mediaStaged,
   dbCommitStarted,
   dbCommitComplete,
-  mediaSwapped,
+  mediaActivated,
   cloudIntentDurable,
   derivedRebuilt,
   cleanupPending,
@@ -96,7 +104,7 @@ class RestoreJournalEntry {
 
   factory RestoreJournalEntry.fromJson(Map<String, dynamic> json) {
     return RestoreJournalEntry(
-      version: json['version'] as int? ?? 1,
+      version: json['version'] as int? ?? kCurrentRestoreJournalVersion,
       journalId: json['journal_id'] as String,
       accountScope: json['account_scope'] as String,
       archivePath: json['archive_path'] as String,
@@ -125,7 +133,7 @@ class RestoreJournalStore {
             aOptions: owntendAndroidSecureStorageOptions,
           );
 
-  static const _activeKey = 'owntend_active_restore_journal_v1';
+  static const _activeKey = 'owntend_active_restore_journal_v2';
 
   final FlutterSecureStorage _storage;
 
@@ -185,14 +193,156 @@ class InMemoryRestoreJournalStore extends RestoreJournalStore {
   }
 }
 
+/// Reads the transactional restore-generation marker from the live database.
+///
+/// The marker equals the active journal id only when the import transaction
+/// actually committed; a rolled-back transaction leaves the previous value.
+abstract class RestoreCommitProbe {
+  Future<String?> readRestoreGenerationMarker();
+}
+
+class _DirectoryMediaGeneration {
+  _DirectoryMediaGeneration({
+    required this.canonicalRoot,
+    required this.live,
+    required this.staged,
+    required this.previous,
+  });
+
+  final String canonicalRoot;
+  final Directory live;
+  final Directory staged;
+  final Directory previous;
+
+  Future<bool> get liveExists => live.exists();
+  Future<bool> get stagedExists => staged.exists();
+  Future<bool> get previousExists => previous.exists();
+}
+
+List<_DirectoryMediaGeneration> _mediaGenerations(
+  Directory appDir,
+  String token,
+) {
+  return [
+    for (final root in kRestoreMediaRoots)
+      _DirectoryMediaGeneration(
+        canonicalRoot: root,
+        live: Directory(p.join(appDir.path, root)),
+        staged: Directory(p.join(appDir.path, '$root.restore-$token')),
+        previous: Directory(p.join(appDir.path, '$root.previous-$token')),
+      ),
+  ];
+}
+
+/// Activates staged media after the imported database generation has been
+/// proven committed. Idempotent across process death: each root converges to
+/// `live = staged content` exactly once, keeping the old generation in
+/// `.previous-*` until cleanup.
+///
+/// Per-root states and transitions:
+/// - live + staged              : activation not started -> perform renames.
+/// - no live, staged + previous : died between renames -> finish rename.
+/// - no live, staged, no previous : first-generation root -> expose staged.
+/// - live, no staged            : already activated -> nothing to do.
+///
+/// WP-005 (F-012): this is the single activation implementation.
+/// [OwntendBackupService] delegates here with its sidecar registration and
+/// failpoint hooks instead of maintaining a parallel rename sequence.
+Future<void> activateStagedMediaGenerations({
+  required Directory appDir,
+  required String token,
+  void Function(String root)? onRootActivated,
+  void Function(String root)? onPreviousArchived,
+  void Function(String root)? onRootActivating,
+}) async {
+  for (final generation in _mediaGenerations(appDir, token)) {
+    if (!await generation.stagedExists) {
+      continue;
+    }
+    // Called before any rename for this root so injected crashes reproduce
+    // the exact pre-activation interruption states.
+    onRootActivating?.call(generation.canonicalRoot);
+    final hadLive = await generation.liveExists;
+    if (hadLive) {
+      if (await generation.previousExists) {
+        await generation.previous.delete(recursive: true);
+      }
+      await generation.live.rename(generation.previous.path);
+      onPreviousArchived?.call(generation.canonicalRoot);
+    }
+    await generation.staged.rename(generation.live.path);
+    onRootActivated?.call(generation.canonicalRoot);
+  }
+}
+
+/// Deletes staged media without ever touching the canonical live folders.
+/// Used before the database commit has been proven; `.previous-*`
+/// generations are restored first if a partial activation left one behind.
+Future<void> rollbackStagedMediaGenerations({
+  required Directory appDir,
+  required String token,
+}) async {
+  for (final generation in _mediaGenerations(appDir, token).reversed) {
+    if (await generation.stagedExists) {
+      await generation.staged.delete(recursive: true);
+    }
+    if (await generation.previousExists && !await generation.liveExists) {
+      await generation.previous.rename(generation.live.path);
+    }
+  }
+}
+
+/// Removes retained previous generations after successful activation.
+Future<void> cleanupPreviousMediaGenerations({
+  required Directory appDir,
+  required String token,
+}) async {
+  for (final generation in _mediaGenerations(appDir, token)) {
+    if (await generation.previousExists) {
+      await generation.previous.delete(recursive: true);
+    }
+  }
+}
+
 class RestoreJournalResolver {
-  RestoreJournalResolver({required this.journalStore, this.localSyncStore});
+  RestoreJournalResolver({
+    required this.journalStore,
+    this.localSyncStore,
+    this.commitProbe,
+    Future<Directory> Function()? documentsDirectory,
+  }) : _documentsDirectoryOverride = documentsDirectory;
 
   final RestoreJournalStore journalStore;
   final LocalSyncStore? localSyncStore;
+  final RestoreCommitProbe? commitProbe;
+  final Future<Directory> Function()? _documentsDirectoryOverride;
+
+  Future<Directory> _appDir() async {
+    final override = _documentsDirectoryOverride;
+    if (override != null) return override();
+    return getApplicationDocumentsDirectory();
+  }
+
+  RestoreCommitProbe get _probe {
+    final explicit = commitProbe;
+    if (explicit != null) return explicit;
+    final store = localSyncStore;
+    if (store == null) {
+      throw StateError(
+        'Restore recovery requires the local synchronization store to verify '
+        'the committed restore generation.',
+      );
+    }
+    return store;
+  }
+
+  Future<bool> _databaseCommitted(RestoreJournalEntry entry) async {
+    final marker = await _probe.readRestoreGenerationMarker();
+    return marker == entry.journalId;
+  }
 
   Future<void> resolveActiveJournal() async {
-    var entry = await journalStore.getActiveEntry();
+    final entry = await journalStore.getActiveEntry();
     if (entry == null) return;
     if (entry.phase == RestorePhase.terminal) {
       await journalStore.clearActiveEntry();
@@ -204,43 +354,48 @@ class RestoreJournalResolver {
         'Active restore journal version (${entry.version}) is newer than supported ($kCurrentRestoreJournalVersion). Update Owntend to complete restore.',
       );
     }
+    if (entry.version < kCurrentRestoreJournalVersion) {
+      throw StateError(
+        'Active restore journal uses the retired format ${entry.version}; no compatibility path is provided.',
+      );
+    }
 
     AppLogger.info(
       'restore_journal_recovery_started',
       fields: {'phase': entry.phase.name},
     );
 
-    if (entry.phase.index < RestorePhase.dbCommitStarted.index) {
+    final appDir = await _appDir();
+    final committed = await _databaseCommitted(entry);
+
+    if (committed) {
+      await _validateAccountScope(entry);
       if (entry.mediaToken != null) {
-        await _cleanupStagedMedia(entry.mediaToken!);
+        await activateStagedMediaGenerations(
+          appDir: appDir,
+          token: entry.mediaToken!,
+        );
+      }
+      await _makeCloudIntentDurable(entry);
+      if (entry.mediaToken != null) {
+        await cleanupPreviousMediaGenerations(
+          appDir: appDir,
+          token: entry.mediaToken!,
+        );
       }
       await journalStore.clearActiveEntry();
-      AppLogger.info('restore_journal_rolled_back_pre_db_commit');
+      AppLogger.info('restore_journal_rolled_forward_commit_verified');
       return;
     }
 
-    await _validateAccountScope(entry);
-    if (entry.phase.index < RestorePhase.mediaSwapped.index &&
-        entry.mediaToken != null) {
-      await _finalizeMediaSwap(entry.mediaToken!);
-      entry = entry.copyWith(
-        phase: RestorePhase.mediaSwapped,
-        updatedAt: DateTime.now(),
+    if (entry.mediaToken != null) {
+      await rollbackStagedMediaGenerations(
+        appDir: appDir,
+        token: entry.mediaToken!,
       );
-      await journalStore.saveEntry(entry);
     }
-
-    if (entry.phase.index < RestorePhase.cloudIntentDurable.index) {
-      await _makeCloudIntentDurable(entry);
-      entry = entry.copyWith(
-        phase: RestorePhase.cloudIntentDurable,
-        updatedAt: DateTime.now(),
-      );
-      await journalStore.saveEntry(entry);
-    }
-
     await journalStore.clearActiveEntry();
-    AppLogger.info('restore_journal_rolled_forward_post_db_commit');
+    AppLogger.info('restore_journal_rolled_back_commit_unverified');
   }
 
   Future<void> _validateAccountScope(RestoreJournalEntry entry) async {
@@ -283,31 +438,6 @@ class RestoreJournalResolver {
       await store.enqueueRestoreSnapshot(DateTime.now());
     } else {
       await store.pauseAfterLocalRestore();
-    }
-  }
-
-  Future<void> _cleanupStagedMedia(String token) async {
-    final appDir = await getApplicationDocumentsDirectory();
-    for (final root in ['photos', 'profile', 'cloud_media']) {
-      final staged = Directory(p.join(appDir.path, '$root.restore-$token'));
-      if (await staged.exists()) {
-        await staged.delete(recursive: true);
-      }
-    }
-  }
-
-  Future<void> _finalizeMediaSwap(String token) async {
-    final appDir = await getApplicationDocumentsDirectory();
-    for (final root in ['photos', 'profile', 'cloud_media']) {
-      final previous = Directory(p.join(appDir.path, '$root.previous-$token'));
-      if (await previous.exists()) {
-        await previous.delete(recursive: true);
-      }
-      final staged = Directory(p.join(appDir.path, '$root.restore-$token'));
-      final destination = Directory(p.join(appDir.path, root));
-      if (await staged.exists() && !await destination.exists()) {
-        await staged.rename(destination.path);
-      }
     }
   }
 }

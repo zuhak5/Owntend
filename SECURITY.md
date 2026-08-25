@@ -44,10 +44,10 @@ Changes in these areas require elevated review:
 - Google authentication, session storage, account binding, sign-out, and account deletion.
 - Offline synchronization, conflict recovery, maintenance-completion idempotency, and media cleanup.
 - AdMob server-side verification, reward claims, point balances, and charged creation.
-- Backup archive parsing, restore staging, schema compatibility, and rollback. All backup imports enforce strict preallocation resource budgets before live mutation: 256 MiB compressed limit (`_maxBackupBytes`), 512 MiB total expanded limit (`_maxExtractedBytes`), 256 MiB single entry limit (`_maxSingleEntryBytes`), 10,000 maximum entry count (`_maxEntryCount`), 20x maximum compression ratio (`_maxCompressionRatio`), and streaming declared-vs-actual byte size validation.
+- Backup archive parsing, restore staging, schema compatibility, and rollback. All backup imports enforce strict preallocation resource budgets before live mutation: 256 MiB container size limit (`_maxBackupBytes`), 512 MiB aggregate decrypted payload limit (`_maxExtractedBytes`), 256 MiB single entry limit (`_maxSingleEntryBytes`), 128 KiB manifest limit (`_maxManifestBytes`), 10,000 maximum entry count (`_maxEntryCount`), and streaming declared-vs-actual byte size validation.
 - Sentry initialization, scrubbing, event processors, release publication, and telemetry fields.
 - Shorebird release/patch identity, strict eligibility, tracks/promotion/rollback, KMS signing, app IDs, tokens, and updater provenance.
-- Android permissions, exact alarms, foreground services, boot receivers, and location.
+- Android permissions, foreground services, boot receivers, and location.
 - Production configuration, Android signing, APK verification, and VersionDeck.
 
 ## Secret handling

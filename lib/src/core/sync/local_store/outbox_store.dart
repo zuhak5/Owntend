@@ -144,7 +144,18 @@ mixin _LocalSyncOutboxStore on _LocalSyncStoreBase {
     final count = db.syncOutbox.entity.count();
     final query = db.selectOnly(db.syncOutbox)
       ..addColumns([count])
-      ..where(db.syncOutbox.attempts.isBiggerOrEqualValue(0));
+      ..where(
+        db.syncOutbox.attempts.isBiggerOrEqualValue(0) &
+            db.syncOutbox.state.isNotIn(const ['conflict']),
+      );
+    return (await query.map((row) => row.read(count) ?? 0).getSingle());
+  }
+
+  Future<int> unresolvedConflictCount() async {
+    final count = db.syncOutbox.entity.count();
+    final query = db.selectOnly(db.syncOutbox)
+      ..addColumns([count])
+      ..where(db.syncOutbox.state.equals('conflict'));
     return (await query.map((row) => row.read(count) ?? 0).getSingle());
   }
 
@@ -171,7 +182,10 @@ GROUP BY state
     final count = db.syncOutbox.entity.count();
     final query = db.selectOnly(db.syncOutbox)
       ..addColumns([count])
-      ..where(db.syncOutbox.attempts.isBiggerOrEqualValue(0));
+      ..where(
+        db.syncOutbox.attempts.isBiggerOrEqualValue(0) &
+            db.syncOutbox.state.isNotIn(const ['conflict']),
+      );
     return query.map((row) => row.read(count) ?? 0).watchSingle().distinct();
   }
 
@@ -182,6 +196,7 @@ GROUP BY state
       ..addColumns([count])
       ..where(
         db.syncOutbox.attempts.isBiggerOrEqualValue(0) &
+            db.syncOutbox.state.isNotIn(const ['conflict']) &
             (db.syncOutbox.nextAttemptAt.isNull() |
                 db.syncOutbox.nextAttemptAt.isSmallerOrEqualValue(now)),
       );
@@ -270,6 +285,7 @@ WHERE id = 1
       ..addColumns([outboxMinimum])
       ..where(
         db.syncOutbox.attempts.isBiggerOrEqualValue(0) &
+            db.syncOutbox.state.isNotIn(const ['conflict']) &
             db.syncOutbox.nextAttemptAt.isNotNull(),
       );
     final cleanupMinimum = db.syncMediaCleanup.nextAttemptAt.min();
@@ -287,19 +303,25 @@ WHERE id = 1
     return candidates.firstOrNull;
   }
 
-  Future<void> deferPendingAfterFailure(
-    String message, {
+  /// Schedules a run-level retry backoff for every currently-due mutation.
+  ///
+  /// WP-006 (F-038): this deliberately does NOT stamp [lastError]. The
+  /// failure that caused the deferral is run-level (connectivity, auth,
+  /// server health) and is already recorded on `sync_account.last_error`;
+  /// copying it onto unrelated rows forged per-row diagnostics that never
+  /// described those rows' own outcomes.
+  Future<void> deferPendingAfterFailure({
     Duration delay = const Duration(seconds: 15),
   }) async {
     await db.customUpdate(
       '''
 UPDATE offline_mutation_queue
-SET next_attempt_at = ?, last_error = ?
-WHERE next_attempt_at IS NULL OR next_attempt_at <= ?
+SET next_attempt_at = ?
+WHERE (next_attempt_at IS NULL OR next_attempt_at <= ?)
+  AND state <> 'conflict'
 ''',
       variables: [
         Variable<DateTime>(DateTime.now().add(delay)),
-        Variable<String>(message),
         Variable<DateTime>(DateTime.now()),
       ],
       updates: {db.syncOutbox},
@@ -309,19 +331,59 @@ WHERE next_attempt_at IS NULL OR next_attempt_at <= ?
 
   Future<List<LocalSyncMutation>> pendingMutations({int limit = 200}) async {
     final now = DateTime.now();
-    final allOutboxRows = await db.select(db.syncOutbox).get();
-    final allOutboxKeys = {for (final row in allOutboxRows) row.recordKey};
-
-    final query = db.select(db.syncOutbox)
+    // WP-006 (F-010): the due-window query is bounded; dependency keys are
+    // resolved with one targeted lookup for the referenced operation ids
+    // instead of loading every outbox row into memory on each push cycle.
+    final dueQuery = db.select(db.syncOutbox)
       ..where(
         (row) =>
             row.attempts.isBiggerOrEqualValue(0) &
+            row.state.isNotIn(const ['conflict']) &
             (row.nextAttemptAt.isNull() |
                 row.nextAttemptAt.isSmallerOrEqualValue(now)),
       )
       ..orderBy([(row) => OrderingTerm.asc(row.changedAt)])
       ..limit(limit);
-    final rows = await query.get();
+    final rows = await dueQuery.get();
+
+    final dependsOnByRow = <String, String?>{};
+    final dependsOnIds = <String>{};
+    for (final row in rows) {
+      if (row.entity != 'maintenance_completion' || row.payloadJson == null) {
+        continue;
+      }
+      try {
+        final decoded = jsonDecode(row.payloadJson!) as Map<String, dynamic>;
+        final dependsOn = decoded['depends_on_operation_id'] as String?;
+        dependsOnByRow[row.recordKey] = dependsOn;
+        if (dependsOn != null && dependsOn.isNotEmpty) {
+          dependsOnIds.add(dependsOn);
+        }
+      } on Object {
+        // F-015: corrupt payloads no longer vanish silently. The mutation
+        // stays eligible (conservative, matching prior behaviour) and the
+        // failure is observable through [payloadParseFailures].
+        payloadParseFailures++;
+        AppLogger.warning(
+          'sync_outbox_payload_unreadable',
+          fields: {'entity': row.entity},
+        );
+      }
+    }
+
+    final Set<String> blockedDependencyKeys;
+    if (dependsOnIds.isEmpty) {
+      blockedDependencyKeys = const <String>{};
+    } else {
+      final referenced = await (db.select(
+        db.syncOutbox,
+      )..where((row) => row.recordKey.isIn(dependsOnIds))).get();
+      blockedDependencyKeys = {
+        for (final row in referenced)
+          if (row.state != 'conflict') row.recordKey,
+      };
+    }
+
     final rawMutations = [
       for (final row in rows)
         LocalSyncMutation(
@@ -343,18 +405,13 @@ WHERE next_attempt_at IS NULL OR next_attempt_at <= ?
 
     final mutations = <LocalSyncMutation>[];
     for (final mutation in rawMutations) {
-      if (mutation.entity == 'maintenance_completion' &&
-          mutation.payloadJson != null) {
-        try {
-          final decoded =
-              jsonDecode(mutation.payloadJson!) as Map<String, dynamic>;
-          final dependsOn = decoded['depends_on_operation_id'] as String?;
-          if (dependsOn != null &&
-              dependsOn.isNotEmpty &&
-              allOutboxKeys.contains(dependsOn)) {
-            continue;
-          }
-        } catch (_) {}
+      if (mutation.entity == 'maintenance_completion') {
+        final dependsOn = dependsOnByRow[mutation.recordKey];
+        if (dependsOn != null &&
+            dependsOn.isNotEmpty &&
+            blockedDependencyKeys.contains(dependsOn)) {
+          continue;
+        }
       }
       mutations.add(mutation);
     }
@@ -561,8 +618,18 @@ WHERE entity = 'profile'
     await db.transaction(() async {
       await enqueueInitialSnapshot();
       await enqueueReconciliationSnapshot();
-      await db
-          .update(db.syncOutbox)
+      // WP-005 (F-009): a restore must not resurrect user-dismissed failures
+      // (`failedVisible`) or unresolved conflicts (`conflict`). Only
+      // retryable states have their backoff and error stamps cleared so the
+      // post-restore push starts immediately without erasing terminal
+      // decisions the user already made.
+      await (db.update(db.syncOutbox)..where(
+            (row) => row.state.isIn(const [
+              'pending',
+              'inFlight',
+              'conflictRecovery',
+            ]),
+          ))
           .write(
             SyncOutboxCompanion(
               changedAt: Value(restoredAt),
@@ -574,15 +641,13 @@ WHERE entity = 'profile'
     });
   }
 
+  @override
   Future<SyncRecord?> readMutation(
     LocalSyncMutation mutation,
     String deviceId,
   ) async {
     final spec = syncSpecByEntity[mutation.entity];
     if (spec == null) {
-      if (mutation.entity == 'device_setting') {
-        return null;
-      }
       throw SupabaseFailure(
         kind: SupabaseFailureKind.incompatibleSchema,
         message:

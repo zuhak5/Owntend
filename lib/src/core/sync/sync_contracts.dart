@@ -77,6 +77,7 @@ class SyncStatus {
     this.restorePending = false,
     this.backgroundResult,
     this.clockSkewConflicts = 0,
+    this.payloadParseFailures = 0,
   });
 
   const SyncStatus.disabled()
@@ -100,6 +101,10 @@ class SyncStatus {
   final bool restorePending;
   final String? backgroundResult;
   final int clockSkewConflicts;
+
+  /// WP-006 (F-015): outbox/acknowledgement payloads that failed structural
+  /// decoding. Non-PII counter only; no payload content is retained.
+  final int payloadParseFailures;
 }
 
 abstract interface class CloudSyncRepository {

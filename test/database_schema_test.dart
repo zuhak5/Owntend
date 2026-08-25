@@ -68,6 +68,8 @@ void main() {
           'sync_media_cleanup',
           'local_media_cleanup',
           'sync_account',
+          'sync_conflicts',
+          'sync_skipped_feed_entries',
           'search_index_state',
           'search_index',
         }),
@@ -262,5 +264,186 @@ void main() {
         expect(runtime.suppressOutbox, isFalse);
       },
     );
+
+    test('rejects outbox rows outside the canonical state domain', () async {
+      await expectLater(
+        db.customStatement(
+          "INSERT INTO offline_mutation_queue(entity, record_key, operation, state) "
+          "VALUES ('asset', 'a1', 'upsert', 'processing')",
+        ),
+        throwsA(anything),
+      );
+      await expectLater(
+        db.customStatement(
+          "INSERT INTO offline_mutation_queue(entity, record_key, operation) "
+          "VALUES ('asset', 'a1', 'patch')",
+        ),
+        throwsA(anything),
+      );
+      await expectLater(
+        db.customStatement(
+          "INSERT INTO offline_mutation_queue(entity, record_key, operation, attempts) "
+          "VALUES ('asset', 'a1', 'upsert', -2)",
+        ),
+        throwsA(anything),
+      );
+      await expectLater(
+        db.customStatement(
+          "INSERT INTO offline_mutation_queue(entity, record_key, operation, generation) "
+          "VALUES ('asset', 'a1', 'upsert', 0)",
+        ),
+        throwsA(anything),
+      );
+      // A canonical pending row is accepted; -1 is the terminal sentinel.
+      await db.customStatement(
+        "INSERT INTO offline_mutation_queue(entity, record_key, operation, state) "
+        "VALUES ('asset', 'a1', 'delete', 'pending')",
+      );
+    });
+
+    test('enforces cursor sequence and generation domains', () async {
+      await expectLater(
+        db.customStatement(
+          "INSERT INTO sync_cursors(entity, last_sync_seq) VALUES ('asset', -1)",
+        ),
+        throwsA(anything),
+      );
+      await expectLater(
+        db.customStatement(
+          "INSERT INTO sync_cursors(entity, feed_generation) VALUES ('asset', 0)",
+        ),
+        throwsA(anything),
+      );
+      await expectLater(
+        db.customStatement(
+          "INSERT INTO sync_cursors(entity, high_water_seq) VALUES ('asset', -5)",
+        ),
+        throwsA(anything),
+      );
+      await db.customStatement(
+        "INSERT INTO sync_cursors(entity, last_sync_seq, feed_generation, high_water_seq) "
+        "VALUES ('asset', 3, 2, 4)",
+      );
+    });
+
+    test('enforces the sync runtime singleton and lease pairing', () async {
+      await expectLater(
+        db.customStatement('INSERT INTO sync_runtime(id) VALUES (2)'),
+        throwsA(anything),
+      );
+      // A lease owner without an expiry is structurally impossible.
+      await expectLater(
+        db.customStatement(
+          "UPDATE sync_runtime SET lease_owner = 'device-x' WHERE id = 1",
+        ),
+        throwsA(anything),
+      );
+      await db.customStatement(
+        "UPDATE sync_runtime SET lease_owner = 'device-x', "
+        "lease_expires_at = strftime('%s','now') + 60 WHERE id = 1",
+      );
+      final runtime = await db.select(db.syncRuntime).getSingle();
+      expect(runtime.leaseOwner, 'device-x');
+      expect(runtime.leaseExpiresAt, isNotNull);
+    });
+
+    test('enforces the sync account singleton and hydration bounds', () async {
+      await expectLater(
+        db.customStatement(
+          "INSERT INTO sync_account(id, device_id) VALUES (2, 'd2')",
+        ),
+        throwsA(anything),
+      );
+      await db.customStatement(
+        "INSERT INTO sync_account(id, device_id, hydration_total_units) "
+        "VALUES (1, 'd1', 10)",
+      );
+      await expectLater(
+        db.customStatement(
+          "UPDATE sync_account SET hydration_completed_units = 11 WHERE id = 1",
+        ),
+        throwsA(anything),
+      );
+      await db.customStatement(
+        'UPDATE sync_account SET hydration_completed_units = 10 WHERE id = 1',
+      );
+    });
+
+    test('enforces conflict resolution and reconciliation reason domains', () async {
+      await db.customStatement(
+        "INSERT INTO sync_conflicts(id, account_id, entity, record_key) "
+        "VALUES ('c1', 'user-a', 'asset', 'a1')",
+      );
+      await expectLater(
+        db.customStatement(
+          "UPDATE sync_conflicts SET resolution_status = 'winner' "
+          "WHERE id = 'c1'",
+        ),
+        throwsA(anything),
+      );
+
+      await db.customStatement(
+        "INSERT INTO notification_reconciliation_requests(scope_key, reason) "
+        "VALUES ('scope-1', 'local_completion')",
+      );
+      await expectLater(
+        db.customStatement(
+          "UPDATE notification_reconciliation_requests SET reason = 'because' "
+          "WHERE scope_key = 'scope-1'",
+        ),
+        throwsA(anything),
+      );
+      await expectLater(
+        db.customStatement(
+          "UPDATE notification_reconciliation_requests SET attempts = -2 "
+          "WHERE scope_key = 'scope-1'",
+        ),
+        throwsA(anything),
+      );
+    });
+
+    test('enforces cleanup retry attempt domains', () async {
+      await expectLater(
+        db.customStatement(
+          "INSERT INTO sync_media_cleanup(object_path, user_id, entity, record_key, attempts) "
+          "VALUES ('p/1.jpg', 'u1', 'asset_photo', 'p1', -2)",
+        ),
+        throwsA(anything),
+      );
+      await expectLater(
+        db.customStatement(
+          "INSERT INTO local_media_cleanup(relative_path, attempts) "
+          "VALUES ('p/1.jpg', -2)",
+        ),
+        throwsA(anything),
+      );
+    });
+
+    test('retry indexes drive outbox and cleanup query plans', () async {
+      final plan = await db
+          .customSelect(
+            'EXPLAIN QUERY PLAN '
+            "SELECT * FROM offline_mutation_queue "
+            "WHERE state IN ('pending', 'inFlight', 'conflictRecovery') "
+            "AND (next_attempt_at IS NULL OR next_attempt_at <= '2026-01-01') "
+            'ORDER BY changed_at LIMIT 50',
+          )
+          .get();
+      final detail = plan.map((row) => row.read<String>('detail')).join(' | ');
+      expect(detail, contains('idx_outbox_retry'));
+
+      final mediaPlan = await db
+          .customSelect(
+            'EXPLAIN QUERY PLAN '
+            'SELECT * FROM sync_media_cleanup '
+            "WHERE next_attempt_at IS NULL OR next_attempt_at <= '2026-01-01' "
+            'ORDER BY next_attempt_at LIMIT 20',
+          )
+          .get();
+      final mediaDetail = mediaPlan
+          .map((row) => row.read<String>('detail'))
+          .join(' | ');
+      expect(mediaDetail, contains('idx_sync_media_cleanup_retry'));
+    });
   });
 }

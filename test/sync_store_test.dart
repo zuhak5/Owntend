@@ -3,10 +3,14 @@ import 'dart:convert';
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'support/wait_for.dart';
+
 import 'package:owntend/src/core/data/repositories.dart';
 import 'package:owntend/src/core/database/app_database.dart';
 import 'package:owntend/src/core/domain/models.dart';
 import 'package:owntend/src/core/services/reminder_schedule_reconciler.dart';
+import 'package:owntend/src/core/supabase/supabase_failure.dart';
 import 'package:owntend/src/core/sync/local_sync_store.dart';
 import 'package:owntend/src/core/sync/sync_dtos.dart';
 
@@ -262,7 +266,7 @@ void main() {
         boundUserId: 'user-a',
         migrationState: 'active',
       );
-      await store.setCursor('room', 42);
+      await setCursorRow(db, 'room', 42, null);
       final before = await store.account();
 
       await store.clearBinding();
@@ -272,7 +276,7 @@ void main() {
       expect(after.boundUserId, isNull);
       expect(after.enabled, isFalse);
       expect(after.migrationState, 'localOnly');
-      expect(await store.cursor('room'), 0);
+      expect((await readCursorRow(db, 'room')).$1, 0);
       expect(await store.pendingCount(), 0);
       expect(await repository.getAsset(roomId), isNull);
       expect(
@@ -312,7 +316,7 @@ void main() {
       areaId: 'area_first_floor',
       name: 'Local room to preserve',
     );
-    await store.setCursor('room', 99);
+    await setCursorRow(db, 'room', 99, null);
     final originalDeviceId = (await store.account()).deviceId;
 
     await store.bindIdentity('new-user');
@@ -320,7 +324,7 @@ void main() {
     final account = await store.account();
     expect(account.boundUserId, 'new-user');
     expect(account.deviceId, originalDeviceId);
-    expect(await store.cursor('room'), 0);
+    expect((await readCursorRow(db, 'room')).$1, 0);
     expect(await store.pendingCount(), 0);
     expect(
       (await repository.listRooms()).map((room) => room.id),
@@ -341,7 +345,7 @@ void main() {
         name: 'Restored local room',
       );
       await store.bindIdentity('user-a');
-      await store.setCursor('room', 8);
+      await setCursorRow(db, 'room', 8, null);
 
       await store.pauseAfterLocalRestore();
 
@@ -350,7 +354,7 @@ void main() {
       expect(account.boundUserId, isNull);
       expect(account.migrationState, 'restorePaused');
       expect(account.restorePending, isTrue);
-      expect(await store.cursor('room'), 0);
+      expect((await readCursorRow(db, 'room')).$1, 0);
       expect(await store.pendingCount(), 0);
       expect(
         (await repository.listRooms()).map((room) => room.id),
@@ -404,7 +408,7 @@ void main() {
         areaId: 'area_first_floor',
         name: 'Partially restored room',
       );
-      await store.setCursor('room', 9);
+      await setCursorRow(db, 'room', 9, null);
       await store.beginOrResumeHydration();
 
       await store.clearPartialBootstrapForUser('user-a');
@@ -414,7 +418,7 @@ void main() {
       expect(account.boundUserId, isNull);
       expect(account.migrationState, 'localOnly');
       expect(account.restorePending, isFalse);
-      expect(await store.cursor('room'), 0);
+      expect((await readCursorRow(db, 'room')).$1, 0);
       expect(await store.pendingCount(), 0);
       expect(
         (await repository.listRooms()).map((room) => room.id),
@@ -508,7 +512,7 @@ void main() {
   test(
     'remote application suppresses outbox feedback without owning pull cursor',
     () async {
-      await store.discardMutation('area', 'area_first_floor');
+      await db.delete(db.syncOutbox).go();
       final before = await store.pendingCount();
       final spec = syncSpecByEntity['area']!;
 
@@ -537,7 +541,7 @@ void main() {
       )..where((row) => row.id.equals('area_first_floor'))).getSingle();
       expect(area.name, 'Remote floor');
       expect(await store.pendingCount(), before);
-      expect(await store.cursor('area'), 0);
+      expect((await readCursorRow(db, 'area')).$1, 0);
     },
   );
 
@@ -606,8 +610,7 @@ void main() {
       areaId: 'area_second_floor',
       name: 'Remote deletion room',
     );
-    await store.discardMutation('room', roomId);
-    await store.discardMutation('area', 'area_second_floor');
+    await db.delete(db.syncOutbox).go();
     final deletedAt = DateTime.utc(2026, 6, 28);
 
     await store.applyRemoteRecords([
@@ -1039,16 +1042,24 @@ void main() {
     expect(pending.where((item) => item.entity == 'device_setting'), isEmpty);
   });
 
-  test('readMutation gracefully returns null for legacy device_setting outbox mutation', () async {
+  test('readMutation throws incompatibleSchema for unsupported entity outbox mutation', () async {
     final mutation = LocalSyncMutation(
-      entity: 'device_setting',
-      recordKey: 'weather_cache',
+      entity: 'unsupported_entity',
+      recordKey: 'item_1',
       operation: 'delete',
       changedAt: DateTime.now().toUtc(),
       attempts: 0,
     );
-    final record = await store.readMutation(mutation, 'device-test');
-    expect(record, isNull);
+    expect(
+      () => store.readMutation(mutation, 'device-test'),
+      throwsA(
+        isA<SupabaseFailure>().having(
+          (e) => e.kind,
+          'kind',
+          SupabaseFailureKind.incompatibleSchema,
+        ),
+      ),
+    );
   });
 
   test('remote inbox pulls retain 250 rows and queue tombstones', () async {
@@ -1102,16 +1113,176 @@ void main() {
         .toList();
     expect(tombstones, hasLength(2));
   });
+
+  group('WP-004 skipped-feed bookkeeping (F-006)', () {
+    SyncRecord buildMaskedAreaRecord(String id, String name, int revision) {
+      final now = DateTime.utc(2026, 7, 1, 9);
+      return SyncRecord(
+        spec: syncSpecByEntity['area']!,
+        recordKey: id,
+        values: {
+          'id': id,
+          'name': name,
+          'kind': 'indoor',
+          'sort_order': 0,
+          'created_at': now.toIso8601String(),
+          'updated_at': now.toIso8601String(),
+          'archived_at': null,
+        },
+        clientModifiedAt: now,
+        originDeviceId: 'remote-device',
+        revision: revision,
+        serverUpdatedAt: now,
+      );
+    }
+
+    Future<void> seedMaskingIntent(
+      String key, {
+      String state = 'pending',
+    }) async {
+      await db
+          .into(db.syncOutbox)
+          .insert(
+            SyncOutboxCompanion.insert(
+              entity: 'area',
+              recordKey: key,
+              operation: 'upsert',
+              state: Value(state),
+              payloadJson: const Value('{"id":"x"}'),
+              changedAt: Value(DateTime.now()),
+              generation: const Value(1),
+            ),
+          );
+    }
+
+    test('an active intent masks the remote record and books a refetch '
+        'promise without touching local state or shadows', () async {
+      await seedMaskingIntent('area_masked_active');
+      await store.applyRemoteFeedRecord(
+        buildMaskedAreaRecord(
+          'area_masked_active',
+          'Remote rename while pending',
+          4,
+        ),
+      );
+
+      expect(await db.select(db.syncSkippedFeedEntries).get(), hasLength(1));
+      final skip =
+          await (db.select(db.syncSkippedFeedEntries)
+                ..where((row) => row.recordKey.equals('area_masked_active')))
+              .getSingle();
+      expect(skip.reason, 'active_intent');
+      // The masked remote value must not leak into local state.
+      final locals = await (db.select(
+        db.areas,
+      )..where((row) => row.id.equals('area_masked_active'))).get();
+      expect(locals, isEmpty);
+      final shadows = await (db.select(
+        db.syncShadows,
+      )..where((row) => row.recordKey.equals('area_masked_active'))).get();
+      expect(shadows, isEmpty);
+    });
+
+    test('a conflict/terminal intent keeps the shadow truth-adjacent and '
+        'still promises convergence', () async {
+      await seedMaskingIntent('area_masked_conflict', state: 'conflict');
+      await store.applyRemoteFeedRecord(
+        buildMaskedAreaRecord(
+          'area_masked_conflict',
+          'Remote winner behind conflict',
+          6,
+        ),
+      );
+
+      final shadow =
+          await (db.select(db.syncShadows)
+                ..where((row) => row.recordKey.equals('area_masked_conflict')))
+              .getSingle();
+      expect(shadow.remoteRevision, 6);
+      final skip =
+          await (db.select(db.syncSkippedFeedEntries)
+                ..where((row) => row.recordKey.equals('area_masked_conflict')))
+              .getSingle();
+      expect(skip.reason, 'conflict_or_terminal');
+    });
+
+    test('applying an unmasked record fulfils any earlier promise', () async {
+      await db
+          .into(db.syncSkippedFeedEntries)
+          .insert(
+            SyncSkippedFeedEntriesCompanion.insert(
+              entity: 'area',
+              recordKey: 'area_already_clear',
+              reason: 'active_intent',
+            ),
+          );
+      await store.applyRemoteFeedRecord(
+        buildMaskedAreaRecord(
+          'area_already_clear',
+          'Applied after intent cleared',
+          2,
+        ),
+      );
+
+      expect(await db.select(db.syncSkippedFeedEntries).get(), isEmpty);
+      final local = await (db.select(
+        db.areas,
+      )..where((row) => row.id.equals('area_already_clear'))).getSingle();
+      expect(local.name, 'Applied after intent cleared');
+    });
+
+    test('drain candidates only include unmasked promises', () async {
+      await seedMaskingIntent('area_still_masked');
+      await db
+          .into(db.syncSkippedFeedEntries)
+          .insertOnConflictUpdate(
+            SyncSkippedFeedEntriesCompanion.insert(
+              entity: 'area',
+              recordKey: 'area_still_masked',
+              reason: 'active_intent',
+            ),
+          );
+      await db
+          .into(db.syncSkippedFeedEntries)
+          .insertOnConflictUpdate(
+            SyncSkippedFeedEntriesCompanion.insert(
+              entity: 'area',
+              recordKey: 'area_unmasked',
+              reason: 'conflict_or_terminal',
+            ),
+          );
+
+      final candidates = await store.skippedFeedEntriesForDrain();
+      expect(candidates.map((row) => row.recordKey), ['area_unmasked']);
+    });
+
+    test('a deletion behind an intent is promised, never applied', () async {
+      await seedMaskingIntent('area_delete_masked', state: 'failedVisible');
+      final record = buildMaskedAreaRecord(
+        'area_delete_masked',
+        'Soon deleted',
+        3,
+      );
+      await store.applyRemoteFeedDelete(record);
+
+      expect(
+        await (db.select(
+          db.syncShadows,
+        )..where((row) => row.recordKey.equals('area_delete_masked'))).get(),
+        isEmpty,
+      );
+      final skip =
+          await (db.select(db.syncSkippedFeedEntries)
+                ..where((row) => row.recordKey.equals('area_delete_masked')))
+              .getSingle();
+      expect(skip.reason, 'conflict_or_terminal');
+    });
+  });
 }
 
-Future<void> _waitForSyncStoreTest(bool Function() condition) async {
-  final deadline = DateTime.now().add(const Duration(seconds: 2));
-  while (DateTime.now().isBefore(deadline)) {
-    if (condition()) return;
-    await Future<void>.delayed(const Duration(milliseconds: 10));
-  }
-  fail('Timed out waiting for sync store test condition.');
-}
+Future<void> _waitForSyncStoreTest(bool Function() condition) async =>
+    // WP-015 (F-024): shared bounded helper replaces the wall-clock loop.
+    waitFor(condition);
 
 Future<void> _seedTestAreas(AppDatabase db, LocalSyncStore store) async {
   await store.withOutboxSuppressed(() async {
@@ -1129,4 +1300,30 @@ Future<void> _seedTestAreas(AppDatabase db, LocalSyncStore store) async {
       sortOrder: 1,
     );
   });
+}
+
+// WP-010: legacy per-entity cursor API was deleted from LocalSyncStore; tests
+// arrange and assert cursor rows directly through Drift.
+Future<void> setCursorRow(
+  AppDatabase db,
+  String entity,
+  int seq,
+  String? recordKey,
+) {
+  return db
+      .into(db.syncCursors)
+      .insertOnConflictUpdate(
+        SyncCursorsCompanion.insert(
+          entity: entity,
+          lastSyncSeq: Value(seq),
+          lastRecordKey: Value(recordKey),
+        ),
+      );
+}
+
+Future<(int, String?)> readCursorRow(AppDatabase db, String entity) async {
+  final row = await (db.select(
+    db.syncCursors,
+  )..where((item) => item.entity.equals(entity))).getSingleOrNull();
+  return (row?.lastSyncSeq ?? 0, row?.lastRecordKey);
 }

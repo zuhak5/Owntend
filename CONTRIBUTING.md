@@ -66,6 +66,10 @@ npm run test:all
 - Do not edit generated Drift or localization output manually.
 - Add focused tests for behavior changes.
 
+### Import boundaries
+
+Features must not import other features' internals directly. Shared presentation code lives in `lib/src/ui/components`. Cross-feature import violations fail the boundary contract test `test/feature_boundary_contract_test.dart`.
+
 ### Database and synchronization
 
 - Treat local and cloud schema changes as coordinated work.

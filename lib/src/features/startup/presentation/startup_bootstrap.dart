@@ -176,7 +176,7 @@ Future<void> _removeUnsupportedCloudSession(
 
   final store = LocalSyncStore(database);
   if (!await store.isDomainDataPristine()) {
-    await ZipBackupService(database)
+    await OwntendBackupService(database)
         .exportBackup(trigger: BackupTrigger.preRestore);
   }
   await client!.auth.signOut(scope: SignOutScope.local);
@@ -275,10 +275,7 @@ class _DeferredOwntendBootstrapState extends State<DeferredOwntendBootstrap> {
         Directory(p.join(support.path, 'diagnostics')),
       );
       await diagnosticStore.initialize();
-      AppDiagnosticRuntime.fileStore = diagnosticStore;
-      unawaited(
-        DiagnosticExportService(fileStore: diagnosticStore).cleanupExpired(),
-      );
+      unawaited(diagnosticStore.cleanupExpired());
     } on Object catch (error) {
       AppLogger.warning('startup_diagnostics', error: error);
     }
@@ -347,12 +344,14 @@ class OwntendStartupFailure extends StatelessWidget {
   const OwntendStartupFailure({
     this.cloudUnavailable = false,
     this.accountCleanupBlocked = false,
+    this.databaseUnrecoverable = false,
     this.onRetry,
     super.key,
   });
 
   final bool cloudUnavailable;
   final bool accountCleanupBlocked;
+  final bool databaseUnrecoverable;
   final Future<void> Function()? onRetry;
 
   @override
@@ -384,6 +383,8 @@ class OwntendStartupFailure extends StatelessWidget {
                       Text(
                         accountCleanupBlocked
                             ? context.l10n.accountDeletionFailed
+                            : databaseUnrecoverable
+                            ? context.l10n.databaseUnrecoverableBody
                             : cloudUnavailable
                             ? context
                                   .l10n
@@ -1354,13 +1355,20 @@ class StartupBootstrapController {
     if (!_routeHomeAfterReady || _navigationCompleted) return;
     _routeHomeAfterReady = false;
     _navigationCompleted = true;
+    // WP-011 (F-019): a notification tapped before readiness wins over the
+    // default home destination.
+    final pendingRoute = PendingNotificationRoute.take();
+    final target = pendingRoute ?? '/';
     AppLogger.info(
       'startup_finalization_navigation_scheduled',
-      fields: {'attempt': _startupGeneration},
+      fields: {
+        'attempt': _startupGeneration,
+        if (pendingRoute != null) 'destination': 'notification_route',
+      },
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_disposed || !_isCurrentSession(session)) return;
-      _ref.read(routerProvider).go('/');
+      _ref.read(routerProvider).go(target);
       AppLogger.info(
         'startup_navigation_home',
         fields: {'attempt': _startupGeneration},

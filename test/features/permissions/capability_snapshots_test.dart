@@ -20,12 +20,10 @@ const _deviceArea = HomeLocation(
 
 const _schedulerAllowed = NotificationPermissionState(
   notificationsEnabled: true,
-  canScheduleExact: true,
 );
 
 const _schedulerBlocked = NotificationPermissionState(
   notificationsEnabled: false,
-  canScheduleExact: false,
 );
 
 void main() {
@@ -123,7 +121,6 @@ void main() {
       final snapshot = deriveNotificationCapability(
         preferences: const NotificationPreferences(enabled: false),
         notificationPermission: AppPermissionState.granted,
-        exactAlarmPermission: AppPermissionState.granted,
         schedulerState: _schedulerAllowed,
       );
 
@@ -137,17 +134,12 @@ void main() {
         snapshot.weatherAlertState,
         EffectiveCapabilityState.disabledByUser,
       );
-      expect(
-        snapshot.exactTimingState,
-        EffectiveCapabilityState.disabledByUser,
-      );
     });
 
     test('device reminders are active only when both signals allow them', () {
       final snapshot = deriveNotificationCapability(
         preferences: const NotificationPreferences(),
         notificationPermission: AppPermissionState.granted,
-        exactAlarmPermission: AppPermissionState.denied,
         schedulerState: _schedulerAllowed,
       );
 
@@ -158,7 +150,6 @@ void main() {
       final snapshot = deriveNotificationCapability(
         preferences: const NotificationPreferences(),
         notificationPermission: AppPermissionState.denied,
-        exactAlarmPermission: AppPermissionState.denied,
         schedulerState: _schedulerBlocked,
       );
 
@@ -166,65 +157,12 @@ void main() {
       expect(snapshot.notificationNextAction, PermissionNextAction.request);
     });
 
-    test('exact preference off is normal approximate timing', () {
-      final snapshot = deriveNotificationCapability(
-        preferences: const NotificationPreferences(preferExactReminders: false),
-        notificationPermission: AppPermissionState.granted,
-        exactAlarmPermission: AppPermissionState.denied,
-        schedulerState: const NotificationPermissionState(
-          notificationsEnabled: true,
-          canScheduleExact: false,
-        ),
-      );
-
-      expect(
-        snapshot.exactTimingState,
-        EffectiveCapabilityState.disabledByUser,
-      );
-      expect(snapshot.usesApproximateTiming, isTrue);
-      expect(snapshot.exactTimingNextAction, PermissionNextAction.none);
-    });
-
-    test('requested exact timing is active only with effective access', () {
-      final snapshot = deriveNotificationCapability(
-        preferences: const NotificationPreferences(preferExactReminders: true),
-        notificationPermission: AppPermissionState.granted,
-        exactAlarmPermission: AppPermissionState.granted,
-        schedulerState: _schedulerAllowed,
-      );
-
-      expect(snapshot.exactTimingState, EffectiveCapabilityState.active);
-      expect(snapshot.usesApproximateTiming, isFalse);
-    });
-
-    test(
-      'requested exact timing degrades to approximate when access is absent',
-      () {
-        final snapshot = deriveNotificationCapability(
-          preferences: const NotificationPreferences(
-            preferExactReminders: true,
-          ),
-          notificationPermission: AppPermissionState.granted,
-          exactAlarmPermission: AppPermissionState.denied,
-          schedulerState: const NotificationPermissionState(
-            notificationsEnabled: true,
-            canScheduleExact: false,
-          ),
-        );
-
-        expect(snapshot.exactTimingState, EffectiveCapabilityState.degraded);
-        expect(snapshot.usesApproximateTiming, isTrue);
-        expect(snapshot.exactTimingNextAction, PermissionNextAction.request);
-      },
-    );
-
     test(
       'in-app inbox stays active while Android notifications are blocked',
       () {
         final snapshot = deriveNotificationCapability(
           preferences: const NotificationPreferences(),
           notificationPermission: AppPermissionState.permanentlyDenied,
-          exactAlarmPermission: AppPermissionState.denied,
           schedulerState: _schedulerBlocked,
         );
 
@@ -240,7 +178,6 @@ void main() {
           weatherAlerts: true,
         ),
         notificationPermission: AppPermissionState.granted,
-        exactAlarmPermission: AppPermissionState.denied,
         schedulerState: _schedulerAllowed,
       );
 
@@ -260,7 +197,6 @@ void main() {
         deviceLocationPermission: AppPermissionState.denied,
         locationServiceEnabled: true,
         notificationPermission: AppPermissionState.denied,
-        exactAlarmPermission: AppPermissionState.denied,
         schedulerState: _schedulerBlocked,
       );
 

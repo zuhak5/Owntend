@@ -4,6 +4,9 @@ import 'dart:io';
 import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'support/wait_for.dart';
+
 import 'package:owntend/main.dart';
 import 'package:owntend/src/core/data/reactive_stream.dart';
 import 'package:owntend/src/core/database/app_database.dart';
@@ -287,14 +290,13 @@ void _expectNoPostPopulationGap<T>(
   }
 }
 
-Future<void> _eventually(FutureOr<bool> Function() condition) async {
-  final deadline = DateTime.now().add(const Duration(seconds: 5));
-  while (DateTime.now().isBefore(deadline)) {
-    if (await condition()) return;
-    await Future<void>.delayed(const Duration(milliseconds: 25));
-  }
-  fail('Condition was not met before the timeout.');
-}
+Future<void> _eventually(FutureOr<bool> Function() condition) async =>
+    // WP-015 (F-024): shared bounded helper replaces the wall-clock loop.
+    waitFor(
+      () async => await condition(),
+      timeout: const Duration(seconds: 5),
+      because: 'Condition was not met before the timeout.',
+    );
 
 class _AggregateSnapshot {
   const _AggregateSnapshot({required this.room, required this.asset});
@@ -349,6 +351,7 @@ class _RecordingSyncGateway extends SupabaseSyncGateway {
   Future<UserChangeFeedPage> fetchUserChangeFeed({
     int sinceSeq = 0,
     int limit = 100,
+    int? expectedGeneration,
   }) async {
     feedCalls++;
     final candidate = remoteSetting;

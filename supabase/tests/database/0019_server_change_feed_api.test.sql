@@ -7,17 +7,17 @@ set search_path = public, extensions, pg_catalog;
 select extensions.plan(16);
 
 -- 1. Check RPC Existence & Function Grants
-select extensions.has_function('public', 'fetch_user_change_feed', ARRAY['bigint', 'integer'], 'fetch_user_change_feed RPC exists');
+select extensions.has_function('public', 'fetch_user_change_feed', ARRAY['bigint', 'integer', 'bigint'], 'fetch_user_change_feed RPC exists');
 select extensions.has_function('public', 'validate_change_feed_parity', ARRAY[]::text[], 'owner-scoped validate_change_feed_parity RPC exists');
 select extensions.hasnt_function('public', 'validate_change_feed_parity', ARRAY['uuid'], 'caller-selected parity RPC was removed');
 
 select extensions.ok(
-  not (select has_function_privilege('anon', 'public.fetch_user_change_feed(bigint, integer)', 'execute')),
+  not (select has_function_privilege('anon', 'public.fetch_user_change_feed(bigint, integer, bigint)', 'execute')),
   'anon role cannot execute fetch_user_change_feed'
 );
 
 select extensions.ok(
-  (select has_function_privilege('authenticated', 'public.fetch_user_change_feed(bigint, integer)', 'execute')),
+  (select has_function_privilege('authenticated', 'public.fetch_user_change_feed(bigint, integer, bigint)', 'execute')),
   'authenticated role can execute fetch_user_change_feed'
 );
 
@@ -28,6 +28,7 @@ execute create_user_a;
 execute create_user_b;
 
 truncate table public.server_change_feed restart identity;
+truncate table public.owner_feed_state cascade;
 
 -- 2. Unauthenticated Call Fails
 set local role anon;
@@ -108,6 +109,7 @@ select extensions.results_eq(
 -- 6. Resnapshot Required Test
 set local role postgres;
 delete from public.server_change_feed where change_seq <= 2;
+update public.owner_feed_state set retained_min_seq = 3 where user_id = '00000000-0000-0000-0000-00000000000a';
 
 set local role authenticated;
 set local "request.jwt.claims" = '{"sub": "00000000-0000-0000-0000-00000000000a"}';

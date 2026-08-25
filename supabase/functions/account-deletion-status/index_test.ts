@@ -52,6 +52,30 @@ Deno.test("status endpoint has exact CORS allowlist", async () => {
   );
   assertEquals(denied.status, 403);
   assertEquals(await denied.json(), { error: "origin_not_allowed" });
+
+  // WP-002 (F-034): development origins fail closed unless the function
+  // explicitly runs in a non-production environment.
+  const devOrigin = await handleAccountDeletionStatus(
+    new Request("http://localhost/account-deletion-status", {
+      method: "OPTIONS",
+      headers: { Origin: "http://localhost:4173" },
+    }),
+    {
+      get: (key: string): string | undefined =>
+        key === "OWNTEND_FUNCTIONS_ENV" ? "development" : undefined,
+    } as never,
+  );
+  assertEquals(devOrigin.status, 204);
+  assertEquals(
+    devOrigin.headers.get("access-control-allow-origin"),
+    "http://localhost:4173",
+  );
+
+  const devOriginDenied = await handleAccountDeletionStatus(
+    recoveryRequest({ origin: "http://localhost:4173" }),
+    emptyEnvironment,
+  );
+  assertEquals(devOriginDenied.status, 403);
 });
 
 Deno.test("status endpoint rejects malformed recovery requests and identifiers", async () => {

@@ -98,6 +98,36 @@ For every new or changed field:
 
 The current Drift schema version is `1`. It directly contains the canonical domain, FTS generation/invalidation, sync/outbox/shadow/checkpoint, notification-reconciliation, and durable local-media-cleanup structures. There is no unpublished upgrade ladder, Category table, duplicate device-notification table, or compatibility field in the production-v1 baseline.
 
+All static schema objects — tables, CHECK constraints, indexes, the FTS cache, and every sync/search trigger — are installed by one canonical creation path when a fresh database is created. `beforeOpen` performs only connection pragmas, baseline verification (a database that does not match the canonical v1 object inventory fails closed with an explicit error instead of being silently repaired), runtime lease recovery, and deliberate default seeding.
+
+Structural invariants enforced by the schema itself include:
+
+- Outbox operation/state/attempt/generation domains (`upsert`/`delete` trigger operations plus the durable `execute` completion journal; states `pending`, `inFlight`, `conflictRecovery`, `failedVisible`, `conflict`; attempts use `-1` as the terminal sentinel; generations start at 1).
+- Cursor sequence/generation domains and singleton runtime/account rows with all-or-nothing lease pairing.
+- Conflict resolution and notification-reconciliation reason domains.
+- Retry-ready composite indexes for outbox dequeue, sync/local media cleanup, and reminder reconciliation; query plans are asserted by test.
+
+### Upgrade story and timestamp convention (WP-008, F-008)
+
+The v1 baseline is the launch contract. `beforeOpen` deliberately rejects any
+database that does not match the canonical object inventory
+(`StateError` naming the missing objects plus "clear app storage" guidance);
+the startup bootstrap surfaces this as a localized, unrecoverable-database
+screen (`OwntendStartupFailure(databaseUnrecoverable: true)`).
+
+- **Through launch:** no `onUpgrade` ladder exists. Any schema change is made
+  directly in the v1 baseline (`schemaVersion` stays `1`) because zero devices
+  carry an older file. `test/database_baseline_rejection_test.dart` pins the
+  rejection contract.
+- **First post-launch schema change (trigger):** bump `currentSchemaVersion`,
+  add an `onUpgrade` step from the previously shipped version, extend
+  `test/database_schema_test.dart` with from-fixture coverage for every shipped
+  version, and coordinate the change with the backup container format and sync
+  payload contracts in the same release.
+- **Timestamps:** all synced timestamps use second precision
+  (`canonicalSyncSecond` in `maintenance_repository.dart`; SQLite triggers use
+  `strftime('%s','now')`). Never mix millisecond values into synced columns.
+
 ## Indexing and constraints
 
 Use database constraints for invariants that must hold independently of Flutter. Add indexes based on real query and synchronization access patterns. Review uniqueness together with soft deletion, account ownership, retries, and idempotency.

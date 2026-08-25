@@ -7,7 +7,7 @@ import 'package:owntend/src/core/services/app_permission_coordinator.dart'
 export 'package:owntend/src/core/services/app_permission_coordinator.dart'
     show AppPermissionState;
 
-enum PermissionCapability { deviceLocation, notifications, exactReminderTiming }
+enum PermissionCapability { deviceLocation, notifications }
 
 enum PermissionEducationSource {
   firstDashboardVisit,
@@ -30,7 +30,6 @@ enum PermissionNextAction {
   request,
   openAppSettings,
   openLocationSettings,
-  openExactAlarmSettings,
   chooseManualLocation,
   none,
 }

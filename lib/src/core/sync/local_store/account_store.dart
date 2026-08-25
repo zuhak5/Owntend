@@ -352,6 +352,7 @@ ORDER BY created_at DESC, id DESC
       await db.delete(db.syncCursors).go();
       await db.delete(db.syncShadows).go();
       await db.delete(db.syncOutbox).go();
+      await db.delete(db.syncConflicts).go();
       await db.delete(db.syncMediaCleanup).go();
       await (db.update(db.syncRuntime)..where((row) => row.id.equals(1))).write(
         const SyncRuntimeCompanion(
@@ -618,6 +619,7 @@ ORDER BY created_at DESC, id DESC
       await db.delete(db.syncCursors).go();
       await db.delete(db.syncShadows).go();
       await db.delete(db.syncOutbox).go();
+      await db.delete(db.syncConflicts).go();
       await db.delete(db.syncMediaCleanup).go();
       await db.delete(db.syncAccount).go();
       await (db.update(db.syncRuntime)..where((row) => row.id.equals(1))).write(

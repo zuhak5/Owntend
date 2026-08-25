@@ -16,10 +16,12 @@ import 'sync_dtos.dart';
 part 'coordinator/models.dart';
 part 'coordinator/post_ready_coordinator.dart';
 part 'coordinator/push_coordinator.dart';
+part 'coordinator/repair_coordinator.dart';
 part 'coordinator/run_coordinator.dart';
 part 'coordinator/runtime_coordinator.dart';
+part 'coordinator/schedule_controller.dart';
 
-class SyncCoordinator implements CloudSyncRepository {
+class SyncCoordinator implements CloudSyncRepository, _SyncScheduleEnv {
   SyncCoordinator(
     this._authRepository,
     this._localStore,
@@ -101,18 +103,17 @@ class SyncCoordinator implements CloudSyncRepository {
   StreamSubscription<bool>? _connectivitySubscription;
   Future<SyncRunOutcome>? _activeSync;
   SyncWork? _activeWork;
-  Timer? _automaticSyncTimer;
-  Timer? _retryTimer;
   Timer? _realtimeReconnectTimer;
   Timer? _realtimeDeleteFollowUpTimer;
+  Timer? _retryTimer;
   Timer? _initializationTimer;
   bool _isInitializing = true;
-  final Set<String> _pendingTargetTables = {};
-  bool _pushOnlyRequested = false;
-  bool _broadPullRequested = false;
+
+  /// WP-007 (F-011): queued-work requests and the automatic-sync timer are
+  /// owned by the schedule controller; the facade only answers environment
+  /// queries and consumes drained work requests.
+  late final _SyncScheduleController _schedule = _SyncScheduleController(this);
   var _realtimeReconnectAttempts = 0;
-  bool _syncRequestedWhileActive = false;
-  bool _fullSyncRequestedWhileActive = false;
   bool _online = true;
   bool _mergeConfirmationRequired = false;
   Future<void> _authInitialization = Future<void>.value();
@@ -133,6 +134,24 @@ class SyncCoordinator implements CloudSyncRepository {
   String? _lastAccountScopeKey;
 
   bool? get lastCloudAccountWasExisting => _lastCloudAccountWasExisting;
+
+  // WP-007: environment answers for [_SyncScheduleController].
+  @override
+  bool get scheduleAccountDeletionInProgress => _accountDeletionInProgress;
+  @override
+  bool get scheduleAutomaticEnabled => _automaticSyncEnabled;
+  @override
+  bool get scheduleIsInitializing => _isInitializing;
+  @override
+  bool get scheduleHasActiveSync => _activeSync != null;
+  @override
+  bool get scheduleActiveCoversBroadPull => _activeWork?.pullTables == null;
+  @override
+  int get scheduleAttemptSerial => _syncAttemptSerial;
+  @override
+  void scheduleRunAutomaticSync() {
+    unawaited(_runAutomaticSync());
+  }
 
   void _runListener(String eventName, Future<void> Function() operation) {
     unawaited(
@@ -173,6 +192,7 @@ class SyncCoordinator implements CloudSyncRepository {
         nextRetryAt: nextRetryAt,
         mergeConfirmationRequired: false,
         clockSkewConflicts: _clockSkewConflicts,
+        payloadParseFailures: _localStore.payloadParseFailures,
       );
     }
     final hydration = await _localStore.hydrationProgress();
@@ -204,6 +224,7 @@ class SyncCoordinator implements CloudSyncRepository {
       restorePending: account.restorePending,
       backgroundResult: account.backgroundResult,
       clockSkewConflicts: _clockSkewConflicts,
+      payloadParseFailures: _localStore.payloadParseFailures,
     );
   }
 
@@ -447,12 +468,26 @@ class SyncCoordinator implements CloudSyncRepository {
     }
   }
 
+  void _scheduleAutomaticSync({
+    Duration delay = const Duration(milliseconds: 350),
+    Set<String>? targetTables,
+    bool pushOnly = false,
+    bool requireBroadPull = false,
+  }) {
+    _schedule.scheduleAutomatic(
+      delay: delay,
+      targetTables: targetTables,
+      pushOnly: pushOnly,
+      requireBroadPull: requireBroadPull,
+    );
+  }
+
   Future<void> dispose() async {
     _initializationTimer?.cancel();
-    _automaticSyncTimer?.cancel();
     _retryTimer?.cancel();
     _realtimeReconnectTimer?.cancel();
     _realtimeDeleteFollowUpTimer?.cancel();
+    _schedule.dispose();
     await _accountSubscription?.cancel();
     await _pendingSubscription?.cancel();
     await _authSubscription?.cancel();

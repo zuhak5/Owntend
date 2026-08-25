@@ -2,6 +2,10 @@
 
 Production release mutation remains contained. This runbook defines evidence and handoff; it does not authorize a Shorebird publish, Play upload, Sentry mutation, GitHub Release, VersionDeck publication, hosted backend mutation, or rollout.
 
+Pre-launch schema posture: while the `AGENTS.md` lifecycle checkbox is
+unchecked, Drift stays at immutable v1 (reject-on-mismatch) and the Supabase
+history is exactly one baseline migration. At launch authorization, execute
+[`docs/plans/launch-containment-checklist.md`](../plans/launch-containment-checklist.md).
 ## Canonical release rail
 
 [`Shorebird Android Release`](../../.github/workflows/shorebird-release-android.yml) replaces the old independent APK and Play builds. It accepts an exact source SHA, flavor, and `validate`/`publish` operation. `validate` is the default and runs `shorebird release android --dry-run`. Production publication additionally requires:

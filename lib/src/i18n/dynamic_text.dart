@@ -1,13 +1,10 @@
 import 'package:flutter/material.dart' as material;
 import 'package:flutter/widgets.dart';
 
-import '../core/domain/models.dart';
-
 class DynamicText extends StatelessWidget {
   const DynamicText(
     this.data, {
     required this.contentType,
-    this.sourceLanguage = AppLanguage.en,
     this.style,
     this.strutStyle,
     this.textAlign,
@@ -26,7 +23,6 @@ class DynamicText extends StatelessWidget {
 
   final String data;
   final String contentType;
-  final AppLanguage sourceLanguage;
   final TextStyle? style;
   final StrutStyle? strutStyle;
   final TextAlign? textAlign;

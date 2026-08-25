@@ -21,9 +21,7 @@ extension _SyncRunCoordinator on SyncCoordinator {
       // and manual-refresh requests. Targeted or push-only work does not cover
       // a requested broad pull and therefore requires one follow-up sync.
       if (!activeCoversRequestedPull) {
-        _syncRequestedWhileActive = true;
-        _fullSyncRequestedWhileActive =
-            _fullSyncRequestedWhileActive || mode == SyncMode.fullReconcile;
+        _schedule.markFollowUpRequired(full: mode == SyncMode.fullReconcile);
       }
 
       AppLogger.info(
@@ -34,17 +32,12 @@ extension _SyncRunCoordinator on SyncCoordinator {
       );
       return _activeSync!;
     }
-    final targetTables = _pendingTargetTables.toSet();
-    _pendingTargetTables.clear();
-    final pushOnlyRequested = _pushOnlyRequested;
-    _pushOnlyRequested = false;
-    final broadPullRequested = _broadPullRequested;
-    _broadPullRequested = false;
+    final queued = _schedule.consumeQueuedWork();
     final work = _workFor(
       mode,
-      targetTables,
-      pushOnlyRequested,
-      broadPullRequested,
+      queued.targetTables,
+      queued.pushOnly,
+      queued.broadPull,
     );
     _activeWork = work;
     final attempt = ++_syncAttemptSerial;
@@ -60,17 +53,11 @@ extension _SyncRunCoordinator on SyncCoordinator {
       _activeSync = null;
       _activeWork = null;
       if (_accountDeletionInProgress) {
-        _syncRequestedWhileActive = false;
-        _fullSyncRequestedWhileActive = false;
-        _pendingTargetTables.clear();
-        _pushOnlyRequested = false;
-        _broadPullRequested = false;
+        _schedule.cancelQueuedWork();
         return;
       }
-      if (_syncRequestedWhileActive) {
-        _syncRequestedWhileActive = false;
-        final nextFullSync = _fullSyncRequestedWhileActive;
-        _fullSyncRequestedWhileActive = false;
+      if (_schedule.takeFollowUpRequested()) {
+        final nextFullSync = _schedule.takeFollowUpFullSync();
         if (nextFullSync) {
           unawaited(_startSync(mode: SyncMode.fullReconcile));
         } else {
@@ -246,6 +233,7 @@ extension _SyncRunCoordinator on SyncCoordinator {
           scope: activeScope,
           trackHydration: firstSync,
         );
+        await _drainSkippedFeedEntries(scope: activeScope);
         await _setInitialHydrationStage(
           firstSync,
           InitialHydrationStage.checkingLatestUpdates,
@@ -281,14 +269,6 @@ extension _SyncRunCoordinator on SyncCoordinator {
               'sync_failed_visible_detail',
               fields: {'count': failedVisibleCount, 'details': details},
             );
-            final abandonedCount = await _localStore
-                .abandonStaleFailedVisibleMutations();
-            if (abandonedCount > 0) {
-              AppLogger.info(
-                'sync_outbox_abandoned',
-                fields: {'abandoned_count': abandonedCount},
-              );
-            }
           }
         }
       }
@@ -365,7 +345,7 @@ extension _SyncRunCoordinator on SyncCoordinator {
       } else {
         await _localStore.recordSyncFailure(failure.message);
         if (failure.retryable) {
-          await _localStore.deferPendingAfterFailure(failure.message);
+          await _localStore.deferPendingAfterFailure();
         }
       }
       if (firstSync) {
@@ -439,22 +419,25 @@ extension _SyncRunCoordinator on SyncCoordinator {
     var remoteRecordCount = 0;
     var meaningfulRemoteRecordCount = 0;
     var maintenanceChanged = false;
-    final pendingResnapshotHighWater = await _localStore
-        .feedResnapshotHighWater();
-    if (pendingResnapshotHighWater != null) {
+    final pendingResnapshotMarker = await _localStore.feedResnapshotMarker();
+    if (pendingResnapshotMarker != null) {
       return _resumeFeedResnapshot(
         userId,
         deviceId,
         scope: scope,
-        highWaterSeq: pendingResnapshotHighWater,
+        highWaterSeq: pendingResnapshotMarker.highWaterSeq,
+        feedGeneration: pendingResnapshotMarker.feedGeneration,
       );
     }
-    var currentSeq = await _localStore.getFeedCursor();
+    final cursorRow = await _localStore.getFeedCursorRow();
+    var currentSeq = cursorRow?.lastSyncSeq ?? 0;
+    var currentGeneration = cursorRow?.feedGeneration ?? 1;
 
     while (true) {
       final page = await _remoteGateway.fetchUserChangeFeed(
         sinceSeq: currentSeq,
         limit: 100,
+        expectedGeneration: currentGeneration,
       );
 
       if (page.resnapshotRequired) {
@@ -463,10 +446,12 @@ extension _SyncRunCoordinator on SyncCoordinator {
           fields: {
             'since_seq': currentSeq,
             'high_water_seq': page.highWaterSeq,
+            'feed_generation': page.feedGeneration,
           },
         );
         await _localStore.resetFeedCursorForResnapshot(
           highWaterSeq: page.highWaterSeq,
+          feedGeneration: page.feedGeneration,
         );
         return _resumeFeedResnapshot(
           userId,
@@ -480,6 +465,8 @@ extension _SyncRunCoordinator on SyncCoordinator {
         await _localStore.applyRemoteFeedPageAndCheckpoint(
           records: const [],
           lastSyncSeq: page.nextSeq,
+          feedGeneration: page.feedGeneration,
+          highWaterSeq: page.highWaterSeq,
         );
         break;
       }
@@ -490,7 +477,7 @@ extension _SyncRunCoordinator on SyncCoordinator {
         final record = entry.record;
         final materialized =
             record.spec.entity == 'asset_photo' && !record.isDeleted
-            ? await _remoteGateway.materializeRemoteMedia(record, userId)
+            ? await _materializeFeedPhotoWithDeferral(record, userId)
             : record;
         pageRecords.add(materialized);
         if (record.spec.entity != 'profile') {
@@ -505,8 +492,11 @@ extension _SyncRunCoordinator on SyncCoordinator {
       await _localStore.applyRemoteFeedPageAndCheckpoint(
         records: pageRecords,
         lastSyncSeq: page.nextSeq,
+        feedGeneration: page.feedGeneration,
+        highWaterSeq: page.highWaterSeq,
       );
       currentSeq = page.nextSeq;
+      currentGeneration = page.feedGeneration;
 
       if (!page.hasMore) break;
     }
@@ -523,6 +513,7 @@ extension _SyncRunCoordinator on SyncCoordinator {
     String deviceId, {
     required _ActiveAccountScope scope,
     required int highWaterSeq,
+    int? feedGeneration,
   }) async {
     final outcome = await _pullAuthoritativeSnapshot(
       userId,
@@ -534,7 +525,10 @@ extension _SyncRunCoordinator on SyncCoordinator {
     await _ensureActiveAccountScope(scope);
     await _reconcileMissedRemoteDeletes(userId, deviceId, scope: scope);
     await _ensureActiveAccountScope(scope);
-    await _localStore.completeFeedResnapshot(highWaterSeq);
+    await _localStore.completeFeedResnapshot(
+      highWaterSeq,
+      feedGeneration: feedGeneration,
+    );
     return outcome;
   }
 
@@ -648,9 +642,18 @@ extension _SyncRunCoordinator on SyncCoordinator {
             remoteWinners.add(record);
             maintenanceChanged =
                 maintenanceChanged || _isMaintenanceSyncEntity(record);
-            await _localStore.discardMutation(
-              record.spec.entity,
-              record.recordKey,
+            // A remote winner never deletes the queued local intent. The
+            // outbox row enters the durable `conflict` state (generation-
+            // checked) and survives restart until acknowledged or explicitly
+            // resolved by the user.
+            await _localStore.markEntityMutationConflicted(
+              entity: record.spec.entity,
+              recordKey: record.recordKey,
+              accountId: userId,
+              deviceId: deviceId,
+              reason: 'pulled_remote_winner',
+              remotePayloadJson: jsonEncode(record.values),
+              remoteRevision: record.revision,
             );
           }
           recordKey = record.recordKey;
@@ -732,55 +735,6 @@ extension _SyncRunCoordinator on SyncCoordinator {
             total +
             (_isBootstrapClassificationRecord(seed) ? seed.exactCount : 0),
       ),
-    );
-  }
-
-  Future<void> _reconcileMissedRemoteDeletes(
-    String userId,
-    String deviceId, {
-    required _ActiveAccountScope scope,
-  }) async {
-    final remoteKeys = <String, Set<String>>{};
-    const parallelism = 4;
-    for (var index = 0; index < syncEntitySpecs.length; index += parallelism) {
-      final end = math.min(index + parallelism, syncEntitySpecs.length);
-      final batch = syncEntitySpecs.sublist(index, end);
-      final results = await Future.wait([
-        for (final spec in batch)
-          _remoteGateway.fetchAuthoritativeRecordKeys(
-            spec: spec,
-            userId: userId,
-            deviceId: deviceId,
-          ),
-      ]);
-      await _ensureActiveAccountScope(scope);
-      for (var offset = 0; offset < batch.length; offset++) {
-        remoteKeys[batch[offset].entity] = results[offset];
-      }
-    }
-
-    var removed = 0;
-    for (final spec in syncEntitySpecs.reversed) {
-      await _ensureActiveAccountScope(scope);
-      final stopwatch = Stopwatch()..start();
-      final tableRemoved = await _localStore.reconcileAuthoritativeRecordKeys(
-        spec: spec,
-        remoteKeys: remoteKeys[spec.entity] ?? const {},
-      );
-      removed += tableRemoved;
-      AppLogger.info(
-        'sync_integrity_${spec.entity}_completed',
-        fields: {
-          'remote_keys': remoteKeys[spec.entity]?.length ?? 0,
-          'removed': tableRemoved,
-          'elapsed_ms': stopwatch.elapsedMilliseconds,
-        },
-      );
-    }
-    await _localStore.recordIntegrityCheck(DateTime.now());
-    AppLogger.info(
-      'sync_integrity_completed',
-      fields: {'removed': removed, 'tables': syncEntitySpecs.length},
     );
   }
 

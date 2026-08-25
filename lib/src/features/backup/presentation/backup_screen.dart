@@ -1,5 +1,6 @@
 import 'package:path/path.dart' as p;
 
+import '../../monetization/monetization.dart';
 import '../../../ui/components.dart' as hk_ui;
 import '../../../ui/presentation_support.dart';
 
@@ -21,6 +22,7 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
   String _busyLabel = '';
   BackupState _state = const BackupState();
   BackupPreview? _restorePreview;
+  String? _restorePassphrase;
 
   @override
   void initState() {
@@ -99,15 +101,101 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
     }
   }
 
+  /// Returns null when cancelled, an empty string for a device-protected
+  /// backup, or the chosen passphrase.
+  Future<String?> _promptForExportPassphrase() async {
+    final controller = TextEditingController();
+    final confirmController = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: Text(context.l10n.backupPassphraseDialogTitle),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: controller,
+                  obscureText: true,
+                  autofillHints: const [AutofillHints.newPassword],
+                  decoration: InputDecoration(
+                    labelText: context.l10n.backupPassphraseLabel,
+                    helperText: context.l10n.backupPassphraseHelp,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: confirmController,
+                  obscureText: true,
+                  autofillHints: const [AutofillHints.newPassword],
+                  decoration: InputDecoration(
+                    labelText: context.l10n.backupPassphraseConfirmLabel,
+                    errorText: _passphraseError(
+                      controller.text,
+                      confirmController.text,
+                    ),
+                  ),
+                  onChanged: (_) => setDialogState(() {}),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: Text(MaterialLocalizations.of(context).cancelButtonLabel),
+            ),
+            FilledButton(
+              onPressed: () {
+                final error = _passphraseError(
+                  controller.text,
+                  confirmController.text,
+                );
+                if (error != null) {
+                  setDialogState(() {});
+                  return;
+                }
+                Navigator.of(dialogContext).pop(controller.text.trim());
+              },
+              child: Text(context.l10n.createBackup),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String? _passphraseError(String passphrase, String confirm) {
+    if (passphrase.isEmpty) {
+      return null;
+    }
+    if (passphrase.length < 8) {
+      return context.l10n.backupPassphraseTooShort;
+    }
+    if (passphrase != confirm) {
+      return context.l10n.backupPassphraseMismatch;
+    }
+    return null;
+  }
+
   Future<void> _exportBackup() async {
     if (_busy) {
       return;
     }
+    final passphraseChoice = await _promptForExportPassphrase();
+    if (!mounted || passphraseChoice == null) {
+      return;
+    }
+    final passphrase = passphraseChoice.isEmpty ? null : passphraseChoice;
     final operationId = ++_backupOperationId;
     _setBusy(context.l10n.creatingBackup);
     _scheduleBackupLoadingIndicator(operationId);
     try {
-      final path = await ref.read(backupRepositoryProvider).exportBackup();
+      final path = await ref
+          .read(backupRepositoryProvider)
+          .exportBackup(passphrase: passphrase);
       if (!mounted || operationId != _backupOperationId) {
         return;
       }
@@ -192,7 +280,7 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
   Future<void> _chooseRestoreBackup() async {
     final result = await FilePickerPlatform.instance.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['zip'],
+      allowedExtensions: ['owntend-backup', 'zip'],
     );
     final path = result.isNotEmpty ? result.first.path : null;
     if (path == null) {
@@ -201,11 +289,28 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
     if (!mounted) {
       return;
     }
+    _restorePassphrase = null;
     _setBusy(context.l10n.checkingBackup);
     try {
-      final preview = await ref
-          .read(backupRepositoryProvider)
-          .inspectBackup(path);
+      BackupPreview preview;
+      try {
+        preview = await ref
+            .read(backupRepositoryProvider)
+            .inspectBackup(path, passphrase: null);
+      } on BackupPassphraseRequiredException {
+        if (!mounted) {
+          return;
+        }
+        final entered = await _promptForRestorePassphrase();
+        if (!mounted || entered == null || entered.isEmpty) {
+          return;
+        }
+        _setBusy(context.l10n.checkingBackup);
+        _restorePassphrase = entered;
+        preview = await ref
+            .read(backupRepositoryProvider)
+            .inspectBackup(path, passphrase: entered);
+      }
       if (!mounted) {
         return;
       }
@@ -226,6 +331,37 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
         _clearBusy();
       }
     }
+  }
+
+  Future<String?> _promptForRestorePassphrase() async {
+    final controller = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(context.l10n.backupEnterPassphraseTitle),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          obscureText: true,
+          autofillHints: const [AutofillHints.password],
+          onSubmitted: (value) => Navigator.of(dialogContext).pop(value.trim()),
+          decoration: InputDecoration(
+            labelText: context.l10n.backupPassphraseLabel,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(MaterialLocalizations.of(context).cancelButtonLabel),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(controller.text.trim()),
+            child: Text(context.l10n.restoreBackup),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _confirmRestore() async {
@@ -310,7 +446,9 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
       } else {
         await ref.read(cloudSyncRepositoryProvider).disable();
       }
-      await ref.read(backupRepositoryProvider).restoreBackup(preview.path);
+      await ref
+          .read(backupRepositoryProvider)
+          .restoreBackup(preview.path, passphrase: _restorePassphrase);
       final localStore = ref.read(localSyncStoreProvider);
       if (choice == _RestoreCloudChoice.localOnlyPause) {
         await localStore?.pauseAfterLocalRestore();
@@ -318,7 +456,9 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
         await localStore?.enqueueRestoreSnapshot(DateTime.now());
         await ref.read(cloudSyncRepositoryProvider).fullReconcile();
       }
-      _reloadRestoredProviders();
+      // WP-005 (F-007): the restore service publishes the database epoch on
+      // verified commit, so every completion path — not just this screen —
+      // rebuilds dependent streams.
       await ref.read(searchRepositoryProvider).rebuildIndex();
       if (ref.read(notificationAutoStartProvider)) {
         final scheduler = ref.read(notificationSchedulerProvider);
@@ -347,34 +487,6 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
         _clearBusy();
       }
     }
-  }
-
-  void _reloadRestoredProviders() {
-    ref.invalidate(databaseProvider);
-    ref.invalidate(assetRepositoryProvider);
-    ref.invalidate(maintenanceRepositoryProvider);
-    ref.invalidate(calendarRepositoryProvider);
-    ref.invalidate(streakServiceProvider);
-    ref.invalidate(statisticsRepositoryProvider);
-    ref.invalidate(settingsRepositoryProvider);
-    ref.invalidate(notificationInboxRepositoryProvider);
-    ref.invalidate(weatherRepositoryProvider);
-    ref.invalidate(backupRepositoryProvider);
-    ref.invalidate(searchRepositoryProvider);
-    ref.invalidate(notificationSchedulerProvider);
-    ref.invalidate(profileProvider);
-    ref.invalidate(homeLocationProvider);
-    ref.invalidate(weatherProvider);
-    ref.invalidate(notificationsProvider);
-    ref.invalidate(unreadNotificationsProvider);
-    ref.invalidate(notificationPreferencesProvider);
-    ref.invalidate(tasksProvider);
-    ref.invalidate(areasProvider);
-    ref.invalidate(roomsProvider);
-    ref.invalidate(assetsProvider);
-    ref.invalidate(dashboardProvider);
-    ref.invalidate(statisticsProvider);
-    ref.invalidate(streakRefreshProvider);
   }
 
   void _setBusy(String label) {

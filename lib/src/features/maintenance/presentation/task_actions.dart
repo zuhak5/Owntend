@@ -1,3 +1,6 @@
+import 'task_completion_controller.dart';
+import '../../monetization/monetization.dart';
+
 import 'dart:math' as math;
 
 import '../../../ui/components.dart' as hk_ui;

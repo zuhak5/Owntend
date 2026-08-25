@@ -1,2 +1,12 @@
+# WP-015 (F-036): suite-level guardrails.
+#
+# Concurrency: the documented full-suite command passes --concurrency=1
+# explicitly (in-memory Drift databases + Workmanager-style callbacks assume
+# serialized execution); this default keeps bare `flutter test` runs honest.
+concurrency: 1
+
+# A hung test fails fast instead of riding the runner's global default.
+timeout: 2m
+
 tags:
   production-config:

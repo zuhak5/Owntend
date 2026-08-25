@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-21T14:30:00.000Z",
-  "leaseExpiresAt": "2026-08-22T14:30:00.000Z",
-  "generatorCommit": "13d37d14a3ef70c7cc28f6e94dccb2a1ab3d7466",
+  "generatedAt": "2026-08-25T21:58:40.622Z",
+  "leaseExpiresAt": "2026-08-26T21:58:40.622Z",
+  "generatorCommit": "157ac9ee82bd57a04b52f749c0c956ba6f20cc2b",
   "repository": "zuhak5/Owntend",
   "package": {
     "name": "app.owntend.mobile",

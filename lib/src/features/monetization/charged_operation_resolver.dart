@@ -1,6 +1,6 @@
 import '../../core/sync/local_sync_store.dart';
-import '../maintenance/data/task_creation_operation_store.dart';
-import '../maintenance/domain/task_creation.dart';
+import '../../core/services/charged_operation_journal/charged_operation_store.dart';
+import '../../core/services/charged_operation_journal/charged_operation_contracts.dart';
 import 'monetization.dart';
 
 class ChargedOperationResolver {

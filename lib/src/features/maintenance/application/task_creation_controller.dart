@@ -10,8 +10,8 @@ import '../../../core/domain/models.dart';
 import '../../../core/sync/sync_providers.dart';
 import '../../monetization/charged_operation_resolver.dart';
 import '../../monetization/monetization.dart';
-import '../data/task_creation_operation_store.dart';
-import '../domain/task_creation.dart';
+import '../../../core/services/charged_operation_journal/charged_operation_store.dart';
+import '../../../core/services/charged_operation_journal/charged_operation_contracts.dart';
 
 class TaskCreationState {
   const TaskCreationState({

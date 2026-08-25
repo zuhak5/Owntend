@@ -1,5 +1,31 @@
 # Offline-First Synchronization Protocol
 
+
+## Skipped-feed promises and push efficiency (WP-004/WP-006)
+
+Incremental-feed records masked by a local outbox intent are never applied
+blindly. Each skip writes a durable `sync_skipped_feed_entries` promise:
+
+- Active intents (`pending`/`inFlight`/`conflictRecovery`) defer the remote row;
+  the cursor may advance only because the promise exists.
+- Conflict/terminal intents additionally refresh the shadow so revision checks
+  stay truth-adjacent, while the local row remains owned by conflict machinery.
+- After every push cycle `_drainSkippedFeedEntries` performs one targeted
+  `gateway.fetch` per unmasked promise; failures leave the promise for the next
+  cycle. Deletions behind intents are promised, never guessed.
+- Invariant: for any feed record either the shadows reflect it or a durable
+  promise exists.
+
+Failure semantics: outbox/acknowledgement payload decode failures increment the
+non-PII `SyncStatus.payloadParseFailures` counter (never silent, no content
+stored); incremental-feed photo download failures defer to the post-ready media
+worker exactly like first-sync photos; `deferPendingAfterFailure` schedules
+run-level backoff without forging per-row error text.
+
+Push dequeue is a bounded due-window query (`pendingMutations`, LIMIT 200,
+indexed by `idx_outbox_retry`) with dependency keys resolved by targeted
+lookups — the queue table is no longer loaded whole per cycle.
+
 ## Purpose
 
 Owntend must accept useful local work without connectivity and later synchronize it without losing mutation intent, mixing accounts, duplicating charged or completion operations, or silently overwriting newer cloud state.
@@ -121,15 +147,12 @@ This recovery path repairs a remote change whose Realtime notification was misse
 
 A conflict exists when local and cloud changes cannot be safely merged under the entity contract.
 
-Conflict behavior must be entity-specific and visible in tests. Valid strategies include:
-
-- Server-authoritative overwrite for protected server state.
-- Local retry against a new revision.
-- Field-aware merge where semantics are deterministic.
-- Explicit blocked state requiring reconciliation.
-- Compensating local correction after a rejected operation.
-
-Do not treat a conflict as generic success and do not discard pending local work silently.
+Conflict behavior is entity-specific, durable, and verifiable in tests:
+- **Full Preimage Conflict Ledger**: All sync conflicts are durably recorded in the SQLite `sync_conflicts` table (`id`, `account_id`, `entity`, `record_key`, `operation_id`, `local_payload_json`, `remote_payload_json`, `remote_revision`, `resolution_status`, `resolved_at`, `created_at`). Account ownership is strictly non-null for account-bound conflicts, and only the owning account can list or resolve its conflicts.
+- **No Silent Discard**: The sync engine has no discard-on-conflict path across snapshot, pull, and push. An outbox entry is removed only when (a) the exact server operation is acknowledged with a generation-checked CAS delete, (b) a newer local edit replaces it through the outbox trigger's generation bump, or (c) the user explicitly resolves the conflict.
+- **Durable Conflict State**: When a remote edit wins a conflict — by higher server revision, newer client timestamp, or clock-skew policy — the client applies the canonical remote row locally but moves the losing outbox entry into the durable `conflict` state instead of deleting or resolving it. Conflicted rows are excluded from automatic pushes and survive restart and process death indefinitely. Each preserved conflict records the serialized local payload snapshot plus remote payload/revision evidence in `sync_conflicts`; `resolution_status` stays `unresolved` and `resolved_at` stays null until explicit resolution.
+- **Explicit Resolution Only**: `LocalSyncStore.resolveSyncConflict` is the sole resolution entry point. Keep-local restores the newest preserved payload into the local table and returns the mutation to the push queue; keep-remote deletes the conflicted intent. Exact server acknowledgement resolves outstanding ledger rows as `resolved_server_acknowledged`. A fresh local edit on a conflicted record supersedes the stale conflict through the trigger's generation bump and returns the row to the pending queue.
+- **Server-Authoritative State**: Maintenance completion RPCs and wallet/point debits are strictly server-authoritative and idempotent.
 
 ## Clock skew
 
@@ -144,8 +167,9 @@ The database includes a server-assigned, monotonic, owner-scoped change feed (`s
 - Hard deletes write durable `DELETE` records into `server_change_feed`, recording the entity type and deleted record ID.
 - Row Level Security (RLS) restricts SELECT access to the authenticated user owning the records (`user_id = auth.uid()`), while direct client INSERT/UPDATE/DELETE access to `server_change_feed` is strictly revoked.
 - Monotonic change sequences support owner-scoped keyset pagination (`user_id`, `change_seq`).
-- The `fetch_user_change_feed(p_since_seq, p_limit)` RPC exposes the feed to authenticated clients. It captures an owner-scoped high-water sequence at scan start and pages only changes `change_seq <= high_water_seq` in strict monotonic order.
-- `fetch_user_change_feed` returns contract version, `next_seq`, `has_more`, `high_water_seq`, and `resnapshot_required = true` when the requested cursor predates retained history.
+- The `fetch_user_change_feed(p_since_seq, p_limit, p_expected_generation)` RPC exposes the feed to authenticated clients as a `SECURITY INVOKER` function under owner-scoped RLS. It captures an owner-scoped high-water sequence and generation at scan start and pages only changes `change_seq <= high_water_seq` in strict monotonic order.
+- Bounded retention is real: the service-only `owntend_private.compact_user_change_feed()` job removes rows below the retained boundary (age plus per-owner row cap) while holding the owner state row lock, and — only when it actually removed rows — atomically advances the durable `owner_feed_state.feed_generation` together with `retained_min_seq`. No-op runs never advance the generation. Concurrent feed writes serialize on the same row lock, so a generation or high-water range can never be observed half-applied.
+- `fetch_user_change_feed` returns contract version, `feed_generation`, `next_seq`, `has_more`, `high_water_seq`, and `resnapshot_required = true` when the requested cursor predates the retained range or was built for a different generation. Because compaction advances the durable generation, every pre-compaction cursor deterministically rehydrates instead of silently missing deleted history.
 - There is no rollout flag, capability table, fallback pull protocol, or authenticated parity function in production v1. A service-role-only parity function remains available to protected validation.
 
 The cloud uses deliberate aliases for maintenance plan recurrence (`description`, `interval_count`, `interval_unit`) and streak summaries (`longest_streak`, `last_completion_date`). `SyncEntitySpec.remoteRenames` translates those names in both directions. Specialized detail and maintenance metadata columns otherwise match the Flutter/Drift payload names directly, preventing silent field loss during RPC creation or ordinary synchronization.
@@ -158,7 +182,7 @@ Maintenance completion affects history, recurrence, due state, reminders, statis
 
 Media requires coordination between local metadata, file availability, Storage objects, upload state, and deletion cleanup.
 
-- **Prepare-first ledger**: `prepare_asset_photo_upload` creates an owner-scoped immutable stage before any Storage mutation and returns a server-issued `{user_id}/staging/{uuid}.{ext}` path. The preparation binds asset, photo, expected size/MIME, an idempotency key, and the client digest (explicitly advisory).
+- **Prepare-first ledger**: `prepare_asset_photo_upload` creates an owner-scoped immutable stage before any Storage mutation and returns a server-issued `{user_id}/media/{photo_id}.{ext}` path. The preparation binds asset, photo, expected size/MIME, an idempotency key, and the client digest (explicitly advisory).
 - **Required client saga**: The client prepares, uploads once with `upsert: false`, then calls `finalize_asset_photo_upload`. Finalization reads trusted Storage metadata and validates owner, row revision, MIME type, size (<=10 MiB), and object existence before exposing photo metadata. Failure remains retryable or visible; there is no direct-upload fallback.
 - **Server Durable Cleanup Ledger**: Upload finalization and server-side replacement flows enqueue superseded object paths into `media_cleanup_queue` transactionally before database mutation acknowledgement.
 - **Client Delete Tombstone & Cleanup Handoff**: A local `asset_photo` DELETE preserves the exact canonical Storage path in the durable outbox tombstone before the local row disappears. If the remote metadata row was already deleted (including response-loss retry), `SupabaseSyncGateway.write()` returns that same tombstone path as cleanup work. The coordinator acknowledges the exact outbox generation and inserts `sync_media_cleanup` in one Drift transaction, so the object path is always represented by either pending mutation intent or durable cleanup work. Storage object-not-found is successful idempotent cleanup; duplicate cleanup attempts are safe.

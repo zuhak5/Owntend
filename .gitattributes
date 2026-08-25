@@ -1,2 +1,61 @@
+# Repository source policy: text sources are stored with LF endings so that
+# formatters (`deno fmt`, `dart format`) and CI checks are deterministic on
+# every platform. Binary artifacts are never normalized or diffed as text.
+
+# Dart / Flutter
+*.dart text eol=lf
+*.arb text eol=lf
+
+# TypeScript / JavaScript
+*.ts text eol=lf
+*.js text eol=lf
+*.mjs text eol=lf
+
+# Data and configuration formats
+*.json text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.toml text eol=lf
+
+# Database and documentation sources
+*.sql text eol=lf
+*.md text eol=lf
+
+# Android / web shell sources
+*.xml text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+*.kts text eol=lf
+*.properties text eol=lf
+*.sh text eol=lf
+
+# Gradle wrapper bootstrap scripts must keep their native endings: the POSIX
+# launcher is executed by bash, the Windows launcher by cmd.exe.
+/android/gradlew text eol=lf
+/android/gradlew.bat text eol=crlf
+
 download-site/assets/versiondeck-mark.svg text eol=lf
+
+# Generated Drift output stays LF regardless of platform.
 *.g.dart text eol=lf
+
+# Binaries are excluded from normalization.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.ttf binary
+*.otf binary
+*.woff binary
+*.woff2 binary
+*.jar binary
+*.keystore binary
+*.jks binary
+*.apk binary
+*.aab binary
+*.zip binary
+*.mp3 binary
+*.wav binary
+*.ogg binary

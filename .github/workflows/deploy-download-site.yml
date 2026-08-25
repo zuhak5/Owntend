@@ -19,7 +19,6 @@ on:
       - "tool/account-deletion-site.test.mjs"
       - "tool/validate_versiondeck.mjs"
       - "docs/versiondeck-release-runbook.md"
-      - "docs/versiondeck-live-build-status.md"
       - ".github/workflows/deploy-download-site.yml"
 
   workflow_run:

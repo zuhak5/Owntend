@@ -1,8 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:archive/archive.dart';
-import 'package:drift/drift.dart' show Value;
+import 'package:drift/drift.dart' show UpdateKind, Value;
 import 'package:drift/native.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -10,6 +9,7 @@ import 'package:owntend/src/core/data/repositories.dart';
 import 'package:owntend/src/core/database/app_database.dart';
 import 'package:owntend/src/core/domain/contracts.dart';
 import 'package:owntend/src/core/domain/models.dart';
+import 'package:owntend/src/core/services/backup/backup_container.dart';
 import 'package:owntend/src/core/services/backup_service.dart';
 import 'package:owntend/src/core/services/restore_journal.dart';
 import 'package:owntend/src/core/sync/local_sync_store.dart';
@@ -20,7 +20,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   FlutterSecureStorage.setMockInitialValues(<String, String>{});
 
-  group('ZipBackupService', () {
+  group('OwntendBackupService', () {
     late Directory root;
     late Directory docs;
     late Directory temp;
@@ -55,7 +55,7 @@ void main() {
       () async {
         final db = await _openDatabase(docs, databases);
         await _seedRealisticData(db, root);
-        final service = ZipBackupService(db);
+        final service = OwntendBackupService(db);
 
         final backupPath = await service.exportBackup();
         final preview = await service.inspectBackup(backupPath);
@@ -94,13 +94,12 @@ void main() {
       await originalFile.rename(cloudFile.path);
       await (db.update(db.assetPhotos)..where((row) => row.id.equals(photo.id)))
           .write(AssetPhotosCompanion(relativePath: Value(cloudRelativePath)));
-      final service = ZipBackupService(db);
+      final service = OwntendBackupService(db);
 
       final backupPath = await service.exportBackup();
-      final archive = ZipDecoder().decodeBytes(
-        await File(backupPath).readAsBytes(),
-      );
-      expect(archive.findFile(cloudRelativePath), isNotNull);
+      final preview = await service.inspectBackup(backupPath);
+      expect(preview.fileCount, greaterThan(0));
+      expect(File(backupPath).readAsBytesSync().take(8), 'OWNTDBK1'.codeUnits);
 
       await cloudFile.writeAsBytes([9, 9, 9], flush: true);
       await service.restoreBackup(backupPath);
@@ -118,7 +117,7 @@ void main() {
               relativePath: Value('cloud_media/../outside.jpg'),
             ),
           );
-      final service = ZipBackupService(db);
+      final service = OwntendBackupService(db);
 
       await expectLater(
         service.exportBackup(),
@@ -129,7 +128,7 @@ void main() {
     test('restores backup state without duplicating current data', () async {
       final db = await _openDatabase(docs, databases);
       await _seedRealisticData(db, root);
-      final service = ZipBackupService(db);
+      final service = OwntendBackupService(db);
       final backupPath = await service.exportBackup();
 
       final repo = DriftAssetRepository(db);
@@ -192,7 +191,7 @@ void main() {
 
       final journalStore = InMemoryRestoreJournalStore();
       RestoreJournalEntry? entryAtBarrier;
-      final service = ZipBackupService(
+      final service = OwntendBackupService(
         db,
         journalStore: journalStore,
         onBeforeRestoreBarrier: () async {
@@ -214,7 +213,7 @@ void main() {
       final db = await _openDatabase(docs, databases);
       await _seedRealisticData(db, root);
       final journalStore = InMemoryRestoreJournalStore();
-      final service = ZipBackupService(db, journalStore: journalStore);
+      final service = OwntendBackupService(db, journalStore: journalStore);
       final backupPath = await service.exportBackup();
 
       await service.restoreBackup(backupPath);
@@ -230,7 +229,7 @@ void main() {
     test('rolls media back when the database import fails', () async {
       final db = await _openDatabase(docs, databases);
       await _seedRealisticData(db, root);
-      final service = ZipBackupService(db);
+      final service = OwntendBackupService(db);
       final backupPath = await service.exportBackup();
       final asset = (await DriftAssetRepository(db).listAssets()).single;
       final photo = File(
@@ -248,6 +247,11 @@ END
       await expectLater(service.restoreBackup(backupPath), throwsA(anything));
 
       expect(await photo.readAsBytes(), [9, 8, 7, 6]);
+      expect(
+        await LocalSyncStore(db).readRestoreGenerationMarker(),
+        isNull,
+        reason: 'a failed import must never leave a commit marker',
+      );
       final stagedMedia = await docs
           .list()
           .where(
@@ -261,16 +265,18 @@ END
 
     test('rejects corrupted, empty, and unsafe backup files', () async {
       final db = await _openDatabase(docs, databases);
-      final service = ZipBackupService(db);
-      final empty = File(p.join(root.path, 'empty.zip'))..writeAsBytesSync([]);
-      final corrupt = File(p.join(root.path, 'corrupt.zip'))
-        ..writeAsStringSync('not a zip');
-      final unsafe = File(p.join(root.path, 'unsafe.zip'))
-        ..writeAsBytesSync(
-          ZipEncoder().encode(
-            Archive()..addFile(ArchiveFile.string('../evil.txt', 'x')),
-          ),
-        );
+      final service = OwntendBackupService(db);
+      final empty = File(p.join(root.path, 'empty.owntend-backup'))
+        ..writeAsBytesSync([]);
+      final corrupt = File(p.join(root.path, 'corrupt.owntend-backup'))
+        ..writeAsStringSync('not an owntend container');
+      // A ZIP file is not a valid Owntend container and must be rejected.
+      final zipBytes = <int>[
+        0x50, 0x4b, 0x03, 0x04, 0x14, 0x00, 0x00, 0x00, 0x00, 0x00, //
+        0x00, 0x00, 0x00, 0x00,
+      ];
+      final foreignZip = File(p.join(root.path, 'foreign.owntend-backup'))
+        ..writeAsBytesSync(zipBytes);
 
       expect(
         () => service.inspectBackup(empty.path),
@@ -281,7 +287,7 @@ END
         throwsA(isA<BackupException>()),
       );
       expect(
-        () => service.inspectBackup(unsafe.path),
+        () => service.inspectBackup(foreignZip.path),
         throwsA(isA<BackupException>()),
       );
     });
@@ -289,7 +295,7 @@ END
     test('rejects tampered checksum and newer schema backups', () async {
       final db = await _openDatabase(docs, databases);
       await _seedRealisticData(db, root);
-      final service = ZipBackupService(db);
+      final service = OwntendBackupService(db);
       final backupPath = await service.exportBackup();
 
       final tamperedChecksum = await _tamperBackup(
@@ -308,8 +314,11 @@ END
         manifestUpdates: {'format': 99},
       );
 
+      // Payload corruption is caught by the authenticated extraction path
+      // (per-entry checksums), while manifest-level tampering is caught
+      // during inspection.
       expect(
-        () => service.inspectBackup(tamperedChecksum.path),
+        () => service.restoreBackup(tamperedChecksum.path),
         throwsA(isA<BackupException>()),
       );
       expect(
@@ -321,6 +330,225 @@ END
         throwsA(isA<BackupException>()),
       );
     });
+  });
+
+  group('restore crash atomicity (failpoint process-death simulation)', () {
+    late Directory root;
+    late Directory docs;
+    late Directory temp;
+    late List<AppDatabase> databases;
+
+    setUp(() async {
+      root = await Directory.systemTemp.createTemp('owntend_crash_test_');
+      docs = Directory(p.join(root.path, 'docs'))..createSync(recursive: true);
+      temp = Directory(p.join(root.path, 'temp'))..createSync(recursive: true);
+      PathProviderPlatform.instance = _FakePathProviderPlatform(
+        documentsPath: docs.path,
+        temporaryPath: temp.path,
+      );
+      FlutterSecureStorage.setMockInitialValues(<String, String>{});
+      databases = [];
+    });
+
+    tearDown(() async {
+      for (final db in databases.reversed) {
+        try {
+          await db.close();
+        } catch (_) {}
+      }
+      if (await root.exists()) {
+        await _deleteDirectoryWithRetries(root);
+      }
+    });
+
+    /// Exports a backup, then diverges live state from the archive so old
+    /// and new generations are distinguishable.
+    Future<({AppDatabase db, File photo, String backupPath})>
+    seedDivergedState() async {
+      final db = await _openDatabase(docs, databases);
+      await _seedRealisticData(db, root);
+      final service = OwntendBackupService(db);
+      final backupPath = await service.exportBackup();
+      final asset = (await DriftAssetRepository(db).listAssets()).single;
+      final photo = File(
+        p.join(docs.path, 'photos', asset.id, 'seed-photo.jpg'),
+      );
+      await photo.writeAsBytes([9, 9, 9, 9], flush: true);
+      await db.customUpdate(
+        "UPDATE rooms SET name = 'Renamed After Backup' "
+        "WHERE name = 'Utility'",
+        updates: {db.rooms},
+        updateKind: UpdateKind.update,
+      );
+      return (db: db, photo: photo, backupPath: backupPath);
+    }
+
+    Future<String> roomName(AppDatabase db) async {
+      final utility = await (db.select(
+        db.rooms,
+      )..where((row) => row.name.equals('Utility'))).getSingleOrNull();
+      if (utility != null) return 'Utility';
+      final renamed =
+          await (db.select(db.rooms)
+                ..where((row) => row.name.equals('Renamed After Backup')))
+              .getSingleOrNull();
+      return renamed == null ? '<missing>' : 'Renamed After Backup';
+    }
+
+    Future<List<String>> restoreResidue() async {
+      return [
+        for (final entity in docs.listSync())
+          if (p.basename(entity.path).contains('.restore-') ||
+              p.basename(entity.path).contains('.previous-'))
+            p.basename(entity.path),
+      ];
+    }
+
+    Future<void> runRecovery(AppDatabase db) async {
+      await RestoreRecoveryCoordinator(
+        journalStore: RestoreJournalStore(),
+        localSyncStore: LocalSyncStore(db),
+      ).recover();
+    }
+
+    test('death before the import transaction leaves the complete old '
+        'generation', () async {
+      final (:db, :photo, :backupPath) = await seedDivergedState();
+      final crashing = OwntendBackupService(
+        db,
+        failpoints: RestoreFailpoints({'db:importCommit': 1}),
+      );
+
+      await expectLater(
+        crashing.restoreBackup(backupPath),
+        throwsA(isA<StateError>()),
+      );
+
+      // The in-process failure handler already rolled staged media back;
+      // assert the old generation is complete and unpaired with new data.
+      expect(await roomName(db), 'Renamed After Backup');
+      expect(await photo.readAsBytes(), [9, 9, 9, 9]);
+      expect(await restoreResidue(), isEmpty);
+      expect(await RestoreJournalStore().getActiveEntry(), isNull);
+    });
+
+    test('death after actual DB commit but before persisting dbCommitComplete '
+        'rolls forward during recovery', () async {
+      final (:db, :photo, :backupPath) = await seedDivergedState();
+      final crashing = OwntendBackupService(
+        db,
+        failpoints: RestoreFailpoints({'db:importCommit:returned': 1}),
+      );
+
+      await expectLater(
+        crashing.restoreBackup(backupPath),
+        throwsA(isA<StateError>()),
+      );
+
+      // SQLite committed: the generation marker matches the journal even
+      // though the journal phase only says dbCommitStarted.
+      final store = LocalSyncStore(db);
+      final journal = await RestoreJournalStore().getActiveEntry();
+      expect(journal, isNotNull);
+      expect(journal!.phase, RestorePhase.dbCommitStarted);
+      expect(await store.readRestoreGenerationMarker(), journal.journalId);
+      // Media activation has not started yet: canonical files are still
+      // the old generation, never mixed.
+      expect(await photo.readAsBytes(), [9, 9, 9, 9]);
+
+      await runRecovery(db);
+
+      expect(
+        await roomName(db),
+        'Utility',
+        reason: 'committed import must survive recovery',
+      );
+      expect(await photo.readAsBytes(), [
+        1,
+        2,
+        3,
+        4,
+      ], reason: 'staged media must be activated to pair with the new DB');
+      expect(await restoreResidue(), isEmpty);
+      expect(await RestoreJournalStore().getActiveEntry(), isNull);
+    });
+
+    test(
+      'death between per-root media activations converges during recovery',
+      () async {
+        final (:db, :photo, :backupPath) = await seedDivergedState();
+        final profileAvatar = File(p.join(docs.path, 'profile', 'avatar.jpg'));
+        await profileAvatar.writeAsBytes([8, 8, 8, 8], flush: true);
+        final crashing = OwntendBackupService(
+          db,
+          failpoints: RestoreFailpoints({'media:activate:profile': 1}),
+        );
+
+        await expectLater(
+          crashing.restoreBackup(backupPath),
+          throwsA(isA<StateError>()),
+        );
+
+        // photos activated; profile not yet.
+        expect(await photo.readAsBytes(), [1, 2, 3, 4]);
+        expect(await profileAvatar.readAsBytes(), [8, 8, 8, 8]);
+
+        await runRecovery(db);
+
+        expect(await profileAvatar.readAsBytes(), [
+          5,
+          6,
+          7,
+          8,
+        ], reason: 'remaining root must finish activating');
+        expect(await photo.readAsBytes(), [1, 2, 3, 4]);
+        expect(await restoreResidue(), isEmpty);
+        expect(await RestoreJournalStore().getActiveEntry(), isNull);
+      },
+    );
+
+    test('death at the cleanup boundary retains consistent generations and '
+        'recovery finishes cleanup', () async {
+      final (:db, :photo, :backupPath) = await seedDivergedState();
+      final crashing = OwntendBackupService(
+        db,
+        failpoints: RestoreFailpoints({'cleanup:previousGenerations': 1}),
+      );
+
+      await expectLater(
+        crashing.restoreBackup(backupPath),
+        throwsA(isA<StateError>()),
+      );
+
+      expect(await roomName(db), 'Utility');
+      expect(await photo.readAsBytes(), [1, 2, 3, 4]);
+      final residueAfterCrash = await restoreResidue();
+      expect(
+        residueAfterCrash.where((name) => name.contains('.previous-')),
+        isNotEmpty,
+      );
+
+      await runRecovery(db);
+
+      expect(await restoreResidue(), isEmpty);
+      expect(await RestoreJournalStore().getActiveEntry(), isNull);
+      expect(await photo.readAsBytes(), [1, 2, 3, 4]);
+    });
+
+    test(
+      'successful restore pairs the new database with the new media',
+      () async {
+        final (:db, :photo, :backupPath) = await seedDivergedState();
+        final service = OwntendBackupService(db);
+
+        await service.restoreBackup(backupPath);
+
+        expect(await roomName(db), 'Utility');
+        expect(await photo.readAsBytes(), [1, 2, 3, 4]);
+        expect(await restoreResidue(), isEmpty);
+        expect(await RestoreJournalStore().getActiveEntry(), isNull);
+      },
+    );
   });
 }
 
@@ -424,39 +652,54 @@ Future<void> _deleteDirectoryWithRetries(Directory directory) async {
   }
 }
 
+/// Re-encrypts an exported container with a modified manifest, or flips a
+/// payload byte when [mutateDatabase] is set (which must always fail AEAD
+/// authentication).
 Future<File> _tamperBackup(
   String backupPath,
   Directory root, {
   Map<String, Object?> manifestUpdates = const {},
   bool mutateDatabase = false,
 }) async {
-  final archive = ZipDecoder().decodeBytes(
-    await File(backupPath).readAsBytes(),
+  final secret = await BackupAutoKeyStore.load();
+  final sourceHandle = await File(backupPath).open(mode: FileMode.read);
+  final reader = await BackupContainerReader.open(
+    input: sourceHandle,
+    passphrase: secret,
   );
-  final manifest = jsonDecode(
-    utf8.decode(archive.findFile('manifest.json')!.content),
-  ) as Map<String, dynamic>;
+  final manifestFrame = await reader.readFrame(sourceHandle);
+  final manifest =
+      jsonDecode(utf8.decode(manifestFrame!)) as Map<String, dynamic>;
   manifest.addAll(manifestUpdates);
 
-  final next = Archive();
-  for (final file in archive.files.where((file) => file.isFile)) {
-    if (file.name == 'manifest.json') {
-      continue;
-    }
-    final bytes = file.content.toList();
-    if (mutateDatabase && file.name == AppDatabase.databaseFileName) {
-      bytes[bytes.length - 1] = bytes.last == 0 ? 1 : 0;
-    }
-    next.addFile(ArchiveFile.bytes(file.name, bytes));
-  }
-  next.addFile(
-    ArchiveFile.string(
-      'manifest.json',
-      const JsonEncoder.withIndent('  ').convert(manifest),
+  final output = File(
+    p.join(
+      root.path,
+      '${_uuid()}${manifestUpdates.hashCode}${mutateDatabase ? '-flip' : ''}.owntend-backup',
     ),
   );
-  final output = File(p.join(root.path, '${_uuid()}.zip'));
-  await output.writeAsBytes(ZipEncoder().encode(next), flush: true);
+  final outHandle = await output.open(mode: FileMode.write);
+  final writer = await BackupContainerWriter.start(
+    output: outHandle,
+    passphrase: secret,
+    keyGuard: BackupContainerCodec.keyGuardDeviceKey,
+    fastProfile: false,
+  );
+  await writer.writeFrame(utf8.encode(jsonEncode(manifest)));
+  var payloadFrameIndex = 0;
+  while (true) {
+    final frame = await reader.readFrame(sourceHandle);
+    if (frame == null) break;
+    if (mutateDatabase && payloadFrameIndex == 0 && frame.isNotEmpty) {
+      // Corrupt the first payload byte of the database snapshot so its
+      // decrypted content no longer matches the manifest checksum.
+      frame[0] ^= 0x01;
+    }
+    await writer.writeFrame(frame);
+    payloadFrameIndex++;
+  }
+  await outHandle.close();
+  await sourceHandle.close();
   return output;
 }
 

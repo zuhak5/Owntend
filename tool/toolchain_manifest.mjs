@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -14,15 +14,59 @@ export async function loadCanonicalToolchain(rootDir = repositoryRoot) {
 }
 
 function safeExec(cmd, args = [], options = {}) {
+  // Version probes print to stdout or stderr depending on the tool
+  // (java -version writes to stderr), so both streams are captured.
+  const spawnOptions = {
+    encoding: 'utf8',
+    timeout: 60000,
+    windowsHide: true,
+    ...options,
+  };
+
+  let result = spawnSync(cmd, args, spawnOptions);
+  if (result.error && process.platform === 'win32') {
+    // Windows resolves .cmd/.bat launchers (npm, flutter) only through the shell.
+    const commandLine = [quoteCommand(cmd), ...args.map(quoteArg)].join(' ');
+    result = spawnSync(commandLine, { ...spawnOptions, shell: true });
+  }
+  const output = `${result.stdout || ''}\n${result.stderr || ''}`.trim();
+  return output.length > 0 && !result.error ? output : null;
+}
+
+function quoteCommand(cmd) {
+  return /[\s"]/.test(cmd) ? `"${cmd.replace(/"/g, '\\"')}"` : cmd;
+}
+
+function quoteArg(arg) {
+  return typeof arg === 'string' && /[\s"]/.test(arg) ? `"${arg.replace(/"/g, '\\"')}"` : arg;
+}
+
+export function parseJavaDistribution(versionOutput) {
+  if (!versionOutput) return null;
+  const match = versionOutput.match(/(?:VM|Client VM|Server VM)\s+([A-Za-z][A-Za-z0-9]*)[-_\s]/);
+  if (!match) return null;
+  const vendor = match[1].toLowerCase();
+  // Normalize common vendor spellings to the canonical distribution name.
+  if (vendor.startsWith('temurin')) return 'temurin';
+  return vendor;
+}
+
+async function sha256File(filePath) {
   try {
-    const output = execFileSync(cmd, args, {
-      encoding: 'utf8',
-      timeout: 10000,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      ...options,
-    });
-    return output.trim();
-  } catch (err) {
+    const contents = await fs.readFile(filePath);
+    return crypto.createHash('sha256').update(contents).digest('hex').toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+async function readInstalledSupabaseCliVersion(rootDir) {
+  try {
+    const pkg = JSON.parse(
+      await fs.readFile(path.join(rootDir, 'node_modules', 'supabase', 'package.json'), 'utf8'),
+    );
+    return typeof pkg.version === 'string' ? pkg.version : null;
+  } catch {
     return null;
   }
 }
@@ -52,6 +96,7 @@ export async function collectResolvedToolchain(rootDir = repositoryRoot) {
     const match = javaVersionRaw.match(/(?:version|openjdk version)\s+"([^"]+)"/i);
     if (match) javaVersion = match[1];
   }
+  const javaDistribution = parseJavaDistribution(javaVersionRaw);
 
   const flutterVersionRaw = safeExec('flutter', ['--version']);
   let flutterVersion = null;
@@ -93,13 +138,27 @@ export async function collectResolvedToolchain(rootDir = repositoryRoot) {
 
   let compileSdk = null;
   let targetSdk = null;
+  let minSdk = null;
+  let buildToolsVersion = null;
   try {
     const appBuild = await fs.readFile(path.join(rootDir, 'android', 'app', 'build.gradle.kts'), 'utf8');
     const cMatch = appBuild.match(/compileSdk\s*=\s*(\d+)/);
     if (cMatch) compileSdk = parseInt(cMatch[1], 10);
     const tMatch = appBuild.match(/targetSdk\s*=\s*(\d+)/);
     if (tMatch) targetSdk = parseInt(tMatch[1], 10);
+    const minMatch = appBuild.match(/minSdk\s*=\s*(\d+)/);
+    if (minMatch) minSdk = parseInt(minMatch[1], 10);
+    const btMatch = appBuild.match(/buildToolsVersion\s*=\s*"([^"]+)"/);
+    if (btMatch) buildToolsVersion = btMatch[1];
   } catch {}
+
+  // Gradle wrapper bootstrap integrity: the tracked JAR must hash to the
+  // canonical value recorded in config/toolchain.json.
+  const gradleWrapperJarSha256 = await sha256File(
+    path.join(rootDir, 'android', 'gradle', 'wrapper', 'gradle-wrapper.jar'),
+  );
+
+  const supabaseCliResolved = await readInstalledSupabaseCliVersion(rootDir);
 
   const shorebirdHome = process.env.SHOREBIRD_HOME;
   let shorebirdVersion = null;
@@ -156,6 +215,7 @@ export async function collectResolvedToolchain(rootDir = repositoryRoot) {
     },
     java: {
       version: javaVersion,
+      distribution: javaDistribution,
     },
     node: {
       version: nodeVersion,
@@ -167,10 +227,16 @@ export async function collectResolvedToolchain(rootDir = repositoryRoot) {
     android: {
       compileSdkVersion: compileSdk,
       targetSdkVersion: targetSdk,
+      minSdkVersion: minSdk,
+      buildToolsVersion,
       agpVersion,
       kotlinVersion,
       gradleDistribution,
       gradleDistributionSha256: gradleChecksum,
+      gradleWrapperJarSha256,
+    },
+    supabaseCli: {
+      resolvedVersion: supabaseCliResolved,
     },
     shorebird: {
       version: shorebirdVersion,
@@ -181,6 +247,35 @@ export async function collectResolvedToolchain(rootDir = repositoryRoot) {
   };
 }
 
+function checkField(checks, errors, name, expected, actual) {
+  const pass = actual !== null && actual !== undefined && String(actual).toLowerCase() === String(expected).toLowerCase();
+  checks.push({ name, expected, actual: actual ?? 'NOT FOUND', pass });
+  if (!pass) {
+    if (actual === null || actual === undefined) {
+      errors.push(`${name} missing: canonical toolchain requires ${expected}. Install the tool or point PATH/JAVA_HOME at the pinned release.`);
+    } else {
+      errors.push(`${name} mismatch: expected ${expected}, got ${actual}`);
+    }
+  }
+}
+
+export function dartSatisfiesCaret(resolvedVersion, caretConstraint) {
+  if (!resolvedVersion || !caretConstraint) return false;
+  const match = caretConstraint.match(/^\^(\d+)\.(\d+)\.(\d+)$/);
+  if (!match) return false;
+  const [, major, minor, patch] = match.map(Number);
+  const resolved = resolvedVersion.split('.').map(Number);
+  if (resolved.length < 3 || resolved.some(Number.isNaN)) return false;
+  const [rMajor, rMinor, rPatch] = resolved;
+  if (major === 0) {
+    return rMajor === major && rMinor === minor && rPatch >= patch;
+  }
+  return (
+    rMajor === major &&
+    (rMinor > minor || (rMinor === minor && rPatch >= patch))
+  );
+}
+
 export function evaluateToolchainPolicy(canonical, resolved, { requireShorebird = false } = {}) {
   const checks = [];
   const errors = [];
@@ -188,61 +283,91 @@ export function evaluateToolchainPolicy(canonical, resolved, { requireShorebird 
   const cAndroid = canonical.canonicalToolchain?.android || {};
   const rAndroid = resolved.android || {};
 
-  // Check Android Gradle plugin version
+  // --- Java runtime: enforced whenever the toolchain gate runs. ---
+  const cJava = canonical.canonicalToolchain?.java;
+  if (cJava?.version) {
+    const actualMajor = resolved.java?.version ? parseInt(resolved.java.version.split('.')[0], 10) : null;
+    checkField(checks, errors, 'Java major version', cJava.version, Number.isNaN(actualMajor) ? null : actualMajor);
+  }
+  if (cJava?.distribution) {
+    checkField(checks, errors, 'Java distribution', cJava.distribution, resolved.java?.distribution);
+  }
+
+  // --- Dart SDK compatibility with the canonical constraint. ---
+  const cDart = canonical.canonicalToolchain?.dart;
+  if (cDart?.sdkConstraint) {
+    const pass = dartSatisfiesCaret(resolved.dart?.version, cDart.sdkConstraint);
+    checks.push({ name: 'Dart SDK compatibility', expected: cDart.sdkConstraint, actual: resolved.dart?.version ?? 'NOT FOUND', pass });
+    if (!pass) {
+      errors.push(`Dart SDK mismatch: expected ${cDart.sdkConstraint}, got ${resolved.dart?.version ?? 'NOT FOUND'}`);
+    }
+  }
+
+  // --- Node.js and npm majors ---
+  const cNode = canonical.canonicalToolchain?.node;
+  if (cNode?.version) {
+    const actualMajor = resolved.node?.version ? parseInt(resolved.node.version.split('.')[0], 10) : null;
+    checkField(checks, errors, 'Node.js major version', cNode.version, Number.isNaN(actualMajor) ? null : actualMajor);
+  }
+  if (cNode?.npmMajor) {
+    const actualNpmMajor = resolved.node?.npmVersion ? parseInt(resolved.node.npmVersion.split('.')[0], 10) : null;
+    checkField(checks, errors, 'npm major version', cNode.npmMajor, Number.isNaN(actualNpmMajor) ? null : actualNpmMajor);
+  }
+
+  // --- Deno exact pin ---
+  const cDeno = canonical.canonicalToolchain?.deno;
+  if (cDeno?.version) {
+    checkField(checks, errors, 'Deno version', cDeno.version, resolved.deno?.version);
+  }
+
+  // --- Supabase CLI exact pin (resolved from installed npm dependency) ---
+  const cSupabaseCli = canonical.canonicalToolchain?.tools?.supabaseCli;
+  if (cSupabaseCli) {
+    checkField(
+      checks,
+      errors,
+      'Supabase CLI',
+      cSupabaseCli,
+      resolved.supabaseCli?.resolvedVersion,
+    );
+  }
+
+  // --- Android build inputs ---
   if (cAndroid.agpVersion) {
-    const pass = rAndroid.agpVersion === cAndroid.agpVersion;
-    checks.push({ name: 'Android Gradle Plugin (AGP)', expected: cAndroid.agpVersion, actual: rAndroid.agpVersion, pass });
-    if (!pass) errors.push(`AGP version mismatch: expected ${cAndroid.agpVersion}, got ${rAndroid.agpVersion}`);
+    checkField(checks, errors, 'Android Gradle Plugin (AGP)', cAndroid.agpVersion, rAndroid.agpVersion);
   }
-
-  // Check Kotlin version
   if (cAndroid.kotlinVersion) {
-    const pass = rAndroid.kotlinVersion === cAndroid.kotlinVersion;
-    checks.push({ name: 'Kotlin Plugin', expected: cAndroid.kotlinVersion, actual: rAndroid.kotlinVersion, pass });
-    if (!pass) errors.push(`Kotlin version mismatch: expected ${cAndroid.kotlinVersion}, got ${rAndroid.kotlinVersion}`);
+    checkField(checks, errors, 'Kotlin Plugin', cAndroid.kotlinVersion, rAndroid.kotlinVersion);
   }
-
-  // Check Gradle distribution
   if (cAndroid.gradleDistribution) {
-    const pass = rAndroid.gradleDistribution === cAndroid.gradleDistribution;
-    checks.push({ name: 'Gradle Distribution', expected: cAndroid.gradleDistribution, actual: rAndroid.gradleDistribution, pass });
-    if (!pass) errors.push(`Gradle distribution mismatch: expected ${cAndroid.gradleDistribution}, got ${rAndroid.gradleDistribution}`);
+    checkField(checks, errors, 'Gradle Distribution', cAndroid.gradleDistribution, rAndroid.gradleDistribution);
   }
-
-  // Check Gradle distribution checksum
   if (cAndroid.gradleDistributionSha256) {
-    const pass = (rAndroid.gradleDistributionSha256 || '').toLowerCase() === cAndroid.gradleDistributionSha256.toLowerCase();
-    checks.push({ name: 'Gradle Distribution SHA-256', expected: cAndroid.gradleDistributionSha256, actual: rAndroid.gradleDistributionSha256, pass });
-    if (!pass) errors.push(`Gradle distribution checksum mismatch: expected ${cAndroid.gradleDistributionSha256}, got ${rAndroid.gradleDistributionSha256}`);
+    checkField(checks, errors, 'Gradle Distribution SHA-256', cAndroid.gradleDistributionSha256.toLowerCase(), rAndroid.gradleDistributionSha256);
   }
-
-  // Check compileSdk and targetSdk
+  if (cAndroid.gradleWrapperJarSha256) {
+    checkField(checks, errors, 'Gradle wrapper JAR SHA-256', cAndroid.gradleWrapperJarSha256, rAndroid.gradleWrapperJarSha256);
+  }
   if (cAndroid.compileSdkVersion) {
-    const pass = rAndroid.compileSdkVersion === cAndroid.compileSdkVersion;
-    checks.push({ name: 'Android compileSdk', expected: cAndroid.compileSdkVersion, actual: rAndroid.compileSdkVersion, pass });
-    if (!pass) errors.push(`compileSdk mismatch: expected ${cAndroid.compileSdkVersion}, got ${rAndroid.compileSdkVersion}`);
+    checkField(checks, errors, 'Android compileSdk', cAndroid.compileSdkVersion, rAndroid.compileSdkVersion);
   }
-
   if (cAndroid.targetSdkVersion) {
-    const pass = rAndroid.targetSdkVersion === cAndroid.targetSdkVersion;
-    checks.push({ name: 'Android targetSdk', expected: cAndroid.targetSdkVersion, actual: rAndroid.targetSdkVersion, pass });
-    if (!pass) errors.push(`targetSdk mismatch: expected ${cAndroid.targetSdkVersion}, got ${rAndroid.targetSdkVersion}`);
+    checkField(checks, errors, 'Android targetSdk', cAndroid.targetSdkVersion, rAndroid.targetSdkVersion);
+  }
+  if (cAndroid.minSdkVersion) {
+    checkField(checks, errors, 'Android minSdk', cAndroid.minSdkVersion, rAndroid.minSdkVersion);
+  }
+  if (cAndroid.buildToolsVersion) {
+    checkField(checks, errors, 'Android build tools', cAndroid.buildToolsVersion, rAndroid.buildToolsVersion);
   }
 
-  // Check Node version (major)
-  const cNode = canonical.canonicalToolchain?.node?.version;
-  if (cNode && resolved.node?.version) {
-    const pass = resolved.node.version.startsWith(cNode);
-    checks.push({ name: 'Node.js Version', expected: `^${cNode}`, actual: resolved.node.version, pass });
-    if (!pass) errors.push(`Node.js version mismatch: expected ^${cNode}, got ${resolved.node.version}`);
-  }
-
-  // Check Flutter version if resolved
-  const cFlutter = canonical.canonicalToolchain?.flutter?.version;
-  if (cFlutter && resolved.flutter?.version) {
-    const pass = resolved.flutter.version === cFlutter;
-    checks.push({ name: 'Flutter Version', expected: cFlutter, actual: resolved.flutter.version, pass });
-    if (!pass) errors.push(`Flutter version mismatch: expected ${cFlutter}, got ${resolved.flutter.version}`);
+  // --- Flutter exact release and channel ---
+  const cFlutter = canonical.canonicalToolchain?.flutter;
+  if (cFlutter?.version) {
+    checkField(checks, errors, 'Flutter Version', cFlutter.version, resolved.flutter?.version);
+    if (cFlutter.channel) {
+      checkField(checks, errors, 'Flutter channel', cFlutter.channel, resolved.flutter?.channel);
+    }
   }
 
   if (requireShorebird) {

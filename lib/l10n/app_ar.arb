@@ -381,10 +381,8 @@
   "retryIncrementalSync": "إعادة المزامنة التدريجية",
   "fullReconciliation": "مطابقة كاملة",
   "exportDiagnostics": "تصدير التشخيصات",
-  "diagnosticExportDisclosure": "تحتوي هذه الحزمة على أحداث Owntend والبيانات التقنية المنقحة فقط. ولا تتضمن سجلات النظام الكاملة أو رسائل البريد الإلكتروني للحساب أو الرموز أو أرقام الأجهزة أو الإحداثيات أو مسارات الوسائط.",
   "exportingDiagnostics": "جارٍ إعداد تشخيصات خاصة…",
   "owntendDiagnosticsShareText": "تشخيصات Owntend الآمنة للخصوصية",
-  "diagnosticExportFailed": "تعذر تصدير التشخيصات.",
   "notRecorded": "غير مسجل",
   "removeAvatar": "إزالة الصورة الشخصية",
   "avatarRemovalFailed": "فشلت إزالة الصورة الشخصية",
@@ -603,6 +601,7 @@
   "undoFailedPleaseTryAgain": "تعذر التراجع. حاول مرة أخرى.",
   "cloudServicesAreUnavailablePleaseTryAgainLater": "الخدمات السحابية غير متاحة. حاول لاحقًا.",
   "thisBuildIsNotConfiguredCorrectly": "إعداد هذا الإصدار غير صحيح.",
+  "databaseUnrecoverableBody": "لا يمكن تشغيل Owntend لأن قاعدة البيانات المحلية على هذا الجهاز من إصدار تجريبي غير مدعوم. امسح بيانات التطبيق (أو أعد تثبيته) للمتابعة؛ ولا يمكن استرداد البيانات المحلية التي لم يتم تصديرها كنسخة احتياطية.",
   "activeTaskCount": "{count, plural, =0{لا مهام نشطة} =1{مهمة نشطة واحدة} =2{مهمتان نشطتان} few{{count} مهام نشطة} many{{count} مهمة نشطة} other{{count} مهمة نشطة}}",
   "savedPhotoCount": "{count, plural, =0{لا صور محفوظة} =1{صورة محفوظة واحدة} =2{صورتان محفوظتان} few{{count} صور محفوظة} many{{count} صورة محفوظة} other{{count} صورة محفوظة}}",
   "warrantyUntilDate": "الضمان حتى {date}",
@@ -770,7 +769,27 @@
   "goodEvening": "مساء الخير",
   "there": "مرحبًا",
   "personalGreeting": "{greeting}، {name}.",
-  "creatingBackup": "جارٍ إنشاء النسخة الاحتياطية...",
+  "backupPassphraseDialogTitle": "حماية نسختك الاحتياطية",
+  "@backupPassphraseDialogTitle": {},
+  "backupPassphraseLabel": "عبارة المرور (اختياري)",
+  "@backupPassphraseLabel": {},
+  "backupPassphraseHelp": "اتركها فارغة لحماية النسخة بمفتاح يبقى على هذا الجهاز، أو عيّن عبارة مرور من 8 أحرف على الأقل لفتحها على أي جهاز.",
+  "@backupPassphraseHelp": {},
+  "backupPassphraseConfirmLabel": "تأكيد عبارة المرور",
+  "@backupPassphraseConfirmLabel": {},
+  "backupPassphraseMismatch": "عبارتا المرور غير متطابقتين.",
+  "@backupPassphraseMismatch": {},
+  "backupPassphraseTooShort": "استخدم 8 أحرف على الأقل.",
+  "@backupPassphraseTooShort": {},
+  "backupEnterPassphraseTitle": "عبارة مرور النسخة الاحتياطية",
+  "@backupEnterPassphraseTitle": {},
+  "backupPassphraseNeededError": "تحتاج هذه النسخة الاحتياطية إلى عبارة المرور الخاصة بها.",
+  "@backupPassphraseNeededError": {},  "routeErrorTitle": "الصفحة غير متوفرة",
+  "@routeErrorTitle": {},
+  "routeErrorMessage": "تعذّر فتح هذا الرابط. قد يكون غير صحيح أو لم يعد موجودًا.",
+  "@routeErrorMessage": {},
+  "routeErrorAction": "العودة إلى الرئيسية",
+  "@routeErrorAction": {},  "creatingBackup": "جارٍ إنشاء النسخة الاحتياطية...",
   "updatingBackupSettings": "جارٍ تحديث إعدادات النسخ الاحتياطي...",
   "checkingBackup": "جارٍ فحص النسخة الاحتياطية...",
   "restoringBackup": "جارٍ استعادة النسخة الاحتياطية...",
@@ -857,8 +876,6 @@
   "reminderCountLabel": "{count, plural, =1{تذكير مهمة واحد} =2{تذكيرا مهمة} few{{count} تذكيرات مهام} many{{count} تذكير مهمة} other{{count} تذكير مهمة}}",
   "locationPermissionBody": "يستخدم Owntend موقعك فقط لاختيار الطقس المحلي لتخطيط أعمال المنزل.",
   "notificationsPermissionBody": "تُستخدم الإشعارات فقط لتذكيرات المهام والتنبيهات التي تفعلها.",
-  "preciseAlarmsPermissionBody": "تتيح المنبهات الدقيقة لـ Owntend إرسال التذكيرات المفعلة في الوقت المحدد بدقة.",
-  "approximateReminderTimingWarning": "ستستخدم التذكيرات توقيتًا تقريبيًا حتى يتم السماح بالمنبهات الدقيقة.",
   "automaticBackupsDescription": "ينشئ نسخة احتياطية محلية واحدة يوميًا عند فتح التطبيق. قد تتم إزالة النسخ التلقائية القديمة أثناء تنظيف التخزين.",
   "restorePreviewDescription": "ستستبدل الاستعادة بياناتك المحلية الحالية بعد مراجعة المعاينة.",
   "snoozeReminderDescription": "أخّر التذكير دون تغيير تاريخ الاستحقاق.",
@@ -997,10 +1014,8 @@
       "total": {"type": "int", "format": "decimalPattern"}
     }
   },
-  "exactAlarmEducationTitle": "حافظ على التذكيرات في وقتها",
-  "enableAlarmsAndRemindersOnboarding": "تفعيل التذكيرات",
   "permissionSetup": "الأذونات والإعداد",
-  "permissionSetupSubtitle": "اختر منطقة الطقس، ثم تحكم في تذكيرات الجهاز والتوقيت الدقيق الاختياري.",
+  "permissionSetupSubtitle": "اختر منطقة الطقس، ثم تحكم في تذكيرات الجهاز.",
   "permissionsAlreadyEnabled": "تم إعداد الموقع والإشعارات والتذكيرات بالفعل.",
   "permissionSetupFinishLater": "إكمال لاحقاً",
   "permissionSetupChooseLocation": "تحديد مدينة",
@@ -1008,10 +1023,6 @@
   "permissionSetupWeatherTitle": "تحديد منطقة الطقس",
   "permissionSetupWeatherBody": "اختر مدينة أو استخدم موقعك التقريبي الحالي لعرض الطقس المحلي لتخطيط الصيانة.",
   "permissionSetupWeatherPrivacy": "إذا استخدمت الموقع الحالي، يحفظ Owntend منطقة منزلية تقريبية. لا يتم جمع موقعك باستمرار في الخلفية.",
-  "permissionSetupExactOptionalTitle": "استخدام التوقيت الدقيق للتذكير",
-  "permissionSetupExactOptionalBody": "يتطلب أندرويد إذنًا خاصًا للتذكير في الوقت المحدد تمامًا. بدونه، سيعتمد Owntend التوقيت التقريبي.",
-  "permissionSetupUseApproximateTiming": "استخدام التوقيت التقريبي",
-  "permissionSetupAllowPreciseTiming": "السماح بالتوقيت الدقيق",
   "permissionSetupManageInSettings": "إدارة في الإعدادات"
   ,"permissionSetupChangeLocation": "تغيير الموقع"
   ,"permissionSelectedArea": "المنطقة المحددة: {area}"
@@ -1021,7 +1032,6 @@
   ,"permissionLocationAccessRequired": "يلزم إذن الموقع لاستخدام الموقع الحالي."
   ,"permissionNotificationAccessRequired": "يلزم إذن إشعارات أندرويد لتذكيرات الجهاز."
   ,"permissionDeviceRemindersOff": "تذكيرات الجهاز متوقفة في Owntend."
-  ,"permissionExactRequiresDeviceReminders": "شغّل تذكيرات الجهاز قبل تفعيل التوقيت الدقيق."
   ,"permissionActionCouldNotComplete": "تعذر إكمال الإجراء. حاول مرة أخرى."
   ,"permissionSettingsCouldNotOpen": "تعذر فتح إعدادات أندرويد. حاول من إعدادات الجهاز."
   ,"owntendAlerts": "تنبيهات Owntend"

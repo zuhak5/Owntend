@@ -138,62 +138,6 @@ extension _SyncRuntimeCoordinator on SyncCoordinator {
     await _emit();
   }
 
-  void _scheduleAutomaticSync({
-    Duration delay = const Duration(milliseconds: 350),
-    Set<String>? targetTables,
-    bool pushOnly = false,
-    bool requireBroadPull = false,
-  }) {
-    if (_accountDeletionInProgress) return;
-    if (requireBroadPull) {
-      _broadPullRequested = true;
-      _pendingTargetTables.clear();
-      _pushOnlyRequested = false;
-    } else if (!_broadPullRequested) {
-      if (targetTables != null) {
-        _pendingTargetTables.addAll(targetTables);
-      }
-      _pushOnlyRequested = _pushOnlyRequested || pushOnly;
-    }
-    if (!_automaticSyncEnabled || _isInitializing) return;
-    if (_activeSync != null) {
-      final activeCoversBroadPull = _activeWork?.pullTables == null;
-
-      if (_broadPullRequested && activeCoversBroadPull) {
-        _broadPullRequested = false;
-        _pendingTargetTables.clear();
-        _pushOnlyRequested = false;
-        AppLogger.info(
-          'sync_automatic_reused_active_broad_pull',
-          fields: {'attempt': _syncAttemptSerial},
-        );
-        return;
-      }
-
-      // Preserve follow-up work when data changed during the active sync or
-      // when a requested broad convergence is not covered by targeted or
-      // push-only active work.
-      final hasNewWork =
-          _broadPullRequested ||
-          _pendingTargetTables.isNotEmpty ||
-          _pushOnlyRequested ||
-          !activeCoversBroadPull;
-      if (hasNewWork) {
-        _syncRequestedWhileActive = true;
-      } else {
-        AppLogger.info(
-          'sync_automatic_skipped_active',
-          fields: {'attempt': _syncAttemptSerial},
-        );
-      }
-      return;
-    }
-    _automaticSyncTimer?.cancel();
-    _automaticSyncTimer = Timer(delay, () {
-      unawaited(_runAutomaticSync());
-    });
-  }
-
   Future<void> _runAutomaticSync() async {
     if (_accountDeletionInProgress) return;
     final account = await _localStore.existingAccount();
@@ -245,15 +189,10 @@ extension _SyncRuntimeCoordinator on SyncCoordinator {
   }
 
   void _cancelScheduledSyncWork() {
-    _automaticSyncTimer?.cancel();
     _retryTimer?.cancel();
     _realtimeReconnectTimer?.cancel();
     _realtimeDeleteFollowUpTimer?.cancel();
-    _pendingTargetTables.clear();
-    _pushOnlyRequested = false;
-    _broadPullRequested = false;
-    _syncRequestedWhileActive = false;
-    _fullSyncRequestedWhileActive = false;
+    _schedule.cancelQueuedWork();
   }
 
   bool _isActiveAccountScope(_ActiveAccountScope scope) {

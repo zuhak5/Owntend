@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- WP-012 (F-025): make the cleartext guarantee explicit and auditable.
+     Owntend talks only to HTTPS endpoints (Supabase, Sentry, Open-Meteo,
+     Nominatim, gstatic). The platform default already forbids cleartext at
+     targetSdk >= 28; this config pins that policy so it survives future
+     targetSdk changes and is reviewable in one file. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+</network-security-config>
