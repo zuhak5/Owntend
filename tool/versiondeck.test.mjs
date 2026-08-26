@@ -422,14 +422,14 @@ test("service worker never caches releases.json", async () => {
   assert.match(serviceWorker, /fetch\(request, \{ cache: "no-store" \}\)/);
 });
 
-test("committed VersionDeck control is fail-closed disabled and builds a valid manifest", async () => {
-  const testNow = Date.parse("2026-08-21T14:30:00.000Z");
+test("committed VersionDeck control is active for verified publication and builds a valid manifest", async () => {
+  const testNow = Date.parse("2026-08-26T12:00:00.000Z");
   const control = await loadVersionDeckControl(
     path.join(root, "tool", "versiondeck-control.json"),
     { now: testNow },
   );
-  assert.equal(control.publication.status, VersionDeckPublicationStatus.DISABLED);
-  assert.equal(control.publication.reasonCode, "pre-release");
+  assert.equal(control.publication.status, VersionDeckPublicationStatus.ACTIVE);
+  assert.equal(control.publication.reasonCode, null);
 
   const { manifest } = await buildManifest([], {
     control,
@@ -437,7 +437,10 @@ test("committed VersionDeck control is fail-closed disabled and builds a valid m
     now: testNow,
   });
 
-  assert.equal(manifest.publication.status, VersionDeckPublicationStatus.DISABLED);
+  assert.equal(manifest.publication.status, VersionDeckPublicationStatus.ACTIVE);
+  // An active control with no verified releases still yields a structurally
+  // valid manifest; the release pipeline refuses to publish without the
+  // independently verified GitHub release evidence.
   assert.equal(manifest.releases.length, 0);
   assert.equal(manifest.latestStableReleaseId, null);
   assert.deepEqual(validateVersionDeckManifest(manifest, { now: testNow }), []);
