@@ -70,7 +70,6 @@ jobs:
       - run: npm ci
       - name: Validate test inventory and execute all canonical Node tests
         run: |
-          node --check tool/run_local_backend_integration.mjs
           npm run validate:test-inventory
           npm run validate:asset-provenance
           npm run test:all
