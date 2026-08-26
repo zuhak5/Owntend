@@ -177,14 +177,16 @@ try {
     [IO.File]::WriteAllText($envFile, "$MediaCleanupWorkerTokenEnv=$workerToken")
     Write-Host 'Serving Edge Functions...'
     # A bootstrap script sidesteps quoting problems caused by spaces in the
-    # temporary workspace path.
+    # temporary workspace path. The bootstrap is launched by the same
+    # PowerShell host executing this lane (Windows PowerShell or pwsh), which
+    # keeps the served-function environment identical across platforms.
+    $hostExecutable = (Get-Process -Id $PID).Path
     $serveBootstrap = Join-Path $workspace 'run-functions-serve.ps1'
     $serveScript = "Set-Location -LiteralPath '" + (Join-Path $workspace 'supabase') + "'" + [Environment]::NewLine
     $serveScript += '& npx supabase functions serve --env-file ''' + $envFile + ''' 1> ''' + $serveLog + ''' 2> ''' + $serveErr + ''''
     [IO.File]::WriteAllText($serveBootstrap, $serveScript)
-    $serveProcess = Start-Process -FilePath 'powershell.exe' `
+    $serveProcess = Start-Process -FilePath $hostExecutable `
         -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$serveBootstrap`"" `
-        -WindowStyle Hidden `
         -PassThru
 
     # Wait until OUR token-aware function revision is actually serving. The

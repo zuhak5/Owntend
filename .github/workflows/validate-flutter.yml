@@ -60,6 +60,24 @@ jobs:
       - name: Validate repository documentation links
         run: npm run validate:docs-links
 
+      - name: Validate canonical test and asset inventory
+        run: npm run validate:test-inventory
+
+      # Toolchain enforcement shells out to `flutter --version`, so the pinned
+      # Flutter/Dart toolchain must be on PATH before it runs.
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: "3.47.0"
+          channel: stable
+          cache: true
+
+      - name: Show tool versions
+        run: |
+          flutter --version
+          dart --version
+          pwsh --version
+
       - name: Validate canonical toolchain contracts and manifest
         run: |
           npm run test:toolchain
@@ -75,22 +93,6 @@ jobs:
         run: |
           npm run test:asset-provenance
           npm run validate:asset-provenance
-
-      - name: Validate canonical test and asset inventory
-        run: npm run validate:test-inventory
-
-      - name: Set up Flutter
-        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
-        with:
-          flutter-version: "3.47.0"
-          channel: stable
-          cache: true
-
-      - name: Show tool versions
-        run: |
-          flutter --version
-          dart --version
-          pwsh --version
 
       - name: Resolve dependencies
         # --enforce-lockfile fails if pubspec.lock does not exactly satisfy
