@@ -34,7 +34,6 @@ const allowedApplicationFiles = [
 
 const neutralPrefixes = [
   'docs/',
-  'integration_test/',
   'supabase/',
   'test/',
   'tool/',

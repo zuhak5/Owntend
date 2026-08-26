@@ -34,7 +34,7 @@ Launch claims map to named lanes; a claim without its lane is not evidenced:
 | Deno functions | per-function frozen fmt/check/test | Local/CI |
 | Blank-baseline database + endpoint integration | `npm run test:backend-integration` (isolated disposable stack) | Disposable local/CI |
 | Two-user application/backend | `test/backend_integration/local_backend_sync_test.dart` via backend workflow | Disposable local/CI |
-| Emulator/device integration | `flutter test integration_test --flavor dev --dart-define-from-file=config/dev.json` | Emulator/device |
+| Emulator/device integration | Removed: the `integration_test` SDK dependency leaked into release plugin registration (flutter/flutter#169336) and broke production AAB builds; no device lane exists in CI |  |
 | Physical-device matrix | API 26/33/35/36 + OEM matrix: permissions, reboot/timezone, process death, TalkBack | Device (external) |
 | Hosted staging | disposable hosted Supabase, cron, Storage with authorization | Hosted (external) |
 | Protected release rehearsal | release workflow dry runs, signing, Sentry symbols, VersionDeck derivation | Protected (external) |

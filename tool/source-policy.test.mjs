@@ -62,15 +62,21 @@ test('.gitignore has no duplicate effective ignore entries', () => {
   );
 });
 
-test('analysis_options.yaml does not exclude platforms absent from this Android-first repository', () => {
+test('analysis_options.yaml excludes only recognized build and platform paths', () => {
   const analysisOptions = readFileSync(
     path.join(repositoryRoot, 'analysis_options.yaml'),
     'utf8',
   );
+  // flutter_tools (3.47) re-adds the standard platform excludes on every
+  // `pub get` / `gen-l10n` upgrade pass, so their presence is accepted even
+  // though this Android-first repository has no such directories. Any other
+  // absent directory must stay excluded from the analyzer exclude list.
+  const flutterManagedExcludes = new Set(['ios', 'web', 'windows', 'macos', 'linux']);
   const excludedPlatforms = ['ios', 'web', 'windows', 'macos', 'linux'].filter(platform =>
     new RegExp(`- ${platform}/\\*\\*`, 'm').test(analysisOptions),
   );
   for (const platform of excludedPlatforms) {
+    if (flutterManagedExcludes.has(platform)) continue;
     assert.ok(
       existsSync(path.join(repositoryRoot, platform)),
       `analysis_options.yaml excludes "${platform}" but the repository has no such directory.`,

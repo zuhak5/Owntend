@@ -157,7 +157,6 @@ export const KNOWN_PUB_LICENSES = Object.freeze({
   'image_picker_platform_interface': 'BSD-3-Clause',
   'image_picker_windows': 'BSD-3-Clause',
   'intl': 'BSD-3-Clause',
-  'integration_test': 'BSD-3-Clause',
   'io': 'BSD-3-Clause',
   'js': 'BSD-3-Clause',
   'json_annotation': 'BSD-3-Clause',
