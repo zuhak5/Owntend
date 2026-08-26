@@ -6,35 +6,6 @@ export const allowedAdvisorTitles = new Set([
   'Leaked Password Protection Disabled',
 ]);
 
-// SECURITY DEFINER RPCs that authenticated callers execute by design. These
-// functions are the application's server-authoritative API surface: they must
-// bypass row level security to write canonical rows and ledgers atomically,
-// which is exactly what SECURITY DEFINER exists for. The anon variants of the
-// same advisor stay actionable, and any function not listed here stays
-// actionable, so this remains a fail-closed gate.
-export const allowedAuthenticatedSecurityDefinerFunctions = new Set([
-  'public.prepare_asset_photo_upload',
-  'public.finalize_asset_photo_upload',
-  'public.delete_asset_photo',
-  'public.set_primary_asset_photo',
-  'public.create_asset',
-  'public.create_task_with_point_debit',
-  'public.create_reward_claim_request',
-  'public.get_charged_operation_status',
-  'public.record_monetization_event',
-]);
-
-function isAllowedFinding(finding) {
-  if (allowedAdvisorTitles.has(finding.title)) return true;
-  if (finding.name !== 'authenticated_security_definer_function_executable') {
-    return false;
-  }
-  const schema = finding.metadata?.schema;
-  const name = finding.metadata?.name;
-  if (typeof schema !== 'string' || typeof name !== 'string') return false;
-  return allowedAuthenticatedSecurityDefinerFunctions.has(`${schema}.${name}`);
-}
-
 function normalizeProjectRef(projectRef, supabaseUrl) {
   const explicit = projectRef?.trim();
   if (explicit) return explicit;
@@ -109,12 +80,16 @@ export async function auditSupabaseAdvisors({
     findings.push(...body.lints.map((lint) => sanitizeLint(kind, lint)));
   }
 
-  const allowed = findings.filter((finding) => isAllowedFinding(finding));
+  const allowed = findings.filter((finding) =>
+    allowedAdvisorTitles.has(finding.title),
+  );
   const informational = findings.filter(
-    (finding) => !isAllowedFinding(finding) && finding.level === 'INFO',
+    (finding) =>
+      !allowedAdvisorTitles.has(finding.title) && finding.level === 'INFO',
   );
   const actionable = findings.filter(
-    (finding) => !isAllowedFinding(finding) && finding.level !== 'INFO',
+    (finding) =>
+      !allowedAdvisorTitles.has(finding.title) && finding.level !== 'INFO',
   );
   return {
     projectRef: resolvedRef,
@@ -167,7 +142,7 @@ async function main() {
     ...report.allowed,
     ...report.informational,
   ]) {
-    const disposition = isAllowedFinding(finding)
+    const disposition = allowedAdvisorTitles.has(finding.title)
       ? 'ALLOWED'
       : finding.level === 'INFO'
         ? 'INFO'

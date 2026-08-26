@@ -94,11 +94,11 @@ select extensions.is(
         'create_task_with_point_debit',
         'record_monetization_event'
       )
-      and functions.prosecdef
+      and not functions.prosecdef
       and has_function_privilege('authenticated', functions.oid, 'EXECUTE')
   ),
   4,
-  'authenticated point RPCs are secure security definer boundaries in public'
+  'authenticated point RPCs are security invoker delegations in public'
 );
 select extensions.is(
   (
@@ -113,9 +113,10 @@ select extensions.is(
         'record_monetization_event_impl'
       )
       and functions.prosecdef
+      and has_function_privilege('authenticated', functions.oid, 'EXECUTE')
   ),
   4,
-  'privileged point implementations live in the private schema'
+  'privileged point implementations stay definer in the private schema and serve authenticated callers'
 );
 select extensions.ok(
   exists (

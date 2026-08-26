@@ -4,30 +4,30 @@ create extension if not exists pgtap with schema extensions;
 set local role postgres;
 set search_path = public, extensions, pg_catalog;
 
-select extensions.plan(14);
+select extensions.plan(15);
 
 select extensions.is(
   (select prosecdef from pg_proc where oid = 'public.prepare_asset_photo_upload(text,text,bigint,text,text,text)'::regprocedure),
-  true,
-  'prepare_asset_photo_upload public API is SECURITY DEFINER'
+  false,
+  'prepare_asset_photo_upload public API is a SECURITY INVOKER delegation'
 );
 
 select extensions.is(
   (select prosecdef from pg_proc where oid = 'public.finalize_asset_photo_upload(uuid,text,text,integer,text,boolean)'::regprocedure),
-  true,
-  'finalize_asset_photo_upload public API is SECURITY DEFINER'
+  false,
+  'finalize_asset_photo_upload public API is a SECURITY INVOKER delegation'
 );
 
 select extensions.is(
   (select prosecdef from pg_proc where oid = 'public.set_primary_asset_photo(text,text)'::regprocedure),
-  true,
-  'set_primary_asset_photo public API is SECURITY DEFINER'
+  false,
+  'set_primary_asset_photo public API is a SECURITY INVOKER delegation'
 );
 
 select extensions.is(
   (select prosecdef from pg_proc where oid = 'public.get_charged_operation_status(uuid,text)'::regprocedure),
-  true,
-  'get_charged_operation_status public API is SECURITY DEFINER'
+  false,
+  'get_charged_operation_status public API is a SECURITY INVOKER delegation'
 );
 
 select extensions.is(
@@ -49,16 +49,39 @@ select extensions.is(
     from pg_proc p
     join pg_namespace n on n.oid = p.pronamespace
     where n.nspname in ('owntend_media_private', 'owntend_monetization_private', 'owntend_private')
-      and (
-        has_function_privilege('anon', p.oid, 'EXECUTE')
-        or has_function_privilege('authenticated', p.oid, 'EXECUTE')
-      )
+      and has_function_privilege('anon', p.oid, 'EXECUTE')
       -- WP-002 (F-002): the auth.uid()-guarded reconcile helper is the single
       -- sanctioned exception; it backs the maintenance_plans INSERT policy.
       and p.proname <> 'can_reconcile_maintenance_plan'
   ),
   0,
-  'private schema implementations are strictly inaccessible to anon and authenticated (except the policy-backed reconcile helper)'
+  'private schema implementations are never executable by anon (except the policy-backed reconcile helper)'
+);
+
+select extensions.is(
+  (
+    select count(*)::int
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname in ('owntend_media_private', 'owntend_monetization_private')
+      and p.proname in (
+        'prepare_asset_photo_upload_impl',
+        'finalize_asset_photo_upload_impl',
+        'delete_asset_photo_impl',
+        'set_primary_asset_photo_impl',
+        'create_asset_impl',
+        'create_task_with_point_debit_impl',
+        'create_reward_claim_request_impl',
+        'get_charged_operation_status',
+        'record_monetization_event_impl'
+      )
+      and has_function_privilege('authenticated', p.oid, 'EXECUTE')
+      and has_function_privilege('service_role', p.oid, 'EXECUTE')
+      and not has_function_privilege('anon', p.oid, 'EXECUTE')
+      and p.prosecdef
+  ),
+  9,
+  'exactly the nine RPC implementations stay SECURITY DEFINER while serving authenticated and service_role callers'
 );
 
 select extensions.is(

@@ -123,13 +123,11 @@ The server-only cleanup, recent-session, and AdMob settlement RPCs explicitly re
 
 The protected `Audit Supabase Advisors` workflow queries both security and performance Advisors from exact current `main` and stores a sanitized report artifact. Advisor results are classified deliberately:
 
-- `WARN`, `ERROR`, and unknown severities are blocking unless explicitly allowlisted. Two narrowly scoped exception classes exist, both reviewed in code:
-  - the documented auth-configuration title (`Leaked Password Protection Disabled`), and
-  - `authenticated_security_definer_function_executable` findings for the exact nine server-authoritative application RPCs pinned in `tool/audit_supabase_advisors.mjs`. These functions must execute as SECURITY DEFINER for authenticated callers because they write canonical rows and ledgers atomically; their anon variants and any unlisted function remain blocking.
+- `WARN`, `ERROR`, and unknown severities are blocking unless the documented auth-configuration title (`Leaked Password Protection Disabled`) is explicitly allowlisted. SECURITY DEFINER executability findings are never allowlisted.
 - `INFO` findings are retained in the report as non-blocking evidence. In particular, an unused-index observation on a freshly reset zero-traffic database is not sufficient evidence that an index is unnecessary.
 - Management API errors fail closed.
 
-The twelve public SECURITY DEFINER entry points state their EXECUTE boundary explicitly through forward migration `20260826010000_harden_security_definer_execute_privileges.sql`: media-cleanup worker RPCs are service-role-only, and authenticated application RPCs deny `anon`/`PUBLIC` while serving `authenticated` (plus `service_role`). pgTAP `0031_rpc_execute_privileges.test.sql` pins that matrix.
+The public RPC surface keeps no elevated authority at the exposed layer: `20260826030000_public_rpcs_security_invoker.sql` converts the nine server-authoritative application RPCs into SECURITY INVOKER delegation wrappers, while their SECURITY DEFINER implementations remain in the unexposed `owntend_media_private` / `owntend_monetization_private` schemas serving `authenticated` and `service_role` callers. This clears splinter lints 0028/0029 by construction instead of by exception. Media-cleanup worker RPCs stay service-role-only per `20260826010000_harden_security_definer_execute_privileges.sql`. pgTAP `0023_api_security.test.sql` and `0031_rpc_execute_privileges.test.sql` pin that matrix.
 
 Database-side pgTAP coverage independently locks the exposed RPC security mode, effective ACL boundary, RLS init-plan form, and required foreign-key indexes so the hosted Advisor check is not the only line of defense.
 

@@ -4,7 +4,7 @@ create extension if not exists pgtap with schema extensions;
 set local role postgres;
 set search_path = public, extensions, pg_catalog;
 
-select extensions.plan(12);
+select extensions.plan(13);
 
 -- Media-cleanup worker RPCs are service_role-only capabilities.
 select extensions.ok(
@@ -91,6 +91,35 @@ select extensions.ok(
     and has_function_privilege('service_role', 'public.record_monetization_event(text,jsonb)', 'execute')
     and not has_function_privilege('anon', 'public.record_monetization_event(text,jsonb)', 'execute'),
   'record_monetization_event serves authenticated and service_role only'
+);
+
+-- The public entry points must hold no elevated authority themselves: the
+-- SECURITY DEFINER boundary lives exclusively in the private implementations,
+-- which keeps the hosted advisor (splinter lint 0029) clean without weakening
+-- the server-authoritative behavior.
+select extensions.is(
+  (
+    select count(*)::int
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and p.proname in (
+        'prepare_asset_photo_upload',
+        'finalize_asset_photo_upload',
+        'delete_asset_photo',
+        'set_primary_asset_photo',
+        'create_asset',
+        'create_task_with_point_debit',
+        'create_reward_claim_request',
+        'get_charged_operation_status',
+        'record_monetization_event'
+      )
+      and not p.prosecdef
+      and has_function_privilege('authenticated', p.oid, 'EXECUTE')
+      and not has_function_privilege('anon', p.oid, 'EXECUTE')
+  ),
+  9,
+  'all nine public RPC entry points are invoker delegations executable only by authenticated callers'
 );
 
 rollback;

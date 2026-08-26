@@ -3,7 +3,6 @@ import test from 'node:test';
 
 import {
   allowedAdvisorTitles,
-  allowedAuthenticatedSecurityDefinerFunctions,
   auditSupabaseAdvisors,
 } from './audit_supabase_advisors.mjs';
 
@@ -84,54 +83,23 @@ test('fails closed when the management API response is unavailable', async () =>
   );
 });
 
-test('allows only reviewed by-design authenticated SECURITY DEFINER functions', async () => {
-  const definerFinding = (schema, name) => ({
-    name: 'authenticated_security_definer_function_executable',
-    title: 'Signed-In Users Can Execute SECURITY DEFINER Function',
-    level: 'WARN',
-    metadata: { schema, name },
-  });
+test('SECURITY DEFINER executability findings are never allowlisted by title or metadata', async () => {
   const report = await auditSupabaseAdvisors({
     accessToken: 'test-token',
     projectRef: 'project-ref',
     fetchImpl: async (url) => {
       if (!url.endsWith('/security')) return response([]);
       return response([
-        definerFinding('public', 'create_asset'),
-        definerFinding('public', 'unknown_function'),
         {
-          name: 'anon_security_definer_function_executable',
-          title: 'Public Can Execute SECURITY DEFINER Function',
+          name: 'authenticated_security_definer_function_executable',
+          title: 'Signed-In Users Can Execute SECURITY DEFINER Function',
           level: 'WARN',
           metadata: { schema: 'public', name: 'create_asset' },
         },
-        definerFinding('owntend_private', 'compact_user_change_feed'),
-        { ...definerFinding('public', 'create_asset'), metadata: null },
       ]);
     },
   });
 
-  assert.equal(report.allowedExceptionCount, 1);
-  assert.equal(report.actionableCount, 4);
-  assert.ok(
-    report.actionable.some(
-      (finding) =>
-        finding.name === 'anon_security_definer_function_executable',
-    ),
-    'anon-executable SECURITY DEFINER findings are never allowed',
-  );
-});
-
-test('the reviewed SECURITY DEFINER allowance list stays pinned', () => {
-  assert.deepEqual([...allowedAuthenticatedSecurityDefinerFunctions].sort(), [
-    'public.create_asset',
-    'public.create_reward_claim_request',
-    'public.create_task_with_point_debit',
-    'public.delete_asset_photo',
-    'public.finalize_asset_photo_upload',
-    'public.get_charged_operation_status',
-    'public.prepare_asset_photo_upload',
-    'public.record_monetization_event',
-    'public.set_primary_asset_photo',
-  ]);
+  assert.equal(report.allowedExceptionCount, 0);
+  assert.equal(report.actionableCount, 1);
 });
