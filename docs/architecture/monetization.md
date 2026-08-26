@@ -164,7 +164,7 @@ Ambiguous operations (`outcomeUnknown` or interrupted `submitting`) are consider
 ## Privacy and diagnostics boundaries
 
 - Ad requests and reward identifiers must not contain room names, asset names, maintenance content, location, email, media references, tokens, or raw domain payloads.
-- Current app-owned monetization events contain only technical fields: known placement and ad-unit identifiers for native events; cooldown/session counters for interstitials; and reward amount, entry point, and server-pending state for rewarded events. The authenticated event RPC derives the user ID and restricts event names and payload size, but it does not sanitize arbitrary future property values. New call sites therefore require a privacy review.
+- Current app-owned monetization events contain only technical fields: known placement and canonical Google ad-unit identifiers (`ca-app-pub-<16 digits>/<10 digits>`) for native events; cooldown/session counters for interstitials; and reward amount, entry point, and server-pending state for rewarded events. The authenticated event RPC derives the user ID and rejects unknown keys, malformed identifiers, wrong types, unbounded counters, and non-allowlisted values. New call sites therefore require a privacy review and an explicit backend allowlist update.
 - SSV logs omit the raw query and signed content, redact claim and user values, record only signature length, and replace the provider transaction ID with a short SHA-256 fingerprint. They still contain technical request and reward metadata such as user agent, parameter names, ad unit, reward value, timestamp, key ID, failure details, and a request ID. Hosted log access and retention require operator review.
 - Google Mobile Ads/UMP may process interaction, IP, diagnostic, consent, advertising-identifier, and other device/account data according to the installed SDK and console configuration. The repository cannot establish Google's final processing or the Play disclosure by itself.
 
@@ -176,7 +176,7 @@ Repository coverage includes:
 
 - [`monetization_test.dart`](../../test/monetization_test.dart) for eligibility gates and per-format switches, generation changes, retry budgets and jitter bounds, 55-minute freshness, exact-once leases, fullscreen serialization, placement policy, and native slot states.
 - [`native_ad_factory_contract_test.dart`](../../test/native_ad_factory_contract_test.dart) for bridge-contract parity, atomic fallback, registered assets, absent-asset hiding, rounded/stroked chrome, light/dark resources, and single native-constructor ownership.
-- [`0012_points_monetization.test.sql`](../../supabase/tests/database/0012_points_monetization.test.sql) and [`0013_admob_ssv_security.test.sql`](../../supabase/tests/database/0013_admob_ssv_security.test.sql) for authorization, wallet conservation, reward limits, replay, and idempotency.
+- [`0012_points_monetization.test.sql`](../../supabase/tests/database/0012_points_monetization.test.sql), [`0013_admob_ssv_security.test.sql`](../../supabase/tests/database/0013_admob_ssv_security.test.sql), and [`0030_monetization_authority.test.sql`](../../supabase/tests/database/0030_monetization_authority.test.sql) for authorization, wallet conservation, reward limits, replay, canonical AdMob event identifiers, and idempotency.
 - [`admob-ssv-handler/index_test.ts`](../../supabase/functions/admob-ssv-handler/index_test.ts) for callback parsing, signatures, setup probes, production validation, retry responses, duplicate settlement, and log redaction.
 
 These checks do not prove:

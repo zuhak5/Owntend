@@ -112,6 +112,7 @@ Receives Google Mobile Ads server-side verification callbacks. It validates prov
 - Keep secrets in the Supabase function environment.
 - Use bounded timeouts and retries for external or Storage work.
 - Make repeated requests safe.
+- Validate technical identifier formats against their real provider contracts. Native-ad event unit IDs use the canonical Google `ca-app-pub-<16 digits>/<10 digits>` shape; unknown properties and malformed identifiers remain rejected before ledger insertion.
 - Return stable technical errors without leaking internals.
 - Do not log tokens, signatures, direct identifiers, user content, signed URLs, or raw payloads.
 - If Sentry is enabled for a function, use request-scoped capture only and report only genuine server failures. Do not attach JWTs, recovery keys, claim IDs, user IDs, raw callback query strings, or webhook payload bodies.

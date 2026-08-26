@@ -235,10 +235,22 @@ extension _SyncPushCoordinator on SyncCoordinator {
                   for (final record in batchResult.records)
                     record.recordKey: record,
                 };
-                for (final item in batchMutations) {
-                  await _localStore.markMutationSucceeded(
-                    item,
-                    byKey[item.recordKey],
+                for (var offset = 0; offset < batchMutations.length; offset++) {
+                  final item = batchMutations[offset];
+                  final inserted = byKey[item.recordKey];
+                  if (inserted != null &&
+                      !batchResult.replayedRecordKeys.contains(
+                        item.recordKey,
+                      )) {
+                    await _localStore.markMutationSucceeded(item, inserted);
+                    continue;
+                  }
+                  await _reconcileBatchCreationReplay(
+                    mutation: item,
+                    local: batchRecords[offset],
+                    userId: userId,
+                    deviceId: deviceId,
+                    scope: scope,
                   );
                 }
                 if (trackHydration) {
@@ -263,21 +275,13 @@ extension _SyncPushCoordinator on SyncCoordinator {
                   ) {
                     final item = batchMutations[offset];
                     final rec = batchRecords[offset];
-                    final canonical = await _remoteGateway.fetch(
-                      spec: rec.spec,
+                    await _reconcileBatchCreationReplay(
+                      mutation: item,
+                      local: rec,
                       userId: userId,
                       deviceId: deviceId,
-                      recordKey: rec.recordKey,
+                      scope: scope,
                     );
-                    if (canonical != null) {
-                      await _localStore.applyRemoteRecords([canonical]);
-                      await _localStore.markMutationSucceeded(item, canonical);
-                    } else {
-                      await _localStore.markMutationFailed(
-                        item,
-                        'Primary key conflict occurred but canonical row was absent (23505).',
-                      );
-                    }
                   }
                   if (trackHydration) {
                     await _localStore.addHydrationUnits(batchMutations.length);
@@ -350,6 +354,46 @@ extension _SyncPushCoordinator on SyncCoordinator {
         if (remaining.isEmpty) return pushedSomething;
       }
     }
+  }
+
+  Future<void> _reconcileBatchCreationReplay({
+    required LocalSyncMutation mutation,
+    required SyncRecord local,
+    required String userId,
+    required String deviceId,
+    required _ActiveAccountScope scope,
+  }) async {
+    // A skipped insert or legacy 23505 can be a response-loss replay. It is
+    // acknowledged only when the canonical cloud record has the same semantic
+    // data. A divergent same-key record remains a durable user-resolvable
+    // conflict instead of being overwritten or silently accepted.
+    final canonical = await _remoteGateway.fetch(
+      spec: local.spec,
+      userId: userId,
+      deviceId: deviceId,
+      recordKey: mutation.recordKey,
+    );
+    await _ensureActiveAccountScope(scope);
+    if (canonical == null) {
+      await _localStore.markMutationFailed(
+        mutation,
+        'A replayed creation had no canonical cloud row; it will be retried.',
+      );
+      return;
+    }
+    await _localStore.applyRemoteRecords([canonical]);
+    if (_sameRecordData(local, canonical)) {
+      await _localStore.markMutationSucceeded(mutation, canonical);
+      return;
+    }
+    await _localStore.markMutationConflicted(
+      mutation,
+      accountId: userId,
+      reason: 'remote_revision_winner',
+      localPayloadJson: _localSyncConflictPayload(mutation, local),
+      remotePayloadJson: jsonEncode(canonical.values),
+      remoteRevision: canonical.revision,
+    );
   }
 
   Future<void> _pushMaintenanceUndo(

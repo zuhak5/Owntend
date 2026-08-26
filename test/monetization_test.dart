@@ -160,6 +160,33 @@ void main() {
     expect(production.native('home'), isNot(production.native('more')));
   });
 
+  test('all native ad units use the server-accepted canonical format', () {
+    final units = [
+      for (final production in [true, false])
+        for (final placement in [
+          'home',
+          'assets',
+          'room_detail',
+          'thing_detail',
+          'task_detail',
+          'maintenance',
+          'calendar',
+          'more',
+          'search',
+          'notifications',
+          'statistics',
+          'account',
+          'backup',
+          'trash',
+          'settings',
+          'permission_setup',
+        ])
+          OwntendAdUnits(production: production).native(placement),
+    ];
+    final canonicalAdMobId = RegExp(r'^ca-app-pub-[0-9]{16}/[0-9]{10}$');
+    expect(units, everyElement(matches(canonicalAdMobId)));
+  });
+
   test('consent debug settings map from app config', () {
     final config = AppConfig.configured(
       environment: AppEnvironment.dev,

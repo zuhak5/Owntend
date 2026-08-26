@@ -30,6 +30,7 @@ class _StatefulGateway implements SupabaseSyncGateway {
   final Map<String, int> pullCalls = {};
   final Map<String, int> writeCalls = {};
   var batchWriteCalls = 0;
+  Set<String> batchPreexistingKeys = const {};
   var materializeMediaCalls = 0;
   var startRealtimeCalls = 0;
   var maintenanceCompletionCalls = 0;
@@ -112,8 +113,30 @@ class _StatefulGateway implements SupabaseSyncGateway {
     required String deviceId,
   }) async {
     batchWriteCalls++;
+    // Simulate PostgREST `Prefer: resolution=ignore-duplicates`: keys listed
+    // in [batchPreexistingKeys] are skipped by the server instead of aborting
+    // the statement, and only freshly inserted rows are returned.
     final canonical = <SyncRecord>[];
+    final replayedKeys = <String>{};
     for (final record in records) {
+      if (batchPreexistingKeys.contains(record.recordKey)) {
+        final existing = await fetch(
+          spec: record.spec,
+          userId: userId,
+          deviceId: deviceId,
+          recordKey: record.recordKey,
+        );
+        if (existing == null) {
+          return const BatchWriteConflict(
+            code: '23505',
+            message: 'Conflict',
+            details: 'primary key',
+            isPrimaryKeyConflict: true,
+          );
+        }
+        replayedKeys.add(record.recordKey);
+        continue;
+      }
       final result = await write(
         record: record,
         userId: userId,
@@ -130,7 +153,7 @@ class _StatefulGateway implements SupabaseSyncGateway {
       }
       canonical.add(result.canonical!);
     }
-    return BatchWriteSuccess(canonical);
+    return BatchWriteSuccess(canonical, replayedRecordKeys: replayedKeys);
   }
 
   @override
@@ -1307,6 +1330,144 @@ void main() {
       ).called(1);
     },
   );
+
+  test(
+    'acknowledges a batch creation replay skipped by idempotent insert',
+    () async {
+      final db = AppDatabase(executor: NativeDatabase.memory());
+      addTearDown(db.close);
+      final store = LocalSyncStore(db);
+      await store.account();
+      await db.delete(db.syncOutbox).go();
+      final createdAt = DateTime.utc(2026, 8, 26, 9);
+      await db
+          .into(db.tags)
+          .insert(
+            TagsCompanion.insert(
+              id: 'tag-replay',
+              name: 'Home',
+              createdAt: Value(createdAt),
+            ),
+          );
+      await store.setEnabled(enabled: true, boundUserId: 'user-1');
+      await store.recordSyncSuccess(DateTime.utc(2026, 8, 26));
+
+      final auth = _FakeAuthRepository(const AuthSession(userId: 'user-1'));
+      addTearDown(auth.controller.close);
+      final gateway = _StatefulGateway();
+      // The prior push attempt committed server-side but its acknowledgement
+      // was lost, so the remote row already exists when the intent replays.
+      gateway._records.add(
+        _StoredRecord(
+          userId: 'user-1',
+          deviceId: null,
+          record: SyncRecord(
+            spec: syncSpecByEntity['tag']!,
+            recordKey: 'tag-replay',
+            values: {
+              'user_id': 'user-1',
+              'id': 'tag-replay',
+              'name': 'Home',
+              'created_at': createdAt.toIso8601String(),
+              'revision': 1,
+              'updated_at': createdAt.toIso8601String(),
+            },
+            clientModifiedAt: createdAt,
+            originDeviceId: 'device-under-test',
+            revision: 1,
+            serverUpdatedAt: createdAt,
+          ),
+        ),
+      );
+      gateway.batchPreexistingKeys = {'tag-replay'};
+      final coordinator = SyncCoordinator(auth, store, gateway);
+      addTearDown(coordinator.dispose);
+
+      await coordinator.syncIncremental();
+
+      expect(gateway.batchWriteCalls, 1);
+      expect(await store.pendingCount(), 0);
+      expect(await store.listSyncConflicts(), isEmpty);
+      // The skipped row must not be duplicated remotely.
+      expect(
+        gateway._records.where((item) => item.record.recordKey == 'tag-replay'),
+        hasLength(1),
+      );
+    },
+  );
+
+  test('keeps a divergent batch replay as a durable conflict', () async {
+    final db = AppDatabase(executor: NativeDatabase.memory());
+    addTearDown(db.close);
+    final store = LocalSyncStore(db);
+    await store.account();
+    await db.delete(db.syncOutbox).go();
+    final createdAt = DateTime.utc(2026, 8, 26, 9);
+    await db
+        .into(db.tags)
+        .insert(
+          TagsCompanion.insert(
+            id: 'tag-divergent',
+            name: 'Local Name',
+            createdAt: Value(createdAt),
+          ),
+        );
+    await store.setEnabled(enabled: true, boundUserId: 'user-1');
+    await store.recordSyncSuccess(DateTime.utc(2026, 8, 26));
+
+    final auth = _FakeAuthRepository(const AuthSession(userId: 'user-1'));
+    addTearDown(auth.controller.close);
+    final gateway = _StatefulGateway();
+    // Same primary key, but the cloud row carries different data created by
+    // another device: the replay must never silently overwrite it.
+    gateway._records.add(
+      _StoredRecord(
+        userId: 'user-1',
+        deviceId: null,
+        record: SyncRecord(
+          spec: syncSpecByEntity['tag']!,
+          recordKey: 'tag-divergent',
+          values: {
+            'user_id': 'user-1',
+            'id': 'tag-divergent',
+            'name': 'Remote Name',
+            'created_at': createdAt.toIso8601String(),
+            'revision': 4,
+            'updated_at': DateTime.utc(2026, 8, 26, 10).toIso8601String(),
+          },
+          clientModifiedAt: DateTime.utc(2026, 8, 26, 10),
+          originDeviceId: 'another-device',
+          revision: 4,
+          serverUpdatedAt: DateTime.utc(2026, 8, 26, 10),
+        ),
+      ),
+    );
+    gateway.batchPreexistingKeys = {'tag-divergent'};
+    final coordinator = SyncCoordinator(auth, store, gateway);
+    addTearDown(coordinator.dispose);
+
+    await coordinator.syncIncremental();
+
+    expect(gateway.batchWriteCalls, 1);
+    expect(await store.pendingCount(), 0);
+    final conflicts = await store.listSyncConflicts();
+    expect(conflicts, hasLength(1));
+    // The cloud row stays authoritative remotely and locally; the local
+    // intent survives only in the durable conflict ledger.
+    expect(
+      gateway._records
+          .firstWhere((item) => item.record.recordKey == 'tag-divergent')
+          .record
+          .values['name'],
+      'Remote Name',
+    );
+    expect(
+      (await (db.select(
+        db.tags,
+      )..where((row) => row.id.equals('tag-divergent'))).getSingle()).name,
+      'Remote Name',
+    );
+  });
 
   test(
     'two devices recover cloud data without sharing operational state',

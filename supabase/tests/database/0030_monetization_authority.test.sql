@@ -4,7 +4,7 @@ create extension if not exists pgtap with schema extensions;
 set local role postgres;
 set search_path = public, extensions, pg_catalog;
 
-select extensions.plan(15);
+select extensions.plan(17);
 
 -- MON-001: one server-authoritative mutation path for assets and typed
 -- monetization events. Direct client INSERT into assets is denied so the
@@ -142,9 +142,24 @@ select extensions.lives_ok(
   'allowlisted debit properties are accepted'
 );
 
+select extensions.lives_ok(
+  $$ select public.record_monetization_event('ad_native_impression',
+       jsonb_build_object('screen_name', 'home',
+         'ad_unit_id', 'ca-app-pub-5274007212820203/8393243294')) $$,
+  'canonical AdMob unit identifiers are accepted'
+);
+
 select extensions.throws_ok(
   $$ select public.record_monetization_event('ad_native_impression',
-       jsonb_build_object('screen_name', 'home', 'ad_unit_id', 'native_home', 'user_note', 'free text')) $$,
+       jsonb_build_object('screen_name', 'home', 'ad_unit_id', 'native_home')) $$,
+  '22023',
+  'INVALID_EVENT_PROPERTY',
+  'non-canonical ad unit identifier shapes are rejected'
+);
+
+select extensions.throws_ok(
+  $$ select public.record_monetization_event('ad_native_impression',
+       jsonb_build_object('screen_name', 'home', 'ad_unit_id', 'ca-app-pub-3940256099942544/2247696110', 'user_note', 'free text')) $$,
   '22023',
   'INVALID_EVENT_PROPERTY',
   'extra keys outside the allowlist are rejected even with valid core fields'
@@ -177,8 +192,8 @@ select extensions.throws_ok(
 set local role postgres;
 select extensions.is(
   (select count(*) from public.monetization_events),
-  2::bigint,
-  'only the two valid events reached the ledger'
+  3::bigint,
+  'only the three valid events reached the ledger'
 );
 
 select extensions.ok(

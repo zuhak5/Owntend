@@ -38,6 +38,22 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
+$supabaseCliRelativePath = 'node_modules\.bin\supabase.cmd'
+if ($PSVersionTable.PSEdition -ne 'Desktop' -and $env:OS -ne 'Windows_NT') {
+    $supabaseCliRelativePath = 'node_modules/.bin/supabase'
+}
+$supabaseCli = Join-Path $repositoryRoot $supabaseCliRelativePath
+if (-not (Test-Path -LiteralPath $supabaseCli -PathType Leaf)) {
+    throw "Pinned Supabase CLI launcher was not found at $supabaseCli. Run npm ci first."
+}
+$expectedSupabaseCliVersion = [string](
+    Get-Content -LiteralPath (Join-Path $repositoryRoot 'config\toolchain.json') -Raw |
+        ConvertFrom-Json
+).canonicalToolchain.tools.supabaseCli
+$resolvedSupabaseCliVersion = (& $supabaseCli --version | Out-String).Trim()
+if ($LASTEXITCODE -ne 0 -or $resolvedSupabaseCliVersion -ne $expectedSupabaseCliVersion) {
+    throw "Supabase CLI mismatch: expected $expectedSupabaseCliVersion, got $resolvedSupabaseCliVersion."
+}
 
 # ------------------------------------------------------------------- guards
 $linkState = Join-Path $repositoryRoot 'supabase\.temp\project-id'
@@ -67,7 +83,7 @@ function Stop-DisposableStack {
         $supabaseDir = Join-Path $workspace 'supabase'
         if (Test-Path -LiteralPath $supabaseDir) {
             Push-Location $supabaseDir
-            & npx supabase stop --no-backup 2>$null | Out-Null
+            & $supabaseCli stop --no-backup 2>$null | Out-Null
             Pop-Location
         }
     } catch { }
@@ -119,7 +135,7 @@ try {
     # supported admin APIs, so nothing interactive can block the lane.
     Push-Location (Join-Path $workspace 'supabase')
     Write-Host 'Starting isolated Supabase stack...'
-    & npx supabase start --ignore-health-check | Out-Null
+    & $supabaseCli start --ignore-health-check | Out-Null
     if ($LASTEXITCODE -ne 0) { Pop-Location; throw 'supabase start failed for the disposable stack.' }
 
     # -------------------------------------------------- blank-baseline gates
@@ -141,18 +157,18 @@ try {
 
     Write-Host 'Linting blank baseline schema...'
     Invoke-StackCommandWithRetry -Description 'supabase db lint' -Command {
-        & npx supabase db lint --local --level error --fail-on error
+        & $supabaseCli db lint --local --level error --fail-on error
     }
 
     Write-Host 'Running pgTAP suite against the blank baseline...'
     Invoke-StackCommandWithRetry -Description 'pgTAP suite' -MaxAttempts 3 -Command {
-        & npx supabase test db --local (Join-Path $repositoryRoot 'supabase\tests\database')
+        & $supabaseCli test db --local (Join-Path $repositoryRoot 'supabase\tests\database')
     }
 
     # ------------------------------------------------------------ credentials
     # Parse status output strictly in memory. Values are never echoed or
     # written anywhere persistent.
-    $statusJson = & npx supabase status -o json
+    $statusJson = & $supabaseCli status -o json
     if ($LASTEXITCODE -ne 0) { Pop-Location; throw 'supabase status failed.' }
     Pop-Location
     $status = $statusJson | ConvertFrom-Json
@@ -183,7 +199,7 @@ try {
     $hostExecutable = (Get-Process -Id $PID).Path
     $serveBootstrap = Join-Path $workspace 'run-functions-serve.ps1'
     $serveScript = "Set-Location -LiteralPath '" + (Join-Path $workspace 'supabase') + "'" + [Environment]::NewLine
-    $serveScript += '& npx supabase functions serve --env-file ''' + $envFile + ''' 1> ''' + $serveLog + ''' 2> ''' + $serveErr + ''''
+    $serveScript += '& ''' + $supabaseCli + ''' functions serve --env-file ''' + $envFile + ''' 1> ''' + $serveLog + ''' 2> ''' + $serveErr + ''''
     [IO.File]::WriteAllText($serveBootstrap, $serveScript)
     $serveProcess = Start-Process -FilePath $hostExecutable `
         -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$serveBootstrap`"" `

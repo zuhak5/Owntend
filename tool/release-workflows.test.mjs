@@ -222,6 +222,18 @@ test('backend gate covers formatting, type safety, functions, and database', asy
   assert.match(workflow, /delete-account\/index_test\.ts/);
   assert.match(workflow, /account-deletion-status\/index_test\.ts/);
   assert.match(workflow, /npm run test:backend-integration/);
+  assert.match(
+    await read('tool/run_local_backend_integration.ps1'),
+    /node_modules[\\/]\.bin[\\/]supabase(?:\.cmd)?/,
+  );
+  assert.doesNotMatch(
+    await read('tool/run_local_backend_integration.ps1'),
+    /& npx supabase/,
+  );
+  assert.match(
+    await read('tool/run_local_backend_integration.mjs'),
+    /process\.platform === 'win32'/,
+  );
   // WP-001: npm matches script names literally; a malformed invocation such as
   // `test:backend-integration/..` resolves to a missing script and must fail
   // this contract instead of surfacing only as a broken CI job.

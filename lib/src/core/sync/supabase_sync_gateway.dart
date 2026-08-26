@@ -603,16 +603,40 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
       for (final record in records) {
         payloads.add(await _preparePayload(record, userId, deviceId));
       }
+      // Creation intents are replayed verbatim after a crash or response loss
+      // between the server commit and the local acknowledgement. ON CONFLICT
+      // DO NOTHING keeps that replay idempotent: already-present rows are
+      // skipped instead of aborting the whole statement with 23505, and only
+      // freshly inserted rows come back. The coordinator reconciles skipped
+      // keys against their canonical rows without surfacing conflicts.
       final response = await _withDataTimeout(
         () async => _client
             .from(spec.remoteTable)
-            .insert(payloads)
+            .upsert(
+              payloads,
+              onConflict: [
+                'user_id',
+                if (spec.scope == SyncScope.deviceScoped) 'device_id',
+                ...spec.keyColumns.map(spec.remoteColumnFor),
+              ].join(','),
+              ignoreDuplicates: true,
+            )
             .select(spec.selectClause),
       );
-      return BatchWriteSuccess([
+      final insertedRecords = [
         for (final item in response)
           SyncRecord.fromRemote(spec, Map<String, dynamic>.from(item)),
-      ]);
+      ];
+      final insertedKeys = {
+        for (final record in insertedRecords) record.recordKey,
+      };
+      return BatchWriteSuccess(
+        insertedRecords,
+        replayedRecordKeys: {
+          for (final record in records)
+            if (!insertedKeys.contains(record.recordKey)) record.recordKey,
+        },
+      );
     } on PostgrestException catch (error) {
       if (error.code == '23505') {
         final details = error.details?.toString().toLowerCase() ?? '';
@@ -621,8 +645,7 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
             details.contains('_pkey') ||
             message.contains('_pkey') ||
             details.contains('primary key') ||
-            message.contains('primary key') ||
-            error.details == null;
+            message.contains('primary key');
         return BatchWriteConflict(
           code: error.code ?? '23505',
           message: error.message,
@@ -1274,8 +1297,13 @@ sealed class BatchWriteResult {
 }
 
 final class BatchWriteSuccess extends BatchWriteResult {
-  const BatchWriteSuccess(this.records);
+  const BatchWriteSuccess(this.records, {this.replayedRecordKeys = const {}});
   final List<SyncRecord> records;
+
+  /// Keys the server skipped under ON CONFLICT DO NOTHING because a row with
+  /// that primary key already exists: idempotent creation replays that must be
+  /// reconciled against their canonical rows instead of acknowledged blindly.
+  final Set<String> replayedRecordKeys;
 }
 
 final class BatchWriteUnsuitable extends BatchWriteResult {

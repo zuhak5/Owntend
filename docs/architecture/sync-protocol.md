@@ -83,7 +83,7 @@ The push worker:
 1. Selects eligible outbox work for the current account.
 2. Orders operations when dependencies require it.
 3. Sends an idempotent RPC or cloud mutation.
-4. Distinguishes success, duplicate success, conflict, retryable failure, authorization failure, and terminal validation failure. Optimistic updates and deletes request list responses, so a revision mismatch or missing row returns HTTP 200 with an empty list instead of a noisy PostgREST 406 object-response warning. The empty result is still a sync conflict and triggers canonical remote fetching; older `PGRST116` failures remain classified as conflicts.
+4. Distinguishes success, duplicate success, conflict, retryable failure, authorization failure, and terminal validation failure. New-row batches use `ON CONFLICT DO NOTHING` against the exact remote primary-key columns (`user_id`, optional `device_id`, plus entity key columns): a response-loss replay is skipped without a noisy PostgREST 409/PostgreSQL 23505, then the canonical row is fetched and acknowledged only when its semantic data matches the local intent. A divergent same-key row is applied as canonical state and the losing local intent remains a durable conflict; unrelated business uniqueness constraints are never ignored. Optimistic updates and deletes request list responses, so a revision mismatch or missing row returns HTTP 200 with an empty list instead of a noisy PostgREST 406 object-response warning. The empty result is still a sync conflict and triggers canonical remote fetching; older `PGRST116` failures remain classified as conflicts.
 5. Updates local revisions/shadows and removes or resolves the outbox entry transactionally.
 6. Schedules targeted reconciliation when the cloud result differs from local assumptions.
 
@@ -94,7 +94,7 @@ A network timeout after a server commit must be safe to retry.
 Every outbox row (`offline_mutation_queue` table) maintains an integer `generation` column (incremented automatically on SQLite triggers during coalesced same-key edits).
 - Operations (`markMutationInFlight`, `markMutationSucceeded`, `markMutationFailed`, `markMutationTerminal`) use conditional Compare-And-Swap (CAS) matching `(entity, record_key, generation)`.
 - If a same-key edit occurs while a network request is in-flight, `generation` is incremented. The older network response fails to match `generation`, preserving the newer local intent and preventing outbox data loss.
-- Batch primary key conflict resolution (Postgres 23505) performs canonical remote record comparison and applies the fetched record before acknowledging completion.
+- Idempotent batch replay resolution performs canonical remote record comparison and applies the fetched record before acknowledging completion; the legacy primary-key 23505 fallback uses the same exact-data check.
 
 ## Pull path
 

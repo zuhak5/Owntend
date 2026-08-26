@@ -136,7 +136,8 @@ jobs:
             "tool/invoke_shorebird_patch.ps1",
             "tool/invoke_shorebird_release.ps1",
             "tool/verify_android_release_registrants.ps1",
-            "tool/publish_sentry_release.ps1"
+            "tool/publish_sentry_release.ps1",
+            "tool/run_local_backend_integration.ps1"
           )) {
             $Path = Join-Path $PWD $Script
             if (-not (Test-Path -LiteralPath $Path)) {

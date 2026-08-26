@@ -45,4 +45,13 @@ void main() {
       );
     },
   );
+
+  test('batch creation uses exact-key idempotent conflict resolution', () {
+    final source = File('lib/src/core/sync/supabase_sync_gateway.dart')
+        .readAsStringSync();
+
+    expect(source, contains('onConflict: ['));
+    expect(source, contains("ignoreDuplicates: true"));
+    expect(source, contains('replayedRecordKeys'));
+  });
 }

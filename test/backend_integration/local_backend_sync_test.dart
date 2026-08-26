@@ -11,6 +11,7 @@ import 'package:owntend/src/core/domain/models.dart';
 import 'package:owntend/src/core/sync/local_sync_store.dart';
 import 'package:owntend/src/core/sync/supabase_sync_gateway.dart';
 import 'package:owntend/src/core/sync/sync_coordinator.dart';
+import 'package:owntend/src/core/sync/sync_dtos.dart';
 import 'package:owntend/src/features/auth/domain/auth_repository.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
@@ -225,6 +226,65 @@ void main() {
               .having((area) => area.id, 'id', 'device-one-area')
               .having((area) => area.name, 'name', 'Device One'),
         ),
+      );
+    },
+  );
+
+  test(
+    'batch creation replays are idempotent without masking unique conflicts',
+    () async {
+      final gateway = SupabaseSyncGateway(userADevice1);
+      final createdAt = DateTime.utc(2026, 8, 26, 12);
+      final record = SyncRecord(
+        spec: syncSpecByEntity['tag']!,
+        recordKey: 'backend-replay-tag',
+        values: {
+          'id': 'backend-replay-tag',
+          'name': 'Backend Replay Tag',
+          'created_at': createdAt.toIso8601String(),
+        },
+        clientModifiedAt: createdAt,
+        originDeviceId: 'integration-device',
+      );
+
+      final first = await gateway.writeNewBatch(
+        records: [record],
+        userId: userAId,
+        deviceId: 'integration-device',
+      );
+      expect(first, isA<BatchWriteSuccess>());
+      expect((first as BatchWriteSuccess).records, hasLength(1));
+      expect(first.replayedRecordKeys, isEmpty);
+
+      final replay = await gateway.writeNewBatch(
+        records: [record],
+        userId: userAId,
+        deviceId: 'integration-device',
+      );
+      expect(replay, isA<BatchWriteSuccess>());
+      expect((replay as BatchWriteSuccess).records, isEmpty);
+      expect(replay.replayedRecordKeys, {'backend-replay-tag'});
+
+      final duplicateName = SyncRecord(
+        spec: syncSpecByEntity['tag']!,
+        recordKey: 'backend-secondary-conflict-tag',
+        values: {
+          'id': 'backend-secondary-conflict-tag',
+          'name': 'Backend Replay Tag',
+          'created_at': createdAt.toIso8601String(),
+        },
+        clientModifiedAt: createdAt,
+        originDeviceId: 'integration-device',
+      );
+      final secondaryConflict = await gateway.writeNewBatch(
+        records: [duplicateName],
+        userId: userAId,
+        deviceId: 'integration-device',
+      );
+      expect(secondaryConflict, isA<BatchWriteConflict>());
+      expect(
+        (secondaryConflict as BatchWriteConflict).isPrimaryKeyConflict,
+        isFalse,
       );
     },
   );
