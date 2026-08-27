@@ -158,14 +158,15 @@ developer-started stack and can never reach a hosted project.
 
 ## Current pre-launch migration chain
 
-The repository currently contains the initial schema, three earlier security/function corrections, and four remediation migrations in timestamp order. The remediation boundaries are:
+The repository currently contains the initial schema, three earlier security/function corrections, and five remediation migrations in timestamp order. The remediation boundaries are:
 
 1. authoritative entitlements, completion authorization, copy/move/type-change/history-restore RPCs;
 2. media staging quotas/retry and stage-bound Storage policy;
 3. explicit-user service parity RPC; and
-4. final mutation grants and rejection of client-authored initial plans.
+4. final mutation grants and rejection of client-authored initial plans; and
+5. explicit fail-closed Data API policies for the three private operational ledgers, clearing Advisor lint 0008 without granting API access.
 
-The fourth remediation migration is a compatibility boundary: deploy the compatible Flutter build and convert retained journals/outbox work before applying it to an already-deployed environment. Fresh local environments replay the full chain. Documentation must describe this real chain until an operator explicitly approves the destructive pre-launch squash/reset. If approval is withheld, the forward chain remains canonical permanently.
+The fourth remediation migration is a compatibility boundary: deploy the compatible Flutter build and convert retained journals/outbox work before applying it to an already-deployed environment. The fifth is an access-neutral security-visibility correction and can follow it directly. Fresh local environments replay the full chain. Documentation must describe this real chain until an operator explicitly approves the destructive pre-launch squash/reset. If approval is withheld, the forward chain remains canonical permanently.
 
 The protected migration workflow also runs `npm run validate:supabase-parity` after a hosted operation. Before any database mutation, the pinned Supabase CLI uses the existing protected migration management token to require exactly one current default `sb_secret_...` project key. The key is resolved again only inside the parity step, masked immediately, and never persisted as a workflow output, artifact, repository secret, or application configuration. The validator enumerates Auth user IDs only in memory through the server-only Admin API, invokes `validate_change_feed_parity(p_user_id)` for each account, and uploads a sanitized report containing aggregate counts and account ordinals only. Zero Auth accounts is an explicit success; an Auth account without its required profile fails validation rather than disappearing from the evidence set.
 

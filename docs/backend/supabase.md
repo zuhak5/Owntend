@@ -55,7 +55,7 @@ Backend authorization must derive ownership from the authenticated JWT identity 
 
 ## Database and RLS
 
-Every user-owned table should have explicit RLS policies for intended owner operations and denial tests for anonymous and cross-user access. Constraints and indexes should enforce invariants independently of client behavior.
+Every user-owned table should have explicit RLS policies for intended owner operations and denial tests for anonymous and cross-user access. Private operational ledgers are not exposed to Data API roles: they retain revoked schema/table privileges and explicit `FOR ALL` false policies for `anon` and `authenticated`, making the fail-closed boundary visible to database tests and Supabase Advisor lint 0008 without granting access. Constraints and indexes should enforce invariants independently of client behavior.
 
 Review `SECURITY DEFINER` functions carefully:
 

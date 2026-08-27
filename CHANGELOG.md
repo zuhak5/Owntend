@@ -8,6 +8,7 @@ The current application version is defined only in `pubspec.yaml`. Released vers
 
 ### Supabase authority remediation (2026-08-27)
 
+- Added explicit deny-all Data API policies to the three private entitlement/economy/restore ledgers, preserving their revoked API privileges while clearing Supabase Advisor `rls_enabled_no_policy` findings.
 - Fixed the protected migration rail so hosted parity derives a current default Supabase secret key from its existing environment-scoped management token, validates that capability before mutation, masks it before use, and avoids a redundant long-lived GitHub service-role secret.
 - Closed missing-plan completion authorization: recovery now requires an exact same-user task-creation operation and commits nothing on `task_creation_not_authorized`.
 - Added private plan entitlements and idempotent economy operations. Owned-source copies are server-derived and free; task moves and asset-type changes charge only the current entitlement shortfall, include archived plans, never refund, and reject direct protected-column updates.

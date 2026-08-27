@@ -4,7 +4,7 @@ create extension if not exists pgtap with schema extensions;
 set local role postgres;
 set search_path = public, extensions, pg_catalog;
 
-select extensions.plan(39);
+select extensions.plan(43);
 
 select extensions.has_table(
   'owntend_monetization_private', 'maintenance_plan_entitlements',
@@ -17,6 +17,81 @@ select extensions.has_table(
 select extensions.has_table(
   'owntend_private', 'maintenance_history_restore_operations',
   'private history restore operation ledger exists'
+);
+select extensions.is(
+  (select count(*)::integer
+   from pg_policies
+   where schemaname = 'owntend_monetization_private'
+     and tablename = 'maintenance_plan_entitlements'
+     and policyname = 'maintenance_plan_entitlements_api_roles_deny_all'
+     and permissive = 'PERMISSIVE'
+     and cmd = 'ALL'
+     and roles = array['anon', 'authenticated']::name[]
+     and qual = 'false'
+     and with_check = 'false'),
+  1,
+  'plan entitlements explicitly deny all Data API role access'
+);
+select extensions.is(
+  (select count(*)::integer
+   from pg_policies
+   where schemaname = 'owntend_monetization_private'
+     and tablename = 'plan_economy_operations'
+     and policyname = 'plan_economy_operations_api_roles_deny_all'
+     and permissive = 'PERMISSIVE'
+     and cmd = 'ALL'
+     and roles = array['anon', 'authenticated']::name[]
+     and qual = 'false'
+     and with_check = 'false'),
+  1,
+  'economy operations explicitly deny all Data API role access'
+);
+select extensions.is(
+  (select count(*)::integer
+   from pg_policies
+   where schemaname = 'owntend_private'
+     and tablename = 'maintenance_history_restore_operations'
+     and policyname = 'maintenance_history_restore_operations_api_roles_deny_all'
+     and permissive = 'PERMISSIVE'
+     and cmd = 'ALL'
+     and roles = array['anon', 'authenticated']::name[]
+     and qual = 'false'
+     and with_check = 'false'),
+  1,
+  'history restore operations explicitly deny all Data API role access'
+);
+select extensions.ok(
+  not has_table_privilege(
+    'anon',
+    'owntend_monetization_private.maintenance_plan_entitlements',
+    'SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER'
+  )
+  and not has_table_privilege(
+    'authenticated',
+    'owntend_monetization_private.maintenance_plan_entitlements',
+    'SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER'
+  )
+  and not has_table_privilege(
+    'anon',
+    'owntend_monetization_private.plan_economy_operations',
+    'SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER'
+  )
+  and not has_table_privilege(
+    'authenticated',
+    'owntend_monetization_private.plan_economy_operations',
+    'SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER'
+  )
+  and not has_table_privilege(
+    'anon',
+    'owntend_private.maintenance_history_restore_operations',
+    'SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER'
+  )
+  and not has_table_privilege(
+    'authenticated',
+    'owntend_private.maintenance_history_restore_operations',
+    'SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER'
+  ),
+  'private operational ledgers retain no Data API table privileges'
 );
 select extensions.ok(
   not has_table_privilege('authenticated',
