@@ -835,13 +835,20 @@ void main() {
       raceBalanceAfter['balance'],
       (raceBalanceBefore['balance'] as int) - 1,
     );
+    final raceDebits = await userADevice1
+        .from('point_transactions')
+        .select('amount,transaction_type,reference_id')
+        .eq('transaction_type', 'task_entitlement_upgrade')
+        .eq('reference_id', 'economy-race-safety');
+    expect(raceDebits, hasLength(1));
+    expect(raceDebits.single['amount'], -1);
     expect(
       (await userADevice1
           .from('maintenance_plans')
           .select('asset_id')
           .eq('id', 'economy-race-task')
           .single())['asset_id'],
-      'economy-general-target',
+      'economy-race-safety',
     );
     expect(
       (await userADevice1
