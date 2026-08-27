@@ -38,6 +38,8 @@ Additional production-only keys may be validated by `test/prod_build_config_test
 
 A Supabase publishable/anonymous key can be distributed to the client only when RLS and backend authorization are correct. A service-role key must never be included.
 
+The protected migration workflow does not store a duplicate service-role credential in GitHub. Its environment-scoped migration management token retrieves the project's exact default `sb_secret_...` key just in time through the pinned Supabase CLI. The workflow validates that capability before database mutation, masks it before use, and exposes it only to the parity command. The management token and derived secret key must never enter Flutter configuration, logs, outputs, or artifacts.
+
 ## Local Supabase
 
 `supabase/config.toml` defines the local service ports, enabled providers, Storage bucket, Deno function entrypoints, and database major version.

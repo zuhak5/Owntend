@@ -292,8 +292,15 @@ test('Supabase migration deployment requires exact main and explicit production 
   assert.match(workflow, /npm run validate:supabase-parity/);
   assert.match(
     workflow,
-    /SUPABASE_OPERATOR_SERVICE_ROLE_KEY: \$\{\{ secrets\.SUPABASE_OPERATOR_SERVICE_ROLE_KEY \}\}/,
+    /supabase projects api-keys[\s\S]*--reveal[\s\S]*--output json/,
   );
+  assert.match(workflow, /node tool\/select_supabase_operator_key\.mjs/);
+  assert.match(workflow, /echo "::add-mask::\$operator_key"/);
+  assert.match(
+    workflow,
+    /SUPABASE_OPERATOR_SERVICE_ROLE_KEY="\$operator_key"[\s\\]*npm run validate:supabase-parity/,
+  );
+  assert.doesNotMatch(workflow, /secrets\.SUPABASE_OPERATOR_SERVICE_ROLE_KEY/);
   assert.match(workflow, /artifacts\/change-feed-parity\.json/);
   assert.doesNotMatch(
     workflow,
@@ -301,6 +308,10 @@ test('Supabase migration deployment requires exact main and explicit production 
   );
   const dryRun = workflow.indexOf('name: Dry-run pending migrations');
   const apply = workflow.indexOf('name: Apply pending migrations');
+  const operatorKeyPreflight = workflow.indexOf(
+    'name: Require a current protected Supabase operator key',
+  );
+  assert.ok(operatorKeyPreflight >= 0 && operatorKeyPreflight < dryRun);
   assert.ok(dryRun >= 0 && apply > dryRun);
   assert.doesNotMatch(workflow, /--include-all|migration repair|include-seed/);
 });

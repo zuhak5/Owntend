@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { validateChangeFeedParity } from './validate_change_feed_parity.mjs';
+import { selectSupabaseOperatorKey } from './select_supabase_operator_key.mjs';
 
 function fakeClient({ users = [], parityByUser = {}, rpcErrorByUser = {} }) {
   return {
@@ -92,4 +93,52 @@ test('RPC failures identify only an account ordinal', async () => {
       return true;
     },
   );
+});
+
+test('operator key selection requires the exact default secret key', () => {
+  const expected = `sb_secret_${'a'.repeat(22)}_${'b'.repeat(8)}`;
+  assert.equal(
+    selectSupabaseOperatorKey([
+      {
+        id: 'publishable-id',
+        type: 'publishable',
+        name: 'default',
+        api_key: `sb_publishable_${'c'.repeat(22)}_${'d'.repeat(8)}`,
+      },
+      {
+        id: 'legacy-service-role',
+        type: 'legacy',
+        name: 'service_role',
+        api_key: 'legacy-value-must-not-be-selected',
+      },
+      {
+        id: 'secret-id',
+        type: 'secret',
+        name: 'default',
+        api_key: expected,
+      },
+    ]),
+    expected,
+  );
+});
+
+test('operator key selection fails closed without disclosing candidates', () => {
+  const secret = `sb_secret_${'e'.repeat(22)}_${'f'.repeat(8)}`;
+  for (const payload of [
+    [],
+    [{ type: 'secret', name: 'other', api_key: secret }],
+    [
+      { type: 'secret', name: 'default', api_key: secret },
+      { type: 'secret', name: 'default', api_key: secret },
+    ],
+    [{ type: 'secret', name: 'default', api_key: 'not-a-secret-key' }],
+  ]) {
+    assert.throws(
+      () => selectSupabaseOperatorKey(payload),
+      (error) => {
+        assert.doesNotMatch(error.message, /sb_secret_|not-a-secret-key/);
+        return true;
+      },
+    );
+  }
 });

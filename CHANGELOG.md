@@ -8,6 +8,7 @@ The current application version is defined only in `pubspec.yaml`. Released vers
 
 ### Supabase authority remediation (2026-08-27)
 
+- Fixed the protected migration rail so hosted parity derives a current default Supabase secret key from its existing environment-scoped management token, validates that capability before mutation, masks it before use, and avoids a redundant long-lived GitHub service-role secret.
 - Closed missing-plan completion authorization: recovery now requires an exact same-user task-creation operation and commits nothing on `task_creation_not_authorized`.
 - Added private plan entitlements and idempotent economy operations. Owned-source copies are server-derived and free; task moves and asset-type changes charge only the current entitlement shortfall, include archived plans, never refund, and reject direct protected-column updates.
 - Rejected non-empty `create_asset.initial_plans`, converted retained unsupported bundles into visible conflicts, and made copy/move/type offline attempts explicit drafts. Copy response-loss recovery retains local tag/photo intent without sending it across the RPC boundary.
