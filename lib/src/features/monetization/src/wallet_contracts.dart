@@ -1,5 +1,23 @@
 part of '../monetization.dart';
 
+/// Returns the complete, allowlisted wire contract for an authoritative
+/// owned-asset copy. Local recovery context may live beside these keys in the
+/// durable journal, but it must never cross the RPC trust boundary.
+Map<String, dynamic> authoritativeAssetCopyPayload(
+  Map<String, dynamic> journalPayload,
+) => <String, dynamic>{
+  for (final key in const <String>[
+    'operation_id',
+    'request_hash',
+    'source_asset_id',
+    'target_asset_id',
+    'destination_room_id',
+    'include_tasks',
+    'plan_id_map',
+  ])
+    key: journalPayload[key],
+};
+
 class PointWallet {
   const PointWallet({
     required this.balance,
@@ -157,6 +175,103 @@ class PointDebitResult {
   final Map<String, dynamic>? metadata;
 }
 
+class AuthoritativeQuote {
+  const AuthoritativeQuote({
+    required this.charge,
+    required this.balance,
+    required this.revision,
+    this.subjectCount = 1,
+  });
+
+  factory AuthoritativeQuote.fromJson(
+    Map<String, dynamic> json, {
+    required String revisionKey,
+  }) => AuthoritativeQuote(
+    charge: (json['charge'] as num?)?.toInt() ?? 0,
+    balance: (json['balance'] as num?)?.toInt() ?? 0,
+    revision: (json[revisionKey] as num?)?.toInt() ?? 0,
+    subjectCount: (json['plan_count'] as num?)?.toInt() ?? 1,
+  );
+
+  final int charge;
+  final int balance;
+  final int revision;
+  final int subjectCount;
+}
+
+class AuthoritativeMutationResult {
+  const AuthoritativeMutationResult({
+    required this.status,
+    required this.charged,
+    required this.balance,
+    required this.alreadyProcessed,
+    this.conflictReason,
+    this.asset,
+    this.plan,
+  });
+
+  factory AuthoritativeMutationResult.fromJson(Map<String, dynamic> json) =>
+      AuthoritativeMutationResult(
+        status: json['status'] as String? ?? 'invalid',
+        charged: (json['charged'] as num?)?.toInt() ?? 0,
+        balance: (json['balance'] as num?)?.toInt() ?? 0,
+        alreadyProcessed: json['already_processed'] as bool? ?? false,
+        conflictReason: json['conflict_reason'] as String?,
+        asset: json['asset'] is Map
+            ? Map<String, dynamic>.from(json['asset'] as Map)
+            : null,
+        plan: json['plan'] is Map
+            ? Map<String, dynamic>.from(json['plan'] as Map)
+            : null,
+      );
+
+  final String status;
+  final int charged;
+  final int balance;
+  final bool alreadyProcessed;
+  final String? conflictReason;
+  final Map<String, dynamic>? asset;
+  final Map<String, dynamic>? plan;
+
+  bool get applied => status == 'applied';
+}
+
+class AssetCopyResult extends PointDebitResult {
+  const AssetCopyResult({
+    required super.balance,
+    required super.charged,
+    required super.alreadyProcessed,
+    super.asset,
+    this.plans = const [],
+    this.planMetadata = const [],
+    this.detailRows = const [],
+  });
+
+  factory AssetCopyResult.fromJson(Map<String, dynamic> json) =>
+      AssetCopyResult(
+        balance: (json['balance'] as num?)?.toInt() ?? 0,
+        charged: (json['charged'] as num?)?.toInt() ?? 0,
+        alreadyProcessed: json['already_processed'] as bool? ?? false,
+        asset: json['asset'] is Map
+            ? Map<String, dynamic>.from(json['asset'] as Map)
+            : null,
+        plans: _jsonMapList(json['plans']),
+        planMetadata: _jsonMapList(json['plan_metadata']),
+        detailRows: _jsonMapList(json['detail_rows']),
+      );
+
+  final List<Map<String, dynamic>> plans;
+  final List<Map<String, dynamic>> planMetadata;
+  final List<Map<String, dynamic>> detailRows;
+}
+
+List<Map<String, dynamic>> _jsonMapList(Object? value) => value is List
+    ? [
+        for (final item in value)
+          if (item is Map) Map<String, dynamic>.from(item),
+      ]
+    : const [];
+
 class ChargedOperationStatusResult {
   const ChargedOperationStatusResult({
     required this.status,
@@ -167,6 +282,9 @@ class ChargedOperationStatusResult {
     this.asset,
     this.plan,
     this.metadata,
+    this.plans = const [],
+    this.planMetadata = const [],
+    this.detailRows = const [],
   });
 
   final String status;
@@ -177,6 +295,9 @@ class ChargedOperationStatusResult {
   final Map<String, dynamic>? asset;
   final Map<String, dynamic>? plan;
   final Map<String, dynamic>? metadata;
+  final List<Map<String, dynamic>> plans;
+  final List<Map<String, dynamic>> planMetadata;
+  final List<Map<String, dynamic>> detailRows;
 
   factory ChargedOperationStatusResult.fromJson(Map<String, dynamic> json) {
     return ChargedOperationStatusResult(
@@ -194,6 +315,9 @@ class ChargedOperationStatusResult {
       metadata: json['metadata'] != null
           ? Map<String, dynamic>.from(json['metadata'] as Map)
           : null,
+      plans: _jsonMapList(json['plans']),
+      planMetadata: _jsonMapList(json['plan_metadata']),
+      detailRows: _jsonMapList(json['detail_rows']),
     );
   }
 }
@@ -240,6 +364,32 @@ abstract class MonetizationRepository {
 
   Future<PointDebitResult> createTask(Map<String, dynamic> operation) =>
       Future.error(UnsupportedError('Task point debit is unavailable.'));
+
+  Future<AssetCopyResult> copyAsset(Map<String, dynamic> operation) =>
+      Future.error(
+        UnsupportedError('Authoritative asset copy is unavailable.'),
+      );
+
+  Future<AuthoritativeQuote> quoteMaintenancePlanMove({
+    required String planId,
+    required String targetAssetId,
+  }) => Future.error(UnsupportedError('Task move quote is unavailable.'));
+
+  Future<AuthoritativeMutationResult> moveMaintenancePlan(
+    Map<String, dynamic> operation,
+  ) =>
+      Future.error(UnsupportedError('Authoritative task move is unavailable.'));
+
+  Future<AuthoritativeQuote> quoteAssetTypeChange({
+    required String assetId,
+    required String targetType,
+  }) => Future.error(UnsupportedError('Asset type quote is unavailable.'));
+
+  Future<AuthoritativeMutationResult> changeAssetType(
+    Map<String, dynamic> operation,
+  ) => Future.error(
+    UnsupportedError('Authoritative type change is unavailable.'),
+  );
 
   Future<ChargedOperationStatusResult> getChargedOperationStatus(
     String operationId, {

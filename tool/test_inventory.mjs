@@ -15,6 +15,7 @@ export const CANONICAL_NODE_TESTS = [
   'tool/build-status-timeline.test.mjs',
   'tool/build-status-ui.test.mjs',
   'tool/build-status.test.mjs',
+  'tool/change-feed-parity.test.mjs',
   'tool/dependency-security-and-notices.test.mjs',
   'tool/provenance_policy.test.mjs',
   'tool/release-workflows.test.mjs',

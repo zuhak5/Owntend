@@ -24,7 +24,7 @@ select ok(
        'profiles', 'areas', 'rooms',
        'device_details', 'pet_details', 'plant_details', 'safety_details',
        'tags', 'asset_tags', 'maintenance_plans',
-       'maintenance_plan_metadata', 'maintenance_records',
+       'maintenance_plan_metadata',
        'notification_inbox', 'user_settings', 'streaks'
      ]) as table_name
      left join pg_policies
@@ -35,8 +35,9 @@ select ok(
    -- assets intentionally has no INSERT policy: creation is routed through
    -- the server-authoritative aggregate RPC (MON-001).
    and (select count(*)::integer from pg_policies where schemaname = 'public' and tablename = 'assets') = 3
-   and (select count(*)::integer from pg_policies where schemaname = 'public' and tablename = 'asset_photos') = 1,
-  '15 standard app tables have full policies, assets excludes INSERT, and asset_photos has select-only policy'
+   and (select count(*)::integer from pg_policies where schemaname = 'public' and tablename = 'asset_photos') = 1
+   and (select count(*)::integer from pg_policies where schemaname = 'public' and tablename = 'maintenance_records') = 1,
+  'standard app tables retain intended policies while maintenance history is read-only'
 );
 
 select ok(

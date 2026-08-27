@@ -117,6 +117,10 @@ Derived caches and local generation markers do not become user-domain backup aut
 
 Restore can introduce local state that differs from the cloud. The implementation must use an explicit policy for signed-in users, such as requiring sign-out, rebuilding outbox work, rehydrating, or reconciling entity revisions. Do not allow restored rows to bypass ownership and conflict rules.
 
+For the current signed-in restore path, ordinary synchronized entities are requeued through their normal contracts, but maintenance history is never emitted as direct table CRUD. `enqueueRestoreSnapshot` groups records by existing plan into deterministic batches of at most 100 and creates `maintenance_history_restore` execute intents. Before sending, the client reads the canonical cloud plan revision and snapshot. The server inserts exact missing rows, accepts exact replay, retains unrelated cloud rows, and persists either `plan_snapshot_conflict` or `history_record_conflict` when data diverges. A conflicted batch commits no history rows and remains visible/durable across restart. Previously pending generic history mutations are converted when restore-derived; unsupported mutations become `server_authority_required` conflicts rather than being discarded.
+
+This merge does not authenticate the historical truth of an imported archive. It only validates the current owner, plan match, bounded structure, timestamp precision, uniqueness, and exact replay. Product support must not describe restored history as independently verified.
+
 ## Media
 
 Restore media only from validated paths and supported MIME/file types. Stage replacement before deleting current files. Metadata must not refer to files that failed verification or extraction.

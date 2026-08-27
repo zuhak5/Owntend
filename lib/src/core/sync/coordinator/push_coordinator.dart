@@ -8,6 +8,7 @@ extension _SyncPushCoordinator on SyncCoordinator {
     bool trackHydration = false,
   }) async {
     bool pushedSomething = false;
+    await _localStore.enforceMaintenanceHistoryMutationAuthority();
     while (true) {
       await _ensureActiveAccountScope(scope);
       final mutations = await _localStore.pendingMutations();
@@ -56,6 +57,73 @@ extension _SyncPushCoordinator on SyncCoordinator {
             throw failure;
           }
 
+          index++;
+          continue;
+        }
+
+        if (mutation.entity == 'maintenance_history_restore') {
+          final payloadJson = mutation.payloadJson;
+          if (mutation.operation != 'execute' ||
+              payloadJson == null ||
+              payloadJson.trim().isEmpty) {
+            const failure = SupabaseFailure(
+              kind: SupabaseFailureKind.incompatibleSchema,
+              message: 'A queued maintenance history restore is malformed.',
+              retryable: false,
+            );
+            await _recordMutationFailure(mutation, failure);
+            throw failure;
+          }
+          try {
+            final prepared = await _remoteGateway
+                .prepareMaintenanceHistoryRestorePayload(
+                  payloadJson: payloadJson,
+                  userId: userId,
+                  deviceId: deviceId,
+                );
+            await _localStore.prepareMaintenanceHistoryRestore(
+              mutation,
+              payloadJson: prepared,
+              userId: userId,
+            );
+            final result = await _remoteGateway.restoreMaintenanceHistory(
+              payloadJson: prepared,
+              userId: userId,
+              deviceId: deviceId,
+            );
+            await _ensureActiveAccountScope(scope);
+            if (!result.applied) {
+              final conflictReason =
+                  result.conflictReason ??
+                  'maintenance_history_restore_conflict';
+              final failure = SupabaseFailure(
+                kind: SupabaseFailureKind.conflict,
+                message:
+                    'Maintenance history restore conflict: '
+                    '$conflictReason.',
+                retryable: false,
+              );
+              await _localStore.markMaintenanceHistoryRestoreConflict(
+                mutation,
+                conflictReason: conflictReason,
+                message: failure.message,
+              );
+              throw failure;
+            }
+            await _localStore.markMaintenanceHistoryRestoreSucceeded(
+              mutation,
+              plan: result.plan,
+            );
+            if (trackHydration) await _localStore.addHydrationUnits(1);
+          } on _AccountScopeInactive {
+            rethrow;
+          } on Object catch (error) {
+            final failure = SupabaseFailure.from(error);
+            if (!await _localStore.isMutationFailedVisible(mutation)) {
+              await _recordMutationFailure(mutation, failure);
+            }
+            throw failure;
+          }
           index++;
           continue;
         }

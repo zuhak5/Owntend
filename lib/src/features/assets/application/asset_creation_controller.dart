@@ -44,13 +44,34 @@ class AssetCreationController {
   final Ref ref;
   static const _uuid = Uuid();
 
+  Future<AuthoritativeMutationResult> changeAssetTypeWithPointDelta({
+    required Map<String, dynamic> operation,
+    required String accountScope,
+  }) async {
+    final monetizationRepo = ref.read(monetizationRepositoryProvider);
+    if (monetizationRepo == null ||
+        monetizationRepo.currentUserId != accountScope) {
+      throw StateError('Cloud points service is unavailable.');
+    }
+
+    final result = await monetizationRepo.changeAssetType(operation);
+    if (result.applied) {
+      ref
+          .read(pointWalletControllerProvider.notifier)
+          .adoptAuthoritativeMutationResult(
+            result.balance,
+            userId: accountScope,
+          );
+    }
+    return result;
+  }
+
   Future<AssetCreationResult> createChargedAsset({
     required String assetId,
     required Map<String, dynamic> assetPayload,
     required Map<String, dynamic> detailsPayload,
     required String accountScope,
     String? operationIdOverride,
-    List<Map<String, dynamic>> initialPlans = const [],
   }) async {
     final monetizationRepo = ref.read(monetizationRepositoryProvider);
     if (monetizationRepo == null) {
@@ -73,7 +94,7 @@ class AssetCreationController {
       'operation_id': operationId,
       'asset': assetPayload,
       'details': detailsPayload,
-      'initial_plans': initialPlans,
+      'initial_plans': const <Map<String, dynamic>>[],
     };
     final requestHash = sha256
         .convert(utf8.encode(jsonEncode(unsignedRequestPayload)))
@@ -165,6 +186,115 @@ class AssetCreationController {
     );
   }
 
+  Future<AssetCreationResult> copyOwnedAsset({
+    required String sourceAssetId,
+    required String targetAssetId,
+    required String destinationRoomId,
+    required bool includeTasks,
+    required bool includePhotos,
+    required Map<String, String> planIdMap,
+    required String accountScope,
+    required Future<void> Function() applyLocalCopy,
+    String? operationIdOverride,
+  }) async {
+    final monetizationRepo = ref.read(monetizationRepositoryProvider);
+    if (monetizationRepo == null ||
+        monetizationRepo.currentUserId != accountScope) {
+      throw StateError('Cloud points service is unavailable.');
+    }
+    final operationStore = ref.read(taskCreationOperationStoreProvider);
+    final localSyncStore = ref.read(localSyncStoreProvider);
+    await _recoverBeforeNewChargedOperation(
+      operationStore: operationStore,
+      accountScope: accountScope,
+    );
+
+    final operationId = operationIdOverride ?? _uuid.v7();
+    final unsignedPayload = <String, dynamic>{
+      'operation_id': operationId,
+      'source_asset_id': sourceAssetId,
+      'target_asset_id': targetAssetId,
+      'destination_room_id': destinationRoomId,
+      'include_tasks': includeTasks,
+      'plan_id_map': planIdMap,
+    };
+    final requestHash = sha256
+        .convert(utf8.encode(jsonEncode(unsignedPayload)))
+        .toString();
+    final now = DateTime.now();
+    var operation = TaskCreationOperation(
+      operationId: operationId,
+      planId: targetAssetId,
+      accountScope: accountScope,
+      requestPayload: {
+        ...unsignedPayload,
+        'request_hash': requestHash,
+        '_local_context': {'include_photos': includePhotos},
+      },
+      requestHash: requestHash,
+      state: TaskCreationOperationState.submitting,
+      createdAt: now,
+      updatedAt: now,
+    );
+    await operationStore.saveOperation(operation);
+
+    final AssetCopyResult result;
+    try {
+      result = await monetizationRepo.copyAsset(
+        authoritativeAssetCopyPayload(operation.requestPayload),
+      );
+    } on OperationIdReusedException {
+      await operationStore.saveOperation(
+        operation.copyWith(
+          state: TaskCreationOperationState.permanentRejected,
+          lastErrorCode: 'operation_id_reused',
+          lastErrorMessage: 'OPERATION_ID_REUSED',
+        ),
+      );
+      rethrow;
+    } on Object catch (error) {
+      await operationStore.saveOperation(
+        operation.copyWith(
+          state: TaskCreationOperationState.outcomeUnknown,
+          lastErrorMessage: error.toString(),
+        ),
+      );
+      throw StateError('Asset copy outcome is unknown; recovery is journaled.');
+    }
+
+    operation = operation.copyWith(
+      state: TaskCreationOperationState.serverAcceptedNeedsReconcile,
+      updatedAt: DateTime.now(),
+    );
+    await operationStore.saveOperation(operation);
+    ref
+        .read(pointWalletControllerProvider.notifier)
+        .adoptAuthoritativeMutationResult(result.balance, userId: accountScope);
+
+    await applyLocalCopy();
+    if (localSyncStore != null) {
+      await localSyncStore.reconcileAssetCopyComposite(
+        assetId: targetAssetId,
+        assetJson: result.asset,
+        plans: result.plans,
+        planMetadata: result.planMetadata,
+        detailRows: result.detailRows,
+      );
+    }
+    await operationStore.saveOperation(
+      operation.copyWith(
+        state: TaskCreationOperationState.reconciled,
+        requestPayload: const {},
+        updatedAt: DateTime.now(),
+      ),
+    );
+    return AssetCreationResult(
+      assetId: targetAssetId,
+      balance: result.balance,
+      charged: result.charged,
+    );
+  }
+
   Future<void> _recoverBeforeNewChargedOperation({
     required TaskCreationOperationStore operationStore,
     required String accountScope,
@@ -191,5 +321,7 @@ class AssetCreationController {
 
   bool _isRecoverableChargedOperation(TaskCreationOperation operation) =>
       operation.state == TaskCreationOperationState.submitting ||
-      operation.state == TaskCreationOperationState.outcomeUnknown;
+      operation.state == TaskCreationOperationState.outcomeUnknown ||
+      operation.state ==
+          TaskCreationOperationState.serverAcceptedNeedsReconcile;
 }

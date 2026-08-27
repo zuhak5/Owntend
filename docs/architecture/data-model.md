@@ -75,6 +75,17 @@ Supabase is authoritative for:
 - Protected account deletion status.
 - Private media access policies.
 
+Private Postgres technical tables also preserve authority and replay evidence:
+
+- `owntend_monetization_private.maintenance_plan_entitlements` stores the monotonic zero/one paid entitlement and its provenance for each plan.
+- `owntend_monetization_private.plan_economy_operations` stores idempotent task-move and asset-type-change charge results.
+- `owntend_private.maintenance_history_restore_operations` stores exact restore success/conflict outcomes.
+- `media_staging_objects.attempt` and `media_cleanup_queue` coordinate server-issued upload attempts and service-only deletion.
+
+They are outside exposed schemas, have no authenticated table policies or privileges, use RLS as defense in depth, and cascade with `auth.users`/owned plans. They contain technical identifiers, timestamps, hashes, counts, cost/provenance state, and bounded conflict codes; they do not store wallet credentials or copy client-authored task bodies as economic provenance.
+
+Cloud maintenance history is user-readable but not directly mutable. Completion, undo, and validated restore are the only mutation authorities. Cloud plan association and asset type are likewise protected columns changed only by the entitlement-aware RPCs.
+
 The Flutter client may cache representations for UX, but it must not become the authority for these decisions.
 
 ## Media
@@ -89,7 +100,7 @@ For every new or changed field:
 2. Decide whether the field synchronizes.
 3. Define the cloud column, RPC, RLS, revision, and baseline behavior if applicable.
 4. Define null/default semantics and database invariants.
-5. While the lifecycle marker remains pre-launch, update the Drift schema-1 and single Supabase baseline directly; after launch, add forward migration coverage.
+5. Preserve the current Supabase forward remediation chain until a separately approved reset/squash; after launch, always add forward migration coverage.
 6. Update serialization and generated code.
 7. Update outbox/pull/shadow handling.
 8. Update backup inclusion and compatibility.

@@ -21,6 +21,38 @@ class _MoveCopyItemDialogState extends ConsumerState<MoveCopyItemDialog> {
   void initState() {
     super.initState();
     _roomId = widget.asset.roomId;
+    unawaited(_restoreCopyDraft());
+  }
+
+  String get _copyDraftKey {
+    final userId = ref.read(monetizationRepositoryProvider)?.currentUserId;
+    return 'asset_copy_${userId ?? 'local'}_${widget.asset.id}';
+  }
+
+  Future<void> _saveCopyDraft(String roomId) => ref
+      .read(offlineCreationDraftStoreProvider)
+      .save(_copyDraftKey, <String, dynamic>{
+        'source_asset_id': widget.asset.id,
+        'destination_room_id': roomId,
+        'include_tasks': _includeTasks,
+        'include_photos': _includePhotos,
+      });
+
+  Future<void> _restoreCopyDraft() async {
+    final draft = await ref
+        .read(offlineCreationDraftStoreProvider)
+        .load(_copyDraftKey);
+    if (!mounted ||
+        draft == null ||
+        draft['source_asset_id'] != widget.asset.id) {
+      return;
+    }
+    setState(() {
+      _copy = true;
+      _roomId = draft['destination_room_id'] as String? ?? _roomId;
+      _includeTasks = draft['include_tasks'] != false;
+      _includePhotos = draft['include_photos'] == true;
+    });
   }
 
   @override
@@ -158,65 +190,45 @@ class _MoveCopyItemDialogState extends ConsumerState<MoveCopyItemDialog> {
           for (final task in sourceTasks) task.plan.id: _uuid.v7(),
         };
         final monetization = ref.read(monetizationRepositoryProvider);
-        if (monetization != null) {
-          final online = await ref
-              .read(syncConnectivityInstanceProvider)
-              .isOnline();
-          if (online) {
-            // WP-003 (F-001): the copy flow is charged creation too; it is
-            // journaled and recovered exactly like the editor flow instead of
-            // best-effort with a swallowed failure.
-            final walletUserId = monetization.currentUserId;
-            if (walletUserId == null) {
-              throw StateError('Cloud points service is unavailable.');
-            }
-            await ref
-                .read(assetCreationControllerProvider)
-                .createChargedAsset(
-                  assetId: copiedAssetId,
-                  assetPayload: {
-                    'id': copiedAssetId,
-                    'name': widget.asset.name,
-                    'asset_type': widget.asset.assetType.name,
-                    'room_id': roomId,
-                    'placement': widget.asset.placement,
-                    'notes': widget.asset.notes,
-                    'purchase_date': widget.asset.purchaseDate
-                        ?.toUtc()
-                        .toIso8601String(),
-                  },
-                  detailsPayload: _assetDetailsPayload(widget.asset),
-                  initialPlans: [
-                    for (final task in sourceTasks)
-                      {
-                        'id': copiedTaskIds[task.plan.id],
-                        'asset_id': copiedAssetId,
-                        'title': task.plan.title,
-                        'instructions': task.plan.instructions,
-                        'recurrence_interval': task.plan.recurrence.interval,
-                        'recurrence_unit': task.plan.recurrence.unit.name,
-                        'priority': task.plan.priority.name,
-                        'next_due_date': task.plan.nextDueDate
-                            .toUtc()
-                            .toIso8601String(),
-                        'reminder_days_before': task.plan.reminderDaysBefore,
-                        'is_enabled': true,
-                        'metadata': _taskMetadataPayload(task.plan.metadata),
-                      },
-                  ],
-                  accountScope: walletUserId,
-                  operationIdOverride: copyOperationId,
-                );
-          }
+        final walletUserId = monetization?.currentUserId;
+        if (monetization == null || walletUserId == null) {
+          throw StateError('Cloud points service is unavailable.');
         }
-        await repository.copyAsset(
-          assetId: widget.asset.id,
-          roomId: roomId,
-          includeTasks: _includeTasks,
-          includePhotos: _includePhotos,
-          newAssetId: copiedAssetId,
-          taskIdBySource: copiedTaskIds,
-        );
+        final online = await ref
+            .read(syncConnectivityInstanceProvider)
+            .isOnline();
+        if (!mounted) return;
+        if (!online) {
+          await _saveCopyDraft(roomId);
+          if (mounted) {
+            hk_ui.showToast(
+              context,
+              content: Text(context.l10n.offlineCopyDraftMessage),
+            );
+          }
+          return;
+        }
+        await ref
+            .read(assetCreationControllerProvider)
+            .copyOwnedAsset(
+              sourceAssetId: widget.asset.id,
+              targetAssetId: copiedAssetId,
+              destinationRoomId: roomId,
+              includeTasks: _includeTasks,
+              includePhotos: _includePhotos,
+              planIdMap: copiedTaskIds,
+              accountScope: walletUserId,
+              operationIdOverride: copyOperationId,
+              applyLocalCopy: () => repository.copyAsset(
+                assetId: widget.asset.id,
+                roomId: roomId,
+                includeTasks: _includeTasks,
+                includePhotos: _includePhotos,
+                newAssetId: copiedAssetId,
+                taskIdBySource: copiedTaskIds,
+              ),
+            );
+        await ref.read(offlineCreationDraftStoreProvider).clear(_copyDraftKey);
       } else {
         await repository.moveAsset(assetId: widget.asset.id, roomId: roomId);
       }
@@ -242,63 +254,6 @@ class _MoveCopyItemDialogState extends ConsumerState<MoveCopyItemDialog> {
     }
   }
 }
-
-Map<String, dynamic> _assetDetailsPayload(Asset asset) =>
-    switch (asset.assetType) {
-      AssetType.device => {
-        'brand': asset.deviceDetails?.brand,
-        'model': asset.deviceDetails?.model,
-        'serial_number': asset.deviceDetails?.serialNumber,
-        'power_source': asset.deviceDetails?.powerSource?.name,
-        'warranty_until': asset.deviceDetails?.warrantyUntil
-            ?.toUtc()
-            .toIso8601String(),
-        'manual_url': asset.deviceDetails?.manualUrl,
-        'consumable': asset.deviceDetails?.consumable,
-      },
-      AssetType.pet => {
-        'species': asset.petDetails?.species,
-        'breed': asset.petDetails?.breed,
-        'birth_date': asset.petDetails?.birthDate?.toUtc().toIso8601String(),
-        'microchip_id': asset.petDetails?.microchipId,
-        'vet_name': asset.petDetails?.vetName,
-        'vet_phone': asset.petDetails?.vetPhone,
-        'feeding_notes': asset.petDetails?.feedingNotes,
-        'medical_notes': asset.petDetails?.medicalNotes,
-      },
-      AssetType.plant => {
-        'species': asset.plantDetails?.species,
-        'sunlight': asset.plantDetails?.sunlight?.name,
-        'watering_interval_days': asset.plantDetails?.wateringIntervalDays,
-        'pot_size': asset.plantDetails?.potSize,
-        'last_repotted_at': asset.plantDetails?.lastRepottedAt
-            ?.toUtc()
-            .toIso8601String(),
-        'toxicity_notes': asset.plantDetails?.toxicityNotes,
-      },
-      AssetType.safety => {
-        'safety_type': asset.safetyDetails?.safetyType,
-        'installed_at': asset.safetyDetails?.installedAt
-            ?.toUtc()
-            .toIso8601String(),
-        'expires_at': asset.safetyDetails?.expiresAt?.toUtc().toIso8601String(),
-        'battery_type': asset.safetyDetails?.batteryType,
-        'test_interval_days': asset.safetyDetails?.testIntervalDays,
-      },
-      AssetType.general => const <String, dynamic>{},
-    };
-
-Map<String, dynamic> _taskMetadataPayload(TaskMetadata? metadata) =>
-    metadata == null
-    ? const <String, dynamic>{}
-    : {
-        'task_type': metadata.taskType,
-        'location_label': metadata.locationLabel,
-        'estimated_duration_minutes': metadata.estimatedDurationMinutes,
-        'required_materials': metadata.requiredMaterials,
-        'reminder_recommendation': metadata.reminderRecommendation,
-        'sort_order': metadata.sortOrder,
-      };
 
 Future<String?> showAreaEditorSheet(BuildContext context, {Area? area}) {
   return showEditorModal<String>(
@@ -486,7 +441,10 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
     _expiresAt = safety?.expiresAt;
     _roomId = asset?.roomId ?? widget.roomId;
     if (asset != null) {
-      scheduleMicrotask(_loadInitialTags);
+      scheduleMicrotask(() async {
+        await _loadInitialTags();
+        await _restoreOfflineDraft(overwriteExisting: true);
+      });
     } else {
       scheduleMicrotask(_restoreOfflineDraft);
     }
@@ -537,14 +495,17 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
 
   String get _offlineDraftKey {
     final userId = ref.read(monetizationRepositoryProvider)?.currentUserId;
-    return 'asset_${userId ?? 'local'}_${widget.roomId ?? 'any'}';
+    final existingAssetId = widget.asset?.id;
+    return existingAssetId == null
+        ? 'asset_create_${userId ?? 'local'}_${widget.roomId ?? 'any'}'
+        : 'asset_edit_${userId ?? 'local'}_$existingAssetId';
   }
 
   Future<void> _saveOfflineDraft() {
     String? date(DateTime? value) => value?.toUtc().toIso8601String();
     return ref.read(offlineCreationDraftStoreProvider).save(_offlineDraftKey, {
       'operation_id': _creationOperationId ??= _uuid.v7(),
-      'asset_id': _creationAssetId ??= _uuid.v7(),
+      'asset_id': widget.asset?.id ?? (_creationAssetId ??= _uuid.v7()),
       'name': _nameController.text,
       'placement': _placementController.text,
       'notes': _notesController.text,
@@ -584,11 +545,15 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
     });
   }
 
-  Future<void> _restoreOfflineDraft() async {
+  Future<void> _restoreOfflineDraft({bool overwriteExisting = false}) async {
     final draft = await ref
         .read(offlineCreationDraftStoreProvider)
         .load(_offlineDraftKey);
-    if (!mounted || draft == null || _nameController.text.isNotEmpty) return;
+    if (!mounted ||
+        draft == null ||
+        (!overwriteExisting && _nameController.text.isNotEmpty)) {
+      return;
+    }
     String text(String key) => draft[key] as String? ?? '';
     DateTime? date(String key) => DateTime.tryParse(text(key))?.toLocal();
     _creationOperationId = draft['operation_id'] as String?;
@@ -1262,6 +1227,76 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
               accountScope: monetization.currentUserId!,
               operationIdOverride: _creationOperationId ??= _uuid.v7(),
             );
+      } else if (widget.asset!.assetType != _assetType) {
+        final monetization = ref.read(monetizationRepositoryProvider);
+        if (monetization == null || monetization.currentUserId == null) {
+          throw StateError('Cloud points service is unavailable.');
+        }
+        final online = await ref
+            .read(syncConnectivityInstanceProvider)
+            .isOnline();
+        if (!mounted) return;
+        if (!online) {
+          await _saveOfflineDraft();
+          if (mounted) {
+            hk_ui.showToast(
+              context,
+              content: Text(context.l10n.offlineItemDraftMessage),
+            );
+          }
+          return;
+        }
+        final quote = await monetization.quoteAssetTypeChange(
+          assetId: assetId,
+          targetType: _assetType.name,
+        );
+        if (!mounted) return;
+        if (quote.charge > 0) {
+          final confirmed = await showDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: Text(context.l10n.confirmAssetTypeChargeTitle),
+              content: Text(
+                context.l10n.confirmAssetTypeChargeBody(
+                  quote.charge,
+                  quote.subjectCount,
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: Text(context.l10n.cancel),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: Text(context.l10n.confirmPointChargeAction),
+                ),
+              ],
+            ),
+          );
+          if (confirmed != true) return;
+        }
+        final result = await ref
+            .read(assetCreationControllerProvider)
+            .changeAssetTypeWithPointDelta(
+              operation: {
+                'operation_id': _uuid.v7(),
+                'asset_id': assetId,
+                'target_type': _assetType.name,
+                'details': _pointAssetDetailsPayload(),
+                'expected_asset_revision': quote.revision,
+                'max_charge': quote.charge,
+              },
+              accountScope: monetization.currentUserId!,
+            );
+        if (!mounted) return;
+        if (!result.applied) {
+          throw StateError(
+            result.status == 'charge_changed'
+                ? context.l10n.authoritativeChargeChanged
+                : result.conflictReason ?? result.status,
+          );
+        }
       }
       await ref
           .read(assetRepositoryProvider)
@@ -1327,11 +1362,7 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
                   )
                 : null,
           );
-      if (isCreating) {
-        await ref
-            .read(offlineCreationDraftStoreProvider)
-            .clear(_offlineDraftKey);
-      }
+      await ref.read(offlineCreationDraftStoreProvider).clear(_offlineDraftKey);
       if (mounted) {
         Navigator.of(context).pop();
       }

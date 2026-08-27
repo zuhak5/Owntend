@@ -20,7 +20,9 @@ class _FakeMonetizationRepository implements MonetizationRepository {
   bool shouldThrowOperationIdReusedOnStatus = false;
   final List<Map<String, dynamic>> createTaskCalls = [];
   final List<Map<String, dynamic>> createAssetCalls = [];
+  final List<Map<String, dynamic>> copyAssetCalls = [];
   final List<Map<String, dynamic>> statusCalls = [];
+  AssetCopyResult? copyAssetResult;
 
   @override
   String? get currentUserId => currentUserIdOverride;
@@ -66,6 +68,40 @@ class _FakeMonetizationRepository implements MonetizationRepository {
   }
 
   @override
+  Future<AssetCopyResult> copyAsset(Map<String, dynamic> operation) async {
+    copyAssetCalls.add(operation);
+    return copyAssetResult ??
+        AssetCopyResult(
+          balance: 10,
+          charged: 0,
+          alreadyProcessed: false,
+          asset: {'id': operation['target_asset_id']},
+        );
+  }
+
+  @override
+  Future<AuthoritativeQuote> quoteMaintenancePlanMove({
+    required String planId,
+    required String targetAssetId,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<AuthoritativeMutationResult> moveMaintenancePlan(
+    Map<String, dynamic> operation,
+  ) => throw UnimplementedError();
+
+  @override
+  Future<AuthoritativeQuote> quoteAssetTypeChange({
+    required String assetId,
+    required String targetType,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<AuthoritativeMutationResult> changeAssetType(
+    Map<String, dynamic> operation,
+  ) => throw UnimplementedError();
+
+  @override
   Future<ChargedOperationStatusResult> getChargedOperationStatus(
     String operationId, {
     required String requestHash,
@@ -100,6 +136,7 @@ class _FakeMonetizationRepository implements MonetizationRepository {
 class _FakeLocalSyncStore implements LocalSyncStore {
   final List<String> reconciledTaskPlanIds = [];
   final List<String> reconciledAssetIds = [];
+  final List<String> reconciledCopyIds = [];
 
   @override
   Future<void> reconcileTaskCreationComposite({
@@ -116,6 +153,17 @@ class _FakeLocalSyncStore implements LocalSyncStore {
     Map<String, dynamic>? assetJson,
   }) async {
     reconciledAssetIds.add(assetId);
+  }
+
+  @override
+  Future<void> reconcileAssetCopyComposite({
+    required String assetId,
+    Map<String, dynamic>? assetJson,
+    List<Map<String, dynamic>> plans = const [],
+    List<Map<String, dynamic>> planMetadata = const [],
+    List<Map<String, dynamic>> detailRows = const [],
+  }) async {
+    reconciledCopyIds.add(assetId);
   }
 
   @override
@@ -615,5 +663,84 @@ void main() {
         expect(resolved!.state, TaskCreationOperationState.reconciled);
       },
     );
+
+    test('owned-copy response recovery reapplies retained local photo intent '
+        'before canonical reconciliation', () async {
+      final store = TaskCreationOperationStore();
+      final fakeSyncStore = _FakeLocalSyncStore();
+      const requestHash =
+          'ef2f7a4bd1e0a54bbcc53f6d18ea9f21d0aa4b7f5b6c3d2e1f0a9b8c7d6e5f41';
+      final now = DateTime.now();
+      await store.saveOperation(
+        TaskCreationOperation(
+          operationId: 'op-copy-crash-1',
+          planId: 'asset-copy-crash-1',
+          accountScope: 'user-a',
+          requestPayload: const {
+            'operation_id': 'op-copy-crash-1',
+            'request_hash': requestHash,
+            'source_asset_id': 'asset-source-1',
+            'target_asset_id': 'asset-copy-crash-1',
+            'destination_room_id': 'room-target-1',
+            'include_tasks': true,
+            'plan_id_map': {'plan-source-1': 'plan-copy-1'},
+            '_local_context': {'include_photos': true},
+          },
+          requestHash: requestHash,
+          state: TaskCreationOperationState.serverAcceptedNeedsReconcile,
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+      final fakeMonetization = _FakeMonetizationRepository(
+        statusToReturn: const ChargedOperationStatusResult(
+          status: 'completed',
+          entityType: 'asset',
+          entityId: 'asset-copy-crash-1',
+          balance: 7,
+          asset: {'id': 'asset-copy-crash-1'},
+        ),
+      );
+      Map<String, Object?>? recoveredIntent;
+      final resolver = ChargedOperationResolver(
+        monetizationRepo: fakeMonetization,
+        localSyncStore: fakeSyncStore,
+        operationStore: store,
+        adoptAuthoritativeBalance: (_, _) {},
+        applyRecoveredAssetCopy:
+            ({
+              required sourceAssetId,
+              required targetAssetId,
+              required destinationRoomId,
+              required includeTasks,
+              required includePhotos,
+              required planIdMap,
+            }) async {
+              recoveredIntent = {
+                'source': sourceAssetId,
+                'target': targetAssetId,
+                'room': destinationRoomId,
+                'tasks': includeTasks,
+                'photos': includePhotos,
+                'plan_map': planIdMap,
+              };
+            },
+      );
+
+      await resolver.resolvePendingOperations('user-a');
+
+      expect(recoveredIntent, {
+        'source': 'asset-source-1',
+        'target': 'asset-copy-crash-1',
+        'room': 'room-target-1',
+        'tasks': true,
+        'photos': true,
+        'plan_map': {'plan-source-1': 'plan-copy-1'},
+      });
+      expect(fakeSyncStore.reconciledCopyIds, ['asset-copy-crash-1']);
+      final resolved = await store.getOperation('op-copy-crash-1');
+      expect(resolved!.state, TaskCreationOperationState.reconciled);
+      expect(resolved.requestPayload, isEmpty);
+    });
   });
 }

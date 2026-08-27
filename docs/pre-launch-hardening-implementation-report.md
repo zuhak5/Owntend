@@ -1,5 +1,8 @@
 # Owntend Pre-Launch Hardening Implementation Report
 
+> [!IMPORTANT]
+> **Historical artifact, superseded on 2026-08-27.** Its baseline counts and Supabase design statements describe the completed 2026-08-25 work only. Current authority is the executable ordered migration chain plus the documents under `docs/backend/` and `docs/architecture/`.
+
 **Date:** 2026-08-25 · **Branch:** `main` @ `157ac9e` (worktree-based; no commits created)
 **Plan executed:** `docs/pre-launch-hardening-implementation-plan.md`
 **Lifecycle mode:** Pre-launch (`AGENTS.md` checkbox `[ ]`) — clean replacement authorized, zero backward-compatibility obligations.

@@ -43,8 +43,8 @@ select is(
    where schemaname = 'storage'
      and tablename = 'objects'
      and policyname = 'user_media_delete_own'),
-  1,
-  'private media delete policy exists'
+  0,
+  'authenticated media deletion is RPC and worker-only'
 );
 
 select * from finish();

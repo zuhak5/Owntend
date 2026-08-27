@@ -5779,7 +5779,7 @@ abstract class AppLocalizations {
   /// No description provided for @pointsRuleExplanation.
   ///
   /// In en, this message translates to:
-  /// **'Creating a new maintenance task costs 1 point. Creating items and safety tasks is always free. Completing and editing tasks never costs points.'**
+  /// **'Creating a new maintenance task costs 1 point. Creating items and safety tasks is free. Moving a free task to a paid item or changing an item type can charge the missing task entitlement; no refunds are issued.'**
   String get pointsRuleExplanation;
 
   /// No description provided for @recentActivity.
@@ -6249,6 +6249,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{count, plural, =1{Every year} other{Every {count} years}}'**
   String recurrenceYears(int count);
+
+  /// No description provided for @authoritativeChangeRequiresOnline.
+  ///
+  /// In en, this message translates to:
+  /// **'This change needs an active server session. Your current edit remains unfinished.'**
+  String get authoritativeChangeRequiresOnline;
+
+  /// No description provided for @authoritativeChargeChanged.
+  ///
+  /// In en, this message translates to:
+  /// **'The point cost changed. Review the latest quote and try again.'**
+  String get authoritativeChargeChanged;
+
+  /// No description provided for @confirmTaskMoveChargeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Use points to move task?'**
+  String get confirmTaskMoveChargeTitle;
+
+  /// No description provided for @confirmTaskMoveChargeBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Moving this task requires {count, plural, =1{1 point} other{{count} points}}. No refund is issued later.'**
+  String confirmTaskMoveChargeBody(int count);
+
+  /// No description provided for @confirmAssetTypeChargeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Use points to change item type?'**
+  String get confirmAssetTypeChargeTitle;
+
+  /// No description provided for @confirmAssetTypeChargeBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Changing this item type requires {points} points for {tasks} attached tasks, including archived tasks. No refund is issued later.'**
+  String confirmAssetTypeChargeBody(int points, int tasks);
+
+  /// No description provided for @confirmPointChargeAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Use points'**
+  String get confirmPointChargeAction;
 }
 
 class _AppLocalizationsDelegate

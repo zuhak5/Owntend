@@ -99,6 +99,26 @@ class MaintenanceCompletionResult {
       status == MaintenanceCompletionStatus.alreadyApplied;
 }
 
+class MaintenanceHistoryRestoreResult {
+  const MaintenanceHistoryRestoreResult({
+    required this.status,
+    required this.insertedCount,
+    required this.existingCount,
+    required this.alreadyProcessed,
+    this.plan,
+    this.conflictReason,
+  });
+
+  final String status;
+  final int insertedCount;
+  final int existingCount;
+  final bool alreadyProcessed;
+  final SyncRecord? plan;
+  final String? conflictReason;
+
+  bool get applied => status == 'applied';
+}
+
 enum SyncRealtimeStatus { subscribed, disconnected, failed }
 
 abstract interface class RealtimeSyncSource {
@@ -385,6 +405,13 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
     required int? expectedRevision,
   }) async {
     try {
+      if (record.spec.entity == 'maintenance_record') {
+        throw const SupabaseFailure(
+          kind: SupabaseFailureKind.permissionDenied,
+          message: 'Maintenance history is server-authoritative. Use completion, undo, or validated restore.',
+          retryable: false,
+        );
+      }
       if (record.spec.entity == 'asset_photo') {
         final photoId = record.values['id'] as String;
         final assetId = record.values['asset_id'] as String;
@@ -458,6 +485,12 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
       }
 
       final payload = await _preparePayload(record, userId, deviceId);
+      if (expectedRevision != null) {
+        if (record.spec.entity == 'asset') payload.remove('asset_type');
+        if (record.spec.entity == 'maintenance_plan') {
+          payload.remove('asset_id');
+        }
+      }
       if (record.isDeleted) {
         if (expectedRevision == null) {
           final existing = await fetch(
@@ -589,6 +622,13 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
   }) async {
     if (records.isEmpty) return const BatchWriteSuccess([]);
     final spec = records.first.spec;
+    if (spec.entity == 'maintenance_record') {
+      throw const SupabaseFailure(
+        kind: SupabaseFailureKind.permissionDenied,
+        message: 'Maintenance history cannot be written through generic synchronization.',
+        retryable: false,
+      );
+    }
     if (records.any(
       (record) =>
           record.spec.entity != spec.entity ||
@@ -728,6 +768,93 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
         resultingRecordId: body['resulting_record_id'] as String?,
         resultingNextDueDate: _parseUtc(body['resulting_next_due_date']),
         conflictReason: body['conflict_reason'] as String?,
+      );
+    } on Object catch (error) {
+      throw SupabaseFailure.from(error);
+    }
+  }
+
+  Future<String> prepareMaintenanceHistoryRestorePayload({
+    required String payloadJson,
+    required String userId,
+    required String deviceId,
+  }) async {
+    try {
+      final decoded = jsonDecode(payloadJson);
+      if (decoded is! Map) {
+        throw const FormatException('Invalid maintenance restore payload.');
+      }
+      final payload = Map<String, dynamic>.from(decoded);
+      final planId = payload['plan_id'] as String?;
+      if (planId == null || planId.isEmpty) {
+        throw const FormatException('Maintenance restore omitted its plan.');
+      }
+      final existingRevision = (payload['expected_plan_revision'] as num?)
+          ?.toInt();
+      if (existingRevision == null || existingRevision < 1) {
+        final canonical = await fetch(
+          spec: syncSpecByEntity['maintenance_plan']!,
+          userId: userId,
+          deviceId: deviceId,
+          recordKey: planId,
+        );
+        if (canonical == null || canonical.revision == null) {
+          throw const SupabaseFailure(
+            kind: SupabaseFailureKind.conflict,
+            message: 'Maintenance history cannot be restored until its cloud task exists.',
+            retryable: false,
+          );
+        }
+        payload['expected_plan_revision'] = canonical.revision;
+      }
+      payload.remove('request_hash');
+      payload['request_hash'] = sha256
+          .convert(utf8.encode(jsonEncode(payload)))
+          .toString();
+      return jsonEncode(payload);
+    } on Object catch (error) {
+      throw SupabaseFailure.from(error);
+    }
+  }
+
+  Future<MaintenanceHistoryRestoreResult> restoreMaintenanceHistory({
+    required String payloadJson,
+    required String userId,
+    required String deviceId,
+  }) async {
+    try {
+      final decoded = jsonDecode(payloadJson);
+      if (decoded is! Map) {
+        throw const FormatException('Invalid maintenance restore payload.');
+      }
+      final operation = Map<String, dynamic>.from(decoded);
+      final data = await _withDataTimeout(
+        () => _client.rpc<Map<String, dynamic>>(
+          'restore_maintenance_history',
+          params: {'p_operation': operation, 'p_device_id': deviceId},
+        ),
+      );
+      final rawPlan = data['plan'];
+      final plan = rawPlan is Map
+          ? SyncRecord.fromRemote(
+              syncSpecByEntity['maintenance_plan']!,
+              Map<String, dynamic>.from(rawPlan),
+            )
+          : null;
+      if (plan != null && rawPlan['user_id'] != userId) {
+        throw const SupabaseFailure(
+          kind: SupabaseFailureKind.permissionDenied,
+          message: 'The cloud returned restore data for another account.',
+          retryable: false,
+        );
+      }
+      return MaintenanceHistoryRestoreResult(
+        status: data['status'] as String? ?? 'invalid',
+        insertedCount: (data['inserted_count'] as num?)?.toInt() ?? 0,
+        existingCount: (data['existing_count'] as num?)?.toInt() ?? 0,
+        alreadyProcessed: data['already_processed'] as bool? ?? false,
+        plan: plan,
+        conflictReason: data['conflict_reason'] as String?,
       );
     } on Object catch (error) {
       throw SupabaseFailure.from(error);

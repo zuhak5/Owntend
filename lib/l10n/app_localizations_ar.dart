@@ -3468,7 +3468,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get pointsRuleExplanation =>
-      'يكلف إنشاء مهمة صيانة جديدة نقطة واحدة. إنشاء العناصر ومهام السلامة مجاني دائمًا. لا يكلف إكمال المهام أو تحريرها أي نقاط.';
+      'يكلف إنشاء مهمة صيانة جديدة نقطة واحدة. إنشاء العناصر ومهام السلامة مجاني. قد يتطلب نقل مهمة مجانية إلى عنصر مدفوع أو تغيير نوع العنصر تحصيل استحقاق المهمة الناقص، ولا تُرد النقاط.';
 
   @override
   String get recentActivity => 'النشاط الأخير';
@@ -3841,4 +3841,40 @@ class AppLocalizationsAr extends AppLocalizations {
     );
     return '$_temp0';
   }
+
+  @override
+  String get authoritativeChangeRequiresOnline =>
+      'يتطلب هذا التغيير جلسة خادم نشطة. يبقى تعديلك الحالي غير مكتمل.';
+
+  @override
+  String get authoritativeChargeChanged =>
+      'تغيرت تكلفة النقاط. راجع السعر الأحدث وحاول مرة أخرى.';
+
+  @override
+  String get confirmTaskMoveChargeTitle => 'استخدام النقاط لنقل المهمة؟';
+
+  @override
+  String confirmTaskMoveChargeBody(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count نقطة',
+      many: '$count نقطة',
+      few: '$count نقاط',
+      two: 'نقطتين',
+      one: 'نقطة واحدة',
+    );
+    return 'يتطلب نقل هذه المهمة $_temp0. لن تُرد النقاط لاحقًا.';
+  }
+
+  @override
+  String get confirmAssetTypeChargeTitle => 'استخدام النقاط لتغيير نوع العنصر؟';
+
+  @override
+  String confirmAssetTypeChargeBody(int points, int tasks) {
+    return 'يتطلب تغيير نوع هذا العنصر $points نقطة مقابل $tasks مهمة مرتبطة، بما فيها المهام المؤرشفة. لن تُرد النقاط لاحقًا.';
+  }
+
+  @override
+  String get confirmPointChargeAction => 'استخدام النقاط';
 }

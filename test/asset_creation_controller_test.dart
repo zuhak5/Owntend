@@ -12,15 +12,24 @@ class _ScriptedMonetizationRepository implements MonetizationRepository {
   _ScriptedMonetizationRepository({
     this.createAssetResult,
     this.createAssetThrow,
+    this.copyAssetResult,
+    this.movePlanResult,
+    this.changeAssetTypeResult,
   });
 
   final PointDebitResult? createAssetResult;
   final Object? Function()? createAssetThrow;
+  final AssetCopyResult? copyAssetResult;
+  final AuthoritativeMutationResult? movePlanResult;
+  final AuthoritativeMutationResult? changeAssetTypeResult;
 
   @override
   String? get currentUserId => 'user-a';
 
   final List<Map<String, dynamic>> createAssetCalls = [];
+  final List<Map<String, dynamic>> copyAssetCalls = [];
+  final List<Map<String, dynamic>> movePlanCalls = [];
+  final List<Map<String, dynamic>> changeAssetTypeCalls = [];
   final List<void> journalStatesAtCallTime = [];
 
   @override
@@ -49,6 +58,40 @@ class _ScriptedMonetizationRepository implements MonetizationRepository {
   }
 
   @override
+  Future<AssetCopyResult> copyAsset(Map<String, dynamic> operation) async {
+    copyAssetCalls.add(Map<String, dynamic>.from(operation));
+    return copyAssetResult!;
+  }
+
+  @override
+  Future<AuthoritativeQuote> quoteMaintenancePlanMove({
+    required String planId,
+    required String targetAssetId,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<AuthoritativeMutationResult> moveMaintenancePlan(
+    Map<String, dynamic> operation,
+  ) async {
+    movePlanCalls.add(Map<String, dynamic>.from(operation));
+    return movePlanResult!;
+  }
+
+  @override
+  Future<AuthoritativeQuote> quoteAssetTypeChange({
+    required String assetId,
+    required String targetType,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<AuthoritativeMutationResult> changeAssetType(
+    Map<String, dynamic> operation,
+  ) async {
+    changeAssetTypeCalls.add(Map<String, dynamic>.from(operation));
+    return changeAssetTypeResult!;
+  }
+
+  @override
   Future<ChargedOperationStatusResult> getChargedOperationStatus(
     String operationId, {
     required String requestHash,
@@ -74,6 +117,7 @@ class _ScriptedMonetizationRepository implements MonetizationRepository {
 
 class _RecordingLocalSyncStore implements LocalSyncStore {
   final List<String> reconciledAssetIds = [];
+  final List<String> reconciledCopyIds = [];
 
   @override
   Future<void> reconcileAssetCreationComposite({
@@ -81,6 +125,17 @@ class _RecordingLocalSyncStore implements LocalSyncStore {
     Map<String, dynamic>? assetJson,
   }) async {
     reconciledAssetIds.add(assetId);
+  }
+
+  @override
+  Future<void> reconcileAssetCopyComposite({
+    required String assetId,
+    Map<String, dynamic>? assetJson,
+    List<Map<String, dynamic>> plans = const [],
+    List<Map<String, dynamic>> planMetadata = const [],
+    List<Map<String, dynamic>> detailRows = const [],
+  }) async {
+    reconciledCopyIds.add(assetId);
   }
 
   @override
@@ -108,6 +163,7 @@ ProviderContainer _container({
       else
         localSyncStoreProvider.overrideWithValue(null),
       chargedOperationResolverProvider.overrideWithValue(null),
+      syncConnectivityProvider.overrideWith((ref) => Stream.value(true)),
     ],
   );
   addTearDown(container.dispose);
@@ -298,6 +354,127 @@ void main() {
       final stuck = await store.getOperation('op-stuck-1');
       expect(stuck!.state, equals(TaskCreationOperationState.outcomeUnknown));
       expect(repo.createAssetCalls, isEmpty);
+    });
+
+    test(
+      'owned copy journals before RPC and sends no client-authored content',
+      () async {
+        final repo = _ScriptedMonetizationRepository(
+          createAssetResult: null,
+          copyAssetResult: AssetCopyResult(
+            balance: 5,
+            charged: 0,
+            alreadyProcessed: false,
+            asset: _assetPayload('asset-copy'),
+          ),
+        );
+        final store = TaskCreationOperationStore();
+        final syncStore = _RecordingLocalSyncStore();
+        final container = _container(
+          repo: repo,
+          store: store,
+          syncStore: syncStore,
+        );
+        var localCopyApplied = false;
+
+        await container
+            .read(assetCreationControllerProvider)
+            .copyOwnedAsset(
+              sourceAssetId: 'asset-source',
+              targetAssetId: 'asset-copy',
+              destinationRoomId: 'room-target',
+              includeTasks: true,
+              includePhotos: true,
+              planIdMap: const {'plan-source': 'plan-copy'},
+              accountScope: 'user-a',
+              operationIdOverride: 'copy-operation',
+              applyLocalCopy: () async => localCopyApplied = true,
+            );
+
+        final sent = repo.copyAssetCalls.single;
+        expect(
+          sent.keys.toSet(),
+          equals({
+            'operation_id',
+            'source_asset_id',
+            'target_asset_id',
+            'destination_room_id',
+            'include_tasks',
+            'plan_id_map',
+            'request_hash',
+          }),
+        );
+        expect(localCopyApplied, isTrue);
+        expect(syncStore.reconciledCopyIds, equals(['asset-copy']));
+        final terminal = await store.getOperation('copy-operation');
+        expect(terminal!.state, TaskCreationOperationState.reconciled);
+        expect(terminal.requestPayload, isEmpty);
+      },
+    );
+  });
+
+  group('authoritative entitlement-delta controllers', () {
+    test(
+      'asset type changes adopt the server wallet outside presentation',
+      () async {
+        final repo = _ScriptedMonetizationRepository(
+          changeAssetTypeResult: const AuthoritativeMutationResult(
+            status: 'applied',
+            charged: 2,
+            balance: 3,
+            alreadyProcessed: false,
+          ),
+        );
+        final container = _container(
+          repo: repo,
+          store: TaskCreationOperationStore(),
+        );
+        final operation = <String, dynamic>{
+          'operation_id': 'type-operation',
+          'asset_id': 'asset-1',
+        };
+
+        final result = await container
+            .read(assetCreationControllerProvider)
+            .changeAssetTypeWithPointDelta(
+              operation: operation,
+              accountScope: 'user-a',
+            );
+
+        expect(result.balance, 3);
+        expect(repo.changeAssetTypeCalls, [operation]);
+        expect(container.read(pointWalletProvider).value?.balance, 3);
+      },
+    );
+
+    test('plan moves adopt the server wallet outside presentation', () async {
+      final repo = _ScriptedMonetizationRepository(
+        movePlanResult: const AuthoritativeMutationResult(
+          status: 'applied',
+          charged: 1,
+          balance: 4,
+          alreadyProcessed: false,
+        ),
+      );
+      final container = _container(
+        repo: repo,
+        store: TaskCreationOperationStore(),
+      );
+      final controller = container.read(taskCreationControllerProvider);
+      addTearDown(controller.dispose);
+      final operation = <String, dynamic>{
+        'operation_id': 'move-operation',
+        'plan_id': 'plan-1',
+      };
+
+      final result = await controller.movePlanWithPointDelta(
+        operation: operation,
+        accountScope: 'user-a',
+      );
+
+      expect(result.balance, 4);
+      expect(repo.movePlanCalls, [operation]);
+      expect(container.read(pointWalletProvider).value?.balance, 4);
     });
   });
 }

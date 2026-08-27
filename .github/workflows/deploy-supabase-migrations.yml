@@ -152,3 +152,17 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_MIGRATION_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_MIGRATION_DB_PASSWORD }}
         run: npx supabase db push --linked --dry-run
+      - name: Validate change-feed parity for every hosted account
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_OPERATOR_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_OPERATOR_SERVICE_ROLE_KEY }}
+          SUPABASE_PARITY_REPORT: artifacts/change-feed-parity.json
+        run: npm run validate:supabase-parity
+      - name: Upload sanitized parity evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: change-feed-parity-${{ needs.validate-source.outputs.source_sha }}
+          path: artifacts/change-feed-parity.json
+          if-no-files-found: error
+          retention-days: 14

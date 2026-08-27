@@ -3,6 +3,15 @@ import '../../core/services/charged_operation_journal/charged_operation_store.da
 import '../../core/services/charged_operation_journal/charged_operation_contracts.dart';
 import 'monetization.dart';
 
+typedef ApplyRecoveredAssetCopy = Future<void> Function({
+  required String sourceAssetId,
+  required String targetAssetId,
+  required String destinationRoomId,
+  required bool includeTasks,
+  required bool includePhotos,
+  required Map<String, String> planIdMap,
+});
+
 class ChargedOperationResolver {
   ChargedOperationResolver({
     required this.monetizationRepo,
@@ -10,6 +19,7 @@ class ChargedOperationResolver {
     required this.operationStore,
     required void Function(String userId, int balance)
     adoptAuthoritativeBalance,
+    this.applyRecoveredAssetCopy,
   }) : _adoptAuthoritativeBalance = ((userId, balance) =>
            adoptAuthoritativeBalance(userId, balance));
 
@@ -17,6 +27,7 @@ class ChargedOperationResolver {
   final LocalSyncStore localSyncStore;
   final TaskCreationOperationStore operationStore;
   final void Function(String userId, int balance) _adoptAuthoritativeBalance;
+  final ApplyRecoveredAssetCopy? applyRecoveredAssetCopy;
 
   Future<void> resolvePendingOperations(String accountScope) async {
     if (!_accountIsCurrent(accountScope)) return;
@@ -26,7 +37,8 @@ class ChargedOperationResolver {
     );
     for (final op in operations) {
       if (op.state != TaskCreationOperationState.outcomeUnknown &&
-          op.state != TaskCreationOperationState.submitting) {
+          op.state != TaskCreationOperationState.submitting &&
+          op.state != TaskCreationOperationState.serverAcceptedNeedsReconcile) {
         continue;
       }
       if (!_accountIsCurrent(accountScope)) return;
@@ -40,6 +52,23 @@ class ChargedOperationResolver {
             lastErrorCode: 'unqualified_request_hash',
             lastErrorMessage:
                 'The retained charged operation is not hash-qualified.',
+          ),
+        );
+        continue;
+      }
+
+      final legacyBundle = op.requestPayload['initial_plans'];
+      if (legacyBundle is List &&
+          legacyBundle.isNotEmpty &&
+          !op.requestPayload.containsKey('source_asset_id')) {
+        await operationStore.saveOperation(
+          op.copyWith(
+            state: TaskCreationOperationState.permanentRejected,
+            requestPayload: const {},
+            updatedAt: DateTime.now(),
+            lastErrorCode: 'untrusted_legacy_bundle',
+            lastErrorMessage:
+                'Bundled tasks require an owned server-side copy source.',
           ),
         );
         continue;
@@ -77,6 +106,15 @@ class ChargedOperationResolver {
               planJson: status.plan,
               metadataJson: status.metadata,
             );
+          } else if (op.requestPayload.containsKey('source_asset_id')) {
+            await _applyRetainedAssetCopy(op);
+            await localSyncStore.reconcileAssetCopyComposite(
+              assetId: status.entityId ?? op.planId,
+              assetJson: status.asset,
+              plans: status.plans,
+              planMetadata: status.planMetadata,
+              detailRows: status.detailRows,
+            );
           } else if (op.requestPayload.containsKey('asset') ||
               status.asset != null) {
             await localSyncStore.reconcileAssetCreationComposite(
@@ -106,6 +144,20 @@ class ChargedOperationResolver {
                   planId: op.planId,
                   planJson: result.plan,
                   metadataJson: result.metadata,
+                );
+              } else if (op.requestPayload.containsKey('source_asset_id')) {
+                final result = await monetizationRepo.copyAsset(
+                  authoritativeAssetCopyPayload(op.requestPayload),
+                );
+                if (!_accountIsCurrent(accountScope)) return;
+                _adoptAuthoritativeBalance(accountScope, result.balance);
+                await _applyRetainedAssetCopy(op);
+                await localSyncStore.reconcileAssetCopyComposite(
+                  assetId: op.planId,
+                  assetJson: result.asset,
+                  plans: result.plans,
+                  planMetadata: result.planMetadata,
+                  detailRows: result.detailRows,
                 );
               } else if (op.requestPayload.containsKey('asset')) {
                 final result = await monetizationRepo.createAsset(
@@ -155,6 +207,33 @@ class ChargedOperationResolver {
 
   bool _accountIsCurrent(String accountScope) =>
       monetizationRepo.currentUserId == accountScope;
+
+  Future<void> _applyRetainedAssetCopy(TaskCreationOperation operation) async {
+    final apply = applyRecoveredAssetCopy;
+    if (apply == null) return;
+    final payload = operation.requestPayload;
+    final rawMap = payload['plan_id_map'];
+    if (rawMap is! Map) {
+      throw const FormatException('The retained copy plan map is invalid.');
+    }
+    final planIdMap = <String, String>{};
+    for (final entry in rawMap.entries) {
+      if (entry.key is! String || entry.value is! String) {
+        throw const FormatException('The retained copy plan map is invalid.');
+      }
+      planIdMap[entry.key as String] = entry.value as String;
+    }
+    final localContext = payload['_local_context'];
+    await apply(
+      sourceAssetId: payload['source_asset_id'] as String,
+      targetAssetId: payload['target_asset_id'] as String,
+      destinationRoomId: payload['destination_room_id'] as String,
+      includeTasks: payload['include_tasks'] == true,
+      includePhotos:
+          localContext is Map && localContext['include_photos'] == true,
+      planIdMap: planIdMap,
+    );
+  }
 
   Future<void> _markOperationIdConflict(TaskCreationOperation op) {
     return operationStore.saveOperation(

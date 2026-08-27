@@ -287,6 +287,9 @@ void main() {
     final assetDialogs = File(
       'lib/src/features/assets/presentation/asset_dialogs.dart',
     ).readAsStringSync();
+    final maintenanceDialogs = File(
+      'lib/src/features/maintenance/presentation/maintenance_dialogs.dart',
+    ).readAsStringSync();
     final resolver = File(
       'lib/src/features/monetization/charged_operation_resolver.dart',
     ).readAsStringSync();
@@ -295,6 +298,10 @@ void main() {
     expect(assetController, contains('adoptAuthoritativeMutationResult'));
     expect(assetDialogs, isNot(contains('adoptAuthoritativeMutationResult')));
     expect(
+      maintenanceDialogs,
+      isNot(contains('adoptAuthoritativeMutationResult')),
+    );
+    expect(
       resolver,
       contains('_adoptAuthoritativeBalance(accountScope, balance)'),
     );
@@ -302,7 +309,7 @@ void main() {
       RegExp(r'_adoptAuthoritativeBalance\(accountScope, result\.balance\)')
           .allMatches(resolver)
           .length,
-      2,
+      3,
     );
   });
 

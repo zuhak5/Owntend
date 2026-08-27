@@ -1,6 +1,9 @@
 # Owntend Pre-Launch Hardening Implementation Plan
 
-**Status:** Authoritative execution plan (planning only — no implementation performed by this investigation).
+> [!IMPORTANT]
+> **Historical artifact, superseded on 2026-08-27.** This plan records the repository state and decisions from 2026-08-25; it is not a current Supabase architecture or migration authority. Use the executable ordered migration chain and the current documents under `docs/backend/` and `docs/architecture/`.
+
+**Status:** Superseded historical execution plan (planning only at the time of the investigation).
 **Audience:** The implementing AI agent that will execute this plan end to end. This document is standalone; no other context is required.
 
 ---

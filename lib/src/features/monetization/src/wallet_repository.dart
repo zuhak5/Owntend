@@ -70,6 +70,60 @@ class SupabaseMonetizationRepository extends MonetizationRepository {
   }
 
   @override
+  Future<AssetCopyResult> copyAsset(Map<String, dynamic> operation) async {
+    final payload = _withRequestHash(operation);
+    try {
+      final data = await client.rpc<Map<String, dynamic>>(
+        'copy_asset',
+        params: {'p_operation': payload},
+      );
+      return AssetCopyResult.fromJson(data);
+    } on PostgrestException catch (error) {
+      if (error.message == 'OPERATION_ID_REUSED') {
+        throw const OperationIdReusedException();
+      }
+      rethrow;
+    }
+  }
+
+  @override
+  Future<AuthoritativeQuote> quoteMaintenancePlanMove({
+    required String planId,
+    required String targetAssetId,
+  }) async {
+    final data = await client.rpc<Map<String, dynamic>>(
+      'quote_maintenance_plan_move',
+      params: {'p_plan_id': planId, 'p_target_asset_id': targetAssetId},
+    );
+    return AuthoritativeQuote.fromJson(data, revisionKey: 'plan_revision');
+  }
+
+  @override
+  Future<AuthoritativeMutationResult> moveMaintenancePlan(
+    Map<String, dynamic> operation,
+  ) => _authoritativeMutation(
+    'move_maintenance_plan_with_point_delta',
+    operation,
+  );
+
+  @override
+  Future<AuthoritativeQuote> quoteAssetTypeChange({
+    required String assetId,
+    required String targetType,
+  }) async {
+    final data = await client.rpc<Map<String, dynamic>>(
+      'quote_asset_type_change',
+      params: {'p_asset_id': assetId, 'p_target_type': targetType},
+    );
+    return AuthoritativeQuote.fromJson(data, revisionKey: 'asset_revision');
+  }
+
+  @override
+  Future<AuthoritativeMutationResult> changeAssetType(
+    Map<String, dynamic> operation,
+  ) => _authoritativeMutation('change_asset_type_with_point_delta', operation);
+
+  @override
   Future<ChargedOperationStatusResult> getChargedOperationStatus(
     String operationId, {
     required String requestHash,
@@ -120,6 +174,39 @@ class SupabaseMonetizationRepository extends MonetizationRepository {
       throw InsufficientPointsException(balance: data['balance'] as int? ?? 0);
     }
     return PointDebitResult.fromJson(data);
+  }
+
+  Map<String, dynamic> _withRequestHash(Map<String, dynamic> operation) {
+    final unsigned = Map<String, dynamic>.from(operation)
+      ..remove('request_hash');
+    return {
+      ...unsigned,
+      'request_hash': sha256
+          .convert(utf8.encode(jsonEncode(unsigned)))
+          .toString(),
+    };
+  }
+
+  Future<AuthoritativeMutationResult> _authoritativeMutation(
+    String functionName,
+    Map<String, dynamic> operation,
+  ) async {
+    try {
+      final data = await client.rpc<Map<String, dynamic>>(
+        functionName,
+        params: {'p_operation': _withRequestHash(operation)},
+      );
+      final result = AuthoritativeMutationResult.fromJson(data);
+      if (result.status == 'insufficient_points') {
+        throw InsufficientPointsException(balance: result.balance);
+      }
+      return result;
+    } on PostgrestException catch (error) {
+      if (error.message == 'OPERATION_ID_REUSED') {
+        throw const OperationIdReusedException();
+      }
+      rethrow;
+    }
   }
 
   @override

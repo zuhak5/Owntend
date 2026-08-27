@@ -16,7 +16,7 @@ const read = async (path) =>
 test('GitHub Actions use only reviewed immutable references', async () => {
   const result = await validateRepositoryActionReferences();
   assert.deepEqual(result.errors, []);
-  assert.equal(result.externalReferences, 61);
+  assert.equal(result.externalReferences, 62);
   assert.equal(result.localReferences, 0);
   assert.equal(result.files.length, 8);
 });
@@ -289,6 +289,12 @@ test('Supabase migration deployment requires exact main and explicit production 
     workflow,
     /SUPABASE_DB_PASSWORD: \$\{\{ secrets\.SUPABASE_MIGRATION_DB_PASSWORD \}\}/,
   );
+  assert.match(workflow, /npm run validate:supabase-parity/);
+  assert.match(
+    workflow,
+    /SUPABASE_OPERATOR_SERVICE_ROLE_KEY: \$\{\{ secrets\.SUPABASE_OPERATOR_SERVICE_ROLE_KEY \}\}/,
+  );
+  assert.match(workflow, /artifacts\/change-feed-parity\.json/);
   assert.doesNotMatch(
     workflow,
     /SUPABASE_ADVISOR_|ANDROID_(?:APK_)?KEY|PLAY_UPLOAD_|SENTRY_AUTH_TOKEN/,

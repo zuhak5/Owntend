@@ -35,6 +35,8 @@ class _StatefulGateway implements SupabaseSyncGateway {
   var startRealtimeCalls = 0;
   var maintenanceCompletionCalls = 0;
   var maintenanceUndoCalls = 0;
+  var maintenanceHistoryRestoreCalls = 0;
+  MaintenanceHistoryRestoreResult? maintenanceHistoryRestoreResult;
   String? _activeUserId = 'user-1';
   Completer<void>? maintenanceCompletionGate;
   String? maintenanceCanonicalPlanTitle;
@@ -46,6 +48,29 @@ class _StatefulGateway implements SupabaseSyncGateway {
   Completer<void>? startRealtimeGate;
   Completer<void>? feedGate;
   var fetchFeedCalls = 0;
+
+  @override
+  Future<String> prepareMaintenanceHistoryRestorePayload({
+    required String payloadJson,
+    required String userId,
+    required String deviceId,
+  }) async => payloadJson;
+
+  @override
+  Future<MaintenanceHistoryRestoreResult> restoreMaintenanceHistory({
+    required String payloadJson,
+    required String userId,
+    required String deviceId,
+  }) async {
+    maintenanceHistoryRestoreCalls += 1;
+    return maintenanceHistoryRestoreResult ??
+        const MaintenanceHistoryRestoreResult(
+          status: 'applied',
+          insertedCount: 0,
+          existingCount: 0,
+          alreadyProcessed: false,
+        );
+  }
 
   @override
   Future<Set<String>> fetchAuthoritativeRecordKeys({
@@ -2092,6 +2117,87 @@ void main() {
         contains(SyncPhase.error),
         reason: 'the terminal conflict must publish an error status event',
       );
+    },
+  );
+
+  test(
+    'maintenance history restore conflict keeps its durable server reason',
+    () async {
+      final db = AppDatabase(executor: NativeDatabase.memory());
+      addTearDown(db.close);
+
+      final store = LocalSyncStore(db);
+      await store.account();
+      await store.setEnabled(enabled: true, boundUserId: 'user-1');
+      await store.recordSyncSuccess(DateTime.utc(2026, 8, 27));
+      await db.delete(db.syncOutbox).go();
+
+      const operationId = 'restore-conflict-operation';
+      await db
+          .into(db.syncOutbox)
+          .insert(
+            SyncOutboxCompanion.insert(
+              entity: 'maintenance_history_restore',
+              recordKey: operationId,
+              operation: 'execute',
+              payloadJson: const Value('{"version":1}'),
+              changedAt: Value(DateTime.utc(2026, 8, 27, 1)),
+              attempts: const Value(0),
+              userId: const Value('user-1'),
+            ),
+          );
+
+      final auth = _FakeAuthRepository(const AuthSession(userId: 'user-1'));
+      addTearDown(auth.controller.close);
+      final connectivity = _FakeConnectivity(true);
+      addTearDown(connectivity.controller.close);
+      final gateway = _StatefulGateway()
+        ..maintenanceHistoryRestoreResult =
+            const MaintenanceHistoryRestoreResult(
+              status: 'conflict',
+              insertedCount: 0,
+              existingCount: 0,
+              alreadyProcessed: false,
+              conflictReason: 'history_record_conflict',
+            );
+      final coordinator = SyncCoordinator(
+        auth,
+        store,
+        gateway,
+        connectivity: connectivity,
+        listenToAuthChanges: false,
+      );
+      addTearDown(coordinator.dispose);
+
+      await _eventually(() async {
+        final retained =
+            await (db.select(db.syncOutbox)..where(
+                  (row) =>
+                      row.entity.equals('maintenance_history_restore') &
+                      row.recordKey.equals(operationId),
+                ))
+                .getSingleOrNull();
+        return gateway.maintenanceHistoryRestoreCalls == 1 &&
+            retained?.state == SyncMutationState.failedVisible.name;
+      });
+      await Future<void>.delayed(const Duration(milliseconds: 700));
+
+      final retained =
+          await (db.select(db.syncOutbox)..where(
+                (row) =>
+                    row.entity.equals('maintenance_history_restore') &
+                    row.recordKey.equals(operationId),
+              ))
+              .getSingle();
+      expect(gateway.maintenanceHistoryRestoreCalls, 1);
+      expect(retained.attempts, -1);
+      expect(retained.nextAttemptAt, isNull);
+      expect(retained.lastErrorCode, 'history_record_conflict');
+      expect(
+        retained.lastError,
+        'Maintenance history restore conflict: history_record_conflict.',
+      );
+      expect(await store.pendingMutations(), isEmpty);
     },
   );
 

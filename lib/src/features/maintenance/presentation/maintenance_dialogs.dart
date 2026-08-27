@@ -70,7 +70,9 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
     _unit = plan?.recurrence.unit ?? RecurrenceUnit.months;
     _priority = plan?.priority ?? PriorityLevel.medium;
     _dueDate = plan?.nextDueDate ?? _nextDefaultPlanDueDate();
-    if (plan == null) scheduleMicrotask(_restoreOfflineDraft);
+    scheduleMicrotask(
+      () => _restoreOfflineDraft(overwriteExisting: plan != null),
+    );
   }
 
   @override
@@ -102,13 +104,16 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
 
   String get _offlineDraftKey {
     final userId = ref.read(monetizationRepositoryProvider)?.currentUserId;
-    return 'task_${userId ?? 'local'}_${widget.assetId ?? 'any'}';
+    final existingPlanId = widget.task?.plan.id;
+    return existingPlanId == null
+        ? 'task_create_${userId ?? 'local'}_${widget.assetId ?? 'any'}'
+        : 'task_edit_${userId ?? 'local'}_$existingPlanId';
   }
 
   Future<void> _saveOfflineDraft() {
     return ref.read(offlineCreationDraftStoreProvider).save(_offlineDraftKey, {
       'operation_id': _creationOperationId ??= _uuid.v7(),
-      'plan_id': _creationPlanId ??= _uuid.v7(),
+      'plan_id': widget.task?.plan.id ?? (_creationPlanId ??= _uuid.v7()),
       'asset_id': _assetId,
       'title': _titleController.text,
       'instructions': _instructionsController.text,
@@ -125,11 +130,15 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
     });
   }
 
-  Future<void> _restoreOfflineDraft() async {
+  Future<void> _restoreOfflineDraft({bool overwriteExisting = false}) async {
     final draft = await ref
         .read(offlineCreationDraftStoreProvider)
         .load(_offlineDraftKey);
-    if (!mounted || draft == null || _titleController.text.isNotEmpty) return;
+    if (!mounted ||
+        draft == null ||
+        (!overwriteExisting && _titleController.text.isNotEmpty)) {
+      return;
+    }
     String text(String key) => draft[key] as String? ?? '';
     _creationOperationId = draft['operation_id'] as String?;
     _creationPlanId = draft['plan_id'] as String?;
@@ -550,10 +559,72 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
           }
           return;
         }
-
-        await ref
-            .read(offlineCreationDraftStoreProvider)
-            .clear(_offlineDraftKey);
+      } else if (widget.task!.plan.assetId != assetId) {
+        final monetization = ref.read(monetizationRepositoryProvider);
+        if (monetization == null || monetization.currentUserId == null) {
+          throw StateError('Cloud points service is unavailable.');
+        }
+        final online = await ref
+            .read(syncConnectivityInstanceProvider)
+            .isOnline();
+        if (!mounted) return;
+        if (!online) {
+          await _saveOfflineDraft();
+          if (mounted) {
+            hk_ui.showToast(
+              context,
+              content: Text(context.l10n.offlineTaskDraftMessage),
+            );
+          }
+          return;
+        }
+        final quote = await monetization.quoteMaintenancePlanMove(
+          planId: planId,
+          targetAssetId: assetId,
+        );
+        if (!mounted) return;
+        if (quote.charge > 0) {
+          final confirmed = await showDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: Text(context.l10n.confirmTaskMoveChargeTitle),
+              content: Text(
+                context.l10n.confirmTaskMoveChargeBody(quote.charge),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: Text(context.l10n.cancel),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: Text(context.l10n.confirmPointChargeAction),
+                ),
+              ],
+            ),
+          );
+          if (confirmed != true) return;
+        }
+        final result = await ref
+            .read(taskCreationControllerProvider)
+            .movePlanWithPointDelta(
+              operation: {
+                'operation_id': _uuid.v7(),
+                'plan_id': planId,
+                'target_asset_id': assetId,
+                'expected_plan_revision': quote.revision,
+                'max_charge': quote.charge,
+              },
+              accountScope: monetization.currentUserId!,
+            );
+        if (!mounted) return;
+        if (!result.applied) {
+          throw StateError(
+            result.status == 'charge_changed'
+                ? context.l10n.authoritativeChargeChanged
+                : result.conflictReason ?? result.status,
+          );
+        }
       }
 
       await ref
@@ -569,6 +640,7 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
             reminderDaysBefore: reminderDaysBefore,
             metadata: metadata,
           );
+      await ref.read(offlineCreationDraftStoreProvider).clear(_offlineDraftKey);
 
       await refreshNotificationSchedules(ref);
       if (mounted) {

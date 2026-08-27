@@ -1428,7 +1428,7 @@
   "noRewardAvailable": "No reward is available right now.",
   "dailyRewardAlreadyClaimed": "Today’s completion reward was already claimed or is unavailable.",
   "pointsWallet": "Points wallet",
-  "pointsRuleExplanation": "Creating a new maintenance task costs 1 point. Creating items and safety tasks is always free. Completing and editing tasks never costs points.",
+  "pointsRuleExplanation": "Creating a new maintenance task costs 1 point. Creating items and safety tasks is free. Moving a free task to a paid item or changing an item type can charge the missing task entitlement; no refunds are issued.",
   "recentActivity": "Recent activity",
   "activityUnavailable": "Activity unavailable",
   "noPointActivity": "No point activity yet.",
@@ -1530,4 +1530,13 @@
   ,"@recurrenceMonths": {"placeholders": {"count": {"type": "int"}}}
   ,"recurrenceYears": "{count, plural, =1{Every year} other{Every {count} years}}"
   ,"@recurrenceYears": {"placeholders": {"count": {"type": "int"}}}
+  ,"authoritativeChangeRequiresOnline": "This change needs an active server session. Your current edit remains unfinished."
+  ,"authoritativeChargeChanged": "The point cost changed. Review the latest quote and try again."
+  ,"confirmTaskMoveChargeTitle": "Use points to move task?"
+  ,"confirmTaskMoveChargeBody": "Moving this task requires {count, plural, =1{1 point} other{{count} points}}. No refund is issued later."
+  ,"@confirmTaskMoveChargeBody": {"placeholders": {"count": {"type": "int"}}}
+  ,"confirmAssetTypeChargeTitle": "Use points to change item type?"
+  ,"confirmAssetTypeChargeBody": "Changing this item type requires {points} points for {tasks} attached tasks, including archived tasks. No refund is issued later."
+  ,"@confirmAssetTypeChargeBody": {"placeholders": {"points": {"type": "int"}, "tasks": {"type": "int"}}}
+  ,"confirmPointChargeAction": "Use points"
 }

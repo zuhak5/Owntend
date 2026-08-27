@@ -130,7 +130,7 @@ try {
 
     # ------------------------------------------------------------------ start
     # `supabase start` on a brand-new isolated project applies the full
-    # migration baseline onto a blank database. No separate reset step is
+    # ordered migration chain onto a blank database. No separate reset step is
     # needed: integration suites self-bootstrap their fixtures through
     # supported admin APIs, so nothing interactive can block the lane.
     Push-Location (Join-Path $workspace 'supabase')
@@ -139,7 +139,7 @@ try {
     if ($LASTEXITCODE -ne 0) { Pop-Location; throw 'supabase start failed for the disposable stack.' }
 
     # -------------------------------------------------- blank-baseline gates
-    # Lint and the full pgTAP suite prove the freshly applied single baseline
+    # Lint and the full pgTAP suite prove the freshly applied migration chain
     # on a blank stack, exactly as the validation matrix requires. These run
     # here so a stale developer database can never mask a baseline regression.
     # The stack was started with --ignore-health-check, so gate steps retry

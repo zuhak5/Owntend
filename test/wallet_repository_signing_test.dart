@@ -192,5 +192,116 @@ void main() {
         expect(sentPayload['request_hash'], equals(validHash));
       },
     );
+
+    test(
+      'copyAsset signs only the authoritative source-copy contract',
+      () async {
+        final operation = {
+          'operation_id': 'copy-op-001',
+          'source_asset_id': 'asset-source',
+          'target_asset_id': 'asset-target',
+          'destination_room_id': 'room-target',
+          'include_tasks': true,
+          'plan_id_map': {'plan-source': 'plan-target'},
+          'request_hash': 'dirty',
+        };
+        when(
+          () => client.rpc<Map<String, dynamic>>(
+            'copy_asset',
+            params: any(named: 'params'),
+          ),
+        ).thenAnswer(
+          (_) => _FakePostgrestFilterBuilder(
+            Future.value({
+              'balance': 4,
+              'charged': 0,
+              'already_processed': false,
+              'asset': {'id': 'asset-target'},
+              'plans': const <Map<String, dynamic>>[],
+            }),
+          ),
+        );
+
+        await repository.copyAsset(operation);
+
+        final params =
+            verify(
+                  () => client.rpc<Map<String, dynamic>>(
+                    'copy_asset',
+                    params: captureAny(named: 'params'),
+                  ),
+                ).captured.single
+                as Map<String, dynamic>;
+        final sent = params['p_operation'] as Map<String, dynamic>;
+        final unsigned = Map<String, dynamic>.from(sent)
+          ..remove('request_hash');
+        expect(sent.keys, containsAll(operation.keys));
+        expect(
+          sent['request_hash'],
+          sha256.convert(utf8.encode(jsonEncode(unsigned))).toString(),
+        );
+        expect(sent, isNot(contains('asset')));
+        expect(sent, isNot(contains('initial_plans')));
+      },
+    );
+
+    test('move quote and commit use their dedicated RPC contracts', () async {
+      when(
+        () => client.rpc<Map<String, dynamic>>(
+          'quote_maintenance_plan_move',
+          params: any(named: 'params'),
+        ),
+      ).thenAnswer(
+        (_) => _FakePostgrestFilterBuilder(
+          Future.value({'charge': 1, 'balance': 5, 'plan_revision': 7}),
+        ),
+      );
+      when(
+        () => client.rpc<Map<String, dynamic>>(
+          'move_maintenance_plan_with_point_delta',
+          params: any(named: 'params'),
+        ),
+      ).thenAnswer(
+        (_) => _FakePostgrestFilterBuilder(
+          Future.value({
+            'status': 'applied',
+            'charged': 1,
+            'balance': 4,
+            'already_processed': false,
+          }),
+        ),
+      );
+
+      final quote = await repository.quoteMaintenancePlanMove(
+        planId: 'plan-1',
+        targetAssetId: 'asset-2',
+      );
+      final result = await repository.moveMaintenancePlan({
+        'operation_id': 'move-op-1',
+        'plan_id': 'plan-1',
+        'target_asset_id': 'asset-2',
+        'expected_plan_revision': quote.revision,
+        'max_charge': quote.charge,
+      });
+
+      expect((quote.charge, quote.revision), equals((1, 7)));
+      expect((
+        result.status,
+        result.charged,
+        result.balance,
+      ), equals(('applied', 1, 4)));
+      final params =
+          verify(
+                () => client.rpc<Map<String, dynamic>>(
+                  'move_maintenance_plan_with_point_delta',
+                  params: captureAny(named: 'params'),
+                ),
+              ).captured.single
+              as Map<String, dynamic>;
+      expect(
+        (params['p_operation'] as Map<String, dynamic>)['request_hash'],
+        matches(RegExp(r'^[0-9a-f]{64}$')),
+      );
+    });
   });
 }

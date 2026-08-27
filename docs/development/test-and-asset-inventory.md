@@ -17,6 +17,7 @@ All Node.js test suites in `tool/` are cataloged in [`tool/test_inventory.mjs`](
 | `tool/build-status.test.mjs` | Live build status data model, quartiles, and step estimation | VersionDeck live status |
 | `tool/build-status-timeline.test.mjs` | Step grouping, phase extraction, and timeline presentation | VersionDeck timeline UI |
 | `tool/build-status-ui.test.mjs` | Live build progress rendering and announcement formatting | VersionDeck accessibility & UI |
+| `tool/change-feed-parity.test.mjs` | Service-side account enumeration, sanitized parity evidence, and failure redaction | Protected Supabase operations |
 | `tool/dependency-security-and-notices.test.mjs` | SPDX 2.3 SBOM, third-party notices, license allowlist | Dependency security |
 | `tool/sticky-download-fix.test.mjs` | Sticky download button and responsive footer layout | VersionDeck mobile UX |
 | `tool/supabase-advisors.test.mjs` | Security and performance Advisor audit, warning gates | Backend database posture |

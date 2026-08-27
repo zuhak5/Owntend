@@ -5,6 +5,17 @@ Owntend uses Git history as the authoritative record of shipped changes. This fi
 The current application version is defined only in `pubspec.yaml`. Released versions are recorded below after their version and build numbers have been finalized.
 
 ## Unreleased
+
+### Supabase authority remediation (2026-08-27)
+
+- Closed missing-plan completion authorization: recovery now requires an exact same-user task-creation operation and commits nothing on `task_creation_not_authorized`.
+- Added private plan entitlements and idempotent economy operations. Owned-source copies are server-derived and free; task moves and asset-type changes charge only the current entitlement shortfall, include archived plans, never refund, and reject direct protected-column updates.
+- Rejected non-empty `create_asset.initial_plans`, converted retained unsupported bundles into visible conflicts, and made copy/move/type offline attempts explicit drafts. Copy response-loss recovery retains local tag/photo intent without sending it across the RPC boundary.
+- Made maintenance history read-only through table access and introduced bounded validated merge restore with durable plan/history conflict outcomes and exact replay.
+- Bound Storage upload permission to a fresh exact staging row, removed authenticated object deletion, made expired attempts recoverable, and enforced concurrent per-account limits of 20 active stages and 100 MiB expected bytes.
+- Replaced no-argument change-feed parity with the service-role-only target-user form and added a protected, redacted per-account parity workflow artifact.
+- Added four ordered forward migrations, adversarial pgTAP coverage, real two-client Storage/economy/restore concurrency coverage, and synchronized backend, monetization, sync, backup, privacy, and operations documentation. The chain is intentionally not squashed until a separately approved destructive pre-launch reset.
+
 ### Pre-launch hardening implementation (2026-08-25)
 
 Implements `docs/pre-launch-hardening-implementation-plan.md` end to end.
@@ -33,7 +44,7 @@ Implements `docs/pre-launch-hardening-implementation-plan.md` end to end.
 - **Navigation correctness (WP-011, F-019)**: exact-segment notification-route validation; pre-readiness destinations captured in `PendingNotificationRoute` and honored after authentication.
 - **Android explicitness (WP-012, F-025/F-029/F-032/F-033)**: deny-cleartext network security config; AdMob sourcing documented; back-button tooltip; portraitDown accepted.
 - **Testing infrastructure (WP-014/WP-015/WP-016, F-022..F-024/F-028/F-036)**: 7,046-line widget suite split count-preserving into themed files with shared fakes; shared completer-friendly `waitFor` replaces wall-clock polling; `dart_test.yaml` pins concurrency/timeout; account-deletion orchestration walk covers cloud-success/local-failure plus simulated restart; stale golden artifacts purged.
-- **CI integrity (WP-001, F-003/F-004)**: removed the duplicate disposable-backend job with its malformed npm invocation; workflow parse list asserts required scripts exist; release-workflows contract tightened (61 pinned references).### Pre-launch hardening (2026-08)
+- **CI integrity (WP-001, F-003/F-004)**: removed the duplicate disposable-backend job with its malformed npm invocation; workflow parse list asserts required scripts exist; release-workflows contract tightened.### Pre-launch hardening (2026-08)
 
 - **Encrypted streaming backup container (BACKUP-001, PRIV-001)**: Replaced the plaintext ZIP export with a versioned `.owntend-backup` authenticated container - Argon2id key derivation, chunked AES-256-GCM frames bound to the header via AAD, manifest-first framing, and a full self-verification pass before atomic publication. Manual exports use a user passphrase (never stored); automatic and pre-restore safety exports use a device-local secure-storage key. Restore streams every byte through per-entry SHA-256 verification with unchanged crash-atomic journaling. No plaintext reader exists.
 - **Durable account-deletion acknowledgment (AUTH-001)**: Acknowledgment is now a validated protocol step - only an explicit matching acknowledged receipt clears the secure recovery record; transport loss or mismatch persists acknowledgementPending and startup retries exactly that step. Removed unreachable deletion phases and the unused sign-out hook.

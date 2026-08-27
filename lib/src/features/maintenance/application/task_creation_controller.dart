@@ -7,6 +7,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../core/domain/models.dart';
+import '../../../core/providers/app_providers.dart';
 import '../../../core/sync/sync_providers.dart';
 import '../../monetization/charged_operation_resolver.dart';
 import '../../monetization/monetization.dart';
@@ -62,6 +63,26 @@ final chargedOperationResolverProvider = Provider<ChargedOperationResolver?>((
           .read(pointWalletControllerProvider.notifier)
           .adoptAuthoritativeMutationResult(balance, userId: userId);
     },
+    applyRecoveredAssetCopy:
+        ({
+          required sourceAssetId,
+          required targetAssetId,
+          required destinationRoomId,
+          required includeTasks,
+          required includePhotos,
+          required planIdMap,
+        }) async {
+          await ref
+              .read(assetRepositoryProvider)
+              .copyAsset(
+                assetId: sourceAssetId,
+                roomId: destinationRoomId,
+                includeTasks: includeTasks,
+                includePhotos: includePhotos,
+                newAssetId: targetAssetId,
+                taskIdBySource: planIdMap,
+              );
+        },
   );
 });
 
@@ -75,6 +96,28 @@ class TaskCreationController extends ValueNotifier<TaskCreationState> {
 
   final Ref ref;
   static const _uuid = Uuid();
+
+  Future<AuthoritativeMutationResult> movePlanWithPointDelta({
+    required Map<String, dynamic> operation,
+    required String accountScope,
+  }) async {
+    final monetizationRepo = ref.read(monetizationRepositoryProvider);
+    if (monetizationRepo == null ||
+        monetizationRepo.currentUserId != accountScope) {
+      throw StateError('Cloud points service is unavailable.');
+    }
+
+    final result = await monetizationRepo.moveMaintenancePlan(operation);
+    if (result.applied) {
+      ref
+          .read(pointWalletControllerProvider.notifier)
+          .adoptAuthoritativeMutationResult(
+            result.balance,
+            userId: accountScope,
+          );
+    }
+    return result;
+  }
 
   Future<bool> createNewTask({
     required String assetId,

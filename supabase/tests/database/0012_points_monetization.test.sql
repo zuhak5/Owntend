@@ -249,28 +249,7 @@ select extensions.is(
           'asset_type', 'general',
           'room_id', 'points-room'
         ),
-        'initial_plans', jsonb_build_array(
-          jsonb_build_object(
-            'id', 'points-bundled-task-one',
-            'asset_id', 'points-general-asset',
-            'title', 'Bundled task one',
-            'recurrence_interval', 1,
-            'recurrence_unit', 'months',
-            'priority', 'medium',
-            'next_due_date', '2026-09-01T00:00:00Z',
-            'reminder_days_before', 0
-          ),
-          jsonb_build_object(
-            'id', 'points-bundled-task-two',
-            'asset_id', 'points-general-asset',
-            'title', 'Bundled task two',
-            'recurrence_interval', 3,
-            'recurrence_unit', 'months',
-            'priority', 'low',
-            'next_due_date', '2026-09-02T00:00:00Z',
-            'reminder_days_before', 0
-          )
-        )
+        'initial_plans', jsonb_build_array()
       )
     )->>'charged'
   )::integer,
@@ -286,8 +265,8 @@ select extensions.is(
   (select count(*) from public.maintenance_plans
    where asset_id = 'points-general-asset'
      and id in ('points-bundled-task-one', 'points-bundled-task-two'))::integer,
-  2,
-  'initial maintenance plans are committed in the asset transaction'
+  0,
+  'ordinary asset creation cannot smuggle maintenance plans'
 );
 select extensions.is(
   (select count(*) from public.point_transactions
@@ -308,28 +287,7 @@ select extensions.is(
           'asset_type', 'general',
           'room_id', 'points-room'
         ),
-        'initial_plans', jsonb_build_array(
-          jsonb_build_object(
-            'id', 'points-bundled-task-one',
-            'asset_id', 'points-general-asset',
-            'title', 'Bundled task one',
-            'recurrence_interval', 1,
-            'recurrence_unit', 'months',
-            'priority', 'medium',
-            'next_due_date', '2026-09-01T00:00:00Z',
-            'reminder_days_before', 0
-          ),
-          jsonb_build_object(
-            'id', 'points-bundled-task-two',
-            'asset_id', 'points-general-asset',
-            'title', 'Bundled task two',
-            'recurrence_interval', 3,
-            'recurrence_unit', 'months',
-            'priority', 'low',
-            'next_due_date', '2026-09-02T00:00:00Z',
-            'reminder_days_before', 0
-          )
-        )
+        'initial_plans', jsonb_build_array()
       )
     )->>'already_processed'
   )::boolean,

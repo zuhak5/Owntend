@@ -25,6 +25,79 @@ mixin _LocalSyncMutationStore on _LocalSyncStoreBase {
     return count > 0;
   }
 
+  Future<void> prepareMaintenanceHistoryRestore(
+    LocalSyncMutation mutation, {
+    required String payloadJson,
+    required String userId,
+  }) async {
+    if (mutation.entity != 'maintenance_history_restore' ||
+        mutation.operation != 'execute') {
+      throw StateError('Invalid maintenance history restore mutation.');
+    }
+    final updated =
+        await (db.update(db.syncOutbox)..where(
+              (row) =>
+                  row.entity.equals(mutation.entity) &
+                  row.recordKey.equals(mutation.recordKey) &
+                  row.generation.equals(mutation.generation),
+            ))
+            .write(
+              SyncOutboxCompanion(
+                payloadJson: Value(payloadJson),
+                userId: Value(mutation.userId ?? userId),
+                state: const Value('inFlight'),
+                nextAttemptAt: const Value(null),
+              ),
+            );
+    if (updated != 1) {
+      throw StateError('Maintenance history restore intent changed.');
+    }
+  }
+
+  Future<void> markMaintenanceHistoryRestoreSucceeded(
+    LocalSyncMutation mutation, {
+    SyncRecord? plan,
+  }) async {
+    await db.transaction(() async {
+      if (plan != null) await applyRemoteRecords([plan]);
+      await (db.delete(db.syncOutbox)..where(
+            (row) =>
+                row.entity.equals(mutation.entity) &
+                row.recordKey.equals(mutation.recordKey) &
+                row.generation.equals(mutation.generation),
+          ))
+          .go();
+    });
+  }
+
+  Future<bool> markMaintenanceHistoryRestoreConflict(
+    LocalSyncMutation mutation, {
+    required String conflictReason,
+    required String message,
+  }) async {
+    if (mutation.entity != 'maintenance_history_restore' ||
+        mutation.operation != 'execute') {
+      throw StateError('Invalid maintenance history restore mutation.');
+    }
+    final updated =
+        await (db.update(db.syncOutbox)..where(
+              (row) =>
+                  row.entity.equals(mutation.entity) &
+                  row.recordKey.equals(mutation.recordKey) &
+                  row.generation.equals(mutation.generation),
+            ))
+            .write(
+              SyncOutboxCompanion(
+                attempts: const Value(-1),
+                state: const Value('failedVisible'),
+                nextAttemptAt: const Value(null),
+                lastErrorCode: Value(conflictReason),
+                lastError: Value(message),
+              ),
+            );
+    return updated > 0;
+  }
+
   Future<bool> isMutationFailedVisible(LocalSyncMutation mutation) async {
     final row =
         await (db.select(db.syncOutbox)..where(
@@ -294,6 +367,85 @@ mixin _LocalSyncMutationStore on _LocalSyncStoreBase {
       await applyRemoteRecords([parsed]);
       await (db.delete(db.syncOutbox)..where(
             (row) => row.entity.equals('asset') & row.recordKey.equals(assetId),
+          ))
+          .go();
+    });
+  }
+
+  Future<void> reconcileAssetCopyComposite({
+    required String assetId,
+    Map<String, dynamic>? assetJson,
+    List<Map<String, dynamic>> plans = const [],
+    List<Map<String, dynamic>> planMetadata = const [],
+    List<Map<String, dynamic>> detailRows = const [],
+  }) async {
+    if (assetJson == null || assetJson.isEmpty) return;
+    final assetSpec = syncSpecByEntity['asset']!;
+    final asset = SyncRecord.fromRemote(assetSpec, assetJson);
+    if (asset.recordKey != assetId) {
+      throw const FormatException('The copy RPC returned the wrong asset.');
+    }
+
+    final records = <SyncRecord>[asset];
+    final planIds = <String>{};
+    for (final row in plans) {
+      final record = SyncRecord.fromRemote(
+        syncSpecByEntity['maintenance_plan']!,
+        row,
+      );
+      if (row['asset_id'] != assetId || !planIds.add(record.recordKey)) {
+        throw const FormatException('The copy RPC returned invalid tasks.');
+      }
+      records.add(record);
+    }
+    for (final row in planMetadata) {
+      final record = SyncRecord.fromRemote(
+        syncSpecByEntity['maintenance_plan_metadata']!,
+        row,
+      );
+      if (!planIds.contains(record.recordKey)) {
+        throw const FormatException(
+          'The copy RPC returned metadata for an unknown task.',
+        );
+      }
+      records.add(record);
+    }
+    final detailEntities = <String>{};
+    for (final envelope in detailRows) {
+      final entity = envelope['entity'] as String?;
+      final rawRow = envelope['row'];
+      final spec = entity == null ? null : syncSpecByEntity[entity];
+      if (entity == null ||
+          spec == null ||
+          !const {
+            'device_detail',
+            'pet_detail',
+            'plant_detail',
+            'safety_detail',
+          }.contains(entity) ||
+          rawRow is! Map ||
+          !detailEntities.add(entity)) {
+        throw const FormatException('The copy RPC returned invalid details.');
+      }
+      final row = Map<String, dynamic>.from(rawRow);
+      final record = SyncRecord.fromRemote(spec, row);
+      if (record.recordKey != assetId) {
+        throw const FormatException('The copy RPC returned foreign details.');
+      }
+      records.add(record);
+    }
+
+    await db.transaction(() async {
+      await applyRemoteRecords(records);
+      await (db.delete(db.syncOutbox)..where(
+            (row) =>
+                (row.entity.equals('asset') & row.recordKey.equals(assetId)) |
+                (row.entity.equals('maintenance_plan') &
+                    row.recordKey.isIn(planIds)) |
+                (row.entity.equals('maintenance_plan_metadata') &
+                    row.recordKey.isIn(planIds)) |
+                (row.entity.isIn(detailEntities) &
+                    row.recordKey.equals(assetId)),
           ))
           .go();
     });

@@ -56,6 +56,32 @@ class _ZeroPointsMonetizationRepository implements MonetizationRepository {
   }
 
   @override
+  Future<AssetCopyResult> copyAsset(Map<String, dynamic> operation) =>
+      throw UnimplementedError();
+
+  @override
+  Future<AuthoritativeQuote> quoteMaintenancePlanMove({
+    required String planId,
+    required String targetAssetId,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<AuthoritativeMutationResult> moveMaintenancePlan(
+    Map<String, dynamic> operation,
+  ) => throw UnimplementedError();
+
+  @override
+  Future<AuthoritativeQuote> quoteAssetTypeChange({
+    required String assetId,
+    required String targetType,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<AuthoritativeMutationResult> changeAssetType(
+    Map<String, dynamic> operation,
+  ) => throw UnimplementedError();
+
+  @override
   Future<ChargedOperationStatusResult> getChargedOperationStatus(
     String operationId, {
     String? requestHash,
@@ -176,7 +202,7 @@ void main() {
     });
 
     testWidgets(
-      'points wallet explanation reflects free items and 1-point tasks',
+      'points wallet explains entitlement deltas and the no-refund rule',
       (tester) async {
         await tester.pumpWidget(
           MaterialApp(
@@ -202,7 +228,7 @@ void main() {
 
         expect(
           find.text(
-            'Creating a new maintenance task costs 1 point. Creating items and safety tasks is always free. Completing and editing tasks never costs points.',
+            'Creating a new maintenance task costs 1 point. Creating items and safety tasks is free. Moving a free task to a paid item or changing an item type can charge the missing task entitlement; no refunds are issued.',
           ),
           findsOneWidget,
         );

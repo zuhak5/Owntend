@@ -54,4 +54,14 @@ void main() {
     expect(source, contains("ignoreDuplicates: true"));
     expect(source, contains('replayedRecordKeys'));
   });
+
+  test('generic sync omits protected economic columns and history writes', () {
+    final source = File('lib/src/core/sync/supabase_sync_gateway.dart')
+        .readAsStringSync();
+
+    expect(source, contains("payload.remove('asset_type')"));
+    expect(source, contains("payload.remove('asset_id')"));
+    expect(source, contains("record.spec.entity == 'maintenance_record'"));
+    expect(source, contains('Maintenance history is server-authoritative'));
+  });
 }

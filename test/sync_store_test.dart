@@ -336,6 +336,137 @@ void main() {
   });
 
   test(
+    'restore snapshot batches maintenance history into merge RPC intents',
+    () async {
+      await store.bindIdentity('user-restore');
+      await db
+          .into(db.areas)
+          .insert(
+            AreasCompanion.insert(
+              id: 'restore-area',
+              name: 'Area',
+              kind: 'indoor',
+            ),
+          );
+      await db
+          .into(db.rooms)
+          .insert(
+            RoomsCompanion.insert(
+              id: 'restore-room',
+              areaId: 'restore-area',
+              name: 'Room',
+            ),
+          );
+      await db
+          .into(db.assets)
+          .insert(
+            AssetsCompanion.insert(
+              id: 'restore-asset',
+              roomId: 'restore-room',
+              name: 'Asset',
+            ),
+          );
+      await db
+          .into(db.maintenancePlans)
+          .insert(
+            MaintenancePlansCompanion.insert(
+              id: 'restore-plan',
+              assetId: 'restore-asset',
+              title: 'Plan',
+              recurrenceInterval: 1,
+              recurrenceUnit: 'months',
+              priority: 'medium',
+              nextDueDate: DateTime.utc(2026, 9, 1),
+            ),
+          );
+      await db
+          .into(db.maintenanceRecords)
+          .insert(
+            MaintenanceRecordsCompanion.insert(
+              id: 'restore-record',
+              planId: 'restore-plan',
+              dueDate: DateTime.utc(2026, 8, 1),
+              completedAt: Value(DateTime.utc(2026, 8, 2)),
+            ),
+          );
+      await db.delete(db.syncOutbox).go();
+
+      await store.enqueueRestoreSnapshot(DateTime.utc(2026, 8, 27));
+
+      final rows = await db.select(db.syncOutbox).get();
+      expect(rows.where((row) => row.entity == 'maintenance_record'), isEmpty);
+      final restore = rows.singleWhere(
+        (row) => row.entity == 'maintenance_history_restore',
+      );
+      final payload = Map<String, dynamic>.from(
+        jsonDecode(restore.payloadJson!) as Map,
+      );
+      expect(payload['expected_plan_revision'], 0);
+      expect(payload['plan_id'], 'restore-plan');
+      expect(payload, isNot(contains('request_hash')));
+      final records = payload['records'] as List<dynamic>;
+      expect(records, hasLength(1));
+      expect((records.single as Map)['operation_id'], 'restore-record');
+    },
+  );
+
+  test(
+    'legacy generic history mutations are deduplicated or quarantined visibly',
+    () async {
+      await db.delete(db.syncOutbox).go();
+      final changedAt = DateTime.utc(2026, 8, 27, 2);
+      await db.batch((batch) {
+        batch.insertAll(db.syncOutbox, [
+          SyncOutboxCompanion.insert(
+            entity: 'maintenance_completion',
+            recordKey: 'authorized-record',
+            operation: 'execute',
+            payloadJson: const Value(
+              '{"record":{"id":"authorized-record"},"plan":{"id":"plan"}}',
+            ),
+            changedAt: Value(changedAt),
+          ),
+          SyncOutboxCompanion.insert(
+            entity: 'maintenance_record',
+            recordKey: 'authorized-record',
+            operation: 'upsert',
+            payloadJson: const Value('{}'),
+            changedAt: Value(changedAt),
+          ),
+          SyncOutboxCompanion.insert(
+            entity: 'maintenance_record',
+            recordKey: 'unsupported-record',
+            operation: 'upsert',
+            payloadJson: const Value('{}'),
+            changedAt: Value(changedAt),
+          ),
+        ]);
+      });
+
+      await store.enforceMaintenanceHistoryMutationAuthority();
+
+      final rows = await db.select(db.syncOutbox).get();
+      expect(
+        rows.where(
+          (row) =>
+              row.entity == 'maintenance_record' &&
+              row.recordKey == 'authorized-record',
+        ),
+        isEmpty,
+      );
+      final unsupported = rows.singleWhere(
+        (row) =>
+            row.entity == 'maintenance_record' &&
+            row.recordKey == 'unsupported-record',
+      );
+      expect(unsupported.state, SyncMutationState.failedVisible.name);
+      expect(unsupported.attempts, -1);
+      expect(unsupported.lastErrorCode, 'server_authority_required');
+      expect(unsupported.lastError, contains('validated restore authority'));
+    },
+  );
+
+  test(
     'local-only restore pause clears sync metadata and keeps data',
     () async {
       final repository = DriftAssetRepository(db);

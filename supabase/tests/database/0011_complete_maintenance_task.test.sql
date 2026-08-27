@@ -65,8 +65,8 @@ select is(
     'public.complete_maintenance_task(jsonb,text)',
     'EXECUTE'
   ),
-  false,
-  'service role cannot execute the contained RPC'
+  true,
+  'service role can execute the maintenance RPC for protected smoke tests'
 );
 
 select is(
@@ -1227,7 +1227,7 @@ set local request.jwt.claims = '{}';
 select throws_ok(
   $$ select public.complete_maintenance_task('{}'::jsonb, 'rpc-device') $$,
   '42501',
-  'Authentication is required',
+  'AUTH_REQUIRED',
   'the RPC rejects a call without an authenticated identity'
 );
 

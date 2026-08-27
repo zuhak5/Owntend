@@ -13,7 +13,7 @@ postures.
 
 The repository lifecycle checkbox in `AGENTS.md` decides whether Supabase history is a disposable baseline or production history.
 
-While Owntend remains pre-launch with zero users and zero production data, migrations are a **clean baseline definition**. Refactor, rename, consolidate, or remove obsolete baseline modules directly when that produces a simpler final schema. The complete baseline must still build successfully from an empty database and pass the full database test suite.
+While Owntend remains pre-launch, the eventual goal is a clean baseline. The current security remediation intentionally uses an ordered forward chain first so a previously deployed pre-launch project can be repaired without rewriting applied history. Those migration files are immutable on the preservation path. They may be folded into the initial migration only after hosted validation and a separately approved destructive `reset-prelaunch-database` operation.
 
 After launch, migration history becomes append-only production history. At that point, change behavior only through new forward migrations and preserve compatibility with deployed clients and live data.
 
@@ -31,8 +31,8 @@ Each migration should be:
 ### Pre-launch / zero-user
 
 1. Inspect the complete baseline and the final executable schema contract.
-2. Refactor the existing baseline modules directly when behavior has not shipped.
-3. Remove duplicate replay migrations and obsolete patch-only modules.
+2. Apply and validate the current forward chain without editing applied files.
+3. Consolidate only after explicit reset approval and normalized forward-chain-versus-squashed schema/ACL comparison.
 4. Add or update RLS, RPC, constraint, denial, and authorization tests.
 5. Start Supabase from an empty local database.
 6. Run schema lint and the full pgTAP suite.
@@ -146,9 +146,9 @@ are deployed to a hosted project.
 
 ## Disposable backend integration lane
 
-`npm run test:backend-integration` is the canonical backend gate. It builds an
+`npm run test:backend-integration` is the canonical database/Edge gate. It builds an
 isolated disposable workspace (unique project id, shifted ports, CLI link state
-never copied), starts a blank local stack that applies exactly the one baseline
+never copied), starts a blank local stack that applies the complete ordered chain
 migration, lints the schema, runs the full pgTAP suite against the blank
 baseline, serves every configured Edge Function over real HTTP with a run-scoped
 worker capability, executes `supabase/tests/integration/*.test.ts` through the
@@ -156,21 +156,18 @@ actual `/functions/v1/...` gateway, and tears everything down in every outcome.
 Credentials stay in memory; nothing is printed. The lane refuses to target any
 developer-started stack and can never reach a hosted project.
 
-## Pre-launch canonical baseline
+## Current pre-launch migration chain
 
-The zero-user launch database is defined by exactly one migration:
-[`20260821124930_initial_schema.sql`](../../supabase/migrations/20260821124930_initial_schema.sql).
-It creates the final owner-scoped domain schema, RLS and grants, contract-1
-change feed and authoritative snapshot RPC, private Storage media saga,
-server-authoritative monetization, maintenance completion, account-deletion
-recovery, Realtime publication, indexes, triggers, and scheduled retention.
+The repository currently contains the initial schema, three earlier security/function corrections, and four remediation migrations in timestamp order. The remediation boundaries are:
 
-There is no unpublished patch ladder, archive schema, rollout-capability table,
-or second incremental protocol. The one migration is the executable cloud
-baseline; the numbered pgTAP files organize assertions, not migration stages.
-Before any hosted release dependency, verify exact-main migration identity,
-effective ACLs, zero malformed feed rows, service-only feed parity, Advisors,
-and the two-user application/backend integration suite.
+1. authoritative entitlements, completion authorization, copy/move/type-change/history-restore RPCs;
+2. media staging quotas/retry and stage-bound Storage policy;
+3. explicit-user service parity RPC; and
+4. final mutation grants and rejection of client-authored initial plans.
+
+The fourth remediation migration is a compatibility boundary: deploy the compatible Flutter build and convert retained journals/outbox work before applying it to an already-deployed environment. Fresh local environments replay the full chain. Documentation must describe this real chain until an operator explicitly approves the destructive pre-launch squash/reset. If approval is withheld, the forward chain remains canonical permanently.
+
+The protected migration workflow also runs `npm run validate:supabase-parity` after a hosted operation. It requires the protected `SUPABASE_OPERATOR_SERVICE_ROLE_KEY`, enumerates Auth user IDs only in memory through the server-only Admin API, invokes `validate_change_feed_parity(p_user_id)` for each account, and uploads a sanitized report containing aggregate counts and account ordinals only. Zero Auth accounts is an explicit success; an Auth account without its required profile fails validation rather than disappearing from the evidence set.
 
 ## Deployment evidence
 

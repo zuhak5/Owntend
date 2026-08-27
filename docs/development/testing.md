@@ -74,7 +74,7 @@ Functions require formatting, locked type-checking, unit/request-validation test
 
 ### Disposable backend endpoint integration
 
-`npm run test:backend-integration` provisions an isolated, disposable local Supabase stack on shifted ports inside a temporary workspace, replays deterministic fixtures through `supabase db reset`, serves every configured Edge Function over real HTTP, runs `supabase/tests/integration/*.test.ts` against the actual `/functions/v1/...` gateway (including missing/invalid/valid credentials), and tears everything down in every outcome. It requires `npm ci` first and resolves the repository-local Supabase CLI, verifies that its version equals `config/toolchain.json`, and passes that exact executable into every temporary-workspace and background-process call; a global or stale `npx` cache can never select the backend toolchain. The application/backend lane separately drives real Auth, RLS, sync, Storage, invoker-wrapper, and exact-primary-key batch-replay scenarios through PostgREST; it proves duplicate creation replays are skipped idempotently while secondary uniqueness violations remain visible. The runner refuses to run when the repository is linked to a remote project, never targets a developer-started stack, keeps credentials in memory, and prints no secrets. CI executes these lanes in the Google backend workflow.
+`npm run test:backend-integration` provisions an isolated, disposable local Supabase stack on shifted ports inside a temporary workspace, replays the complete migration chain, runs schema lint and all pgTAP files, serves every configured Edge Function over real HTTP, runs `supabase/tests/integration/*.test.ts` against the actual `/functions/v1/...` gateway, and tears everything down in every outcome. The application/backend lane separately drives two authenticated clients through real Auth, RLS, PostgREST, and Storage. It covers unprepared/expired upload denial, live-object delete denial, concurrent stage count/byte quotas, duplicate copy/move idempotency, simultaneous move/type point conservation with a deadlock timeout, validated history-restore replay/conflict, and protected-column/history CRUD denial. Both lanes keep credentials in memory and target loopback only.
 
 ### Browser deletion and Google/Android contract tests
 
@@ -171,7 +171,7 @@ npm run validate:dependency-policy
 npm run validate:google-contracts
 ```
 
-This runs all 20 canonical Node test suites registered in [`tool/test_inventory.mjs`](../../tool/test_inventory.mjs) — the `CANONICAL_NODE_TESTS` list there is authoritative for the count and membership — validates the complete test inventory, evaluates toolchain consistency, checks dependency license policies against the exception registry, and validates static Google/Android release contracts.
+This runs every canonical Node test suite registered in [`tool/test_inventory.mjs`](../../tool/test_inventory.mjs); that list is authoritative for count and membership. The suite includes the sanitized per-account parity operator tool, complete test inventory, toolchain consistency, dependency policy, and static Google/Android release contracts.
 
 ## Focused remediation contracts
 

@@ -954,7 +954,7 @@
   "noRewardAvailable": "لا توجد مكافأة متاحة الآن.",
   "dailyRewardAlreadyClaimed": "تم الحصول على مكافأة إكمال اليوم أو أنها غير متاحة.",
   "pointsWallet": "محفظة النقاط",
-  "pointsRuleExplanation": "يكلف إنشاء مهمة صيانة جديدة نقطة واحدة. إنشاء العناصر ومهام السلامة مجاني دائمًا. لا يكلف إكمال المهام أو تحريرها أي نقاط.",
+  "pointsRuleExplanation": "يكلف إنشاء مهمة صيانة جديدة نقطة واحدة. إنشاء العناصر ومهام السلامة مجاني. قد يتطلب نقل مهمة مجانية إلى عنصر مدفوع أو تغيير نوع العنصر تحصيل استحقاق المهمة الناقص، ولا تُرد النقاط.",
   "recentActivity": "النشاط الأخير",
   "activityUnavailable": "النشاط غير متاح",
   "noPointActivity": "لا يوجد نشاط للنقاط بعد.",
@@ -1056,4 +1056,13 @@
   ,"@recurrenceMonths": {"placeholders": {"count": {"type": "int"}}}
   ,"recurrenceYears": "{count, plural, =1{كل سنة} =2{كل سنتين} few{كل {count} سنوات} many{كل {count} سنة} other{كل {count} سنة}}"
   ,"@recurrenceYears": {"placeholders": {"count": {"type": "int"}}}
+  ,"authoritativeChangeRequiresOnline": "يتطلب هذا التغيير جلسة خادم نشطة. يبقى تعديلك الحالي غير مكتمل."
+  ,"authoritativeChargeChanged": "تغيرت تكلفة النقاط. راجع السعر الأحدث وحاول مرة أخرى."
+  ,"confirmTaskMoveChargeTitle": "استخدام النقاط لنقل المهمة؟"
+  ,"confirmTaskMoveChargeBody": "يتطلب نقل هذه المهمة {count, plural, =1{نقطة واحدة} =2{نقطتين} few{{count} نقاط} many{{count} نقطة} other{{count} نقطة}}. لن تُرد النقاط لاحقًا."
+  ,"@confirmTaskMoveChargeBody": {"placeholders": {"count": {"type": "int"}}}
+  ,"confirmAssetTypeChargeTitle": "استخدام النقاط لتغيير نوع العنصر؟"
+  ,"confirmAssetTypeChargeBody": "يتطلب تغيير نوع هذا العنصر {points} نقطة مقابل {tasks} مهمة مرتبطة، بما فيها المهام المؤرشفة. لن تُرد النقاط لاحقًا."
+  ,"@confirmAssetTypeChargeBody": {"placeholders": {"points": {"type": "int"}, "tasks": {"type": "int"}}}
+  ,"confirmPointChargeAction": "استخدام النقاط"
 }

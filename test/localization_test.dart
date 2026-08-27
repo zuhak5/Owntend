@@ -90,6 +90,23 @@ void main() {
   });
 
   test(
+    'authoritative mutation confirmations are localized in English and Arabic',
+    () {
+      final english = lookupAppLocalizations(const Locale('en'));
+      final arabic = lookupAppLocalizations(const Locale('ar'));
+
+      expect(english.confirmTaskMoveChargeTitle, contains('move task'));
+      expect(english.confirmTaskMoveChargeBody(1), contains('1 point'));
+      expect(english.confirmAssetTypeChargeBody(3, 4), contains('3 points'));
+      expect(english.confirmAssetTypeChargeBody(3, 4), contains('archived'));
+      expect(arabic.confirmTaskMoveChargeTitle, contains('المهمة'));
+      expect(arabic.confirmTaskMoveChargeBody(2), contains('نقطتين'));
+      expect(arabic.confirmAssetTypeChargeBody(3, 4), contains('3'));
+      expect(arabic.confirmAssetTypeChargeBody(3, 4), contains('المؤرشفة'));
+    },
+  );
+
+  test(
     'controlled domain values use localization at presentation boundaries',
     () {
       final taskDetail = File(
@@ -112,6 +129,16 @@ void main() {
         'lib/src/features/assets/presentation/asset_dialogs.dart',
       ).readAsStringSync();
       expect(assetDialogs, contains('assetTypeLabel(context, type)'));
+      expect(assetDialogs, contains('confirmAssetTypeChargeBody'));
+      expect(assetDialogs, contains('offlineCopyDraftMessage'));
+      expect(assetDialogs, contains("'asset_edit_"));
+
+      final maintenanceDialogs = File(
+        'lib/src/features/maintenance/presentation/maintenance_dialogs.dart',
+      ).readAsStringSync();
+      expect(maintenanceDialogs, contains('confirmTaskMoveChargeBody'));
+      expect(maintenanceDialogs, contains('offlineTaskDraftMessage'));
+      expect(maintenanceDialogs, contains("'task_edit_"));
 
       final domainLocalization = File('lib/src/ui/domain_localization.dart')
           .readAsStringSync();

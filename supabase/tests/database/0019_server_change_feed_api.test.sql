@@ -8,8 +8,8 @@ select extensions.plan(16);
 
 -- 1. Check RPC Existence & Function Grants
 select extensions.has_function('public', 'fetch_user_change_feed', ARRAY['bigint', 'integer', 'bigint'], 'fetch_user_change_feed RPC exists');
-select extensions.has_function('public', 'validate_change_feed_parity', ARRAY[]::text[], 'owner-scoped validate_change_feed_parity RPC exists');
-select extensions.hasnt_function('public', 'validate_change_feed_parity', ARRAY['uuid'], 'caller-selected parity RPC was removed');
+select extensions.hasnt_function('public', 'validate_change_feed_parity', ARRAY[]::text[], 'obsolete no-argument parity RPC is absent');
+select extensions.has_function('public', 'validate_change_feed_parity', ARRAY['uuid'], 'operator target-user parity RPC exists');
 
 select extensions.ok(
   not (select has_function_privilege('anon', 'public.fetch_user_change_feed(bigint, integer, bigint)', 'execute')),
@@ -41,7 +41,7 @@ select extensions.throws_ok(
 
 -- 3. Authenticated Paging & High-Water Capture
 set local role authenticated;
-set local "request.jwt.claims" = '{"sub": "00000000-0000-0000-0000-00000000000a"}';
+set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-00000000000a","role":"authenticated"}';
 
 -- Create initial items for User A
 insert into public.areas (user_id, id, name, kind, sort_order, created_at, updated_at, revision)
@@ -98,12 +98,12 @@ select extensions.is(
 
 -- 5. Protected Parity Validator Test
 set local role service_role;
-set local "request.jwt.claims" = '{"sub": "00000000-0000-0000-0000-00000000000a"}';
+set local "request.jwt.claims" = '{"role":"service_role"}';
 
 select extensions.results_eq(
-  $$ select is_parity from public.validate_change_feed_parity() where entity_type = 'area' $$,
+  $$ select is_parity from public.validate_change_feed_parity('00000000-0000-0000-0000-00000000000a') where entity_type = 'area' $$,
   $$ values (true) $$,
-  'protected parity validator derives User A and matches change feed net count'
+  'protected parity validator targets User A without an impersonated subject'
 );
 
 -- 6. Resnapshot Required Test

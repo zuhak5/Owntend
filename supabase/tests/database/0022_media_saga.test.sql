@@ -69,9 +69,9 @@ select extensions.lives_ok(
   'valid upload preparation succeeds before object upload'
 );
 select extensions.ok(
-  (select staging_path like '00000000-0000-0000-0000-00000000000a/media/photo-a.jpg'
+  (select staging_path ~ '^00000000-0000-0000-0000-00000000000a/media/[0-9a-f-]+/0[.]jpg$'
    from public.media_staging_objects where idempotency_key = 'prepare-upload-0001'),
-  'the server issues an immutable owner-scoped staging path'
+  'the server issues an opaque owner-scoped attempt path'
 );
 select extensions.is(
   public.prepare_asset_photo_upload('asset-a', 'photo-a', 1024, 'image/jpeg', repeat('a', 64), 'prepare-upload-0001') ->> 'digest_verification',

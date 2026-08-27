@@ -3399,7 +3399,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get pointsRuleExplanation =>
-      'Creating a new maintenance task costs 1 point. Creating items and safety tasks is always free. Completing and editing tasks never costs points.';
+      'Creating a new maintenance task costs 1 point. Creating items and safety tasks is free. Moving a free task to a paid item or changing an item type can charge the missing task entitlement; no refunds are issued.';
 
   @override
   String get recentActivity => 'Recent activity';
@@ -3749,4 +3749,37 @@ class AppLocalizationsEn extends AppLocalizations {
     );
     return '$_temp0';
   }
+
+  @override
+  String get authoritativeChangeRequiresOnline =>
+      'This change needs an active server session. Your current edit remains unfinished.';
+
+  @override
+  String get authoritativeChargeChanged =>
+      'The point cost changed. Review the latest quote and try again.';
+
+  @override
+  String get confirmTaskMoveChargeTitle => 'Use points to move task?';
+
+  @override
+  String confirmTaskMoveChargeBody(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count points',
+      one: '1 point',
+    );
+    return 'Moving this task requires $_temp0. No refund is issued later.';
+  }
+
+  @override
+  String get confirmAssetTypeChargeTitle => 'Use points to change item type?';
+
+  @override
+  String confirmAssetTypeChargeBody(int points, int tasks) {
+    return 'Changing this item type requires $points points for $tasks attached tasks, including archived tasks. No refund is issued later.';
+  }
+
+  @override
+  String get confirmPointChargeAction => 'Use points';
 }

@@ -10,12 +10,12 @@ select has_table(
   'account deletion cleanup jobs are private'
 );
 select ok(
-  not has_schema_privilege(
+  has_schema_privilege(
     'authenticated',
     'owntend_private',
     'USAGE'
   ),
-  'authenticated users cannot access the private schema'
+  'authenticated invoker wrappers can resolve the private schema'
 );
 select ok(
   not has_table_privilege(
@@ -206,7 +206,7 @@ select is(
         coalesce(qual, '') || ' ' || coalesce(with_check, '')
       ) like '%current_owntend_session_is_active%'
   ),
-  3,
+  2,
   'all user-media policies reject revoked sessions'
 );
 

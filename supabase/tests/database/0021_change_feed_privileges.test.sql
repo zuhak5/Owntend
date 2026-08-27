@@ -10,10 +10,10 @@ select extensions.plan(23);
 -- a caller-selected user id.
 select extensions.has_function('owntend_private', 'fn_log_server_change_feed', ARRAY[]::text[], 'private feed trigger exists');
 select extensions.has_function('public', 'fetch_user_change_feed', ARRAY['bigint', 'integer', 'bigint'], 'feed pull RPC exists');
-select extensions.has_function('public', 'validate_change_feed_parity', ARRAY[]::text[], 'operator parity RPC exists');
+select extensions.has_function('public', 'validate_change_feed_parity', ARRAY['uuid'], 'operator parity RPC exists');
 select extensions.has_function('public', 'get_user_change_feed_watermark', ARRAY[]::text[], 'owner-scoped watermark RPC exists');
 select extensions.hasnt_function('public', 'fn_log_server_change_feed', ARRAY[]::text[], 'the trigger is absent from the Data API schema');
-select extensions.hasnt_function('public', 'validate_change_feed_parity', ARRAY['uuid'], 'caller-selected parity overload is absent');
+select extensions.hasnt_function('public', 'validate_change_feed_parity', ARRAY[]::text[], 'obsolete no-argument parity overload is absent');
 select extensions.hasnt_function('public', 'get_user_change_feed_watermark', ARRAY['uuid'], 'caller-selected watermark overload is absent');
 
 -- Client-facing feed RPCs do not need definer privileges because the underlying
@@ -23,7 +23,7 @@ select extensions.ok(
   'fetch_user_change_feed is SECURITY INVOKER'
 );
 select extensions.ok(
-  not (select p.prosecdef from pg_proc p where p.oid = 'public.validate_change_feed_parity()'::regprocedure),
+  not (select p.prosecdef from pg_proc p where p.oid = 'public.validate_change_feed_parity(uuid)'::regprocedure),
   'validate_change_feed_parity is SECURITY INVOKER'
 );
 select extensions.ok(
@@ -41,7 +41,7 @@ select extensions.ok(
   'anon cannot execute feed pull RPC'
 );
 select extensions.ok(
-  not has_function_privilege('anon', 'public.validate_change_feed_parity()', 'execute'),
+  not has_function_privilege('anon', 'public.validate_change_feed_parity(uuid)', 'execute'),
   'anon cannot execute parity RPC'
 );
 select extensions.ok(
@@ -60,7 +60,7 @@ select extensions.ok(
   'authenticated can execute feed pull RPC'
 );
 select extensions.ok(
-  not has_function_privilege('authenticated', 'public.validate_change_feed_parity()', 'execute'),
+  not has_function_privilege('authenticated', 'public.validate_change_feed_parity(uuid)', 'execute'),
   'authenticated cannot execute the operator parity RPC'
 );
 select extensions.ok(
@@ -79,7 +79,7 @@ select extensions.ok(
   'service_role cannot execute feed pull RPC'
 );
 select extensions.ok(
-  has_function_privilege('service_role', 'public.validate_change_feed_parity()', 'execute'),
+  has_function_privilege('service_role', 'public.validate_change_feed_parity(uuid)', 'execute'),
   'service_role can execute the operator parity RPC'
 );
 select extensions.ok(

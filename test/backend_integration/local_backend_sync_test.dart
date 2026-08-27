@@ -53,6 +53,11 @@ Future<SupabaseClient> _signedInClient(String email, String password) async {
   return client;
 }
 
+Map<String, dynamic> _signedOperation(Map<String, dynamic> unsigned) => {
+  ...unsigned,
+  'request_hash': sha256.convert(utf8.encode(jsonEncode(unsigned))).toString(),
+};
+
 void main() {
   if (_url.isEmpty || _anonKey.isEmpty || _serviceRoleKey.isEmpty) {
     test(
@@ -289,102 +294,715 @@ void main() {
     },
   );
 
-  test(
-    'prepare-upload-finalize verifies Storage facts and owner isolation',
-    () async {
-      await userADevice1.from('rooms').insert({
-        'user_id': userAId,
-        'id': 'backend-room',
-        'area_id': 'backend-area',
-        'name': 'Backend Room',
-        'sort_order': 0,
-      });
-      // Asset creation has no direct client INSERT authority (MON-001): the
-      // fixture must use the same server-authoritative aggregate RPC the app
-      // uses, so the baseline privilege revocation is exercised end to end.
-      final operationId = const Uuid().v4();
-      final unsignedOperation = <String, dynamic>{
-        'operation_id': operationId,
-        'asset': {
-          'id': 'backend-asset',
-          'room_id': 'backend-room',
-          'name': 'Backend Asset',
-          'asset_type': 'general',
+  test('prepare-upload-finalize verifies Storage facts and owner isolation', () async {
+    await userADevice1.from('rooms').insert({
+      'user_id': userAId,
+      'id': 'backend-room',
+      'area_id': 'backend-area',
+      'name': 'Backend Room',
+      'sort_order': 0,
+    });
+    // Asset creation has no direct client INSERT authority (MON-001): the
+    // fixture must use the same server-authoritative aggregate RPC the app
+    // uses, so the baseline privilege revocation is exercised end to end.
+    final operationId = const Uuid().v4();
+    final unsignedOperation = <String, dynamic>{
+      'operation_id': operationId,
+      'asset': {
+        'id': 'backend-asset',
+        'room_id': 'backend-room',
+        'name': 'Backend Asset',
+        'asset_type': 'general',
+      },
+      'details': <String, dynamic>{},
+      'initial_plans': <Map<String, dynamic>>[],
+    };
+    await userADevice1.rpc<dynamic>(
+      'create_asset',
+      params: {
+        'p_operation': {
+          ...unsignedOperation,
+          'request_hash': sha256
+              .convert(utf8.encode(jsonEncode(unsignedOperation)))
+              .toString(),
         },
-        'details': <String, dynamic>{},
-        'initial_plans': <Map<String, dynamic>>[],
-      };
-      await userADevice1.rpc<dynamic>(
-        'create_asset',
-        params: {
-          'p_operation': {
-            ...unsignedOperation,
-            'request_hash': sha256
-                .convert(utf8.encode(jsonEncode(unsignedOperation)))
-                .toString(),
-          },
-        },
-      );
+      },
+    );
 
-      const digest =
-          '9f64a747e1b97f131fabb6b447296c9b6f0201e79fb3c5356e6c77e89b6a806a';
-      final prepared = Map<String, dynamic>.from(
-        await userADevice1.rpc<Map<String, dynamic>>(
-          'prepare_asset_photo_upload',
-          params: {
-            'p_asset_id': 'backend-asset',
-            'p_photo_id': 'backend-photo',
-            'p_object_size': 4,
-            'p_mime_type': 'image/jpeg',
-            'p_client_sha256_digest': digest,
-            'p_idempotency_key': 'local-backend-media-0001',
-          },
-        ) as Map,
-      );
-      final stagingPath = prepared['staging_path'] as String;
-      final stagingId = prepared['staging_id'] as String;
-      final bytes = Uint8List.fromList(const [0xff, 0xd8, 0xff, 0xd9]);
-      await userADevice1.storage
+    const digest =
+        '9f64a747e1b97f131fabb6b447296c9b6f0201e79fb3c5356e6c77e89b6a806a';
+    final prepared = Map<String, dynamic>.from(
+      await userADevice1.rpc<Map<String, dynamic>>(
+        'prepare_asset_photo_upload',
+        params: {
+          'p_asset_id': 'backend-asset',
+          'p_photo_id': 'backend-photo',
+          'p_object_size': 4,
+          'p_mime_type': 'image/jpeg',
+          'p_client_sha256_digest': digest,
+          'p_idempotency_key': 'local-backend-media-0001',
+        },
+      ) as Map,
+    );
+    final stagingPath = prepared['staging_path'] as String;
+    final stagingId = prepared['staging_id'] as String;
+    final bytes = Uint8List.fromList(const [0xff, 0xd8, 0xff, 0xd9]);
+    await expectLater(
+      userADevice1.storage
           .from('user-media')
           .uploadBinary(
-            stagingPath,
+            '$userAId/media/unprepared/0.jpg',
             bytes,
             fileOptions: const FileOptions(
               contentType: 'image/jpeg',
               upsert: false,
             ),
-          );
+          ),
+      throwsA(isA<StorageException>()),
+    );
+    await userADevice1.storage
+        .from('user-media')
+        .uploadBinary(
+          stagingPath,
+          bytes,
+          fileOptions: const FileOptions(
+            contentType: 'image/jpeg',
+            upsert: false,
+          ),
+        );
 
-      final finalized = Map<String, dynamic>.from(
-        await userADevice1.rpc<Map<String, dynamic>>(
-          'finalize_asset_photo_upload',
-          params: {
-            'p_staging_id': stagingId,
-            'p_asset_id': 'backend-asset',
-            'p_photo_id': 'backend-photo',
-            'p_expected_revision': 1,
+    final finalized = Map<String, dynamic>.from(
+      await userADevice1.rpc<Map<String, dynamic>>(
+        'finalize_asset_photo_upload',
+        params: {
+          'p_staging_id': stagingId,
+          'p_asset_id': 'backend-asset',
+          'p_photo_id': 'backend-photo',
+          'p_expected_revision': 1,
+        },
+      ) as Map,
+    );
+    expect(finalized['digest_verification'], 'client_advisory');
+    expect(
+      await userADevice2.storage.from('user-media').download(stagingPath),
+      bytes,
+    );
+    await expectLater(
+      userB.storage.from('user-media').download(stagingPath),
+      throwsA(isA<StorageException>()),
+    );
+    // Storage DELETE intentionally exposes no matching rows when the caller
+    // lacks a DELETE policy. The HTTP API therefore returns an empty result
+    // instead of an authorization exception; prove denial by checking both
+    // the result and the still-downloadable live object.
+    expect(
+      await userADevice1.storage.from('user-media').remove([stagingPath]),
+      isEmpty,
+    );
+    expect(
+      await userADevice2.storage.from('user-media').download(stagingPath),
+      bytes,
+    );
+    await expectLater(
+      userB.rpc<void>(
+        'prepare_asset_photo_upload',
+        params: {
+          'p_asset_id': 'backend-asset',
+          'p_photo_id': 'cross-user-photo',
+          'p_object_size': 4,
+          'p_mime_type': 'image/jpeg',
+          'p_client_sha256_digest': digest,
+          'p_idempotency_key': 'cross-user-media-0001',
+        },
+      ),
+      throwsA(isA<PostgrestException>()),
+    );
+
+    final expiring = Map<String, dynamic>.from(
+      await userADevice1.rpc<Map<String, dynamic>>(
+        'prepare_asset_photo_upload',
+        params: {
+          'p_asset_id': 'backend-asset',
+          'p_photo_id': 'backend-expired-photo',
+          'p_object_size': 4,
+          'p_mime_type': 'image/jpeg',
+          'p_client_sha256_digest': digest,
+          'p_idempotency_key': 'local-backend-media-expired-0001',
+        },
+      ) as Map,
+    );
+    await admin
+        .from('media_staging_objects')
+        .update({
+          'created_at': DateTime.now()
+              .toUtc()
+              .subtract(const Duration(days: 2))
+              .toIso8601String(),
+          'expires_at': DateTime.now()
+              .toUtc()
+              .subtract(const Duration(days: 1))
+              .toIso8601String(),
+        })
+        .eq('id', expiring['staging_id'] as String);
+    final refreshed = Map<String, dynamic>.from(
+      await userADevice2.rpc<Map<String, dynamic>>(
+        'prepare_asset_photo_upload',
+        params: {
+          'p_asset_id': 'backend-asset',
+          'p_photo_id': 'backend-expired-photo',
+          'p_object_size': 4,
+          'p_mime_type': 'image/jpeg',
+          'p_client_sha256_digest': digest,
+          'p_idempotency_key': 'local-backend-media-expired-0001',
+        },
+      ) as Map,
+    );
+    expect(refreshed['staging_id'], expiring['staging_id']);
+    expect(refreshed['attempt'], 1);
+    expect(refreshed['staging_path'], isNot(expiring['staging_path']));
+    await expectLater(
+      userADevice1.storage
+          .from('user-media')
+          .uploadBinary(
+            expiring['staging_path']! as String,
+            bytes,
+            fileOptions: const FileOptions(
+              contentType: 'image/jpeg',
+              upsert: false,
+            ),
+          ),
+      throwsA(isA<StorageException>()),
+    );
+    await userADevice1.storage
+        .from('user-media')
+        .uploadBinary(
+          refreshed['staging_path']! as String,
+          bytes,
+          fileOptions: const FileOptions(
+            contentType: 'image/jpeg',
+            upsert: false,
+          ),
+        );
+
+    final identicalPrepares = await Future.wait([
+      for (var index = 0; index < 50; index++)
+        (index.isEven ? userADevice1 : userADevice2)
+            .rpc<Map<String, dynamic>>(
+              'prepare_asset_photo_upload',
+              params: {
+                'p_asset_id': 'backend-asset',
+                'p_photo_id': 'backend-identical-photo',
+                'p_object_size': 4,
+                'p_mime_type': 'image/jpeg',
+                'p_client_sha256_digest': digest,
+                'p_idempotency_key': 'local-backend-media-identical-0001',
+              },
+            )
+            .then((value) => Map<String, dynamic>.from(value)),
+    ]);
+    expect(
+      identicalPrepares.map((result) => result['staging_id']).toSet(),
+      hasLength(1),
+    );
+    expect(
+      identicalPrepares.map((result) => result['staging_path']).toSet(),
+      hasLength(1),
+    );
+    final identicalRows = await admin
+        .from('media_staging_objects')
+        .select('id')
+        .eq('user_id', userAId)
+        .eq('idempotency_key', 'local-backend-media-identical-0001');
+    expect(identicalRows, hasLength(1));
+
+    await admin
+        .from('media_staging_objects')
+        .update({'status': 'failed'})
+        .eq('user_id', userAId)
+        .eq('status', 'staged');
+    final stageResults = await Future.wait([
+      for (var index = 0; index < 21; index++)
+        userADevice1
+            .rpc<Map<String, dynamic>>(
+              'prepare_asset_photo_upload',
+              params: {
+                'p_asset_id': 'backend-asset',
+                'p_photo_id': 'quota-photo-$index',
+                'p_object_size': 1,
+                'p_mime_type': 'image/jpeg',
+                'p_client_sha256_digest': digest,
+                'p_idempotency_key':
+                    'local-backend-quota-${index.toString().padLeft(4, '0')}',
+              },
+            )
+            .then<Object>((value) => value)
+            .catchError((Object error) => error),
+    ]);
+    expect(stageResults.whereType<PostgrestException>(), hasLength(1));
+    expect(stageResults.whereType<Map<String, dynamic>>(), hasLength(20));
+
+    await admin
+        .from('media_staging_objects')
+        .update({'status': 'failed'})
+        .eq('user_id', userAId)
+        .eq('status', 'staged');
+    final byteQuotaResults = await Future.wait([
+      for (var index = 0; index < 11; index++)
+        userADevice2
+            .rpc<Map<String, dynamic>>(
+              'prepare_asset_photo_upload',
+              params: {
+                'p_asset_id': 'backend-asset',
+                'p_photo_id': 'byte-quota-photo-$index',
+                'p_object_size': 10 * 1024 * 1024,
+                'p_mime_type': 'image/jpeg',
+                'p_client_sha256_digest': digest,
+                'p_idempotency_key':
+                    'local-backend-byte-quota-${index.toString().padLeft(4, '0')}',
+              },
+            )
+            .then<Object>((value) => value)
+            .catchError((Object error) => error),
+    ]);
+    expect(byteQuotaResults.whereType<PostgrestException>(), hasLength(1));
+    expect(byteQuotaResults.whereType<Map<String, dynamic>>(), hasLength(10));
+  });
+
+  test('authoritative copy, move, and type changes conserve points under concurrency', () async {
+    await userADevice1.from('areas').upsert({
+      'user_id': userAId,
+      'id': 'economy-area',
+      'name': 'Economy Area',
+      'kind': 'indoor',
+      'sort_order': 0,
+    });
+    await userADevice1.from('rooms').upsert({
+      'user_id': userAId,
+      'id': 'economy-room',
+      'area_id': 'economy-area',
+      'name': 'Economy Room',
+      'sort_order': 0,
+    });
+    final sourceAssetOperation = _signedOperation({
+      'operation_id': const Uuid().v4(),
+      'asset': {
+        'id': 'economy-safety-source',
+        'room_id': 'economy-room',
+        'name': 'Smoke alarm',
+        'asset_type': 'safety',
+      },
+      'details': <String, dynamic>{},
+      'initial_plans': <Map<String, dynamic>>[],
+    });
+    final targetAssetOperation = _signedOperation({
+      'operation_id': const Uuid().v4(),
+      'asset': {
+        'id': 'economy-general-target',
+        'room_id': 'economy-room',
+        'name': 'General item',
+        'asset_type': 'general',
+      },
+      'details': <String, dynamic>{},
+      'initial_plans': <Map<String, dynamic>>[],
+    });
+    await userADevice1.rpc<void>(
+      'create_asset',
+      params: {'p_operation': sourceAssetOperation},
+    );
+    await userADevice1.rpc<void>(
+      'create_asset',
+      params: {'p_operation': targetAssetOperation},
+    );
+    final taskOperation = _signedOperation({
+      'operation_id': const Uuid().v4(),
+      'plan': {
+        'id': 'economy-source-task',
+        'asset_id': 'economy-safety-source',
+        'title': 'Test alarm',
+        'recurrence_interval': 1,
+        'recurrence_unit': 'months',
+        'priority': 'high',
+        'next_due_date': '2026-12-01T00:00:00Z',
+      },
+    });
+    await userADevice1.rpc<void>(
+      'create_task_with_point_debit',
+      params: {'p_operation': taskOperation},
+    );
+
+    final copyOperation = _signedOperation({
+      'operation_id': const Uuid().v4(),
+      'source_asset_id': 'economy-safety-source',
+      'target_asset_id': 'economy-copy-target',
+      'destination_room_id': 'economy-room',
+      'include_tasks': true,
+      'plan_id_map': {'economy-source-task': 'economy-copy-task'},
+    });
+    final copyResults = await Future.wait([
+      userADevice1.rpc<Map<String, dynamic>>(
+        'copy_asset',
+        params: {'p_operation': copyOperation},
+      ),
+      userADevice2.rpc<Map<String, dynamic>>(
+        'copy_asset',
+        params: {'p_operation': copyOperation},
+      ),
+    ]);
+    expect(
+      copyResults.where((result) => result['already_processed'] == false),
+      hasLength(1),
+    );
+    expect(
+      await userADevice1
+          .from('assets')
+          .select('id')
+          .eq('id', 'economy-copy-target'),
+      hasLength(1),
+    );
+    expect(
+      await userADevice1
+          .from('maintenance_plans')
+          .select('id')
+          .eq('id', 'economy-copy-task'),
+      hasLength(1),
+    );
+
+    final walletBefore = Map<String, dynamic>.from(
+      await userADevice1
+          .from('point_wallets')
+          .select('balance')
+          .eq('user_id', userAId)
+          .single(),
+    );
+    final quote = Map<String, dynamic>.from(
+      await userADevice1.rpc<Map<String, dynamic>>(
+        'quote_maintenance_plan_move',
+        params: {
+          'p_plan_id': 'economy-copy-task',
+          'p_target_asset_id': 'economy-general-target',
+        },
+      ) as Map,
+    );
+    expect(quote['charge'], 1);
+    final moveOperation = _signedOperation({
+      'operation_id': const Uuid().v4(),
+      'plan_id': 'economy-copy-task',
+      'target_asset_id': 'economy-general-target',
+      'expected_plan_revision': quote['plan_revision'],
+      'max_charge': quote['charge'],
+    });
+    final moveResults = await Future.wait([
+      userADevice1.rpc<Map<String, dynamic>>(
+        'move_maintenance_plan_with_point_delta',
+        params: {'p_operation': moveOperation},
+      ),
+      userADevice2.rpc<Map<String, dynamic>>(
+        'move_maintenance_plan_with_point_delta',
+        params: {'p_operation': moveOperation},
+      ),
+    ]);
+    expect(
+      moveResults.where((result) => result['already_processed'] == false),
+      hasLength(1),
+    );
+    final walletAfter = Map<String, dynamic>.from(
+      await userADevice1
+          .from('point_wallets')
+          .select('balance')
+          .eq('user_id', userAId)
+          .single(),
+    );
+    expect(walletAfter['balance'], (walletBefore['balance'] as int) - 1);
+    await expectLater(
+      userADevice1
+          .from('maintenance_plans')
+          .update({'asset_id': 'economy-safety-source'})
+          .eq('id', 'economy-copy-task'),
+      throwsA(isA<PostgrestException>()),
+    );
+    await expectLater(
+      userADevice1
+          .from('assets')
+          .update({'asset_type': 'safety'})
+          .eq('id', 'economy-general-target'),
+      throwsA(isA<PostgrestException>()),
+    );
+
+    await userADevice1.rpc<void>(
+      'create_asset',
+      params: {
+        'p_operation': _signedOperation({
+          'operation_id': const Uuid().v4(),
+          'asset': {
+            'id': 'economy-race-safety',
+            'room_id': 'economy-room',
+            'name': 'Race alarm',
+            'asset_type': 'safety',
           },
-        ) as Map,
+          'details': <String, dynamic>{},
+          'initial_plans': <Map<String, dynamic>>[],
+        }),
+      },
+    );
+    await userADevice1.rpc<void>(
+      'create_task_with_point_debit',
+      params: {
+        'p_operation': _signedOperation({
+          'operation_id': const Uuid().v4(),
+          'plan': {
+            'id': 'economy-race-task',
+            'asset_id': 'economy-race-safety',
+            'title': 'Race alarm test',
+            'recurrence_interval': 1,
+            'recurrence_unit': 'months',
+            'priority': 'high',
+            'next_due_date': '2027-01-01T00:00:00Z',
+          },
+        }),
+      },
+    );
+    final raceMoveQuote = Map<String, dynamic>.from(
+      await userADevice1.rpc<Map<String, dynamic>>(
+        'quote_maintenance_plan_move',
+        params: {
+          'p_plan_id': 'economy-race-task',
+          'p_target_asset_id': 'economy-race-safety',
+        },
+      ) as Map,
+    );
+    final raceTypeQuote = Map<String, dynamic>.from(
+      await userADevice1.rpc<Map<String, dynamic>>(
+        'quote_asset_type_change',
+        params: {
+          'p_asset_id': 'economy-race-safety',
+          'p_target_type': 'general',
+        },
+      ) as Map,
+    );
+    expect(raceMoveQuote['charge'], 0);
+    expect(raceTypeQuote['charge'], 1);
+    final raceBalanceBefore = Map<String, dynamic>.from(
+      await userADevice1
+          .from('point_wallets')
+          .select('balance')
+          .eq('user_id', userAId)
+          .single(),
+    );
+    final raceMove = _signedOperation({
+      'operation_id': const Uuid().v4(),
+      'plan_id': 'economy-race-task',
+      'target_asset_id': 'economy-race-safety',
+      'expected_plan_revision': raceMoveQuote['plan_revision'],
+      'max_charge': raceMoveQuote['charge'],
+    });
+    final raceType = _signedOperation({
+      'operation_id': const Uuid().v4(),
+      'asset_id': 'economy-race-safety',
+      'target_type': 'general',
+      'details': <String, dynamic>{},
+      'expected_asset_revision': raceTypeQuote['asset_revision'],
+      'max_charge': raceTypeQuote['charge'],
+    });
+    final raceResults = await Future.wait([
+      userADevice1.rpc<Map<String, dynamic>>(
+        'move_maintenance_plan_with_point_delta',
+        params: {'p_operation': raceMove},
+      ),
+      userADevice2.rpc<Map<String, dynamic>>(
+        'change_asset_type_with_point_delta',
+        params: {'p_operation': raceType},
+      ),
+    ]).timeout(const Duration(seconds: 15));
+    expect(
+      raceResults.map((result) => result['status']),
+      everyElement('applied'),
+    );
+    expect(
+      raceResults.fold<int>(
+        0,
+        (total, result) => total + (result['charged'] as int),
+      ),
+      1,
+    );
+    final raceBalanceAfter = Map<String, dynamic>.from(
+      await userADevice1
+          .from('point_wallets')
+          .select('balance')
+          .eq('user_id', userAId)
+          .single(),
+    );
+    expect(
+      raceBalanceAfter['balance'],
+      (raceBalanceBefore['balance'] as int) - 1,
+    );
+    expect(
+      (await userADevice1
+          .from('maintenance_plans')
+          .select('asset_id')
+          .eq('id', 'economy-race-task')
+          .single())['asset_id'],
+      'economy-general-target',
+    );
+    expect(
+      (await userADevice1
+          .from('assets')
+          .select('asset_type')
+          .eq('id', 'economy-race-safety')
+          .single())['asset_type'],
+      'general',
+    );
+  });
+
+  test(
+    'maintenance history restore merges exact rows and preserves conflicts',
+    () async {
+      await userADevice1.from('areas').upsert({
+        'user_id': userAId,
+        'id': 'restore-api-area',
+        'name': 'Restore API Area',
+        'kind': 'indoor',
+        'sort_order': 0,
+      });
+      await userADevice1.from('rooms').upsert({
+        'user_id': userAId,
+        'id': 'restore-api-room',
+        'area_id': 'restore-api-area',
+        'name': 'Restore API Room',
+        'sort_order': 0,
+      });
+      await userADevice1.rpc<void>(
+        'create_asset',
+        params: {
+          'p_operation': _signedOperation({
+            'operation_id': const Uuid().v4(),
+            'asset': {
+              'id': 'restore-api-asset',
+              'room_id': 'restore-api-room',
+              'name': 'Restore API Asset',
+              'asset_type': 'general',
+            },
+            'details': <String, dynamic>{},
+            'initial_plans': <Map<String, dynamic>>[],
+          }),
+        },
       );
-      expect(finalized['digest_verification'], 'client_advisory');
-      expect(
-        await userADevice2.storage.from('user-media').download(stagingPath),
-        bytes,
+      await userADevice1.rpc<void>(
+        'create_task_with_point_debit',
+        params: {
+          'p_operation': _signedOperation({
+            'operation_id': const Uuid().v4(),
+            'plan': {
+              'id': 'restore-api-plan',
+              'asset_id': 'restore-api-asset',
+              'title': 'Restore plan',
+              'recurrence_interval': 1,
+              'recurrence_unit': 'months',
+              'priority': 'medium',
+              'next_due_date': '2026-12-01T00:00:00Z',
+            },
+          }),
+        },
       );
-      await expectLater(
-        userB.storage.from('user-media').download(stagingPath),
-        throwsA(isA<StorageException>()),
+      final plan = Map<String, dynamic>.from(
+        await userADevice1
+            .from('maintenance_plans')
+            .select(
+              'id,asset_id,recurrence_interval,recurrence_unit,next_due_date,is_enabled,archived_at,revision',
+            )
+            .eq('id', 'restore-api-plan')
+            .single(),
       );
-      await expectLater(
-        userB.rpc<void>(
-          'prepare_asset_photo_upload',
+      final restoreOperation = _signedOperation({
+        'version': 1,
+        'operation_id': const Uuid().v4(),
+        'plan_id': 'restore-api-plan',
+        'expected_plan_revision': plan['revision'],
+        'plan_snapshot': {
+          'asset_id': plan['asset_id'],
+          'recurrence_interval': plan['recurrence_interval'],
+          'recurrence_unit': plan['recurrence_unit'],
+          'next_due_date': plan['next_due_date'],
+          'is_enabled': plan['is_enabled'],
+          'archived_at': plan['archived_at'],
+        },
+        'records': [
+          {
+            'id': 'restore-api-record',
+            'operation_id': 'restore-api-record',
+            'plan_id': 'restore-api-plan',
+            'due_date': '2026-11-01T00:00:00Z',
+            'completed_at': '2026-11-02T00:00:00Z',
+            'notes': 'exact backup note',
+            'created_at': '2026-11-02T00:00:00Z',
+            'revision': 1,
+          },
+        ],
+      });
+      final results = await Future.wait([
+        userADevice1.rpc<Map<String, dynamic>>(
+          'restore_maintenance_history',
           params: {
-            'p_asset_id': 'backend-asset',
-            'p_photo_id': 'cross-user-photo',
-            'p_object_size': 4,
-            'p_mime_type': 'image/jpeg',
-            'p_client_sha256_digest': digest,
-            'p_idempotency_key': 'cross-user-media-0001',
+            'p_operation': restoreOperation,
+            'p_device_id': 'restore-device-a',
+          },
+        ),
+        userADevice2.rpc<Map<String, dynamic>>(
+          'restore_maintenance_history',
+          params: {
+            'p_operation': restoreOperation,
+            'p_device_id': 'restore-device-b',
+          },
+        ),
+      ]);
+      expect(results.every((result) => result['status'] == 'applied'), isTrue);
+      expect(
+        results.where((result) => result['already_processed'] == false),
+        hasLength(1),
+      );
+      expect(
+        await userADevice1
+            .from('maintenance_records')
+            .select('id')
+            .eq('id', 'restore-api-record'),
+        hasLength(1),
+      );
+
+      final conflictOperation = _signedOperation({
+        ...Map<String, dynamic>.from(restoreOperation)
+          ..remove('request_hash')
+          ..['operation_id'] = const Uuid().v4(),
+        'records': [
+          {
+            ...(restoreOperation['records']! as List).single as Map,
+            'notes': 'divergent backup note',
+          },
+        ],
+      });
+      final conflict = await userADevice1.rpc<Map<String, dynamic>>(
+        'restore_maintenance_history',
+        params: {
+          'p_operation': conflictOperation,
+          'p_device_id': 'restore-device-a',
+        },
+      );
+      expect(conflict['status'], 'conflict');
+      expect(conflict['conflict_reason'], 'history_record_conflict');
+      await expectLater(
+        userADevice1.from('maintenance_records').insert({
+          'user_id': userAId,
+          'id': 'direct-history-bypass',
+          'plan_id': 'restore-api-plan',
+          'due_date': '2026-11-01T00:00:00Z',
+          'completed_at': '2026-11-02T00:00:00Z',
+        }),
+        throwsA(isA<PostgrestException>()),
+      );
+      await expectLater(
+        userB.rpc<Map<String, dynamic>>(
+          'restore_maintenance_history',
+          params: {
+            'p_operation': restoreOperation,
+            'p_device_id': 'cross-user-device',
           },
         ),
         throwsA(isA<PostgrestException>()),
