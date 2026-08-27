@@ -189,7 +189,7 @@ Install the resulting dev release APK on a test device. Because this is `--dry-r
 
 ### Publish a release
 
-`Shorebird Android Release` is the only release build rail. It always creates one canonical AAB. Production requires exact current `main`, the exact backend validation gate, the `production` approval, and `SHOREBIRD_PRODUCTION_RELEASES_ENABLED=true`. The protected downstream job derives the universal and three single-ABI VersionDeck APKs from that exact AAB using pinned Bundletool; it never recompiles Flutter.
+`Shorebird Android Release` is the only release build rail. It always creates one canonical AAB. Production requires exact current `main`, the exact backend validation gate, explicit operator authorization, the branch-restricted `production` environment, and `SHOREBIRD_PRODUCTION_RELEASES_ENABLED=true`. The environment does not require a separate deployment review. The protected downstream job derives the universal and three single-ABI VersionDeck APKs from that exact AAB using pinned Bundletool; it never recompiles Flutter.
 
 Example non-production publication after authorization:
 
@@ -197,7 +197,7 @@ Example non-production publication after authorization:
 gh workflow run "Shorebird Android Release" --ref main -f flavor=staging -f operation=publish -f source_sha="$(git rev-parse origin/main)"
 ```
 
-No workflow uploads to Play, mutates Sentry, deploys VersionDeck, or creates a GitHub Release.
+The release workflow does not upload to Play or mutate Sentry. A successful production publication automatically triggers independent APK verification, the verified GitHub Release, and VersionDeck deployment.
 
 #### Publish a production patch (Direct-to-Stable)
 
@@ -212,7 +212,7 @@ Owntend production patches publish **directly to track `stable`**. Because there
    gh workflow run "Shorebird Android Patch" --ref "release/1.0.0+4" -f flavor=prod -f operation=validate -f release_version="1.0.0+4" -f release_base_sha="BASE_SHA" -f candidate_sha="CANDIDATE_SHA"
    ```
 
-5. Review the static eligibility JSON and Shorebird dry-run. After explicit authorization, production approval, and `SHOREBIRD_PRODUCTION_PATCHES_ENABLED=true`, rerun with `operation=publish`. Publication is accepted only from the exact tip of `release/<release_version>`, and the wrapper publishes directly to track `stable`; it never uses `--allow-native-diffs` or `--confirm`. The evidence artifact preserves both the dry-run record and the published patch number with `mode: published-directly-to-stable`.
+5. Review the static eligibility JSON and Shorebird dry-run. After explicit operator authorization and `SHOREBIRD_PRODUCTION_PATCHES_ENABLED=true`, rerun with `operation=publish`. The branch-restricted `production` environment supplies scoped credentials without a separate deployment review. Publication is accepted only from the exact tip of `release/<release_version>`, and the wrapper publishes directly to track `stable`; it never uses `--allow-native-diffs` or `--confirm`. The evidence artifact preserves both the dry-run record and the published patch number with `mode: published-directly-to-stable`.
 
 ### Verify on a physical device
 
@@ -258,10 +258,10 @@ Sentry monitors release health tagged by `shorebird_patch_number` (`base` or pat
 - **Alert Rule 2 (Patch New Issue Spike)**: Triggers when >= 5 new unhandled events with tag `shorebird_patch_number` occur within 1 hour of patch deployment.
 - **Rollback Procedure**: When an alert fires on a newly promoted patch, operators immediately disable/rollback the patch in the Shorebird Console to return all clients safely to the previous stable patch.
 
-VersionDeck verifies the unified Shorebird release workflow provenance. Its universal and ABI APKs come from the same canonical AAB. `Verify Production APK Artifact Set` ignores validation/non-production runs, then independently checks a published production artifact set. VersionDeck remains disabled until its separate verified-publication procedure is authorized.
+VersionDeck verifies the unified Shorebird release workflow provenance. Its universal and ABI APKs come from the same canonical AAB. `Verify Production APK Artifact Set` ignores validation/non-production runs, then independently checks a published production artifact set. A successful verified production artifact automatically triggers VersionDeck publication; fail-closed manifest and artifact checks remain mandatory.
 
 ## Evidence and incident checks
 
-Every operator review must record the source SHA, flavor/app ID, release version, operation, workflow run, GitHub environment approval, CLI/Flutter/engine revisions, KMS key version, artifact hashes, and device evidence. Do not include tokens, keystore passwords, DSNs containing private query values, user content, or KMS signatures in tickets or logs.
+Every operator review must record the source SHA, flavor/app ID, release version, operation, workflow run, GitHub environment identity, explicit operator authorization, CLI/Flutter/engine revisions, KMS key version, artifact hashes, and device evidence. Do not include tokens, keystore passwords, DSNs containing private query values, user content, or KMS signatures in tickets or logs.
 
 For a suspected credential leak, disable the relevant workflow switch, revoke the Shorebird API key, disable the Workload Identity binding, rotate Android credentials if affected, and follow [`SECURITY.md`](../../SECURITY.md). A leaked app ID alone is not credential compromise, but unexpected app registration or patch activity is.

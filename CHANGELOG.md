@@ -8,6 +8,7 @@ The current application version is defined only in `pubspec.yaml`. Released vers
 
 ### Supabase authority remediation (2026-08-27)
 
+- Removed the redundant required-reviewer prompt from the branch-restricted GitHub `production` environment while retaining exact-source, backend, signing, provenance, scoped-credential, kill-switch, and `main`/`release/*` deployment controls; synchronized release documentation now reflects the prompt-free operator flow.
 - Added explicit deny-all Data API policies to the three private entitlement/economy/restore ledgers, preserving their revoked API privileges while clearing Supabase Advisor `rls_enabled_no_policy` findings.
 - Fixed the protected migration rail so hosted parity derives a current default Supabase secret key from its existing environment-scoped management token, validates that capability before mutation, masks it before use, and avoids a redundant long-lived GitHub service-role secret.
 - Closed missing-plan completion authorization: recovery now requires an exact same-user task-creation operation and commits nothing on `task_creation_not_authorized`.

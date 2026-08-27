@@ -1,6 +1,6 @@
 # Production containment
 
-_Last updated: August 22, 2026_
+_Last updated: August 28, 2026_
 
 Scoped containment is active. Signed/validated evidence is distinct from public or hosted-service mutation.
 
@@ -13,11 +13,11 @@ Scoped containment is active. Signed/validated evidence is distinct from public 
 - VersionDeck deployment with explicit `disabled` publication;
 - privacy-scrubbed runtime Sentry ingestion configured by the public DSN.
 
-Validation still enters the selected GitHub environment because Shorebird authentication, Android release signing, and KMS public-key access are required. Environment access does not grant publication: workflow operation, exact-source rules, reviewer approval, and the matching kill switch are all required.
+Validation still enters the selected GitHub environment because Shorebird authentication, Android release signing, and KMS public-key access are required. The `production` environment does not require a separate deployment review: exact-source and branch policies, the requested workflow operation, explicit operator authorization, and the matching kill switch remain the publication controls.
 
 ## Separately contained mutations
 
-- production Shorebird release publication (gated by `SHOREBIRD_PRODUCTION_RELEASES_ENABLED` kill-switch and production environment approval);
+- production Shorebird release publication (gated by explicit operator authorization and the `SHOREBIRD_PRODUCTION_RELEASES_ENABLED` kill switch);
 - production patch publication to staging and exact staging-to-stable promotion;
 - Shorebird Console patch rollback/disable;
 - Google Play upload/track/rollout;

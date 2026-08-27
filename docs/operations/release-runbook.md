@@ -3,8 +3,11 @@
 Production release mutation remains contained. This runbook defines evidence and handoff; it does not authorize a Shorebird publish, Play upload, Sentry mutation, GitHub Release, VersionDeck publication, hosted backend mutation, or rollout.
 
 Pre-launch schema posture: while the `AGENTS.md` lifecycle checkbox is
-unchecked, Drift stays at immutable v1 (reject-on-mismatch) and the Supabase
-history is exactly one baseline migration. At launch authorization, execute
+unchecked, Drift stays at immutable v1 (reject-on-mismatch) and Supabase uses
+the ordered forward chain documented in
+[`migrations-and-functions.md`](../backend/migrations-and-functions.md). Do not
+claim a single baseline until the separately approved destructive reset and
+squash has completed. At launch authorization, execute
 [`docs/plans/launch-containment-checklist.md`](../plans/launch-containment-checklist.md).
 ## Canonical release rail
 
@@ -12,7 +15,7 @@ history is exactly one baseline migration. At launch authorization, execute
 
 - dispatch from exact current `main`;
 - an exact successful `Validate Google Backend and Release Contracts` run for the source SHA;
-- `production` environment approval;
+- the branch-restricted `production` environment and its scoped credentials;
 - `SHOREBIRD_PRODUCTION_RELEASES_ENABLED=true`;
 - the environment-scoped Shorebird token, Play upload signer, and non-exportable production KMS signing key.
 
@@ -47,6 +50,6 @@ Only a published production release can enter `production-android-signing`. [`to
 
 ## Required release record
 
-Record the exact source SHA, backend-gate run, workflow run/attempt, flavor/app ID, Shorebird release version, CLI/Flutter/engine revisions, KMS key version, AAB hash/signature, Play upload signer, standalone APK signer, APK hashes, attestations, symbol/evidence artifact IDs, environment approvals, device evidence, and every separately authorized publication decision. Never record tokens, private keys, keystore passwords, user content, or raw credentials.
+Record the exact source SHA, backend-gate run, workflow run/attempt, flavor/app ID, Shorebird release version, CLI/Flutter/engine revisions, KMS key version, AAB hash/signature, Play upload signer, standalone APK signer, APK hashes, attestations, symbol/evidence artifact IDs, environment identity, explicit operator authorization, device evidence, and every separately authorized publication decision. Never record tokens, private keys, keystore passwords, user content, or raw credentials.
 
 See [`shorebird-code-push.md`](shorebird-code-push.md), [`google-play-release-runbook.md`](google-play-release-runbook.md), [`../versiondeck-release-runbook.md`](../versiondeck-release-runbook.md), [`../SENTRY_OPERATIONS.md`](../SENTRY_OPERATIONS.md), and [`production-containment.md`](production-containment.md).
