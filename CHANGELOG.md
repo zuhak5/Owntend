@@ -6,6 +6,10 @@ The current application version is defined only in `pubspec.yaml`. Released vers
 
 ## Unreleased
 
+### Android release identity (2026-08-29)
+
+- Advanced the protected production release identity to `1.0.0+9` so the sync, database-contract, hydration, and observability fixes ship as a new immutable Shorebird release rather than attempting to overwrite the already-published Build 8 artifact.
+
 ### Sync PATCH and least-privilege repair (2026-08-28)
 
 - Fixed asset, maintenance-plan, and other generic cloud updates that could send full local rows into column-restricted PostgREST PATCH operations and fail with `403` / PostgreSQL `42501`. Creation and update serializers are now separate, every entity owns an explicit mutable-column contract, nullable clears remain supported, and ownership, keys, timestamps, revisions, local-only fields, and RPC-authoritative fields are excluded from updates by construction.
