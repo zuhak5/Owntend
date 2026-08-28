@@ -956,7 +956,10 @@ void main() {
       originDeviceId: '',
     );
 
-    final payload = record.toRemotePayload('user-1', deviceId: 'device-a');
+    final payload = record.toRemoteCreatePayload(
+      'user-1',
+      deviceId: 'device-a',
+    );
 
     expect(spec.scope, SyncScope.shared);
     expect(payload['user_id'], 'user-1');

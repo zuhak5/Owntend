@@ -135,7 +135,7 @@ select is(
 select lives_ok(
   $$
     update public.notification_inbox
-    set message_code = 'weather_summary'
+    set read_at = now()
     where user_id = '33333333-3333-3333-3333-333333333333'
       and id = 'localized-notification'
   $$,

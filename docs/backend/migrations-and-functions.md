@@ -85,6 +85,43 @@ Test:
 - Effective RPC ACLs rather than relying on assumed default privileges.
 - Public API functions that require elevated internals remain `SECURITY INVOKER` wrappers rather than authenticated-executable `SECURITY DEFINER` functions in exposed schemas.
 - Statement-stable RLS helpers such as `auth.uid()` and `current_setting()` use init-plan-safe `SELECT` wrapping when their result does not depend on the current row.
+- The effective authenticated UPDATE-column set for every synchronized table matches the client update allowlist exactly, table-wide UPDATE remains absent, server metadata advances through its trigger, and protected/cross-user writes fail closed.
+
+## Generic sync UPDATE ACL rollout
+
+The client serializer, column privileges, pgTAP matrix, and real PostgREST
+integration tests land together. Validate the corrected client against the
+current local schema first, apply the new forward migration locally, and rerun
+the complete backend gate from a blank disposable stack. Before the protected
+hosted migration workflow is approved, ensure the corrected build is the only
+shared pre-launch test client. After the workflow applies the migration, smoke
+test asset, plan, room, detail, setting, and inbox edits and inspect sanitized
+PATCH `403`/`42501` counts. Any occurrence blocks release.
+
+The project remains pre-launch, so an affected disposable test installation is
+reset after the corrected build is available. A fixture that must be preserved
+may use the existing targeted failed-mutation resolver only for its known
+asset/plan entries; there is no legacy grant, serializer shim, or automatic
+replay of generic authorization failures. Hosted migration state, Advisor
+results, real-device convergence, and hosted log counts remain protected-
+environment evidence rather than local proof.
+
+## Maintenance-completion response contract
+
+The forward migration after the sync UPDATE ACL migration versions
+`complete_maintenance_task` at contract 1. A private security-invoker response
+helper constructs one fixed JSON envelope for every non-exception branch. Its
+execution is revoked from `PUBLIC`, `anon`, and `authenticated`; only the
+private implementation can use it. The public RPC remains a security-invoker
+wrapper, while authentication, ownership, entitlement, idempotency, and
+transactional recurrence checks remain in the narrowly authorized private
+implementation with an empty `search_path`.
+
+Deploy this backend contract before its strict client. The earlier client
+ignores the additional `contract_version` field, while the corrected client
+fails closed if the server does not return version 1. pgTAP verifies the exact
+envelope keys and types for every status, helper privileges, public wrapper
+behavior, owner isolation, and the absence of ad-hoc JSON result construction.
 
 ## Edge Function inventory
 
@@ -158,15 +195,17 @@ developer-started stack and can never reach a hosted project.
 
 ## Current pre-launch migration chain
 
-The repository currently contains the initial schema, three earlier security/function corrections, and five remediation migrations in timestamp order. The remediation boundaries are:
+The repository currently contains the initial schema, three earlier security/function corrections, and seven remediation migrations in timestamp order. The remediation boundaries are:
 
 1. authoritative entitlements, completion authorization, copy/move/type-change/history-restore RPCs;
 2. media staging quotas/retry and stage-bound Storage policy;
 3. explicit-user service parity RPC; and
 4. final mutation grants and rejection of client-authored initial plans; and
-5. explicit fail-closed Data API policies for the three private operational ledgers, clearing Advisor lint 0008 without granting API access.
+5. explicit fail-closed Data API policies for the three private operational ledgers, clearing Advisor lint 0008 without granting API access; and
+6. exact generic-sync column UPDATE privileges aligned with the client PATCH allowlists, with server metadata and RPC-authoritative fields excluded; and
+7. the fixed, versioned maintenance-completion response contract and private envelope helper.
 
-The fourth remediation migration is a compatibility boundary: deploy the compatible Flutter build and convert retained journals/outbox work before applying it to an already-deployed environment. The fifth is an access-neutral security-visibility correction and can follow it directly. Fresh local environments replay the full chain. Documentation must describe this real chain until an operator explicitly approves the destructive pre-launch squash/reset. If approval is withheld, the forward chain remains canonical permanently.
+The fourth remediation migration is a compatibility boundary: deploy the compatible Flutter build and convert retained journals/outbox work before applying it to an already-deployed environment. The fifth is an access-neutral security-visibility correction and can follow it directly. The sixth must be paired with the explicit-PATCH client and deployed through the protected order above. The seventh is deployed backend-first before the strict completion client. Fresh local environments replay the full chain. Documentation must describe this real chain until an operator explicitly approves the destructive pre-launch squash/reset. If approval is withheld, the forward chain remains canonical permanently.
 
 The protected migration workflow also runs `npm run validate:supabase-parity` after a hosted operation. Before any database mutation, the pinned Supabase CLI uses the existing protected migration management token to require exactly one current default `sb_secret_...` project key. The key is resolved again only inside the parity step, masked immediately, and never persisted as a workflow output, artifact, repository secret, or application configuration. The validator enumerates Auth user IDs only in memory through the server-only Admin API, invokes `validate_change_feed_parity(p_user_id)` for each account, and uploads a sanitized report containing aggregate counts and account ordinals only. Zero Auth accounts is an explicit success; an Auth account without its required profile fails validation rather than disappearing from the evidence set.
 

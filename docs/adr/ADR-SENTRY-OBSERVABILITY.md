@@ -22,6 +22,10 @@ Use `sentry_flutter` for opt-in/configuration-controlled technical diagnostics w
 - Do not attach database, backup, media, or log files.
 - Keep route names and subsystem context free of entity identifiers and user content.
 - Associate production events with a published release.
+- Permit only bounded technical diagnostic tags and fingerprint actionable
+  failures by operation, failure class, and diagnostic code.
+- Require project-side IP-storage prevention and matching processed symbols
+  before distributing any Sentry-enabled production build.
 
 Production release mutation is performed through controlled scripts rather than ordinary local development commands.
 
@@ -44,6 +48,12 @@ Production release mutation is performed through controlled scripts rather than 
 - Scrubber tests for nested authentication, synchronization, media, ads, backup, and backend errors.
 - No credentials or direct identifiers in tags, breadcrumbs, exception messages, or contexts.
 - Immediate containment if prohibited data reaches Sentry.
+- Expected business conflicts remain breadcrumbs and are not captured as
+  exceptions; a genuine contract mismatch is captured once.
+- Release evidence binds Dart, obfuscation, R8, and engine artifacts to release,
+  dist, source SHA, flavor, patch identity, and SHA-256 hashes before upload.
+- Production ingestion remains disabled when server-side IP/geography controls
+  or exact-build symbol processing cannot be verified.
 - Review after every SDK upgrade or new Sentry integration.
 - Documentation and privacy updates for material telemetry changes.
 

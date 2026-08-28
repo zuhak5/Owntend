@@ -183,6 +183,34 @@ test('Shorebird patch rail rejects unsafe diffs and publishes production directl
   assert.match(patchScript, /legacy-generated-shorebird-yaml-only/);
 });
 
+test('Sentry publication validates complete symbol evidence before mutation', async () => {
+  const script = await read('tool/publish_sentry_release.ps1');
+  const authentication = script.indexOf("Invoke-NativeCommand -FilePath 'npx' -Arguments ($sentryCli + @('info'))");
+  const dartValidation = script.indexOf('$expectedDartSymbols = [ordered]@{');
+  const r8Validation = script.indexOf('Android R8 mapping file was not found');
+  const engineValidation = script.indexOf('Exactly three Shorebird Android engine-symbol archives are required.');
+
+  assert.ok(dartValidation >= 0 && dartValidation < authentication);
+  assert.ok(r8Validation >= 0 && r8Validation < authentication);
+  assert.ok(engineValidation >= 0 && engineValidation < authentication);
+  assert.match(script, /Sentry release or dist does not match the canonical pubspec build identity/);
+  assert.match(script, /schema_version = 1/);
+  assert.match(script, /source_sha = \$sourceSha/);
+  assert.match(script, /shorebird_patch_number = \$ShorebirdPatchNumber/);
+  assert.match(script, /engine_revision = \[string\]\$manifest\.engine_revision/);
+  assert.match(script, /dart_debug_files = \$dartDebugFiles/);
+  assert.match(script, /\[Parameter\(Mandatory = \$true\)\][\s\S]*\[string\]\$EngineSymbolsDirectory/);
+  assert.match(script, /debug-files check --json/);
+  assert.match(script, /Get-DebugFileIdentity[\s\S]*ExpectedArch/);
+  assert.match(script, /debug_id = \[string\]\$variants\[0\]\.debug_id/);
+  assert.match(script, /debug-files', 'upload', '--wait'/);
+  assert.match(script, /Get-FileHash[\s\S]*SHA256/);
+  assert.match(script, /ExpectedSha1/);
+  assert.match(script, /\?debug_id=/);
+  assert.match(script, /files\/dsyms\/\?query=/);
+  assert.match(script, /Sentry did not report the exact processed debug-information file/);
+});
+
 test('deprecated promotion path is fully removed from the repository', async () => {
   // WP-020: the emergency Shorebird promotion workflow/script were deleted.
   // Standard protected release/patch tracks are the only code-push paths.

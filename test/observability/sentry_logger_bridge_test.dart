@@ -94,6 +94,50 @@ void main() {
     expect(fingerprints, ['owntend::sync_run_failed::reportable']);
   });
 
+  test('contract diagnostics receive stable distinct fingerprints', () async {
+    final fingerprints = <String>[];
+    final capturedFields = <Map<String, Object?>>[];
+    final bridge = SentryLoggerBridge(
+      addBreadcrumb: (_) async {},
+      captureException:
+          (
+            error,
+            stackTrace,
+            fingerprint,
+            operation,
+            failureClass,
+            fields,
+          ) async {
+            fingerprints.add(fingerprint);
+            capturedFields.add(fields);
+          },
+      clock: () => DateTime.utc(2026, 8, 28),
+    );
+    const failure = SupabaseFailure(
+      kind: SupabaseFailureKind.incompatibleSchema,
+      message: 'safe',
+      diagnosticCode: maintenanceCompletionRpcContractMismatchCode,
+    );
+    final events = <AppDiagnosticEvent>[];
+    AppLogger.addEventSink(events.add);
+
+    reportOperationFailure(
+      operation: 'sync_initial_hydration_failed',
+      error: failure,
+      fields: const {'sync_mode': 'initial_hydration', 'execution': 'main'},
+    );
+    await bridge.handle(events.single);
+
+    expect(fingerprints, [
+      'owntend::sync_initial_hydration_failed::reportable::'
+          'maintenance_completion_rpc_contract_mismatch',
+    ]);
+    expect(
+      capturedFields.single['diagnostic_code'],
+      maintenanceCompletionRpcContractMismatchCode,
+    );
+  });
+
   test('recursion guard suppresses bridge re-entry', () async {
     late SentryLoggerBridge bridge;
     var breadcrumbs = 0;
@@ -122,13 +166,14 @@ AppDiagnosticEvent _event({
   required String level,
   required String event,
   Object? error,
+  Map<String, Object?> fields = const {},
 }) {
   return AppDiagnosticEvent(
     timestamp: DateTime.utc(2026, 8, 3),
     level: level,
     event: event,
     runId: 'run-test',
-    fields: const {},
+    fields: fields,
     errorType: error?.runtimeType.toString(),
     error: error,
     stackTrace: error == null ? null : StackTrace.current,

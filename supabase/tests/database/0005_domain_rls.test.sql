@@ -156,19 +156,17 @@ select is(
 select lives_ok(
   $$
     update public.user_settings
-    set
-      user_id = '22222222-2222-2222-2222-222222222222',
-      value = 'light'
+    set value = 'light'
     where user_id = '11111111-1111-1111-1111-111111111111'
       and key = 'theme'
   $$,
-  'owned settings remain updatable'
+  'owned setting values remain updatable'
 );
 
 select is(
   (select user_id::text from public.user_settings where key = 'theme'),
   '11111111-1111-1111-1111-111111111111',
-  'ownership cannot be reassigned during update'
+  'a value-only update preserves setting ownership'
 );
 
 select lives_ok(

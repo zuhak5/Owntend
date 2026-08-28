@@ -2,6 +2,7 @@ import 'package:drift/drift.dart' hide isNull, isNotNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:owntend/src/core/database/app_database.dart';
+import 'package:owntend/src/core/supabase/supabase_failure.dart';
 import 'package:owntend/src/core/sync/local_sync_store.dart';
 
 void main() {
@@ -94,6 +95,46 @@ void main() {
       expect(remaining.first['mutation_type'], 'user_setting');
       expect(remaining.first['operation_fingerprint'], isNotNull);
     });
+
+    test(
+      'ACL contract mismatches persist as terminal privacy-safe codes',
+      () async {
+        final now = DateTime.now().toUtc();
+        await db
+            .into(db.syncOutbox)
+            .insertOnConflictUpdate(
+              SyncOutboxCompanion.insert(
+                entity: 'asset',
+                recordKey: 'private-asset-id',
+                operation: 'upsert',
+                changedAt: Value(now),
+              ),
+            );
+        final mutation = (await store.pendingMutations()).firstWhere(
+          (entry) =>
+              entry.entity == 'asset' && entry.recordKey == 'private-asset-id',
+        );
+
+        await store.markMutationTerminal(
+          mutation,
+          'Cloud data permissions do not match this Owntend build.',
+          errorCode: dataApiAclContractMismatchCode,
+        );
+
+        final persisted = (await db.select(db.syncOutbox).get()).firstWhere(
+          (entry) =>
+              entry.entity == 'asset' && entry.recordKey == 'private-asset-id',
+        );
+        expect(persisted.state, 'failedVisible');
+        expect(persisted.attempts, -1);
+        expect(persisted.nextAttemptAt, isNull);
+        expect(persisted.lastErrorCode, dataApiAclContractMismatchCode);
+        final diagnostic =
+            (await store.exportFailedMutationDiagnostics()).single;
+        expect(diagnostic['last_error_code'], dataApiAclContractMismatchCode);
+        expect(diagnostic.toString(), isNot(contains('private-asset-id')));
+      },
+    );
 
     test(
       'resolveFailedMutation retry resets mutation state to pending for retry',

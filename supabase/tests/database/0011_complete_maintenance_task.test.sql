@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(50);
+select plan(51);
 
 select has_function(
   'public',
@@ -574,6 +574,48 @@ select is(
   ),
   'operation_id_reused',
   'a reused operation identifies the conflict reason'
+);
+
+select ok(
+  (
+    select result->>'status' = 'conflict'
+      and result->>'conflict_reason' = 'operation_id_reused'
+      and result->'plan' = 'null'::jsonb
+      and result->'record' = 'null'::jsonb
+      and result->'current_plan_revision' = 'null'::jsonb
+      and result->'resulting_record_id' = 'null'::jsonb
+      and result->'resulting_next_due_date' = 'null'::jsonb
+    from (
+      select public.complete_maintenance_task(
+        jsonb_build_object(
+          'version', 1,
+          'operation_id', 'rpc-record-1',
+          'expected_next_due_date', '2026-08-14T14:30:00.000Z',
+          'plan', jsonb_build_object(
+            'id', 'rpc-early-plan',
+            'asset_id', 'rpc-asset',
+            'title', 'Early daily task',
+            'recurrence_interval', 1,
+            'recurrence_unit', 'days',
+            'priority', 'medium',
+            'next_due_date', '2026-08-15T14:30:00.000Z',
+            'reminder_days_before', 0,
+            'is_enabled', true,
+            'created_at', '2026-08-01T00:00:00.000Z',
+            'updated_at', '2026-08-13T14:30:00.000Z'
+          ),
+          'record', jsonb_build_object(
+            'id', 'different-record',
+            'plan_id', 'rpc-early-plan',
+            'due_date', '2026-08-14T14:30:00.000Z',
+            'completed_at', '2026-08-14T13:30:00.000Z'
+          )
+        ),
+        'rpc-device'
+      ) as result
+    ) as response
+  ),
+  'an operation reused across plans is terminal without returning unrelated canonical rows'
 );
 
 set local role postgres;

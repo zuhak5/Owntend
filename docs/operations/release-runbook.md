@@ -21,7 +21,16 @@ squash has completed. At launch authorization, execute
 
 The backend workflow's required jobs include `Deno SSV tests`, `Google contract/static checks`, and `Supabase database tests`. A pending migration must follow the separately protected migration workflow; release CI does not deploy it.
 
-The release workflow produces one canonical Shorebird AAB with obfuscation, Dart symbols, R8 mapping, merged-manifest/dependency/lint/SBOM evidence, exact toolchain manifest, engine symbols, checksum, and provenance. The release identifier is the `pubspec.yaml` value `x.y.z+N`. Sentry retains `app.owntend.mobile@x.y.z+N` and dist `N`.
+The release workflow produces one canonical Shorebird AAB with obfuscation,
+Dart symbols, R8 mapping, merged-manifest/dependency/lint/SBOM evidence, exact
+toolchain manifest, engine symbols, checksum, and provenance. The release
+identifier is the `pubspec.yaml` value `x.y.z+N`. Sentry retains
+`app.owntend.mobile@x.y.z+N` and dist `N`. A Sentry-enabled artifact is not
+distributable unless the exact three ABI Dart symbols, obfuscation map, R8
+mapping, engine revision/archives, and SHA-bound release evidence all match.
+The separately authorized Sentry publication must upload these before
+distribution and verify every Dart/engine ABI and debug/code identity through
+the debug-information-file API.
 
 ## VersionDeck APK derivation
 
@@ -37,7 +46,9 @@ Only a published production release can enter `production-android-signing`. [`to
 4. Complete physical-device release smoke tests and the Play/Data safety/privacy reviews.
 5. Only after explicit production authorization, enable the release kill switch and rerun with `operation=publish` through the protected `production` environment.
 6. Review the canonical AAB evidence and the downstream automated verification: `Verify Production APK Artifact Set` verifies the ABI APKs, creates the GitHub Release, uploads APK assets, and triggers `Deploy VersionDeck` to update GitHub Pages automatically.
-7. Handle Play and Sentry as separately authorized operations using their own runbooks.
+7. Handle Play and Sentry as separately authorized operations using their own
+   runbooks. Sentry requires verified no-IP-storage privacy configuration and
+   processed exact-build symbols before a Sentry-enabled build is distributed.
 8. For a patch, follow [`shorebird-code-push.md`](shorebird-code-push.md); a native, asset, dependency, or toolchain change requires a new release.
 
 ## Failures and partial state

@@ -45,7 +45,9 @@ class UserChangeFeedPage {
   final int feedGeneration;
 }
 
-enum MaintenanceCompletionStatus {
+enum MaintenanceCompletionStatus { applied, alreadyApplied, conflict, invalid }
+
+enum MaintenanceUndoStatus {
   applied,
   alreadyApplied,
   conflict,
@@ -62,15 +64,15 @@ class MaintenanceUndoResult {
     this.conflictReason,
   });
 
-  final MaintenanceCompletionStatus status;
+  final MaintenanceUndoStatus status;
   final bool retryable;
   final SyncRecord? plan;
   final bool rewound;
   final String? conflictReason;
 
   bool get acknowledged =>
-      status == MaintenanceCompletionStatus.applied ||
-      status == MaintenanceCompletionStatus.alreadyApplied;
+      status == MaintenanceUndoStatus.applied ||
+      status == MaintenanceUndoStatus.alreadyApplied;
 }
 
 class MaintenanceCompletionResult {
@@ -320,8 +322,8 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
         );
       }
       return records;
-    } on Object catch (error) {
-      throw SupabaseFailure.from(error);
+    } on Object catch (error, stackTrace) {
+      Error.throwWithStackTrace(SupabaseFailure.from(error), stackTrace);
     }
   }
 
@@ -472,6 +474,13 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
             return RemoteWriteResult.applied(canonical);
           }
         }
+        throw const SupabaseFailure(
+          kind: SupabaseFailureKind.incompatibleSchema,
+          message:
+              'Photo metadata cannot be changed through generic cloud sync. '
+              'Use the protected media operation.',
+          retryable: false,
+        );
       }
 
       // MON-001: asset creation has no direct INSERT authority. A queued
@@ -484,13 +493,6 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
         return await _createAssetThroughAggregateRpc(record, userId);
       }
 
-      final payload = await _preparePayload(record, userId, deviceId);
-      if (expectedRevision != null) {
-        if (record.spec.entity == 'asset') payload.remove('asset_type');
-        if (record.spec.entity == 'maintenance_plan') {
-          payload.remove('asset_id');
-        }
-      }
       if (record.isDeleted) {
         if (expectedRevision == null) {
           final existing = await fetch(
@@ -542,6 +544,7 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
         return RemoteWriteResult.conflict(current);
       }
       if (expectedRevision == null) {
+        final payload = _prepareCreatePayload(record, userId, deviceId);
         try {
           final response = await _withDataTimeout(
             () async => _client
@@ -578,6 +581,7 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
         }
       }
 
+      final payload = _prepareUpdatePayload(record);
       var query = _client
           .from(record.spec.remoteTable)
           .update(payload)
@@ -641,7 +645,7 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
     try {
       final payloads = <Map<String, dynamic>>[];
       for (final record in records) {
-        payloads.add(await _preparePayload(record, userId, deviceId));
+        payloads.add(_prepareCreatePayload(record, userId, deviceId));
       }
       // Creation intents are replayed verbatim after a crash or response loss
       // between the server commit and the local acknowledgement. ON CONFLICT
@@ -718,59 +722,24 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
           params: {'p_operation': operation, 'p_device_id': deviceId},
         ),
       );
-      if (response is! Map) {
-        throw const FormatException(
-          'The maintenance completion RPC returned an invalid result.',
-        );
-      }
-
-      final body = Map<String, dynamic>.from(response);
-      final status = _maintenanceCompletionStatus(body['status']);
-      final rawPlan = body['plan'];
-      final rawRecord = body['record'];
-      final planData = rawPlan is Map
-          ? Map<String, dynamic>.from(rawPlan)
-          : null;
-      final recordData = rawRecord is Map
-          ? Map<String, dynamic>.from(rawRecord)
-          : null;
-      if ((planData != null && planData['user_id'] != userId) ||
-          (recordData != null && recordData['user_id'] != userId)) {
-        throw const SupabaseFailure(
-          kind: SupabaseFailureKind.permissionDenied,
-          message: 'The cloud returned maintenance data for another account.',
-        );
-      }
-      if ((status == MaintenanceCompletionStatus.applied ||
-              status == MaintenanceCompletionStatus.alreadyApplied) &&
-          (planData == null || recordData == null)) {
-        throw const FormatException(
-          'The maintenance completion RPC omitted canonical records.',
-        );
-      }
-
-      return MaintenanceCompletionResult(
-        status: status,
-        retryable: body['retryable'] == true,
-        plan: planData == null
-            ? null
-            : SyncRecord.fromRemote(
-                syncSpecByEntity['maintenance_plan']!,
-                planData,
-              ),
-        record: recordData == null
-            ? null
-            : SyncRecord.fromRemote(
-                syncSpecByEntity['maintenance_record']!,
-                recordData,
-              ),
-        currentPlanRevision: (body['current_plan_revision'] as num?)?.toInt(),
-        resultingRecordId: body['resulting_record_id'] as String?,
-        resultingNextDueDate: _parseUtc(body['resulting_next_due_date']),
-        conflictReason: body['conflict_reason'] as String?,
+      final result = parseMaintenanceCompletionResult(
+        response,
+        operation: operation,
+        userId: userId,
       );
-    } on Object catch (error) {
-      throw SupabaseFailure.from(error);
+      AppLogger.info(
+        'sync_maintenance_completion_rpc_result',
+        fields: {
+          'contract_version': 1,
+          'rpc_status': result.status.name,
+          'is_retryable': result.retryable,
+          if (result.conflictReason != null)
+            'reason_code': result.conflictReason!,
+        },
+      );
+      return result;
+    } on Object catch (error, stackTrace) {
+      Error.throwWithStackTrace(SupabaseFailure.from(error), stackTrace);
     }
   }
 
@@ -886,7 +855,7 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
         );
       }
       final body = Map<String, dynamic>.from(response);
-      final status = _maintenanceCompletionStatus(body['status']);
+      final status = _maintenanceUndoStatus(body['status']);
       final rawPlan = body['plan'];
       final planData = rawPlan is Map
           ? Map<String, dynamic>.from(rawPlan)
@@ -897,8 +866,8 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
           message: 'The cloud returned maintenance data for another account.',
         );
       }
-      if ((status == MaintenanceCompletionStatus.applied ||
-              status == MaintenanceCompletionStatus.alreadyApplied) &&
+      if ((status == MaintenanceUndoStatus.applied ||
+              status == MaintenanceUndoStatus.alreadyApplied) &&
           planData == null) {
         throw const FormatException(
           'The maintenance undo RPC omitted the canonical plan.',
@@ -1015,17 +984,44 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
     return RemoteWriteResult.applied(canonical);
   }
 
-  Future<Map<String, dynamic>> _preparePayload(
+  Map<String, dynamic> _prepareCreatePayload(
     SyncRecord record,
     String userId,
     String deviceId,
-  ) async {
-    final payload = record.toRemotePayload(userId, deviceId: deviceId);
-    if (record.isDeleted) {
-      return payload;
-    }
+  ) {
+    final payload = record.toRemoteCreatePayload(userId, deviceId: deviceId);
     if (record.spec.entity == 'asset_photo') {
       payload.remove('object_path');
+    }
+    return payload;
+  }
+
+  Map<String, dynamic> _prepareUpdatePayload(SyncRecord record) {
+    if (!record.spec.supportsGenericUpdate) {
+      throw SupabaseFailure(
+        kind: SupabaseFailureKind.incompatibleSchema,
+        message:
+            '${record.spec.entity} does not support generic cloud updates.',
+        retryable: false,
+      );
+    }
+    try {
+      record.spec.validateUpdateContract();
+    } on StateError {
+      throw const SupabaseFailure(
+        kind: SupabaseFailureKind.incompatibleSchema,
+        message: 'The local cloud update contract is invalid for this Owntend build.',
+        retryable: false,
+      );
+    }
+    final payload = record.toRemoteUpdatePayload();
+    if (payload.isEmpty) {
+      throw const SupabaseFailure(
+        kind: SupabaseFailureKind.incompatibleSchema,
+        message:
+            'The local record does not contain a valid cloud update payload.',
+        retryable: false,
+      );
     }
     return payload;
   }
@@ -1482,9 +1478,238 @@ MaintenanceCompletionStatus _maintenanceCompletionStatus(Object? value) {
     'already_applied' => MaintenanceCompletionStatus.alreadyApplied,
     'conflict' => MaintenanceCompletionStatus.conflict,
     'invalid' => MaintenanceCompletionStatus.invalid,
-    'unauthorized' => MaintenanceCompletionStatus.unauthorized,
     _ => throw const FormatException(
       'The maintenance completion RPC returned an unknown status.',
+    ),
+  };
+}
+
+const _maintenanceCompletionInvalidReasons = <String>{
+  'invalid_device_id',
+  'invalid_payload_version',
+  'incomplete_payload',
+  'invalid_identifiers',
+  'invalid_values',
+  'invalid_completion',
+  'task_creation_not_authorized',
+};
+
+const _maintenanceCompletionConflictReasons = <String>{
+  'operation_id_reused',
+  'plan_inactive',
+  'occurrence_completed_elsewhere',
+  'occurrence_changed',
+  'stale_plan_revision',
+};
+
+const _maintenanceCompletionConflictsWithRecord = <String>{
+  'operation_id_reused',
+  'occurrence_completed_elsewhere',
+};
+
+@visibleForTesting
+MaintenanceCompletionResult parseMaintenanceCompletionResult(
+  Object? response, {
+  required Map<String, dynamic> operation,
+  required String userId,
+}) {
+  if (response is! Map) _throwMaintenanceCompletionContractMismatch();
+  final body = Map<String, dynamic>.from(response);
+  const expectedKeys = <String>{
+    'contract_version',
+    'status',
+    'retryable',
+    'conflict_reason',
+    'current_plan_revision',
+    'resulting_record_id',
+    'resulting_next_due_date',
+    'plan',
+    'record',
+  };
+  final responseKeys = body.keys.toSet();
+  if (responseKeys.difference(expectedKeys).isNotEmpty ||
+      expectedKeys.difference(responseKeys).isNotEmpty ||
+      body['contract_version'] != 1 ||
+      body['retryable'] is! bool) {
+    _throwMaintenanceCompletionContractMismatch();
+  }
+
+  MaintenanceCompletionStatus status;
+  try {
+    status = _maintenanceCompletionStatus(body['status']);
+  } on FormatException {
+    _throwMaintenanceCompletionContractMismatch();
+  }
+  final reason = body['conflict_reason'];
+  if (reason != null &&
+      (reason is! String || !RegExp(r'^[a-z0-9_]{1,64}$').hasMatch(reason))) {
+    _throwMaintenanceCompletionContractMismatch();
+  }
+  final currentRevision = body['current_plan_revision'];
+  if (currentRevision != null &&
+      (currentRevision is! int || currentRevision < 1)) {
+    _throwMaintenanceCompletionContractMismatch();
+  }
+  final resultingRecordId = body['resulting_record_id'];
+  if (resultingRecordId != null &&
+      (resultingRecordId is! String ||
+          resultingRecordId.isEmpty ||
+          resultingRecordId.length > 200)) {
+    _throwMaintenanceCompletionContractMismatch();
+  }
+  final rawDueDate = body['resulting_next_due_date'];
+  final resultingDueDate = _parseUtc(rawDueDate);
+  if (rawDueDate != null &&
+      (rawDueDate is! String || resultingDueDate == null)) {
+    _throwMaintenanceCompletionContractMismatch();
+  }
+
+  final rawPlan = body['plan'];
+  final rawRecord = body['record'];
+  if ((rawPlan != null && rawPlan is! Map) ||
+      (rawRecord != null && rawRecord is! Map)) {
+    _throwMaintenanceCompletionContractMismatch();
+  }
+  final planData = rawPlan == null
+      ? null
+      : Map<String, dynamic>.from(rawPlan as Map);
+  final recordData = rawRecord == null
+      ? null
+      : Map<String, dynamic>.from(rawRecord as Map);
+  final planPayload = operation['plan'];
+  final recordPayload = operation['record'];
+  if (planPayload is! Map || recordPayload is! Map) {
+    _throwMaintenanceCompletionContractMismatch();
+  }
+  final expectedPlanId = planPayload['id'];
+  final expectedRecordId = recordPayload['id'];
+  if (expectedPlanId is! String || expectedRecordId is! String) {
+    _throwMaintenanceCompletionContractMismatch();
+  }
+  if ((planData != null &&
+          (planData['user_id'] != userId ||
+              planData['id'] != expectedPlanId)) ||
+      (recordData != null &&
+          (recordData['user_id'] != userId ||
+              recordData['plan_id'] != expectedPlanId))) {
+    throw const SupabaseFailure(
+      kind: SupabaseFailureKind.permissionDenied,
+      message: 'The cloud returned maintenance data for another account.',
+    );
+  }
+  final acknowledged =
+      status == MaintenanceCompletionStatus.applied ||
+      status == MaintenanceCompletionStatus.alreadyApplied;
+  if (acknowledged &&
+      (body['retryable'] == true ||
+          reason != null ||
+          currentRevision == null ||
+          resultingDueDate == null ||
+          planData == null ||
+          recordData == null ||
+          resultingRecordId == null ||
+          recordData['id'] != resultingRecordId ||
+          recordData['id'] != expectedRecordId)) {
+    _throwMaintenanceCompletionContractMismatch();
+  }
+  if (status == MaintenanceCompletionStatus.invalid &&
+      (reason is! String ||
+          !_maintenanceCompletionInvalidReasons.contains(reason) ||
+          body['retryable'] == true ||
+          currentRevision != null ||
+          resultingRecordId != null ||
+          resultingDueDate != null ||
+          planData != null ||
+          recordData != null)) {
+    _throwMaintenanceCompletionContractMismatch();
+  }
+  if (status == MaintenanceCompletionStatus.conflict) {
+    if (reason is! String ||
+        !_maintenanceCompletionConflictReasons.contains(reason)) {
+      _throwMaintenanceCompletionContractMismatch();
+    }
+    final reusedAcrossPlans =
+        reason == 'operation_id_reused' && planData == null;
+    if (reusedAcrossPlans) {
+      if (body['retryable'] == true ||
+          currentRevision != null ||
+          resultingRecordId != null ||
+          resultingDueDate != null ||
+          recordData != null) {
+        _throwMaintenanceCompletionContractMismatch();
+      }
+    } else {
+      if (currentRevision == null ||
+          resultingDueDate == null ||
+          planData == null) {
+        _throwMaintenanceCompletionContractMismatch();
+      }
+      final requiresRecord = _maintenanceCompletionConflictsWithRecord.contains(
+        reason,
+      );
+      if (requiresRecord != (recordData != null) ||
+          requiresRecord != (resultingRecordId != null) ||
+          (requiresRecord && recordData!['id'] != resultingRecordId) ||
+          (reason == 'stale_plan_revision') != (body['retryable'] == true)) {
+        _throwMaintenanceCompletionContractMismatch();
+      }
+    }
+  }
+  if (body['retryable'] == true && reason != 'stale_plan_revision') {
+    _throwMaintenanceCompletionContractMismatch();
+  }
+  if (planData != null &&
+      (planData['revision'] != currentRevision ||
+          _parseUtc(planData['next_due_date']) != resultingDueDate)) {
+    _throwMaintenanceCompletionContractMismatch();
+  }
+
+  try {
+    return MaintenanceCompletionResult(
+      status: status,
+      retryable: body['retryable'] as bool,
+      plan: planData == null
+          ? null
+          : SyncRecord.fromRemote(
+              syncSpecByEntity['maintenance_plan']!,
+              planData,
+            ),
+      record: recordData == null
+          ? null
+          : SyncRecord.fromRemote(
+              syncSpecByEntity['maintenance_record']!,
+              recordData,
+            ),
+      currentPlanRevision: (currentRevision as num?)?.toInt(),
+      resultingRecordId: resultingRecordId as String?,
+      resultingNextDueDate: resultingDueDate,
+      conflictReason: reason as String?,
+    );
+  } on Object {
+    _throwMaintenanceCompletionContractMismatch();
+  }
+}
+
+Never _throwMaintenanceCompletionContractMismatch() {
+  throw const SupabaseFailure(
+    kind: SupabaseFailureKind.incompatibleSchema,
+    message:
+        'This Owntend build is not compatible with the maintenance sync '
+        'protocol. Install the latest release.',
+    retryable: false,
+    diagnosticCode: maintenanceCompletionRpcContractMismatchCode,
+  );
+}
+
+MaintenanceUndoStatus _maintenanceUndoStatus(Object? value) {
+  return switch (value) {
+    'applied' => MaintenanceUndoStatus.applied,
+    'already_applied' => MaintenanceUndoStatus.alreadyApplied,
+    'conflict' => MaintenanceUndoStatus.conflict,
+    'invalid' => MaintenanceUndoStatus.invalid,
+    'unauthorized' => MaintenanceUndoStatus.unauthorized,
+    _ => throw const FormatException(
+      'The maintenance undo RPC returned an unknown status.',
     ),
   };
 }

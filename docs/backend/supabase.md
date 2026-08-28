@@ -57,6 +57,39 @@ Backend authorization must derive ownership from the authenticated JWT identity 
 
 Every user-owned table should have explicit RLS policies for intended owner operations and denial tests for anonymous and cross-user access. Private operational ledgers are not exposed to Data API roles: they retain revoked schema/table privileges and explicit `FOR ALL` false policies for `anon` and `authenticated`, making the fail-closed boundary visible to database tests and Supabase Advisor lint 0008 without granting access. Constraints and indexes should enforce invariants independently of client behavior.
 
+Generic synchronization also uses column-level UPDATE privileges. Every one of
+the 17 synchronized tables has table-wide authenticated UPDATE revoked, and
+only these columns are granted; the executable sources of truth are
+[`SyncEntitySpec.updatableLocalColumns`](../../lib/src/core/sync/sync_dtos.dart)
+and the latest file under
+[`supabase/migrations/`](../../supabase/migrations/):
+
+| Entity | Authenticated generic UPDATE columns |
+| --- | --- |
+| Profile | `nickname` |
+| Area | `name`, `kind`, `sort_order`, `archived_at` |
+| Room | `area_id`, `name`, `room_type`, `notes`, `sort_order`, `archived_at` |
+| Asset | `name`, `room_id`, `placement`, `notes`, `purchase_date`, `archived_at` |
+| Device detail | `brand`, `model`, `serial_number`, `power_source`, `warranty_until`, `manual_url`, `consumable` |
+| Pet detail | `species`, `breed`, `birth_date`, `microchip_id`, `vet_name`, `vet_phone`, `feeding_notes`, `medical_notes` |
+| Plant detail | `species`, `sunlight`, `watering_interval_days`, `pot_size`, `last_repotted_at`, `toxicity_notes` |
+| Safety detail | `safety_type`, `installed_at`, `expires_at`, `battery_type`, `test_interval_days` |
+| Tag | `name` |
+| Asset tag | None; insert/delete only |
+| Asset photo | None; protected media RPCs only |
+| Maintenance plan | `title`, `instructions`, `recurrence_interval`, `recurrence_unit`, `priority`, `next_due_date`, `reminder_days_before`, `is_enabled`, `archived_at` |
+| Maintenance-plan metadata | `task_type`, `location_label`, `estimated_duration_minutes`, `required_materials_json`, `reminder_recommendation`, `sort_order` |
+| Maintenance record | None; completion/undo/restore RPCs only |
+| Notification inbox | `read_at` |
+| User setting | `value` |
+| Streak | `current_streak`, `longest_streak`, `last_completion_date` |
+
+Ownership columns, primary/composite keys, `created_at`, `updated_at`, and
+`revision` are never client-updatable. Owner RLS retains both `USING` and `WITH
+CHECK`; the metadata trigger remains responsible for the server timestamp and
+revision increment. Exact pgTAP matrix comparison prevents a future table
+grant or stale column grant from widening this boundary.
+
 Review `SECURITY DEFINER` functions carefully:
 
 - Set a safe `search_path`.
@@ -71,7 +104,26 @@ Ownership policies use statement-stable helper caching where safe: `(select auth
 
 Never disable RLS to resolve an application error.
 
-The pre-launch cloud schema follows the fields emitted by Flutter for device, pet, plant, and safety details plus maintenance-plan metadata. Cloud-only aliases remain intentional for maintenance plans (`description`, `interval_count`, `interval_unit`) and streaks (`longest_streak`, `last_completion_date`); `SyncEntitySpec.remoteRenames` is the executable client mapping. Plan insertion requires an existing private entitlement, direct plan reparenting and asset-type mutation are not granted, and maintenance history is read-only through table access. Completion, undo, economy changes, and validated restore use dedicated invariant-preserving RPCs.
+The pre-launch cloud schema follows the fields emitted by Flutter for device,
+pet, plant, and safety details plus maintenance-plan metadata. Maintenance plan
+fields use canonical `instructions`, `recurrence_interval`, and
+`recurrence_unit` names on both sides. Only streaks retain cloud aliases
+(`longest_streak`, `last_completion_date`);
+`SyncEntitySpec.remoteRenames` is the executable client mapping. Plan insertion
+requires an existing private entitlement, direct plan reparenting and
+asset-type mutation are not granted, and maintenance history is read-only
+through table access. Completion, undo, economy changes, and validated restore
+use dedicated invariant-preserving RPCs.
+
+`complete_maintenance_task` exposes response contract 1. All non-exception
+branches return one fixed envelope containing version, status, retryability,
+bounded conflict reason, canonical revision/result fields, and nullable plan
+and record rows. A private security-invoker helper builds the envelope and is
+not executable by Data API roles. The authenticated public wrapper and private
+implementation retain their existing ownership and entitlement boundaries;
+the response version adds validation, not authority. The strict Flutter parser
+accepts only the documented status/reason/row combinations and treats any
+other shape as `maintenance_completion_rpc_contract_mismatch`.
 
 ### Asset detail contract
 

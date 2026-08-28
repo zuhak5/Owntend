@@ -316,7 +316,7 @@ extension _SyncRunCoordinator on SyncCoordinator {
         fields: {'attempt': attempt},
       );
       return SyncRunOutcome.notEligible;
-    } on Object catch (error) {
+    } on Object catch (error, stackTrace) {
       if (!_isActiveAccountScope(activeScope)) {
         AppLogger.info(
           'sync_account_scope_failure_discarded',
@@ -361,7 +361,7 @@ extension _SyncRunCoordinator on SyncCoordinator {
           );
         }
       }
-      rethrow;
+      Error.throwWithStackTrace(failure, stackTrace);
     } finally {
       try {
         await _localStore

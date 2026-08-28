@@ -18,7 +18,10 @@ void main() {
       ],
     );
     final event = SentryEvent(
-      user: SentryUser(id: '7f66f02e-6b71-4adb-a7ba-b962c837b131'),
+      user: SentryUser(
+        id: '7f66f02e-6b71-4adb-a7ba-b962c837b131',
+        ipAddress: '203.0.113.42',
+      ),
       request: SentryRequest(
         url: 'https://example.com/path?token=secret',
         headers: {'Authorization': 'Bearer secret'},
@@ -34,7 +37,10 @@ void main() {
         'attempt': 2,
         'unknown': 'eyJabcdefghijklmnopqrstuvwxyz',
       },
-      contexts: Contexts()..['account'] = {'email': 'person@example.com'},
+      contexts: Contexts()
+        ..['account'] = {'email': 'person@example.com'}
+        ..['geo'] = {'city': 'Private city', 'country_code': 'XX'}
+        ..['network'] = {'ip_address': '203.0.113.42'},
       exceptions: [
         SentryException(
           type: 'StateError',
@@ -52,6 +58,8 @@ void main() {
     expect(scrubbed.tags, {'app_environment': 'prod'});
     expect(scrubbed.extra, {'elapsed_ms': 12, 'attempt': 2});
     expect(scrubbed.contexts.containsKey('account'), isFalse);
+    expect(scrubbed.contexts.containsKey('geo'), isFalse);
+    expect(scrubbed.contexts.containsKey('network'), isFalse);
     expect(scrubbed.message?.formatted, 'Owntend exception');
     expect(scrubbed.exceptions!.single.type, 'StateError');
     expect(scrubbed.exceptions!.single.value, 'Owntend StateError');

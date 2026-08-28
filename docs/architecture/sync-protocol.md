@@ -89,6 +89,27 @@ The push worker:
 
 A network timeout after a server commit must be safe to retry.
 
+Generic row creation and optimistic update use separate serialization
+contracts. Creation may carry the owner asserted from the authenticated
+session, record keys, offline creation timestamps, and the entity's insert
+fields. An update is built only from the entity's required
+`SyncEntitySpec.updatableLocalColumns` allowlist; ownership, device scope,
+record keys, expected revision, `created_at`, `updated_at`, and `revision`
+remain filters or server-owned metadata. Remote aliases are applied only after
+the local allowlist is evaluated, and an allowlisted nullable value remains in
+the PATCH map when its value is explicitly `null`. Deletes serialize no row
+payload. An empty update contract means generic UPDATE is prohibited and must
+fail locally before an HTTP request.
+
+The client allowlist and authenticated Postgres column-level UPDATE grants are
+one invariant enforced at two layers. The executable client matrix is in
+[`sync_dtos.dart`](../../lib/src/core/sync/sync_dtos.dart), and the database
+matrix is installed by the latest migration under
+[`supabase/migrations/`](../../supabase/migrations/) and compared exhaustively
+by pgTAP. Table-wide authenticated UPDATE and direct client authority over
+server revision/timestamp columns are prohibited even when owner RLS would
+otherwise allow the row.
+
 ## Outbox generations and conditional completion
 
 Every outbox row (`offline_mutation_queue` table) maintains an integer `generation` column (incremented automatically on SQLite triggers during coalesced same-key edits).
@@ -172,7 +193,14 @@ The database includes a server-assigned, monotonic, owner-scoped change feed (`s
 - `fetch_user_change_feed` returns contract version, `feed_generation`, `next_seq`, `has_more`, `high_water_seq`, and `resnapshot_required = true` when the requested cursor predates the retained range or was built for a different generation. Because compaction advances the durable generation, every pre-compaction cursor deterministically rehydrates instead of silently missing deleted history.
 - There is no rollout flag, capability table, fallback pull protocol, or authenticated parity function in production v1. A service-role-only parity function remains available to protected validation.
 
-The cloud uses deliberate aliases for maintenance plan recurrence (`description`, `interval_count`, `interval_unit`) and streak summaries (`longest_streak`, `last_completion_date`). `SyncEntitySpec.remoteRenames` translates those names in both directions. Specialized detail and maintenance metadata columns otherwise match the Flutter/Drift payload names directly, preventing silent field loss during RPC creation or ordinary synchronization.
+Maintenance plan columns use the same canonical names in Flutter/Drift and
+Postgres (`instructions`, `recurrence_interval`, and `recurrence_unit`). The
+only deliberate generic-sync aliases are the streak summary fields
+(`best_streak` to `longest_streak` and `last_completed_date` to
+`last_completion_date`); `SyncEntitySpec.remoteRenames` translates those names
+in both directions. Specialized detail and maintenance metadata columns also
+match the Flutter/Drift payload names directly, preventing silent field loss
+during RPC creation or ordinary synchronization.
 
 ## Maintenance completion
 
@@ -180,9 +208,39 @@ Maintenance completion affects history, recurrence, due state, reminders, statis
 
 Cloud `maintenance_records` are pull-only for generic synchronization. Authenticated table INSERT, UPDATE, and DELETE are revoked, and both single-row and batch gateway paths fail closed if asked to mutate them. Before pushing, a retained generic history row duplicated by a structurally valid completion/undo intent is removed; any other retained generic history mutation becomes a durable, user-visible `server_authority_required` failure. Restore-origin rows are replaced by validated per-plan merge batches. Ordinary completions and undo use their dedicated RPCs. A missing-plan completion is accepted only when the same account already has an exact task-creation authorization for that plan ID; otherwise it returns terminal `task_creation_not_authorized` without partial state.
 
+`complete_maintenance_task` returns completion contract version 1. Every
+non-exception result has the same nine fields: `contract_version`, `status`,
+`retryable`, `conflict_reason`, `current_plan_revision`,
+`resulting_record_id`, `resulting_next_due_date`, `plan`, and `record`. The
+client rejects unknown versions, statuses, reason codes, types, ownership,
+plan/record relationships, requested identities, timestamps, and impossible
+field combinations as the non-retryable
+`maintenance_completion_rpc_contract_mismatch`. It never persists the response
+or its identifiers for diagnostics.
+
+A completion push has two successful run-level dispositions. `applied`
+acknowledges or reconciles the mutation. `terminalHandled` keeps a rejected
+business mutation as failed-visible and allows hydration and later independent
+mutations to continue. Applied, already-applied, and
+occurrence-completed-elsewhere results require canonical rows. A stale plan
+revision receives exactly one retry using the returned canonical revision;
+another well-formed conflict is reconciled or quarantined without failing the
+run. Invalid payload outcomes are quarantined with their bounded server reason.
+Only transport failures and run-wide authentication, account-scope,
+permission, or schema failures abort the run. The run coordinator rethrows the
+canonical typed failure with the original stack trace so observability sees the
+classification without losing the originating frames.
+
 Signed-in backup restore converts maintenance history into deterministic per-plan `maintenance_history_restore` execute operations of at most 100 records. `restore_maintenance_history` requires an existing owned plan, expected revision, and exact material plan snapshot. It inserts only missing rows; an exact existing row counts as replay success; a differing record ID or operation ID makes the whole batch a durable `history_record_conflict`. A plan difference is a durable `plan_snapshot_conflict`. The RPC never creates plans, overwrites schedules, or deletes unrelated cloud history. An imported archive remains untrusted: this proves ownership, structure, and exact replay, not historical authenticity.
 
-Asset and plan generic updates omit protected economic columns (`assets.asset_type` and `maintenance_plans.asset_id`) and use revision-aware UPDATE for existing rows rather than full-row UPSERT. Type changes, task moves, and owned-source copies require an authenticated online quote/commit path. Offline attempts remain explicit drafts. Copy recovery retains local-only tag/photo intent in secure storage but sends only the allowlisted source/target/room/include/map contract to Supabase.
+Asset and plan generic updates are positive allowlists, not full-row payloads
+with protected fields removed afterward. Asset type and plan parent asset are
+therefore absent by construction, while revision-aware filters retain
+optimistic concurrency. Type changes, task moves, and owned-source copies
+require an authenticated online quote/commit path. Offline attempts remain
+explicit drafts. Copy recovery retains local-only tag/photo intent in secure
+storage but sends only the allowlisted source/target/room/include/map contract
+to Supabase.
 
 ## Media synchronization
 
@@ -204,7 +262,7 @@ Media requires coordination between local metadata, file availability, Storage o
 
 ## Retry and backoff
 
-Retryable failures should use bounded exponential backoff with jitter and persistence where appropriate. Authorization, schema, ownership, and terminal validation errors should not spin indefinitely. User-visible state should distinguish offline waiting from protocol failure.
+Retryable failures should use bounded exponential backoff with jitter and persistence where appropriate. Authorization, schema, ownership, and terminal validation errors should not spin indefinitely. A PostgreSQL `42501` that explicitly reports a missing table/column privilege is a non-retryable, sync-blocking incompatible-schema failure with stable diagnostic code `data_api_acl_contract_mismatch`; RLS ownership and `WITH CHECK` denials remain permission-denied failures. Diagnostics retain only entity, operation, and SQLSTATE, never row keys, account IDs, URLs, payloads, or field values. Existing generic permission failures are never automatically replayed because they may represent genuine ownership denial. User-visible state should distinguish offline waiting from protocol failure.
 
 ## Account deletion interaction
 

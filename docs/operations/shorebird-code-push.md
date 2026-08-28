@@ -249,7 +249,7 @@ Shorebird's native engine incorporates automatic crash resilience:
 
 ## Sentry and VersionDeck boundaries
 
-The runtime keeps the existing release identity `app.owntend.mobile@x.y.z+N` and dist `N`; patch identity is a bounded tag (`shorebird_patch_number`), not a new Sentry release. Release evidence retains Dart obfuscation symbols, R8 mapping, and exact-revision Shorebird engine-symbol archives. [`tool/publish_sentry_release.ps1`](../../tool/publish_sentry_release.ps1) may upload engine symbols only when Sentry mutation receives separate authorization and `-EngineSymbolsDirectory` is provided.
+The runtime keeps the existing release identity `app.owntend.mobile@x.y.z+N` and dist `N`; patch identity is a bounded tag (`shorebird_patch_number`), not a new Sentry release. Release evidence retains Dart obfuscation symbols, R8 mapping, and exact-revision Shorebird engine-symbol archives. A separately authorized [`tool/publish_sentry_release.ps1`](../../tool/publish_sentry_release.ps1) run requires `-EngineSymbolsDirectory`, validates the canonical revision, hashes, ABI set, and debug/code identifiers, waits for processing, and verifies the exact debug-information files before finalization.
 
 ### Sentry Release Health & Patch Regression Alerting
 

@@ -76,6 +76,7 @@ class SyncEntitySpec {
     required this.remoteTable,
     required this.keyColumns,
     required this.localColumns,
+    required this.updatableLocalColumns,
     required this.dateColumns,
     required this.modifiedExpression,
     this.boolColumns = const {},
@@ -91,6 +92,13 @@ class SyncEntitySpec {
   final String remoteTable;
   final List<String> keyColumns;
   final List<String> localColumns;
+
+  /// Local columns that generic optimistic PATCH operations may send.
+  ///
+  /// An empty set makes the entity insert/delete/RPC-only. Ownership, record
+  /// keys, device scope, and sync metadata are always filters or server-owned
+  /// values and therefore cannot appear here.
+  final Set<String> updatableLocalColumns;
   final Set<String> dateColumns;
   final Set<String> boolColumns;
   final Set<String> jsonColumns;
@@ -131,6 +139,49 @@ class SyncEntitySpec {
     }
     return remoteColumn;
   }
+
+  bool get supportsGenericUpdate => updatableLocalColumns.isNotEmpty;
+
+  List<String> get updateContractViolations {
+    const protectedRemoteColumns = {
+      'user_id',
+      'device_id',
+      'created_at',
+      'updated_at',
+      'revision',
+    };
+    final violations = <String>[];
+    final remoteColumns = <String>{};
+    for (final localColumn in updatableLocalColumns) {
+      final remoteColumn = remoteColumnFor(localColumn);
+      if (!localColumns.contains(localColumn)) {
+        violations.add('$localColumn is not a local data column');
+      }
+      if (localOnlyColumns.contains(localColumn)) {
+        violations.add('$localColumn is local-only');
+      }
+      if (keyColumns.contains(localColumn)) {
+        violations.add('$localColumn is part of the record key');
+      }
+      if (protectedRemoteColumns.contains(remoteColumn)) {
+        violations.add('$localColumn maps to protected $remoteColumn');
+      }
+      if (!remoteColumns.add(remoteColumn)) {
+        violations.add('$localColumn duplicates remote column $remoteColumn');
+      }
+    }
+    violations.sort();
+    return violations;
+  }
+
+  void validateUpdateContract() {
+    final violations = updateContractViolations;
+    if (violations.isNotEmpty) {
+      throw StateError(
+        'Invalid generic update contract for $entity: ${violations.join('; ')}',
+      );
+    }
+  }
 }
 
 /// Device-scoped permission state (`permission_education_device_state`) is
@@ -153,6 +204,7 @@ const userSettingSyncSpec = SyncEntitySpec(
   remoteTable: 'user_settings',
   keyColumns: ['key'],
   localColumns: ['key', 'value', 'updated_at'],
+  updatableLocalColumns: {'value'},
   dateColumns: {'updated_at'},
   modifiedExpression: 'updated_at',
   localWhere:
@@ -177,6 +229,7 @@ const syncEntitySpecs = <SyncEntitySpec>[
       'updated_at',
       'archived_at',
     ],
+    updatableLocalColumns: {'name', 'kind', 'sort_order', 'archived_at'},
     dateColumns: {'created_at', 'updated_at', 'archived_at'},
     modifiedExpression: 'updated_at',
   ),
@@ -196,6 +249,14 @@ const syncEntitySpecs = <SyncEntitySpec>[
       'updated_at',
       'archived_at',
     ],
+    updatableLocalColumns: {
+      'area_id',
+      'name',
+      'room_type',
+      'notes',
+      'sort_order',
+      'archived_at',
+    },
     dateColumns: {'created_at', 'updated_at', 'archived_at'},
     modifiedExpression: 'updated_at',
   ),
@@ -216,6 +277,14 @@ const syncEntitySpecs = <SyncEntitySpec>[
       'updated_at',
       'archived_at',
     ],
+    updatableLocalColumns: {
+      'name',
+      'room_id',
+      'placement',
+      'notes',
+      'purchase_date',
+      'archived_at',
+    },
     dateColumns: {'purchase_date', 'created_at', 'updated_at', 'archived_at'},
     modifiedExpression: 'updated_at',
   ),
@@ -234,6 +303,15 @@ const syncEntitySpecs = <SyncEntitySpec>[
       'manual_url',
       'consumable',
     ],
+    updatableLocalColumns: {
+      'brand',
+      'model',
+      'serial_number',
+      'power_source',
+      'warranty_until',
+      'manual_url',
+      'consumable',
+    },
     dateColumns: {'warranty_until'},
     modifiedExpression:
         '(SELECT updated_at FROM assets WHERE assets.id = asset_id)',
@@ -254,6 +332,16 @@ const syncEntitySpecs = <SyncEntitySpec>[
       'feeding_notes',
       'medical_notes',
     ],
+    updatableLocalColumns: {
+      'species',
+      'breed',
+      'birth_date',
+      'microchip_id',
+      'vet_name',
+      'vet_phone',
+      'feeding_notes',
+      'medical_notes',
+    },
     dateColumns: {'birth_date'},
     modifiedExpression:
         '(SELECT updated_at FROM assets WHERE assets.id = asset_id)',
@@ -272,6 +360,14 @@ const syncEntitySpecs = <SyncEntitySpec>[
       'last_repotted_at',
       'toxicity_notes',
     ],
+    updatableLocalColumns: {
+      'species',
+      'sunlight',
+      'watering_interval_days',
+      'pot_size',
+      'last_repotted_at',
+      'toxicity_notes',
+    },
     dateColumns: {'last_repotted_at'},
     modifiedExpression:
         '(SELECT updated_at FROM assets WHERE assets.id = asset_id)',
@@ -289,6 +385,13 @@ const syncEntitySpecs = <SyncEntitySpec>[
       'battery_type',
       'test_interval_days',
     ],
+    updatableLocalColumns: {
+      'safety_type',
+      'installed_at',
+      'expires_at',
+      'battery_type',
+      'test_interval_days',
+    },
     dateColumns: {'installed_at', 'expires_at'},
     modifiedExpression:
         '(SELECT updated_at FROM assets WHERE assets.id = asset_id)',
@@ -299,6 +402,7 @@ const syncEntitySpecs = <SyncEntitySpec>[
     remoteTable: 'tags',
     keyColumns: ['id'],
     localColumns: ['id', 'name', 'created_at'],
+    updatableLocalColumns: {'name'},
     dateColumns: {'created_at'},
     modifiedExpression: 'created_at',
   ),
@@ -308,6 +412,7 @@ const syncEntitySpecs = <SyncEntitySpec>[
     remoteTable: 'asset_tags',
     keyColumns: ['asset_id', 'tag_id'],
     localColumns: ['asset_id', 'tag_id'],
+    updatableLocalColumns: {},
     dateColumns: {},
     modifiedExpression:
         '(SELECT updated_at FROM assets WHERE assets.id = asset_id)',
@@ -326,6 +431,7 @@ const syncEntitySpecs = <SyncEntitySpec>[
       'cloud_object_path',
       'created_at',
     ],
+    updatableLocalColumns: {},
     dateColumns: {'created_at'},
     boolColumns: {'is_primary'},
     modifiedExpression: 'created_at',
@@ -352,6 +458,17 @@ const syncEntitySpecs = <SyncEntitySpec>[
       'updated_at',
       'archived_at',
     ],
+    updatableLocalColumns: {
+      'title',
+      'instructions',
+      'recurrence_interval',
+      'recurrence_unit',
+      'priority',
+      'next_due_date',
+      'reminder_days_before',
+      'is_enabled',
+      'archived_at',
+    },
     dateColumns: {'next_due_date', 'created_at', 'updated_at', 'archived_at'},
     boolColumns: {'is_enabled'},
     modifiedExpression: 'updated_at',
@@ -373,6 +490,14 @@ const syncEntitySpecs = <SyncEntitySpec>[
       'created_at',
       'updated_at',
     ],
+    updatableLocalColumns: {
+      'task_type',
+      'location_label',
+      'estimated_duration_minutes',
+      'required_materials_json',
+      'reminder_recommendation',
+      'sort_order',
+    },
     dateColumns: {'created_at', 'updated_at'},
     modifiedExpression: 'updated_at',
   ),
@@ -382,6 +507,7 @@ const syncEntitySpecs = <SyncEntitySpec>[
     remoteTable: 'maintenance_records',
     keyColumns: ['id'],
     localColumns: ['id', 'plan_id', 'due_date', 'completed_at', 'notes'],
+    updatableLocalColumns: {},
     dateColumns: {'due_date', 'completed_at'},
     modifiedExpression: 'completed_at',
   ),
@@ -404,6 +530,7 @@ const syncEntitySpecs = <SyncEntitySpec>[
       'created_at',
       'updated_at',
     ],
+    updatableLocalColumns: {'read_at'},
     dateColumns: {'read_at', 'created_at', 'updated_at'},
     jsonColumns: {'message_args'},
     modifiedExpression: 'updated_at',
@@ -421,6 +548,11 @@ const syncEntitySpecs = <SyncEntitySpec>[
       'last_completed_date',
       'updated_at',
     ],
+    updatableLocalColumns: {
+      'current_streak',
+      'best_streak',
+      'last_completed_date',
+    },
     dateColumns: {'last_completed_date', 'updated_at'},
     modifiedExpression: 'updated_at',
     remoteRenames: {
@@ -436,6 +568,7 @@ const profileSyncSpec = SyncEntitySpec(
   remoteTable: 'profiles',
   keyColumns: [],
   localColumns: ['nickname'],
+  updatableLocalColumns: {'nickname'},
   dateColumns: {},
   modifiedExpression: "(SELECT updated_at FROM settings WHERE key = 'profile')",
 );
@@ -502,19 +635,37 @@ class SyncRecord {
 
   bool get isDeleted => deletedAt != null;
 
-  Map<String, dynamic> toRemotePayload(String userId, {String? deviceId}) {
+  Map<String, dynamic> toRemoteCreatePayload(
+    String userId, {
+    String? deviceId,
+  }) {
     final payload = {
       'user_id': userId,
       if (spec.scope == SyncScope.deviceScoped) 'device_id': deviceId,
-      for (final entry in values.entries)
-        if (!spec.localOnlyColumns.contains(entry.key))
-          spec.remoteColumnFor(entry.key): entry.value,
+      for (final localColumn in spec.localColumns)
+        if (!spec.localOnlyColumns.contains(localColumn) &&
+            values.containsKey(localColumn))
+          spec.remoteColumnFor(localColumn): values[localColumn],
     };
     payload.putIfAbsent(
       'updated_at',
       () => clientModifiedAt.toUtc().toIso8601String(),
     );
     return payload;
+  }
+
+  Map<String, dynamic> toRemoteUpdatePayload() {
+    spec.validateUpdateContract();
+    if (!spec.supportsGenericUpdate) {
+      throw StateError(
+        '${spec.entity} does not support generic optimistic updates.',
+      );
+    }
+    return {
+      for (final localColumn in spec.updatableLocalColumns)
+        if (values.containsKey(localColumn))
+          spec.remoteColumnFor(localColumn): values[localColumn],
+    };
   }
 
   factory SyncRecord.fromRemote(SyncEntitySpec spec, Map<String, dynamic> row) {

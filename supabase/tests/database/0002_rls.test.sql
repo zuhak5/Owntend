@@ -49,8 +49,14 @@ select ok(
   'authenticated can insert owned areas'
 );
 select ok(
-  has_table_privilege('authenticated', 'public.areas', 'UPDATE'),
-  'authenticated can update owned areas'
+  not has_table_privilege('authenticated', 'public.areas', 'UPDATE')
+  and has_column_privilege(
+    'authenticated', 'public.areas', 'name', 'UPDATE'
+  )
+  and not has_column_privilege(
+    'authenticated', 'public.areas', 'user_id', 'UPDATE'
+  ),
+  'authenticated area updates use the least-privilege column contract'
 );
 select ok(
   has_table_privilege('authenticated', 'public.areas', 'DELETE'),

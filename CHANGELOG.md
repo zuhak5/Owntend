@@ -6,6 +6,19 @@ The current application version is defined only in `pubspec.yaml`. Released vers
 
 ## Unreleased
 
+### Sync PATCH and least-privilege repair (2026-08-28)
+
+- Fixed asset, maintenance-plan, and other generic cloud updates that could send full local rows into column-restricted PostgREST PATCH operations and fail with `403` / PostgreSQL `42501`. Creation and update serializers are now separate, every entity owns an explicit mutable-column contract, nullable clears remain supported, and ownership, keys, timestamps, revisions, local-only fields, and RPC-authoritative fields are excluded from updates by construction.
+- Added a forward migration that removes table-wide and stale authenticated UPDATE grants across all synchronized tables, then grants only the exact client update matrix. New pgTAP and real authenticated gateway coverage locks allowed writes, server revision/timestamp advancement, protected-column denial, stale-revision conflicts, and cross-account isolation.
+- Classified explicit Data API privilege drift separately from RLS denial as the non-retryable `data_api_acl_contract_mismatch` protocol failure, with diagnostics limited to entity, operation, and SQLSTATE so authorization failures cannot create retry storms or expose record/account data.
+
+### Maintenance hydration and Sentry hardening (2026-08-29)
+
+- Prevented well-formed maintenance completion conflicts and validation outcomes from aborting initial hydration. Rejected mutations remain failed-visible, later independent work continues, stale plan revisions retry exactly once, and only run-wide authorization/schema or retryable infrastructure failures stop synchronization.
+- Versioned `complete_maintenance_task` with one fixed contract-1 envelope and a strict ownership/relationship/type/status parser. Malformed or unknown responses fail once with `maintenance_completion_rpc_contract_mismatch`; expected payload rejections use bounded privacy-safe diagnostics.
+- Added stable Sentry fingerprints and allowlisted completion breadcrumbs while strengthening removal of user, IP, geography, request, URL, payload, and custom context data. Expected business conflicts no longer become exception events.
+- Hardened Sentry publication evidence so exact Dart, obfuscation, R8, and engine symbols are hash-bound to the release/source identity and verified through Sentry before finalization. Production IP-storage settings, hosted symbol processing, and affected-event deletion remain separately authorized protected operations.
+
 ### Supabase authority remediation (2026-08-27)
 
 - Removed the redundant required-reviewer prompt from the branch-restricted GitHub `production` environment while retaining exact-source, backend, signing, provenance, scoped-credential, kill-switch, and `main`/`release/*` deployment controls; synchronized release documentation now reflects the prompt-free operator flow.

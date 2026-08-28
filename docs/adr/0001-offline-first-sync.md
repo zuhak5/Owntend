@@ -15,6 +15,14 @@ Use Drift/SQLite as the immediate local working set and Supabase as the authenti
 
 Local synchronized mutations are applied transactionally and recorded as durable outbox operations. A synchronization coordinator binds work to an authenticated account, pushes idempotent operations, pulls revisioned changes using cursors, stores remote shadows, reconciles conflicts, and treats realtime events as invalidation signals.
 
+Authoritative RPC pushes distinguish `applied` from `terminalHandled`.
+Well-formed terminal business outcomes are reconciled or retained as
+failed-visible and do not abort hydration or later independent mutations.
+Retryable infrastructure failures and run-wide authentication, account-scope,
+permission, or schema failures still stop the run. Maintenance completion uses
+a fixed versioned envelope and one safe stale-revision retry; malformed or
+unknown contracts fail closed.
+
 Protected server-authoritative behavior—ownership, point balances, reward verification, atomic charged operations, and globally coordinated revisions—remains in Supabase.
 
 ## Consequences
@@ -43,6 +51,10 @@ Protected server-authoritative behavior—ownership, point balances, reward veri
 - Never treat realtime payloads as bypassing authenticated pull validation.
 - Make externally retried operations idempotent.
 - Reconcile maintenance completion and reminders after conflicts.
+- Do not let one well-formed terminal RPC business outcome fail an otherwise
+  healthy hydration run.
+- Validate versioned authoritative-RPC envelopes before applying canonical
+  rows, including ownership and relationship checks.
 
 ## Alternatives considered
 

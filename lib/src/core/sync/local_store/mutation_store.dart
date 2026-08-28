@@ -1049,8 +1049,9 @@ mixin _LocalSyncMutationStore on _LocalSyncStoreBase {
 
   Future<bool> markMutationFailed(
     LocalSyncMutation mutation,
-    String message,
-  ) async {
+    String message, {
+    String? errorCode,
+  }) async {
     const maxAutomaticAttempts = 24;
     const minimumDelaySeconds = 15;
     const maximumDelaySeconds = 3600;
@@ -1071,7 +1072,7 @@ mixin _LocalSyncMutationStore on _LocalSyncStoreBase {
           attempts: const Value(-1),
           state: const Value('failedVisible'),
           nextAttemptAt: const Value(null),
-          lastErrorCode: const Value('retry_exhausted'),
+          lastErrorCode: Value(errorCode ?? 'retry_exhausted'),
           lastError: Value(
             '$message Automatic sync paused after '
             '$maxAutomaticAttempts failed attempts.',
@@ -1104,7 +1105,7 @@ mixin _LocalSyncMutationStore on _LocalSyncStoreBase {
         attempts: Value(attempts),
         state: const Value('pending'),
         nextAttemptAt: Value(DateTime.now().add(Duration(seconds: seconds))),
-        lastErrorCode: const Value('transient'),
+        lastErrorCode: Value(errorCode ?? 'transient'),
         lastError: Value(message),
       ),
     );
@@ -1113,8 +1114,9 @@ mixin _LocalSyncMutationStore on _LocalSyncStoreBase {
 
   Future<bool> markMutationTerminal(
     LocalSyncMutation mutation,
-    String message,
-  ) async {
+    String message, {
+    String? errorCode,
+  }) async {
     final updated =
         await (db.update(db.syncOutbox)..where(
               (row) =>
@@ -1127,7 +1129,7 @@ mixin _LocalSyncMutationStore on _LocalSyncStoreBase {
                 attempts: const Value(-1),
                 state: const Value('failedVisible'),
                 nextAttemptAt: const Value(null),
-                lastErrorCode: const Value('terminal'),
+                lastErrorCode: Value(errorCode ?? 'terminal'),
                 lastError: Value(message),
               ),
             );

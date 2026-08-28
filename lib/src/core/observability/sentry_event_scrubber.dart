@@ -30,6 +30,13 @@ const allowedSentryTags = <String>{
   'permission_state',
   'theme',
   'provider',
+  'diagnostic_code',
+  'sync_entity',
+  'sync_operation',
+  'rpc_status',
+  'reason_code',
+  'sql_state',
+  'contract_version',
 };
 
 const allowedSentryExtras = <String>{

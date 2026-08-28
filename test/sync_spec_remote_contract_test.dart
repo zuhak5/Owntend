@@ -29,7 +29,7 @@ void main() {
       clientModifiedAt: DateTime.utc(2026, 1, 1),
     );
 
-    final payload = record.toRemotePayload(userId);
+    final payload = record.toRemoteCreatePayload(userId);
 
     expect(payload, isNot(contains('relative_path')));
     expect(payload['object_path'], '$userId/media/asset-1/photo-1.jpg');

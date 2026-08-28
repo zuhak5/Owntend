@@ -85,7 +85,7 @@ select extensions.is(
 -- 4. Ordinary synchronized updates keep their authorized owner-scoped
 --    contract; cross-user updates are denied by RLS.
 update public.assets
-set name = 'Rpc Asset Renamed', updated_at = '2026-02-01T00:00:00Z', revision = 2
+set name = 'Rpc Asset Renamed'
 where user_id = '00000000-0000-0000-0000-00000000000a' and id = 'asset-mon-rpc';
 
 select extensions.is(

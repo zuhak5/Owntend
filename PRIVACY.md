@@ -1,6 +1,6 @@
 # Owntend Privacy and Data Use
 
-_Last reviewed: August 27, 2026_
+_Last reviewed: August 29, 2026_
 
 This document describes the data-handling design represented by the current Owntend source code. It is technical project documentation, not a substitute for jurisdiction-specific legal review or store disclosures.
 
@@ -51,7 +51,19 @@ Charged task creation and entitlement upgrades use server-side point debiting wi
 
 ### Sentry
 
-Sentry may receive technical error and performance information when enabled. Owntend's intended observability policy excludes user content and direct identifiers, disables screenshots, session replay, view hierarchy, and raw HTTP payload capture, and applies event scrubbing. Supabase Edge Functions may optionally report request-scoped server failures to Sentry when their environment provides `SENTRY_DSN`, but they must exclude JWTs, authorization headers, recovery keys, claim IDs, user IDs, and raw callback payloads. See `docs/SENTRY_OPERATIONS.md`.
+Sentry may receive technical error and performance information when enabled.
+Owntend's intended observability policy excludes user content, direct
+identifiers, location, IP-derived geography, URLs, and raw request/response
+payloads; disables screenshots, session replay, and view hierarchy; and applies
+event scrubbing and bounded technical allowlists. Because network
+infrastructure can observe a connection IP before client-side scrubbing, the
+Sentry project must be configured to prevent IP storage before production
+ingestion is enabled. Supabase Edge Functions may optionally report
+request-scoped server failures to Sentry when their environment provides
+`SENTRY_DSN`, but they must exclude JWTs, authorization headers, recovery keys,
+claim IDs, user IDs, and raw callback payloads. Exact release symbols and
+privacy settings are protected operational evidence, not facts proven by a
+local build. See `docs/SENTRY_OPERATIONS.md`.
 
 ### Shorebird
 

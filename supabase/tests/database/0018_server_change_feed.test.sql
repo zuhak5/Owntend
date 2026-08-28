@@ -79,15 +79,15 @@ select extensions.results_eq(
   'INSERT on areas automatically logs INSERT change feed entry'
 );
 
--- Update area with backdated client timestamp
+-- Update an allowed business column; the metadata trigger owns revision/time.
 update public.areas
-set name = 'Updated Main Area', updated_at = '1999-01-01T00:00:00Z', revision = 2
+set name = 'Updated Main Area'
 where user_id = '00000000-0000-0000-0000-00000000000a' and id = 'area-1';
 
 select extensions.results_eq(
   $$ select op_type, revision from public.server_change_feed where user_id = '00000000-0000-0000-0000-00000000000a' order by change_seq desc limit 1 $$,
   $$ values ('UPDATE', 2::bigint) $$,
-  'UPDATE on areas automatically logs UPDATE change feed entry regardless of backdated timestamp'
+  'UPDATE on areas logs the server-incremented revision in the change feed'
 );
 
 -- Delete area

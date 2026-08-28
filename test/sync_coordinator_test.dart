@@ -41,6 +41,8 @@ class _StatefulGateway implements SupabaseSyncGateway {
   Completer<void>? maintenanceCompletionGate;
   String? maintenanceCanonicalPlanTitle;
   int? failMaintenanceCompletionCall;
+  MaintenanceCompletionResult? forcedMaintenanceCompletionResult;
+  final queuedMaintenanceCompletionResults = <MaintenanceCompletionResult>[];
   bool maintenanceConflictOnce = false;
   bool maintenanceConflictWithCanonicalPlan = false;
   Completer<void>? materializeMediaGate;
@@ -196,6 +198,11 @@ class _StatefulGateway implements SupabaseSyncGateway {
         message: 'This maintenance completion conflicts with newer cloud data.',
       );
     }
+    if (queuedMaintenanceCompletionResults.isNotEmpty) {
+      return queuedMaintenanceCompletionResults.removeAt(0);
+    }
+    final forcedResult = forcedMaintenanceCompletionResult;
+    if (forcedResult != null) return forcedResult;
 
     final payload = Map<String, dynamic>.from(jsonDecode(payloadJson) as Map);
     final planValues = Map<String, dynamic>.from(payload['plan'] as Map);
@@ -401,7 +408,7 @@ class _StatefulGateway implements SupabaseSyncGateway {
     );
     if (planIndex < 0) {
       return const MaintenanceUndoResult(
-        status: MaintenanceCompletionStatus.invalid,
+        status: MaintenanceUndoStatus.invalid,
         retryable: false,
         conflictReason: 'plan_missing',
       );
@@ -452,7 +459,7 @@ class _StatefulGateway implements SupabaseSyncGateway {
       rewound = true;
     }
     return MaintenanceUndoResult(
-      status: MaintenanceCompletionStatus.applied,
+      status: MaintenanceUndoStatus.applied,
       retryable: false,
       plan: plan,
       rewound: rewound,
@@ -706,6 +713,20 @@ class _FailingOnceGateway extends _StatefulGateway {
       onExactCount: onExactCount,
       materializeMedia: materializeMedia,
     );
+  }
+}
+
+class _StackFailureGateway extends _StatefulGateway {
+  @override
+  Future<List<SyncRecord>> pullAuthoritativeSnapshotPage({
+    required SyncEntitySpec spec,
+    required String userId,
+    required String deviceId,
+    String? afterRecordKey,
+    void Function(int exactCount)? onExactCount,
+    bool materializeMedia = true,
+  }) {
+    throw StateError('synthetic stack-preservation failure');
   }
 }
 
@@ -1996,7 +2017,7 @@ void main() {
   });
 
   test(
-    'terminal maintenance conflict is visible, retained, and never retried',
+    'stale retry that loses the occurrence reconciles and keeps sync ready',
     () async {
       final db = AppDatabase(executor: NativeDatabase.memory());
       addTearDown(db.close);
@@ -2005,45 +2026,127 @@ void main() {
       await store.account();
       await store.setEnabled(enabled: true, boundUserId: 'user-1');
       await store.recordSyncSuccess(DateTime.utc(2026, 6, 30));
-      await db.delete(db.syncOutbox).go();
-
-      const completionKey = 'terminal-conflict-completion';
-      const conflictMessage =
-          'The maintenance plan changed on another device. '
-          'Review the task and confirm the completion again.';
-
-      await db
-          .into(db.syncOutbox)
-          .insert(
-            SyncOutboxCompanion.insert(
-              entity: 'maintenance_completion',
-              recordKey: completionKey,
-              operation: 'execute',
-              payloadJson: const Value(
-                '{"expected_next_due_date":"2026-07-28T00:00:00.000Z",'
-                '"plan":{"id":"missing-plan","recurrence_interval":1,'
-                '"recurrence_unit":"months"},'
-                '"record":{"id":"terminal-conflict-completion"}}',
+      await store.withOutboxSuppressed(() async {
+        await DriftAssetRepository(db).saveArea(
+          id: 'stale-race-area',
+          name: 'Stale race area',
+          kind: AreaKind.indoor,
+          sortOrder: 0,
+        );
+        await db
+            .into(db.rooms)
+            .insert(
+              RoomsCompanion.insert(
+                id: 'stale-race-room',
+                areaId: 'stale-race-area',
+                name: 'Stale race room',
               ),
-              changedAt: Value(DateTime.utc(2026, 7, 28, 4)),
-              attempts: const Value(0),
-            ),
-          );
+            );
+        await db
+            .into(db.assets)
+            .insert(
+              AssetsCompanion.insert(
+                id: 'stale-race-asset',
+                name: 'Stale race asset',
+                roomId: 'stale-race-room',
+              ),
+            );
+        await db
+            .into(db.maintenancePlans)
+            .insert(
+              MaintenancePlansCompanion.insert(
+                id: 'stale-race-plan',
+                assetId: 'stale-race-asset',
+                title: 'Stale race plan',
+                recurrenceInterval: 1,
+                recurrenceUnit: 'months',
+                priority: 'medium',
+                nextDueDate: DateTime.utc(2026, 7),
+              ),
+            );
+      });
+      await db.delete(db.syncOutbox).go();
+      expect(
+        await DriftMaintenanceRepository(
+          db,
+        ).completePlan('stale-race-plan', completedAt: DateTime.utc(2026, 7)),
+        isTrue,
+      );
 
+      final mutation =
+          await (db.select(db.syncOutbox)
+                ..where((row) => row.entity.equals('maintenance_completion')))
+              .getSingle();
+      final payload = Map<String, dynamic>.from(
+        jsonDecode(mutation.payloadJson!) as Map,
+      );
+      final planValues = Map<String, dynamic>.from(payload['plan'] as Map);
+      final recordValues = Map<String, dynamic>.from(payload['record'] as Map);
+      final expectedDue = DateTime.parse(
+        payload['expected_next_due_date'] as String,
+      ).toUtc();
+      final resultingDue = DateTime.parse(planValues['next_due_date'] as String)
+          .toUtc();
+      final planSpec = syncSpecByEntity['maintenance_plan']!;
+      final recordSpec = syncSpecByEntity['maintenance_record']!;
+      final stalePlan = SyncRecord(
+        spec: planSpec,
+        recordKey: 'stale-race-plan',
+        values: {...planValues, 'next_due_date': expectedDue.toIso8601String()},
+        clientModifiedAt: expectedDue,
+        originDeviceId: 'peer-device',
+        revision: 7,
+        serverUpdatedAt: expectedDue,
+      );
+      final winnerPlan = SyncRecord(
+        spec: planSpec,
+        recordKey: 'stale-race-plan',
+        values: {
+          ...planValues,
+          'next_due_date': resultingDue.toIso8601String(),
+        },
+        clientModifiedAt: resultingDue,
+        originDeviceId: 'peer-device',
+        revision: 8,
+        serverUpdatedAt: resultingDue,
+      );
+      final winnerRecord = SyncRecord(
+        spec: recordSpec,
+        recordKey: 'peer-completion',
+        values: {...recordValues, 'id': 'peer-completion'},
+        clientModifiedAt: DateTime.parse(recordValues['completed_at'] as String)
+            .toUtc(),
+        originDeviceId: 'peer-device',
+        revision: 1,
+      );
+
+      final gateway = _StatefulGateway()
+        ..queuedMaintenanceCompletionResults.addAll([
+          MaintenanceCompletionResult(
+            status: MaintenanceCompletionStatus.conflict,
+            retryable: true,
+            conflictReason: 'stale_plan_revision',
+            currentPlanRevision: 7,
+            plan: stalePlan,
+          ),
+          MaintenanceCompletionResult(
+            status: MaintenanceCompletionStatus.conflict,
+            retryable: false,
+            conflictReason: 'occurrence_completed_elsewhere',
+            currentPlanRevision: 8,
+            resultingRecordId: 'peer-completion',
+            plan: winnerPlan,
+            record: winnerRecord,
+          ),
+        ]);
       final auth = _FakeAuthRepository(const AuthSession(userId: 'user-1'));
       addTearDown(auth.controller.close);
-
-      final connectivity = _FakeConnectivity(true);
-      addTearDown(connectivity.controller.close);
-
-      final gateway = _StatefulGateway()..failMaintenanceCompletionCall = 1;
       var reminderReconciliations = 0;
-
       final coordinator = SyncCoordinator(
         auth,
         store,
         gateway,
-        connectivity: connectivity,
+        connectivity: _FakeConnectivity(true),
         reconcileMaintenanceCompletionReminders: () async {
           reminderReconciliations += 1;
         },
@@ -2051,71 +2154,261 @@ void main() {
       );
       addTearDown(coordinator.dispose);
 
-      final observedMessages = <String?>[];
-      final observedPhases = <SyncPhase>[];
+      await coordinator.syncNow();
 
-      final statusSubscription = coordinator.watchStatus().listen((status) {
-        observedMessages.add(status.message);
-        observedPhases.add(status.phase);
-      });
-      addTearDown(statusSubscription.cancel);
-
-      await _eventually(() async {
-        final retained =
-            await (db.select(db.syncOutbox)..where(
-                  (row) =>
-                      row.entity.equals('maintenance_completion') &
-                      row.recordKey.equals(completionKey),
-                ))
-                .getSingleOrNull();
-
-        final status = await coordinator.status();
-
-        return gateway.maintenanceCompletionCalls == 1 &&
-            retained?.attempts == -1 &&
-            retained?.nextAttemptAt == null &&
-            status.phase == SyncPhase.error;
-      });
-
-      /*
-       * Wait beyond the normal 350 ms automatic-sync delay. A retryable
-       * mutation would attempt the RPC again during this interval.
-       */
-      await Future<void>.delayed(const Duration(milliseconds: 700));
-
+      expect((await coordinator.status()).phase, SyncPhase.ready);
+      expect(gateway.maintenanceCompletionCalls, 2);
+      expect(reminderReconciliations, 1);
+      expect(await store.pendingCount(), 0);
       expect(
-        gateway.maintenanceCompletionCalls,
-        1,
-        reason: 'a terminal maintenance conflict must never retry the RPC',
+        await (db.select(
+          db.maintenanceRecords,
+        )..where((row) => row.id.equals(mutation.recordKey))).getSingleOrNull(),
+        isNull,
       );
-      expect(reminderReconciliations, 0);
+      expect(
+        await (db.select(
+          db.maintenanceRecords,
+        )..where((row) => row.id.equals('peer-completion'))).getSingleOrNull(),
+        isNotNull,
+      );
+    },
+  );
 
+  test('structured terminal completion is retained without failing the sync run', () async {
+    final db = AppDatabase(executor: NativeDatabase.memory());
+    addTearDown(db.close);
+
+    final store = LocalSyncStore(db);
+    await store.account();
+    await store.setEnabled(enabled: true, boundUserId: 'user-1');
+    await store.recordSyncSuccess(DateTime.utc(2026, 6, 30));
+    await db.delete(db.syncOutbox).go();
+
+    const completionKey = 'terminal-conflict-completion';
+    const conflictMessage =
+        'This completion identifier is already associated with different data.';
+
+    await db
+        .into(db.syncOutbox)
+        .insert(
+          SyncOutboxCompanion.insert(
+            entity: 'maintenance_completion',
+            recordKey: completionKey,
+            operation: 'execute',
+            payloadJson: const Value(
+              '{"expected_next_due_date":"2026-07-28T00:00:00.000Z",'
+              '"plan":{"id":"missing-plan","recurrence_interval":1,'
+              '"recurrence_unit":"months"},'
+              '"record":{"id":"terminal-conflict-completion"}}',
+            ),
+            changedAt: Value(DateTime.utc(2026, 7, 28, 4)),
+            attempts: const Value(0),
+          ),
+        );
+    final auth = _FakeAuthRepository(const AuthSession(userId: 'user-1'));
+    addTearDown(auth.controller.close);
+
+    final connectivity = _FakeConnectivity(true);
+    addTearDown(connectivity.controller.close);
+
+    final gateway = _StatefulGateway()
+      ..forcedMaintenanceCompletionResult = const MaintenanceCompletionResult(
+        status: MaintenanceCompletionStatus.conflict,
+        retryable: false,
+        conflictReason: 'operation_id_reused',
+      );
+    var reminderReconciliations = 0;
+
+    final coordinator = SyncCoordinator(
+      auth,
+      store,
+      gateway,
+      connectivity: connectivity,
+      reconcileMaintenanceCompletionReminders: () async {
+        reminderReconciliations += 1;
+      },
+      listenToAuthChanges: false,
+    );
+    addTearDown(coordinator.dispose);
+
+    final observedMessages = <String?>[];
+    final observedPhases = <SyncPhase>[];
+
+    final statusSubscription = coordinator.watchStatus().listen((status) {
+      observedMessages.add(status.message);
+      observedPhases.add(status.phase);
+    });
+    addTearDown(statusSubscription.cancel);
+
+    await _eventually(() async {
       final retained =
           await (db.select(db.syncOutbox)..where(
                 (row) =>
                     row.entity.equals('maintenance_completion') &
                     row.recordKey.equals(completionKey),
               ))
-              .getSingle();
+              .getSingleOrNull();
 
-      expect(retained.attempts, -1);
-      expect(retained.nextAttemptAt, isNull);
-      expect(retained.lastError, conflictMessage);
+      final status = await coordinator.status();
 
-      expect(await store.pendingCount(), 0);
-      expect(await store.hasReadyMutations(), isFalse);
-      expect(await store.pendingMutations(), isEmpty);
-      expect(await store.nextRetryAt(), isNull);
+      return gateway.maintenanceCompletionCalls == 1 &&
+          retained?.attempts == -1 &&
+          retained?.nextAttemptAt == null &&
+          status.phase == SyncPhase.ready;
+    });
 
-      expect(
-        observedMessages,
-        contains(conflictMessage),
-        reason: 'the sync-status stream must expose the conflict to the UI',
+    /*
+       * Wait beyond the normal 350 ms automatic-sync delay. A retryable
+       * mutation would attempt the RPC again during this interval.
+       */
+    await Future<void>.delayed(const Duration(milliseconds: 700));
+
+    expect(
+      gateway.maintenanceCompletionCalls,
+      1,
+      reason: 'a terminal maintenance conflict must never retry the RPC',
+    );
+    expect(reminderReconciliations, 0);
+
+    final retained =
+        await (db.select(db.syncOutbox)..where(
+              (row) =>
+                  row.entity.equals('maintenance_completion') &
+                  row.recordKey.equals(completionKey),
+            ))
+            .getSingle();
+
+    expect(retained.attempts, -1);
+    expect(retained.nextAttemptAt, isNull);
+    expect(retained.lastError, conflictMessage);
+
+    expect(await store.pendingCount(), 0);
+    expect(await store.hasReadyMutations(), isFalse);
+    expect(await store.pendingMutations(), isEmpty);
+    expect(await store.nextRetryAt(), isNull);
+
+    expect(observedPhases, isNot(contains(SyncPhase.error)));
+    expect(
+      observedMessages.whereType<String>(),
+      isNot(contains(conflictMessage)),
+    );
+  });
+
+  test('invalid completion payload does not abort initial hydration', () async {
+    final db = AppDatabase(executor: NativeDatabase.memory());
+    addTearDown(db.close);
+
+    final store = LocalSyncStore(db);
+    await store.account();
+    await store.setEnabled(enabled: true, boundUserId: 'user-1');
+    await db.delete(db.syncOutbox).go();
+
+    const completionKey = 'invalid-hydration-completion';
+    await db
+        .into(db.syncOutbox)
+        .insert(
+          SyncOutboxCompanion.insert(
+            entity: 'maintenance_completion',
+            recordKey: completionKey,
+            operation: 'execute',
+            payloadJson: const Value(
+              '{"version":1,"operation_id":"invalid-hydration-operation",'
+              '"expected_next_due_date":"2026-08-28T00:00:00.000Z",'
+              '"plan":{"id":"missing-plan","recurrence_interval":1,'
+              '"recurrence_unit":"months"},'
+              '"record":{"id":"invalid-hydration-completion"}}',
+            ),
+            changedAt: Value(DateTime.utc(2026, 8, 28, 4, 48)),
+            attempts: const Value(0),
+          ),
+        );
+    await db
+        .into(db.tags)
+        .insert(
+          TagsCompanion.insert(
+            id: 'after-invalid-completion',
+            name: 'Independent mutation',
+            createdAt: Value(DateTime.utc(2026, 8, 28, 4, 49)),
+          ),
+        );
+
+    final auth = _FakeAuthRepository(const AuthSession(userId: 'user-1'));
+    addTearDown(auth.controller.close);
+    final gateway = _StatefulGateway()
+      ..forcedMaintenanceCompletionResult = const MaintenanceCompletionResult(
+        status: MaintenanceCompletionStatus.invalid,
+        retryable: false,
+        conflictReason: 'task_creation_not_authorized',
       );
+    final coordinator = SyncCoordinator(
+      auth,
+      store,
+      gateway,
+      listenToAuthChanges: false,
+    );
+    addTearDown(coordinator.dispose);
+
+    await coordinator.syncNow();
+
+    final status = await coordinator.status();
+    expect(status.phase, SyncPhase.ready);
+    expect(status.initialHydrationProgress, isNull);
+    expect(gateway.maintenanceCompletionCalls, 1);
+    expect(
+      gateway._records,
+      contains(
+        isA<_StoredRecord>().having(
+          (record) => record.record.recordKey,
+          'later independent record',
+          'after-invalid-completion',
+        ),
+      ),
+    );
+    final retained =
+        await (db.select(db.syncOutbox)..where(
+              (row) =>
+                  row.entity.equals('maintenance_completion') &
+                  row.recordKey.equals(completionKey),
+            ))
+            .getSingle();
+    expect(retained.attempts, -1);
+    expect(retained.lastErrorCode, 'task_creation_not_authorized');
+    expect(await store.pendingCount(), 0);
+  });
+
+  test(
+    'sync rethrows a canonical failure with the originating stack',
+    () async {
+      final db = AppDatabase(executor: NativeDatabase.memory());
+      addTearDown(db.close);
+      final store = LocalSyncStore(db);
+      await store.account();
+      await store.setEnabled(enabled: true, boundUserId: 'user-1');
+      await db.delete(db.syncOutbox).go();
+      final auth = _FakeAuthRepository(const AuthSession(userId: 'user-1'));
+      addTearDown(auth.controller.close);
+      final coordinator = SyncCoordinator(
+        auth,
+        store,
+        _StackFailureGateway(),
+        listenToAuthChanges: false,
+      );
+      addTearDown(coordinator.dispose);
+
+      Object? capturedError;
+      StackTrace? capturedStack;
+      try {
+        await coordinator.syncNow();
+      } on Object catch (error, stackTrace) {
+        capturedError = error;
+        capturedStack = stackTrace;
+      }
+
+      expect(capturedError, isA<SupabaseFailure>());
       expect(
-        observedPhases,
-        contains(SyncPhase.error),
-        reason: 'the terminal conflict must publish an error status event',
+        capturedStack.toString(),
+        contains('_StackFailureGateway.pullAuthoritativeSnapshotPage'),
       );
     },
   );

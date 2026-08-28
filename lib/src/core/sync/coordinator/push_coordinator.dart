@@ -1,5 +1,7 @@
 part of '../sync_coordinator.dart';
 
+enum _MutationPushDisposition { applied, terminalHandled }
+
 extension _SyncPushCoordinator on SyncCoordinator {
   Future<bool> _pushPending(
     String userId,
@@ -34,7 +36,7 @@ extension _SyncPushCoordinator on SyncCoordinator {
           }
 
           try {
-            await _pushMaintenanceCompletion(
+            final disposition = await _pushMaintenanceCompletion(
               mutation,
               payloadJson: payloadJson,
               userId: userId,
@@ -43,6 +45,15 @@ extension _SyncPushCoordinator on SyncCoordinator {
             );
             if (trackHydration) {
               await _localStore.addHydrationUnits(1);
+            }
+            if (disposition == _MutationPushDisposition.terminalHandled) {
+              AppLogger.warning(
+                'sync_terminal_mutation_handled',
+                fields: {
+                  'sync_entity': mutation.entity,
+                  'sync_operation': mutation.operation,
+                },
+              );
             }
           } on _AccountScopeInactive {
             rethrow;
@@ -108,7 +119,16 @@ extension _SyncPushCoordinator on SyncCoordinator {
                 conflictReason: conflictReason,
                 message: failure.message,
               );
-              throw failure;
+              if (trackHydration) await _localStore.addHydrationUnits(1);
+              AppLogger.warning(
+                'sync_terminal_mutation_handled',
+                fields: {
+                  'sync_entity': mutation.entity,
+                  'sync_operation': mutation.operation,
+                },
+              );
+              index++;
+              continue;
             }
             await _localStore.markMaintenanceHistoryRestoreSucceeded(
               mutation,
@@ -223,7 +243,7 @@ extension _SyncPushCoordinator on SyncCoordinator {
             throw failure;
           }
           try {
-            await _pushMaintenanceUndo(
+            final disposition = await _pushMaintenanceUndo(
               mutation,
               payloadJson: payloadJson,
               userId: userId,
@@ -233,6 +253,15 @@ extension _SyncPushCoordinator on SyncCoordinator {
             if (trackHydration) {
               await _localStore.addHydrationUnits(1);
             }
+            if (disposition == _MutationPushDisposition.terminalHandled) {
+              AppLogger.warning(
+                'sync_terminal_mutation_handled',
+                fields: {
+                  'sync_entity': mutation.entity,
+                  'sync_operation': mutation.operation,
+                },
+              );
+            }
             // The undo acknowledgement removes generic guard rows that may
             // already be present in this in-memory batch. Stop using this snapshot
             // and re-read the outbox immediately.
@@ -241,8 +270,10 @@ extension _SyncPushCoordinator on SyncCoordinator {
             rethrow;
           } on Object catch (error) {
             final failure = SupabaseFailure.from(error);
-            await _recordMutationFailure(mutation, failure);
-            rethrow;
+            if (!await _localStore.isMutationFailedVisible(mutation)) {
+              await _recordMutationFailure(mutation, failure);
+            }
+            throw failure;
           }
         }
 
@@ -464,7 +495,7 @@ extension _SyncPushCoordinator on SyncCoordinator {
     );
   }
 
-  Future<void> _pushMaintenanceUndo(
+  Future<_MutationPushDisposition> _pushMaintenanceUndo(
     LocalSyncMutation mutation, {
     required String payloadJson,
     required String userId,
@@ -485,22 +516,30 @@ extension _SyncPushCoordinator on SyncCoordinator {
         completionId: mutation.recordKey,
       );
       await _reconcileMaintenanceCompletionReminders(mutation);
-      return;
+      return _MutationPushDisposition.applied;
     }
-    throw SupabaseFailure(
-      kind: result.status == MaintenanceCompletionStatus.unauthorized
-          ? SupabaseFailureKind.permissionDenied
-          : result.status == MaintenanceCompletionStatus.invalid
-          ? SupabaseFailureKind.incompatibleSchema
-          : SupabaseFailureKind.conflict,
+    if (result.status == MaintenanceUndoStatus.unauthorized) {
+      throw const SupabaseFailure(
+        kind: SupabaseFailureKind.permissionDenied,
+        message: 'Cloud access was denied.',
+      );
+    }
+    final failure = SupabaseFailure(
+      kind: SupabaseFailureKind.conflict,
       message:
           result.conflictReason ??
           'The completion undo could not be reconciled.',
       retryable: result.retryable,
+      diagnosticCode: result.status == MaintenanceUndoStatus.invalid
+          ? maintenanceCompletionPayloadRejectedCode
+          : null,
     );
+    if (failure.retryable) throw failure;
+    await _recordMutationFailure(mutation, failure);
+    return _MutationPushDisposition.terminalHandled;
   }
 
-  Future<void> _pushMaintenanceCompletion(
+  Future<_MutationPushDisposition> _pushMaintenanceCompletion(
     LocalSyncMutation mutation, {
     required String payloadJson,
     required String userId,
@@ -533,7 +572,7 @@ extension _SyncPushCoordinator on SyncCoordinator {
             record: result.record!,
           );
           await _reconcileMaintenanceCompletionReminders(mutation);
-          return;
+          return _MutationPushDisposition.applied;
         } else {
           // Record ID mismatch -> another device won this occurrence
           await _localStore.reconcileMaintenanceOccurrenceCompletedElsewhere(
@@ -541,7 +580,7 @@ extension _SyncPushCoordinator on SyncCoordinator {
             plan: result.plan!,
             record: result.record!,
           );
-          return;
+          return _MutationPushDisposition.applied;
         }
       }
     }
@@ -556,7 +595,7 @@ extension _SyncPushCoordinator on SyncCoordinator {
           plan: result.plan!,
           record: result.record!,
         );
-        return;
+        return _MutationPushDisposition.applied;
       }
 
       if (result.retryable &&
@@ -588,10 +627,22 @@ extension _SyncPushCoordinator on SyncCoordinator {
               record: retried.record!,
             );
             await _reconcileMaintenanceCompletionReminders(mutation);
-            return;
+            return _MutationPushDisposition.applied;
           }
         }
         result = retried;
+      }
+
+      if (result.conflictReason == 'occurrence_completed_elsewhere' &&
+          result.plan != null &&
+          result.record != null) {
+        await _localStore.reconcileMaintenanceOccurrenceCompletedElsewhere(
+          mutation,
+          plan: result.plan!,
+          record: result.record!,
+        );
+        await _reconcileMaintenanceCompletionReminders(mutation);
+        return _MutationPushDisposition.applied;
       }
 
       if (result.plan != null) {
@@ -602,7 +653,7 @@ extension _SyncPushCoordinator on SyncCoordinator {
           plan: result.plan,
         );
         await _reconcileMaintenanceCompletionReminders(mutation);
-        return;
+        return _MutationPushDisposition.terminalHandled;
       }
     }
 
@@ -617,14 +668,20 @@ extension _SyncPushCoordinator on SyncCoordinator {
     if (result.plan != null) {
       await _reconcileMaintenanceCompletionReminders(mutation);
     }
-    throw SupabaseFailure(
-      kind: result.status == MaintenanceCompletionStatus.unauthorized
-          ? SupabaseFailureKind.permissionDenied
-          : result.status == MaintenanceCompletionStatus.invalid
-          ? SupabaseFailureKind.incompatibleSchema
-          : SupabaseFailureKind.conflict,
-      message: message,
-    );
+    if (result.status == MaintenanceCompletionStatus.invalid) {
+      AppLogger.warning(
+        maintenanceCompletionPayloadRejectedCode,
+        fields: {
+          'diagnostic_code': maintenanceCompletionPayloadRejectedCode,
+          'sync_entity': mutation.entity,
+          'sync_operation': mutation.operation,
+          'rpc_status': result.status.name,
+          if (result.conflictReason != null)
+            'reason_code': result.conflictReason!,
+        },
+      );
+    }
+    return _MutationPushDisposition.terminalHandled;
   }
 
   Future<void> _reconcileMaintenanceCompletionReminders(
@@ -662,11 +719,15 @@ extension _SyncPushCoordinator on SyncCoordinator {
   }
 
   String _maintenanceConflictMessage(MaintenanceCompletionResult result) {
+    if (result.status == MaintenanceCompletionStatus.invalid) {
+      return 'The cloud could not accept this maintenance completion. '
+          'Review the task and try again.';
+    }
     return switch (result.conflictReason) {
       'occurrence_completed_elsewhere' =>
         'This occurrence was completed on another device. '
             'Your local completion was reconciled with the cloud.',
-      'recurrence_changed' =>
+      'occurrence_changed' =>
         'The maintenance recurrence changed on another device. '
             'Review the task and confirm the completion again.',
       'plan_inactive' =>
@@ -682,11 +743,29 @@ extension _SyncPushCoordinator on SyncCoordinator {
   Future<void> _recordMutationFailure(
     LocalSyncMutation mutation,
     SupabaseFailure failure,
-  ) {
-    if (failure.retryable) {
-      return _localStore.markMutationFailed(mutation, failure.message);
+  ) async {
+    if (failure.diagnosticCode == dataApiAclContractMismatchCode) {
+      AppLogger.warning(
+        dataApiAclContractMismatchCode,
+        fields: failure.safeDiagnosticFields(
+          entity: mutation.entity,
+          operation: mutation.operation,
+        ),
+      );
     }
-    return _localStore.markMutationTerminal(mutation, failure.message);
+    if (failure.retryable) {
+      await _localStore.markMutationFailed(
+        mutation,
+        failure.message,
+        errorCode: failure.diagnosticCode,
+      );
+      return;
+    }
+    await _localStore.markMutationTerminal(
+      mutation,
+      failure.message,
+      errorCode: failure.diagnosticCode,
+    );
   }
 
   SupabaseFailure _canonicalMutationFailure(
@@ -707,6 +786,8 @@ extension _SyncPushCoordinator on SyncCoordinator {
         ),
       ),
       retryable: false,
+      diagnosticCode: failure.diagnosticCode,
+      sqlState: failure.sqlState,
     );
   }
 

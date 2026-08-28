@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:owntend/src/core/data/repositories.dart';
@@ -11,6 +12,7 @@ import 'package:owntend/src/core/domain/models.dart';
 import 'package:owntend/src/core/sync/local_sync_store.dart';
 import 'package:owntend/src/core/sync/supabase_sync_gateway.dart';
 import 'package:owntend/src/core/sync/sync_coordinator.dart';
+import 'package:owntend/src/core/sync/sync_contracts.dart';
 import 'package:owntend/src/core/sync/sync_dtos.dart';
 import 'package:owntend/src/features/auth/domain/auth_repository.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -294,6 +296,478 @@ void main() {
     },
   );
 
+  test('real gateway PATCH contracts update assets and plans without protected columns', () async {
+    const areaId = 'patch-contract-area';
+    const roomId = 'patch-contract-room';
+    const assetId = 'patch-contract-asset';
+    const planId = 'patch-contract-plan';
+    await userB.from('areas').insert({
+      'user_id': userBId,
+      'id': areaId,
+      'name': 'PATCH Contract Area',
+      'kind': 'indoor',
+      'sort_order': 0,
+    });
+    await userB.from('rooms').insert({
+      'user_id': userBId,
+      'id': roomId,
+      'area_id': areaId,
+      'name': 'PATCH Contract Room',
+      'sort_order': 0,
+    });
+    await userB.rpc<void>(
+      'create_asset',
+      params: {
+        'p_operation': _signedOperation({
+          'operation_id': const Uuid().v4(),
+          'asset': {
+            'id': assetId,
+            'room_id': roomId,
+            'name': 'Before PATCH asset',
+            'asset_type': 'safety',
+            'placement': 'Before placement',
+            'notes': 'Clear this note',
+          },
+          'details': <String, dynamic>{},
+          'initial_plans': <Map<String, dynamic>>[],
+        }),
+      },
+    );
+    await userB.rpc<void>(
+      'create_task_with_point_debit',
+      params: {
+        'p_operation': _signedOperation({
+          'operation_id': const Uuid().v4(),
+          'plan': {
+            'id': planId,
+            'asset_id': assetId,
+            'title': 'Before PATCH plan',
+            'instructions': 'Clear these instructions',
+            'recurrence_interval': 1,
+            'recurrence_unit': 'months',
+            'priority': 'medium',
+            'next_due_date': '2026-10-01T00:00:00Z',
+            'reminder_days_before': 1,
+            'is_enabled': true,
+          },
+        }),
+      },
+    );
+
+    final assetSpec = syncSpecByEntity['asset']!;
+    final planSpec = syncSpecByEntity['maintenance_plan']!;
+    final assetBeforeRow = Map<String, dynamic>.from(
+      await userB
+          .from('assets')
+          .select(assetSpec.selectClause)
+          .eq('id', assetId)
+          .single(),
+    );
+    final planBeforeRow = Map<String, dynamic>.from(
+      await userB
+          .from('maintenance_plans')
+          .select(planSpec.selectClause)
+          .eq('id', planId)
+          .single(),
+    );
+    final assetBefore = SyncRecord.fromRemote(assetSpec, assetBeforeRow);
+    final planBefore = SyncRecord.fromRemote(planSpec, planBeforeRow);
+    final gateway = SupabaseSyncGateway(userB);
+
+    final assetResult = await gateway.write(
+      record: SyncRecord(
+        spec: assetSpec,
+        recordKey: assetBefore.recordKey,
+        values: {
+          ...assetBefore.values,
+          'name': 'After PATCH asset',
+          'placement': 'After placement',
+          'notes': null,
+        },
+        clientModifiedAt: DateTime.now().toUtc(),
+        revision: assetBefore.revision,
+        serverUpdatedAt: assetBefore.serverUpdatedAt,
+      ),
+      userId: userBId,
+      deviceId: 'patch-contract-device',
+      expectedRevision: assetBefore.revision,
+    );
+    expect(assetResult.conflict, isFalse);
+    expect(assetResult.canonical?.revision, assetBefore.revision! + 1);
+
+    final planResult = await gateway.write(
+      record: SyncRecord(
+        spec: planSpec,
+        recordKey: planBefore.recordKey,
+        values: {
+          ...planBefore.values,
+          'title': 'After PATCH plan',
+          'instructions': null,
+          'recurrence_interval': 2,
+          'priority': 'high',
+          'reminder_days_before': 3,
+        },
+        clientModifiedAt: DateTime.now().toUtc(),
+        revision: planBefore.revision,
+        serverUpdatedAt: planBefore.serverUpdatedAt,
+      ),
+      userId: userBId,
+      deviceId: 'patch-contract-device',
+      expectedRevision: planBefore.revision,
+    );
+    expect(planResult.conflict, isFalse);
+    expect(planResult.canonical?.revision, planBefore.revision! + 1);
+
+    final assetAfter = Map<String, dynamic>.from(
+      await userB
+          .from('assets')
+          .select(assetSpec.selectClause)
+          .eq('id', assetId)
+          .single(),
+    );
+    final planAfter = Map<String, dynamic>.from(
+      await userB
+          .from('maintenance_plans')
+          .select(planSpec.selectClause)
+          .eq('id', planId)
+          .single(),
+    );
+    expect(assetAfter['name'], 'After PATCH asset');
+    expect(assetAfter['placement'], 'After placement');
+    expect(assetAfter['notes'], isNull);
+    expect(assetAfter['revision'], (assetBeforeRow['revision'] as int) + 1);
+    expect(assetAfter['user_id'], assetBeforeRow['user_id']);
+    expect(assetAfter['id'], assetBeforeRow['id']);
+    expect(assetAfter['asset_type'], assetBeforeRow['asset_type']);
+    expect(assetAfter['room_id'], assetBeforeRow['room_id']);
+    expect(assetAfter['created_at'], assetBeforeRow['created_at']);
+    expect(planAfter['title'], 'After PATCH plan');
+    expect(planAfter['instructions'], isNull);
+    expect(planAfter['recurrence_interval'], 2);
+    expect(planAfter['priority'], 'high');
+    expect(planAfter['reminder_days_before'], 3);
+    expect(planAfter['revision'], (planBeforeRow['revision'] as int) + 1);
+    expect(planAfter['user_id'], planBeforeRow['user_id']);
+    expect(planAfter['id'], planBeforeRow['id']);
+    expect(planAfter['asset_id'], planBeforeRow['asset_id']);
+    expect(planAfter['created_at'], planBeforeRow['created_at']);
+
+    final staleAsset = await gateway.write(
+      record: SyncRecord(
+        spec: assetSpec,
+        recordKey: assetBefore.recordKey,
+        values: {...assetBefore.values, 'name': 'Stale PATCH asset'},
+        clientModifiedAt: DateTime.now().toUtc(),
+        revision: assetBefore.revision,
+      ),
+      userId: userBId,
+      deviceId: 'patch-contract-device',
+      expectedRevision: assetBefore.revision,
+    );
+    expect(staleAsset.conflict, isTrue);
+    expect(staleAsset.canonical?.revision, assetResult.canonical?.revision);
+
+    final crossUserAsset = await SupabaseSyncGateway(userADevice1).write(
+      record: SyncRecord(
+        spec: assetSpec,
+        recordKey: assetBefore.recordKey,
+        values: {...assetBefore.values, 'name': 'Cross-user asset'},
+        clientModifiedAt: DateTime.now().toUtc(),
+        revision: assetBefore.revision,
+      ),
+      userId: userAId,
+      deviceId: 'cross-user-device',
+      expectedRevision: assetBefore.revision,
+    );
+    final crossUserPlan = await SupabaseSyncGateway(userADevice1).write(
+      record: SyncRecord(
+        spec: planSpec,
+        recordKey: planBefore.recordKey,
+        values: {...planBefore.values, 'title': 'Cross-user plan'},
+        clientModifiedAt: DateTime.now().toUtc(),
+        revision: planBefore.revision,
+      ),
+      userId: userAId,
+      deviceId: 'cross-user-device',
+      expectedRevision: planBefore.revision,
+    );
+    expect(crossUserAsset.conflict, isTrue);
+    expect(crossUserAsset.canonical, isNull);
+    expect(crossUserPlan.conflict, isTrue);
+    expect(crossUserPlan.canonical, isNull);
+    expect(
+      await userB.from('assets').select('name').eq('id', assetId).single(),
+      {'name': 'After PATCH asset'},
+    );
+    expect(
+      await userB
+          .from('maintenance_plans')
+          .select('title')
+          .eq('id', planId)
+          .single(),
+      {'title': 'After PATCH plan'},
+    );
+  });
+
+  test('versioned completion RPC handles applied, stale, invalid, and cross-user outcomes', () async {
+    const areaId = 'completion-contract-area';
+    const roomId = 'completion-contract-room';
+    const assetId = 'completion-contract-asset';
+    const planId = 'completion-contract-plan';
+    const recordId = 'completion-contract-record';
+    const dueDate = '2026-11-01T00:00:00.000Z';
+    const nextDueDate = '2026-12-01T00:00:00.000Z';
+    const completedAt = '2026-11-01T01:00:00.000Z';
+
+    await userADevice1.from('areas').insert({
+      'user_id': userAId,
+      'id': areaId,
+      'name': 'Completion Contract Area',
+      'kind': 'indoor',
+      'sort_order': 0,
+    });
+    await userADevice1.from('rooms').insert({
+      'user_id': userAId,
+      'id': roomId,
+      'area_id': areaId,
+      'name': 'Completion Contract Room',
+      'sort_order': 0,
+    });
+    await userADevice1.rpc<void>(
+      'create_asset',
+      params: {
+        'p_operation': _signedOperation({
+          'operation_id': const Uuid().v4(),
+          'asset': {
+            'id': assetId,
+            'room_id': roomId,
+            'name': 'Completion Contract Asset',
+            'asset_type': 'general',
+          },
+          'details': <String, dynamic>{},
+          'initial_plans': <Map<String, dynamic>>[],
+        }),
+      },
+    );
+    await userADevice1.rpc<void>(
+      'create_task_with_point_debit',
+      params: {
+        'p_operation': _signedOperation({
+          'operation_id': const Uuid().v4(),
+          'plan': {
+            'id': planId,
+            'asset_id': assetId,
+            'title': 'Completion Contract Plan',
+            'instructions': null,
+            'recurrence_interval': 1,
+            'recurrence_unit': 'months',
+            'priority': 'medium',
+            'next_due_date': dueDate,
+            'reminder_days_before': 1,
+            'is_enabled': true,
+          },
+        }),
+      },
+    );
+
+    final planBefore = Map<String, dynamic>.from(
+      await userADevice1
+          .from('maintenance_plans')
+          .select()
+          .eq('id', planId)
+          .single(),
+    );
+    final operation = <String, dynamic>{
+      'version': 1,
+      'operation_id': 'completion-contract-operation',
+      'expected_plan_revision': planBefore['revision'],
+      'expected_next_due_date': dueDate,
+      'plan': {
+        ...planBefore,
+        'next_due_date': nextDueDate,
+        'updated_at': completedAt,
+      },
+      'record': {
+        'id': recordId,
+        'plan_id': planId,
+        'due_date': dueDate,
+        'completed_at': completedAt,
+        'notes': null,
+        'created_at': completedAt,
+      },
+    };
+    final gateway = SupabaseSyncGateway(userADevice1);
+    final applied = await gateway.completeMaintenance(
+      payloadJson: jsonEncode(operation),
+      userId: userAId,
+      deviceId: 'completion-contract-device',
+    );
+    expect(applied.status, MaintenanceCompletionStatus.applied);
+    expect(applied.record?.recordKey, recordId);
+    expect(
+      DateTime.parse(applied.plan!.values['next_due_date'] as String),
+      DateTime.parse(nextDueDate),
+    );
+
+    final replay = await gateway.completeMaintenance(
+      payloadJson: jsonEncode(operation),
+      userId: userAId,
+      deviceId: 'completion-contract-device',
+    );
+    expect(replay.status, MaintenanceCompletionStatus.alreadyApplied);
+    expect(replay.record?.recordKey, recordId);
+
+    final crossUser = await SupabaseSyncGateway(userB).completeMaintenance(
+      payloadJson: jsonEncode({
+        ...operation,
+        'operation_id': 'completion-contract-cross-user',
+        'record': {...operation['record'] as Map, 'id': 'cross-user-record'},
+      }),
+      userId: userBId,
+      deviceId: 'cross-user-device',
+    );
+    expect(crossUser.status, MaintenanceCompletionStatus.invalid);
+    expect(crossUser.conflictReason, 'task_creation_not_authorized');
+
+    const stalePlanId = 'completion-contract-stale-plan';
+    await userADevice1.rpc<void>(
+      'create_task_with_point_debit',
+      params: {
+        'p_operation': _signedOperation({
+          'operation_id': const Uuid().v4(),
+          'plan': {
+            'id': stalePlanId,
+            'asset_id': assetId,
+            'title': 'Stale Completion Plan',
+            'recurrence_interval': 1,
+            'recurrence_unit': 'months',
+            'priority': 'medium',
+            'next_due_date': dueDate,
+            'reminder_days_before': 1,
+            'is_enabled': true,
+          },
+        }),
+      },
+    );
+    final staleBefore = Map<String, dynamic>.from(
+      await userADevice1
+          .from('maintenance_plans')
+          .select()
+          .eq('id', stalePlanId)
+          .single(),
+    );
+    final staleRevision = staleBefore['revision'];
+    expect(staleRevision, isA<int>());
+    await userADevice1
+        .from('maintenance_plans')
+        .update({'title': 'Revision advanced'})
+        .eq('id', stalePlanId)
+        .eq('revision', staleRevision as int);
+    final staleCanonical = Map<String, dynamic>.from(
+      await userADevice1
+          .from('maintenance_plans')
+          .select()
+          .eq('id', stalePlanId)
+          .single(),
+    );
+    final stale = await gateway.completeMaintenance(
+      payloadJson: jsonEncode({
+        'version': 1,
+        'operation_id': 'completion-contract-stale-operation',
+        'expected_plan_revision': staleBefore['revision'],
+        'expected_next_due_date': dueDate,
+        'plan': {
+          ...staleCanonical,
+          'next_due_date': nextDueDate,
+          'updated_at': completedAt,
+        },
+        'record': {
+          'id': 'completion-contract-stale-record',
+          'plan_id': stalePlanId,
+          'due_date': dueDate,
+          'completed_at': completedAt,
+          'notes': null,
+          'created_at': completedAt,
+        },
+      }),
+      userId: userAId,
+      deviceId: 'completion-contract-device',
+    );
+    expect(stale.status, MaintenanceCompletionStatus.conflict);
+    expect(stale.retryable, isTrue);
+    expect(stale.conflictReason, 'stale_plan_revision');
+    expect(stale.currentPlanRevision, staleCanonical['revision']);
+
+    final hydrationDatabase = AppDatabase(executor: NativeDatabase.memory());
+    final hydrationStore = LocalSyncStore(hydrationDatabase);
+    await hydrationStore.account();
+    await hydrationStore.setEnabled(enabled: true, boundUserId: userAId);
+    await hydrationDatabase.delete(hydrationDatabase.syncOutbox).go();
+    const hydrationRecordId = 'completion-contract-hydration-record';
+    await hydrationDatabase
+        .into(hydrationDatabase.syncOutbox)
+        .insert(
+          SyncOutboxCompanion.insert(
+            entity: 'maintenance_completion',
+            recordKey: hydrationRecordId,
+            operation: 'execute',
+            payloadJson: Value(
+              jsonEncode({
+                'version': 1,
+                'operation_id': 'completion-contract-hydration-operation',
+                'expected_plan_revision': staleBefore['revision'],
+                'expected_next_due_date': dueDate,
+                'plan': {
+                  ...staleCanonical,
+                  'next_due_date': nextDueDate,
+                  'updated_at': completedAt,
+                },
+                'record': {
+                  'id': hydrationRecordId,
+                  'plan_id': stalePlanId,
+                  'due_date': dueDate,
+                  'completed_at': completedAt,
+                  'notes': null,
+                  'created_at': completedAt,
+                },
+              }),
+            ),
+            changedAt: Value(DateTime.parse(completedAt)),
+            attempts: const Value(0),
+          ),
+        );
+    final hydrationCoordinator = SyncCoordinator(
+      _StaticAuthRepository(userAId),
+      hydrationStore,
+      gateway,
+      listenToAuthChanges: false,
+    );
+    addTearDown(() async {
+      await hydrationCoordinator.dispose();
+      await hydrationDatabase.close();
+    });
+
+    await hydrationCoordinator.syncNow();
+
+    expect((await hydrationCoordinator.status()).phase, SyncPhase.ready);
+    expect(await hydrationStore.pendingCount(), 0);
+    expect(
+      await userADevice1
+          .from('maintenance_records')
+          .select('id')
+          .eq('id', hydrationRecordId),
+      hasLength(1),
+    );
+    expect(
+      await userB.from('maintenance_records').select('id').inFilter('id', [
+        recordId,
+        hydrationRecordId,
+        'completion-contract-stale-record',
+      ]),
+      isEmpty,
+    );
+  });
+
   test('prepare-upload-finalize verifies Storage facts and owner isolation', () async {
     await userADevice1.from('rooms').insert({
       'user_id': userAId,
@@ -569,14 +1043,14 @@ void main() {
   });
 
   test('authoritative copy, move, and type changes conserve points under concurrency', () async {
-    await userADevice1.from('areas').upsert({
+    await userADevice1.from('areas').insert({
       'user_id': userAId,
       'id': 'economy-area',
       'name': 'Economy Area',
       'kind': 'indoor',
       'sort_order': 0,
     });
-    await userADevice1.from('rooms').upsert({
+    await userADevice1.from('rooms').insert({
       'user_id': userAId,
       'id': 'economy-room',
       'area_id': 'economy-area',
@@ -863,14 +1337,14 @@ void main() {
   test(
     'maintenance history restore merges exact rows and preserves conflicts',
     () async {
-      await userADevice1.from('areas').upsert({
+      await userADevice1.from('areas').insert({
         'user_id': userAId,
         'id': 'restore-api-area',
         'name': 'Restore API Area',
         'kind': 'indoor',
         'sort_order': 0,
       });
-      await userADevice1.from('rooms').upsert({
+      await userADevice1.from('rooms').insert({
         'user_id': userAId,
         'id': 'restore-api-room',
         'area_id': 'restore-api-area',

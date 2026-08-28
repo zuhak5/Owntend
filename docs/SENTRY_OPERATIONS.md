@@ -28,6 +28,12 @@ Owntend's intended Sentry configuration must preserve all of the following unles
 - No local file names or media object paths that contain user data.
 - No backup contents or archive paths.
 
+`sendDefaultPii=false` and the client scrubber are necessary but do not control
+server-side connection-IP processing. Before production ingestion is enabled,
+an authorized Sentry administrator must verify the project-level **Prevent
+Storing of IP Addresses** control. Derived geography is prohibited. If the
+control cannot be verified, production Sentry ingestion remains disabled.
+
 Use allowlisted technical context rather than trying to block an unbounded list after collection.
 
 ## Allowed diagnostic context
@@ -42,6 +48,9 @@ Examples of acceptable fields when non-identifying:
 - Technical subsystem names.
 - Stable error classes and sanitized error codes.
 - Synchronization state categories without payloads.
+- Bounded `diagnostic_code`, `sync_entity`, `sync_operation`, `rpc_status`,
+  `reason_code`, `contract_version`, and `sql_state` values from explicit
+  allowlists.
 - Boolean feature/configuration state that does not expose consent choices beyond what is operationally necessary.
 
 Review every new tag, context object, breadcrumb, attachment, and exception message.
@@ -74,6 +83,9 @@ Scrubber tests must include nested maps/lists and representative authentication,
 - Add context close to the subsystem boundary, not user-entered values.
 - Avoid capturing the same exception repeatedly at multiple layers.
 - Distinguish expected offline, cancellation, permission denial, and user-validation states from actionable failures.
+- Expected maintenance business conflicts are breadcrumbs, not exception
+  events. A genuine completion-contract mismatch is captured once and
+  fingerprinted by operation, failure class, and diagnostic code.
 - Never attach database files, backups, screenshots, or request dumps.
 - Background tasks (WorkManager and foreground services) must initialize Sentry safely via `initializeBackgroundSentry()` so unexpected failures are captured without destabilizing process lifecycles.
 
@@ -88,7 +100,21 @@ Current source-backed symbolication expectations:
 
 - Shorebird releases and patches retain obfuscated Dart symbols below `build/shorebird-symbols/<flavor>/`.
 - The production AAB evidence retains `build/app/outputs/mapping/prodRelease/mapping.txt` and exact-revision Android engine-symbol archives from `tool/download_shorebird_engine_symbols.ps1`. The downloader uses Shorebird's revision-aware official artifact proxy because Shorebird-owned engine artifacts are not guaranteed to exist in Flutter's upstream bucket.
-- `tool/publish_sentry_release.ps1` uploads Dart debug symbols and R8 mapping and, only when separately authorized with `-EngineSymbolsDirectory`, validates and uploads all three Shorebird engine-symbol archives.
+- `tool/publish_sentry_release.ps1` requires `-EngineSymbolsDirectory`, then
+  validates and uploads Dart debug symbols, R8 mapping, and all three Shorebird
+  engine-symbol archives during a separately authorized publication.
+- Before Sentry authentication or mutation, the publication script now requires
+  exactly the three ABI-specific Dart symbol files, the obfuscation map, R8
+  mapping, engine revision/manifest/hash files, and all three engine archives.
+  Each Dart symbol and engine ELF must expose the expected ABI plus non-empty
+  debug and code identifiers; filenames and hashes alone are not accepted.
+  It binds SHA-256 hashes to release, dist, source SHA, flavor, environment, and
+  Shorebird patch identity in a local evidence manifest.
+- After an authorized upload, the script queries Sentry's debug-information-file
+  API for the exact debug/code identity of every Dart symbol and engine ELF,
+  plus the exact ProGuard mapping. Missing, mismatched, or unprocessed evidence
+  blocks release finalization. A late upload may help later events but is not
+  evidence that an earlier event was reprocessed.
 
 Do not run production Sentry release mutation as an ordinary local command.
 During active containment, do not run release mutation scripts either.
@@ -114,6 +140,24 @@ When investigating an issue:
 5. Classify application, backend, configuration, device, or external-service cause.
 6. Add regression tests before changing capture volume.
 7. Resolve or monitor the issue according to impact.
+
+### Build 8 maintenance incident evidence
+
+The 2026-08-28 Build 8 event showed
+`sync_maintenance_completion_rpc_sent` immediately before
+`sync_initial_hydration_failed`. Sentry displayed 23 unknown application frames,
+marked `base.apk` missing for symbolication, and retained derived city-level
+geography. No canonical Build 8 Dart symbol bundle was present in the retained
+workspace or developer artifact locations, so the original frame and exact
+response branch cannot be asserted from local evidence. The regression fix
+therefore covers every legal completion outcome and fails closed on malformed
+contracts rather than inventing a symbolized cause.
+
+Before production observability resumes, separately authorized protected work
+must verify the IP-storage control, upload and process the exact build's symbol
+set before distribution, and delete the affected event/issue under the incident
+procedure after preserving only sanitized technical findings. Repository work
+does not authorize those hosted mutations.
 
 ## Sensitive-data incident
 

@@ -71,7 +71,7 @@ class SentryLoggerBridge {
           failureClass == TelemetryFailureClass.recoverable) {
         return;
       }
-      final fingerprint = _fingerprint(event.event, failureClass);
+      final fingerprint = _fingerprint(event.event, failureClass, error);
       final now = _clock().toUtc();
       final lastCapture = _recentCaptures[fingerprint];
       if (lastCapture != null &&
@@ -131,11 +131,20 @@ class SentryLoggerBridge {
   static String _fingerprint(
     String operation,
     TelemetryFailureClass failureClass,
+    Object error,
   ) {
     final boundedOperation = operation.length <= 80
         ? operation
         : operation.substring(0, 80);
-    return 'owntend::$boundedOperation::${failureClass.name}';
+    final diagnosticCode = error is SupabaseFailure
+        ? error.diagnosticCode
+        : null;
+    return [
+      'owntend',
+      boundedOperation,
+      failureClass.name,
+      ?diagnosticCode,
+    ].join('::');
   }
 
   static Future<void> _captureWithSentry(
@@ -180,6 +189,10 @@ void reportOperationFailure({
     ...fields,
     'failure_kind': failureClass.name,
     'is_retryable': _isRetryable(error),
+    if (error is SupabaseFailure && error.diagnosticCode != null)
+      'diagnostic_code': error.diagnosticCode!,
+    if (error is SupabaseFailure && error.sqlState != null)
+      'sql_state': error.sqlState!,
   };
   if (failureClass == TelemetryFailureClass.reportable ||
       failureClass == TelemetryFailureClass.fatal) {

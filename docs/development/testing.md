@@ -19,7 +19,13 @@ stack (blank-baseline pgTAP + Edge Functions + worker contract) in the
 `Blank-baseline database and Edge endpoint integration` job of
 `.github/workflows/validate-google-backend.yml`; the Dart-side two-user loopback
 suite `test/backend_integration/local_backend_sync_test.dart` runs only with
-loopback dart-defines. Skips are honest gates, not rot.
+loopback dart-defines. Its authenticated gateway cases include full local
+asset/maintenance-plan records serialized into least-privilege PATCH payloads,
+server metadata advancement, stale-revision conflict behavior, and cross-user
+isolation. It also exercises the versioned maintenance-completion envelope and
+runs a stale completion through the real coordinator during initial hydration,
+proving one safe retry, canonical reconciliation, `ready` completion, and
+cross-user history isolation. Skips are honest gates, not rot.
 
 ## Launch evidence ladder
 
@@ -74,7 +80,7 @@ Functions require formatting, locked type-checking, unit/request-validation test
 
 ### Disposable backend endpoint integration
 
-`npm run test:backend-integration` provisions an isolated, disposable local Supabase stack on shifted ports inside a temporary workspace, replays the complete migration chain, runs schema lint and all pgTAP files, serves every configured Edge Function over real HTTP, runs `supabase/tests/integration/*.test.ts` against the actual `/functions/v1/...` gateway, and tears everything down in every outcome. The application/backend lane separately drives two authenticated clients through real Auth, RLS, PostgREST, and Storage. It covers unprepared/expired upload denial, live-object delete denial, concurrent stage count/byte quotas, duplicate copy/move idempotency, simultaneous move/type point conservation with a deadlock timeout, validated history-restore replay/conflict, and protected-column/history CRUD denial. Both lanes keep credentials in memory and target loopback only.
+`npm run test:backend-integration` provisions an isolated, disposable local Supabase stack on shifted ports inside a temporary workspace, replays the complete migration chain, runs schema lint and all pgTAP files (including exact sync UPDATE ACL and maintenance-completion response matrices), serves every configured Edge Function over real HTTP, runs `supabase/tests/integration/*.test.ts` against the actual `/functions/v1/...` gateway, and tears everything down in every outcome. The application/backend lane separately drives two authenticated clients through real Auth, RLS, PostgREST, and Storage. It covers unprepared/expired upload denial, live-object delete denial, concurrent stage count/byte quotas, duplicate copy/move idempotency, simultaneous move/type point conservation with a deadlock timeout, validated history-restore replay/conflict, protected-column/history CRUD denial, full-record asset/plan PATCH allowlisting, server metadata advancement, stale revisions, versioned completion parsing and initial-hydration reconciliation, and cross-user UPDATE/history isolation. Both lanes keep credentials in memory and target loopback only.
 
 ### Browser deletion and Google/Android contract tests
 

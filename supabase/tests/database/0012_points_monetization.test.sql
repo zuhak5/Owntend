@@ -485,7 +485,7 @@ select extensions.lives_ok(
       where user_id = '44444444-4444-4444-4444-444444444444'
         and id = 'points-general-task'
       on conflict (user_id, id) do update
-      set updated_at = excluded.updated_at$$,
+      set title = excluded.title$$,
   'offline sync can reconcile a task already created by the atomic RPC'
 );
 

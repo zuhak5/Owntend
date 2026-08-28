@@ -18,16 +18,36 @@ enum SupabaseFailureKind {
   unknown,
 }
 
+const dataApiAclContractMismatchCode = 'data_api_acl_contract_mismatch';
+const maintenanceCompletionRpcContractMismatchCode =
+    'maintenance_completion_rpc_contract_mismatch';
+const maintenanceCompletionPayloadRejectedCode =
+    'maintenance_completion_payload_rejected';
+
 class SupabaseFailure implements Exception {
   const SupabaseFailure({
     required this.kind,
     required this.message,
     this.retryable = false,
+    this.diagnosticCode,
+    this.sqlState,
   });
 
   final SupabaseFailureKind kind;
   final String message;
   final bool retryable;
+  final String? diagnosticCode;
+  final String? sqlState;
+
+  Map<String, String> safeDiagnosticFields({
+    required String entity,
+    required String operation,
+  }) => {
+    'sync_entity': entity,
+    'sync_operation': operation,
+    'diagnostic_code': ?diagnosticCode,
+    'sql_state': ?sqlState,
+  };
 
   @override
   String toString() => message;
@@ -79,6 +99,17 @@ class SupabaseFailure implements Exception {
           kind: SupabaseFailureKind.offline,
           message: 'Cloud backup is temporarily unavailable.',
           retryable: true,
+        );
+      }
+      if (error.code == '42501' && _isDataApiAclMismatch(error)) {
+        return const SupabaseFailure(
+          kind: SupabaseFailureKind.incompatibleSchema,
+          message:
+              'Cloud data permissions do not match this Owntend build. '
+              'Install the latest release.',
+          retryable: false,
+          diagnosticCode: dataApiAclContractMismatchCode,
+          sqlState: '42501',
         );
       }
       if (error.code == '42501' || error.code == 'PGRST301') {
@@ -154,6 +185,23 @@ class SupabaseFailure implements Exception {
       message: 'An unexpected cloud error occurred.',
     );
   }
+}
+
+bool _isDataApiAclMismatch(PostgrestException error) {
+  final message = error.message.toLowerCase();
+  final hint = (error.hint ?? '').toLowerCase();
+  final explicitlyDeniedObject =
+      message.contains('permission denied for table') ||
+      message.contains('permission denied for column') ||
+      message.contains('permission denied for relation');
+  final privilegeHint =
+      hint.contains('grant') &&
+      (hint.contains('privilege') ||
+          hint.contains('select') ||
+          hint.contains('insert') ||
+          hint.contains('update') ||
+          hint.contains('delete'));
+  return explicitlyDeniedObject || privilegeHint;
 }
 
 bool _isMissingSession(String? code, String message) {
