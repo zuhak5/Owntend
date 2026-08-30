@@ -31,6 +31,10 @@ The current application version is defined only in `pubspec.yaml`. Released vers
   that canonical extension, and corrected the VersionDeck launch checklist to
   distinguish workflow publication mode from control-file publication status.
 
+### Android release identity (2026-08-30)
+
+- Advanced the protected production release identity to `1.0.1+1` for the next release cycle.
+
 ### Restore intent and passphrase hardening (2026-08-30)
 
 - Made the restore cloud disposition an explicit service contract and durable journal field. A local-only choice now wins even for a fully hydrated bound account, survives restart, and cannot be bypassed by startup or generic sync enable; explicit resume atomically binds the current account and journals the restored snapshot before hydration.
