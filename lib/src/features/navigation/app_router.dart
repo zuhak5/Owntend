@@ -152,6 +152,11 @@ final routerProvider = Provider<GoRouter>((ref) {
             pageBuilder: (context, state) =>
                 _appRoutePage(context, state, const SettingsScreen()),
           ),
+          GoRoute(
+            path: '/sync-health',
+            pageBuilder: (context, state) =>
+                _appRoutePage(context, state, const SyncHealthScreen()),
+          ),
           GoRoute(path: '/profile', redirect: (context, state) => '/account'),
           GoRoute(
             path: '/account',

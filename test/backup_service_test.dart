@@ -5,6 +5,7 @@ import 'package:drift/drift.dart' show UpdateKind, Value;
 import 'package:drift/native.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image/image.dart' as image;
 import 'package:owntend/src/core/data/repositories.dart';
 import 'package:owntend/src/core/database/app_database.dart';
 import 'package:owntend/src/core/domain/contracts.dart';
@@ -102,9 +103,12 @@ void main() {
       expect(File(backupPath).readAsBytesSync().take(8), 'OWNTDBK1'.codeUnits);
 
       await cloudFile.writeAsBytes([9, 9, 9], flush: true);
-      await service.restoreBackup(backupPath);
+      await service.restoreBackup(
+        backupPath,
+        cloudDisposition: RestoreCloudDisposition.localOnlyPaused,
+      );
 
-      expect(await cloudFile.readAsBytes(), [1, 2, 3, 4]);
+      _expectNormalizedTestPhoto(await cloudFile.readAsBytes());
     });
 
     test('rejects traversal inside the cloud media root', () async {
@@ -140,7 +144,10 @@ void main() {
       await DriftSettingsRepository(db)
           .setThemePreference(ThemePreference.light);
 
-      await service.restoreBackup(backupPath);
+      await service.restoreBackup(
+        backupPath,
+        cloudDisposition: RestoreCloudDisposition.localOnlyPaused,
+      );
 
       final restoredRepo = DriftAssetRepository(db);
       final restoredMaintenance = DriftMaintenanceRepository(db);
@@ -201,10 +208,16 @@ void main() {
       final backupPath = await service.exportBackup();
       await db.delete(db.syncOutbox).go();
 
-      await service.restoreBackup(backupPath);
+      await service.restoreBackup(
+        backupPath,
+        cloudDisposition: RestoreCloudDisposition.updateCloud,
+      );
 
       expect(entryAtBarrier?.accountScope, 'user-a');
-      expect(entryAtBarrier?.updateCloudIntent, isTrue);
+      expect(
+        entryAtBarrier?.cloudDisposition,
+        RestoreCloudDisposition.updateCloud,
+      );
       expect(await journalStore.getActiveEntry(), isNull);
       expect(await syncStore.pendingCount(), greaterThan(0));
     });
@@ -216,7 +229,10 @@ void main() {
       final service = OwntendBackupService(db, journalStore: journalStore);
       final backupPath = await service.exportBackup();
 
-      await service.restoreBackup(backupPath);
+      await service.restoreBackup(
+        backupPath,
+        cloudDisposition: RestoreCloudDisposition.localOnlyPaused,
+      );
 
       final account = await LocalSyncStore(db).account();
       expect(account.enabled, isFalse);
@@ -224,6 +240,72 @@ void main() {
       expect(account.migrationState, 'restorePaused');
       expect(account.restorePending, isTrue);
       expect(await journalStore.getActiveEntry(), isNull);
+    });
+
+    test(
+      'explicit local-only choice wins even for a complete bound snapshot',
+      () async {
+        final db = await _openDatabase(docs, databases);
+        await _seedRealisticData(db, root);
+        final syncStore = LocalSyncStore(db);
+        await syncStore.bindIdentity('user-a');
+        await syncStore.recordSyncSuccess(DateTime.utc(2026, 8, 30, 8));
+        final journalStore = InMemoryRestoreJournalStore();
+        RestoreJournalEntry? entryAtBarrier;
+        final service = OwntendBackupService(
+          db,
+          journalStore: journalStore,
+          onBeforeRestoreBarrier: () async {
+            entryAtBarrier = await journalStore.getActiveEntry();
+          },
+        );
+        final backupPath = await service.exportBackup();
+
+        await service.restoreBackup(
+          backupPath,
+          cloudDisposition: RestoreCloudDisposition.localOnlyPaused,
+        );
+
+        expect(
+          entryAtBarrier?.cloudDisposition,
+          RestoreCloudDisposition.localOnlyPaused,
+        );
+        final account = await syncStore.account();
+        expect(account.enabled, isFalse);
+        expect(account.boundUserId, isNull);
+        expect(account.migrationState, 'restorePaused');
+        expect(account.restorePending, isTrue);
+        expect(await syncStore.pendingCount(), 0);
+      },
+    );
+
+    test('update-cloud choice requires a complete bound snapshot', () async {
+      final db = await _openDatabase(docs, databases);
+      await _seedRealisticData(db, root);
+      final syncStore = LocalSyncStore(db);
+      await syncStore.bindIdentity('user-a');
+      final journalStore = InMemoryRestoreJournalStore();
+      final service = OwntendBackupService(db, journalStore: journalStore);
+      final backupPath = await service.exportBackup();
+
+      await expectLater(
+        service.restoreBackup(
+          backupPath,
+          cloudDisposition: RestoreCloudDisposition.updateCloud,
+        ),
+        throwsA(
+          isA<BackupException>().having(
+            (error) => error.message,
+            'message',
+            contains('complete synchronized snapshot'),
+          ),
+        ),
+      );
+
+      expect(await journalStore.getActiveEntry(), isNull);
+      final account = await syncStore.account();
+      expect(account.boundUserId, 'user-a');
+      expect(account.restorePending, isFalse);
     });
 
     test('rolls media back when the database import fails', () async {
@@ -244,7 +326,13 @@ BEGIN
 END
 ''');
 
-      await expectLater(service.restoreBackup(backupPath), throwsA(anything));
+      await expectLater(
+        service.restoreBackup(
+          backupPath,
+          cloudDisposition: RestoreCloudDisposition.localOnlyPaused,
+        ),
+        throwsA(anything),
+      );
 
       expect(await photo.readAsBytes(), [9, 8, 7, 6]);
       expect(
@@ -318,7 +406,10 @@ END
       // (per-entry checksums), while manifest-level tampering is caught
       // during inspection.
       expect(
-        () => service.restoreBackup(tamperedChecksum.path),
+        () => service.restoreBackup(
+          tamperedChecksum.path,
+          cloudDisposition: RestoreCloudDisposition.localOnlyPaused,
+        ),
         throwsA(isA<BackupException>()),
       );
       expect(
@@ -420,7 +511,10 @@ END
       );
 
       await expectLater(
-        crashing.restoreBackup(backupPath),
+        crashing.restoreBackup(
+          backupPath,
+          cloudDisposition: RestoreCloudDisposition.localOnlyPaused,
+        ),
         throwsA(isA<StateError>()),
       );
 
@@ -441,7 +535,10 @@ END
       );
 
       await expectLater(
-        crashing.restoreBackup(backupPath),
+        crashing.restoreBackup(
+          backupPath,
+          cloudDisposition: RestoreCloudDisposition.localOnlyPaused,
+        ),
         throwsA(isA<StateError>()),
       );
 
@@ -463,12 +560,10 @@ END
         'Utility',
         reason: 'committed import must survive recovery',
       );
-      expect(await photo.readAsBytes(), [
-        1,
-        2,
-        3,
-        4,
-      ], reason: 'staged media must be activated to pair with the new DB');
+      _expectNormalizedTestPhoto(
+        await photo.readAsBytes(),
+        reason: 'staged media must be activated to pair with the new DB',
+      );
       expect(await restoreResidue(), isEmpty);
       expect(await RestoreJournalStore().getActiveEntry(), isNull);
     });
@@ -485,12 +580,15 @@ END
         );
 
         await expectLater(
-          crashing.restoreBackup(backupPath),
+          crashing.restoreBackup(
+            backupPath,
+            cloudDisposition: RestoreCloudDisposition.localOnlyPaused,
+          ),
           throwsA(isA<StateError>()),
         );
 
         // photos activated; profile not yet.
-        expect(await photo.readAsBytes(), [1, 2, 3, 4]);
+        _expectNormalizedTestPhoto(await photo.readAsBytes());
         expect(await profileAvatar.readAsBytes(), [8, 8, 8, 8]);
 
         await runRecovery(db);
@@ -501,7 +599,7 @@ END
           7,
           8,
         ], reason: 'remaining root must finish activating');
-        expect(await photo.readAsBytes(), [1, 2, 3, 4]);
+        _expectNormalizedTestPhoto(await photo.readAsBytes());
         expect(await restoreResidue(), isEmpty);
         expect(await RestoreJournalStore().getActiveEntry(), isNull);
       },
@@ -516,12 +614,15 @@ END
       );
 
       await expectLater(
-        crashing.restoreBackup(backupPath),
+        crashing.restoreBackup(
+          backupPath,
+          cloudDisposition: RestoreCloudDisposition.localOnlyPaused,
+        ),
         throwsA(isA<StateError>()),
       );
 
       expect(await roomName(db), 'Utility');
-      expect(await photo.readAsBytes(), [1, 2, 3, 4]);
+      _expectNormalizedTestPhoto(await photo.readAsBytes());
       final residueAfterCrash = await restoreResidue();
       expect(
         residueAfterCrash.where((name) => name.contains('.previous-')),
@@ -532,7 +633,7 @@ END
 
       expect(await restoreResidue(), isEmpty);
       expect(await RestoreJournalStore().getActiveEntry(), isNull);
-      expect(await photo.readAsBytes(), [1, 2, 3, 4]);
+      _expectNormalizedTestPhoto(await photo.readAsBytes());
     });
 
     test(
@@ -541,15 +642,24 @@ END
         final (:db, :photo, :backupPath) = await seedDivergedState();
         final service = OwntendBackupService(db);
 
-        await service.restoreBackup(backupPath);
+        await service.restoreBackup(
+          backupPath,
+          cloudDisposition: RestoreCloudDisposition.localOnlyPaused,
+        );
 
         expect(await roomName(db), 'Utility');
-        expect(await photo.readAsBytes(), [1, 2, 3, 4]);
+        _expectNormalizedTestPhoto(await photo.readAsBytes());
         expect(await restoreResidue(), isEmpty);
         expect(await RestoreJournalStore().getActiveEntry(), isNull);
       },
     );
   });
+}
+
+void _expectNormalizedTestPhoto(List<int> bytes, {String? reason}) {
+  expect(bytes.length, greaterThan(4), reason: reason);
+  expect(bytes.take(2), orderedEquals(const [0xff, 0xd8]), reason: reason);
+  expect(bytes, isNot(orderedEquals(const [9, 9, 9, 9])), reason: reason);
 }
 
 Future<AppDatabase> _openDatabase(
@@ -614,7 +724,11 @@ Future<void> _seedRealisticData(AppDatabase db, Directory root) async {
   await settings.setProfile(nickname: 'Backup Tester');
 
   final photoSource = File(p.join(root.path, 'seed-photo.jpg'))
-    ..writeAsBytesSync([1, 2, 3, 4]);
+    ..writeAsBytesSync(
+      image.encodeJpg(
+        image.Image(width: 8, height: 8)..clear(image.ColorRgb8(30, 100, 160)),
+      ),
+    );
   await repo.addPhoto(assetId, photoSource.path);
   final generatedPhotoDir = Directory(
     p.join((await _docs()).path, 'photos', assetId),

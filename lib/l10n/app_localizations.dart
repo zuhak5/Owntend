@@ -1233,11 +1233,11 @@ abstract class AppLocalizations {
   /// **'Completion trends and task distribution'**
   String get completionTrendsAndTaskDistribution;
 
-  /// No description provided for @exportOrRestoreZipBackups.
+  /// No description provided for @exportOrRestoreOwntendBackups.
   ///
   /// In en, this message translates to:
-  /// **'Export or restore ZIP backups'**
-  String get exportOrRestoreZipBackups;
+  /// **'Export or restore Owntend backups'**
+  String get exportOrRestoreOwntendBackups;
 
   /// No description provided for @completeTaskTitleCase.
   ///
@@ -1755,11 +1755,11 @@ abstract class AppLocalizations {
   /// **'Automatic local backups'**
   String get automaticLocalBackups;
 
-  /// No description provided for @chooseBackupZip.
+  /// No description provided for @chooseOwntendBackup.
   ///
   /// In en, this message translates to:
-  /// **'Choose backup ZIP'**
-  String get chooseBackupZip;
+  /// **'Choose Owntend backup'**
+  String get chooseOwntendBackup;
 
   /// No description provided for @restoreThisBackup.
   ///
@@ -2241,6 +2241,228 @@ abstract class AppLocalizations {
   /// **'Advanced Sync Diagnostics'**
   String get advancedSyncDiagnostics;
 
+  /// No description provided for @syncHealth.
+  ///
+  /// In en, this message translates to:
+  /// **'Sync Health'**
+  String get syncHealth;
+
+  /// No description provided for @reviewChangesThatNeedSyncAttention.
+  ///
+  /// In en, this message translates to:
+  /// **'Review changes and conflicts that need your attention'**
+  String get reviewChangesThatNeedSyncAttention;
+
+  /// No description provided for @refresh.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh'**
+  String get refresh;
+
+  /// No description provided for @pendingSyncChanges.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No pending changes} =1{1 pending change} other{{count} pending changes}}'**
+  String pendingSyncChanges(int count);
+
+  /// No description provided for @syncHealthUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Sync Health is unavailable'**
+  String get syncHealthUnavailable;
+
+  /// No description provided for @syncHealthUnavailableBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Owntend could not read the local sync state. Try again.'**
+  String get syncHealthUnavailableBody;
+
+  /// No description provided for @syncHealthLooksGood.
+  ///
+  /// In en, this message translates to:
+  /// **'No sync issues need attention'**
+  String get syncHealthLooksGood;
+
+  /// No description provided for @syncHealthLooksGoodBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Owntend will continue syncing saved changes automatically when cloud backup is active.'**
+  String get syncHealthLooksGoodBody;
+
+  /// No description provided for @changesNeedingAttention.
+  ///
+  /// In en, this message translates to:
+  /// **'Changes needing attention'**
+  String get changesNeedingAttention;
+
+  /// No description provided for @changesNeedingAttentionBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic retries stopped for these saved changes. Retry them or dismiss changes you no longer want to sync.'**
+  String get changesNeedingAttentionBody;
+
+  /// No description provided for @syncConflicts.
+  ///
+  /// In en, this message translates to:
+  /// **'Sync conflicts'**
+  String get syncConflicts;
+
+  /// No description provided for @syncConflictsBody.
+  ///
+  /// In en, this message translates to:
+  /// **'These records changed both here and in the cloud. Choose which version should win.'**
+  String get syncConflictsBody;
+
+  /// No description provided for @syncChangeQueuedForRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'The change was queued for retry.'**
+  String get syncChangeQueuedForRetry;
+
+  /// No description provided for @dismissSyncChange.
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss this sync change?'**
+  String get dismissSyncChange;
+
+  /// No description provided for @dismissSyncChangeBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This removes the pending cloud change. The current data on this device stays available, but this change will not be sent to your other devices.'**
+  String get dismissSyncChangeBody;
+
+  /// No description provided for @dismiss.
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss'**
+  String get dismiss;
+
+  /// No description provided for @syncChangeDismissed.
+  ///
+  /// In en, this message translates to:
+  /// **'The pending sync change was dismissed.'**
+  String get syncChangeDismissed;
+
+  /// No description provided for @keepThisDeviceVersion.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep this device\'\'s version?'**
+  String get keepThisDeviceVersion;
+
+  /// No description provided for @keepThisDeviceVersionBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This device\'\'s saved version will be queued for cloud sync and may replace the cloud version.'**
+  String get keepThisDeviceVersionBody;
+
+  /// No description provided for @keepCloudVersion.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep the cloud version?'**
+  String get keepCloudVersion;
+
+  /// No description provided for @keepCloudVersionBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This dismisses this device\'\'s conflicting pending change. This action cannot be undone from Sync Health.'**
+  String get keepCloudVersionBody;
+
+  /// No description provided for @keepThisDevice.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep this device'**
+  String get keepThisDevice;
+
+  /// No description provided for @keepCloud.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep cloud'**
+  String get keepCloud;
+
+  /// No description provided for @syncConflictResolved.
+  ///
+  /// In en, this message translates to:
+  /// **'The sync conflict was resolved.'**
+  String get syncConflictResolved;
+
+  /// No description provided for @syncHealthActionFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Owntend could not update Sync Health. Try again.'**
+  String get syncHealthActionFailed;
+
+  /// No description provided for @syncStoppedAfterRepeatedAttempts.
+  ///
+  /// In en, this message translates to:
+  /// **'Owntend stopped retrying this change after repeated failures.'**
+  String get syncStoppedAfterRepeatedAttempts;
+
+  /// No description provided for @syncConflictForCategory.
+  ///
+  /// In en, this message translates to:
+  /// **'Conflicting {category}'**
+  String syncConflictForCategory(String category);
+
+  /// No description provided for @chooseWhichVersionToKeep.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the version you want to keep.'**
+  String get chooseWhichVersionToKeep;
+
+  /// No description provided for @removedCategoryCouldNotSync.
+  ///
+  /// In en, this message translates to:
+  /// **'Removed {category} could not sync'**
+  String removedCategoryCouldNotSync(String category);
+
+  /// No description provided for @updatedCategoryCouldNotSync.
+  ///
+  /// In en, this message translates to:
+  /// **'Updated {category} could not sync'**
+  String updatedCategoryCouldNotSync(String category);
+
+  /// No description provided for @syncCategoryHomeStructure.
+  ///
+  /// In en, this message translates to:
+  /// **'home structure'**
+  String get syncCategoryHomeStructure;
+
+  /// No description provided for @syncCategoryItem.
+  ///
+  /// In en, this message translates to:
+  /// **'item'**
+  String get syncCategoryItem;
+
+  /// No description provided for @syncCategoryPhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'photo'**
+  String get syncCategoryPhoto;
+
+  /// No description provided for @syncCategoryTask.
+  ///
+  /// In en, this message translates to:
+  /// **'task'**
+  String get syncCategoryTask;
+
+  /// No description provided for @syncCategoryPreference.
+  ///
+  /// In en, this message translates to:
+  /// **'preference'**
+  String get syncCategoryPreference;
+
+  /// No description provided for @syncCategoryNotification.
+  ///
+  /// In en, this message translates to:
+  /// **'notification'**
+  String get syncCategoryNotification;
+
+  /// No description provided for @syncCategoryOther.
+  ///
+  /// In en, this message translates to:
+  /// **'saved data'**
+  String get syncCategoryOther;
+
   /// No description provided for @signOutOnThisDevice.
   ///
   /// In en, this message translates to:
@@ -2498,6 +2720,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'All in Sync'**
   String get allInSync;
+
+  /// No description provided for @showingSavedHomeDataRefreshFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Showing saved home data because the latest refresh failed.'**
+  String get showingSavedHomeDataRefreshFailed;
 
   /// No description provided for @organizeTasksRoutinesAndRemindersAcrossAllYourDevicesAnytimeAnywhere.
   ///
@@ -2959,6 +3187,24 @@ abstract class AppLocalizations {
   /// **'Photo saved.'**
   String get photoSaved;
 
+  /// No description provided for @selectedPhotoIsNoLongerAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'The selected photo is no longer available. Choose it again.'**
+  String get selectedPhotoIsNoLongerAvailable;
+
+  /// No description provided for @selectedPhotoIsTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'The selected photo is too large to save and sync. Choose a smaller photo.'**
+  String get selectedPhotoIsTooLarge;
+
+  /// No description provided for @selectedFileIsNotASupportedPhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'The selected file is damaged or is not a supported photo.'**
+  String get selectedFileIsNotASupportedPhoto;
+
   /// No description provided for @enableThisTaskBeforeSnoozingIt.
   ///
   /// In en, this message translates to:
@@ -3377,17 +3623,17 @@ abstract class AppLocalizations {
   /// **'Account & Cloud Sync'**
   String get accountAndCloudSync;
 
-  /// No description provided for @optionalGoogleSignInAndPrivateDeviceSync.
+  /// No description provided for @requiredGoogleSignInAndPrivateDeviceSync.
   ///
   /// In en, this message translates to:
-  /// **'Optional Google sign-in and private device sync'**
-  String get optionalGoogleSignInAndPrivateDeviceSync;
+  /// **'Required Google sign-in with private device sync'**
+  String get requiredGoogleSignInAndPrivateDeviceSync;
 
-  /// No description provided for @createShareOrRestoreLocalZipBackups.
+  /// No description provided for @createShareOrRestoreEncryptedOwntendBackups.
   ///
   /// In en, this message translates to:
-  /// **'Create, share, or restore local ZIP backups'**
-  String get createShareOrRestoreLocalZipBackups;
+  /// **'Create, share, or restore encrypted Owntend backups'**
+  String get createShareOrRestoreEncryptedOwntendBackups;
 
   /// No description provided for @restoreRecentlyRemovedRoomsItemsAndTasks.
   ///
@@ -3527,11 +3773,11 @@ abstract class AppLocalizations {
   /// **'Permission blocked'**
   String get permissionBlocked;
 
-  /// No description provided for @backupsAreSavedLocallyAsPrivateZipFiles.
+  /// No description provided for @backupsAreSavedLocallyAsEncryptedOwntendFiles.
   ///
   /// In en, this message translates to:
-  /// **'Backups are saved locally as private ZIP files.'**
-  String get backupsAreSavedLocallyAsPrivateZipFiles;
+  /// **'Backups are saved locally as encrypted .owntend-backup files.'**
+  String get backupsAreSavedLocallyAsEncryptedOwntendFiles;
 
   /// No description provided for @restoreFromABackup.
   ///
@@ -6261,6 +6507,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The point cost changed. Review the latest quote and try again.'**
   String get authoritativeChargeChanged;
+
+  /// No description provided for @completeRequiredFields.
+  ///
+  /// In en, this message translates to:
+  /// **'Complete the required fields.'**
+  String get completeRequiredFields;
+
+  /// No description provided for @reviewInvalidFields.
+  ///
+  /// In en, this message translates to:
+  /// **'Review the invalid fields and try again.'**
+  String get reviewInvalidFields;
+
+  /// No description provided for @serverSessionExpired.
+  ///
+  /// In en, this message translates to:
+  /// **'Your server session expired. Sign in again and retry.'**
+  String get serverSessionExpired;
+
+  /// No description provided for @authoritativeEntityNoLongerAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'The item, room, or task is no longer available.'**
+  String get authoritativeEntityNoLongerAvailable;
+
+  /// No description provided for @authoritativeOperationConflict.
+  ///
+  /// In en, this message translates to:
+  /// **'This change conflicts with newer server data. Refresh and try again.'**
+  String get authoritativeOperationConflict;
+
+  /// No description provided for @keepFieldWithinCharacters.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep this field to {count} characters or fewer.'**
+  String keepFieldWithinCharacters(int count);
 
   /// No description provided for @confirmTaskMoveChargeTitle.
   ///

@@ -66,6 +66,10 @@ Owntend has one account-scoped sync engine:
 8. Account binding, account epoch, deletion suspension, retry classification,
    backoff, maintenance-completion idempotency, and reminder reconciliation
    remain durable across restart.
+9. A local-only restore remains durably unbound and paused across startup.
+   Generic sync enable cannot resume it; explicit restore resume atomically binds
+   the authenticated identity and creates the complete restore outbox intent
+   before hydration may advance the account to active.
 
 The mobile/backend response carries integer contract `1`. A different contract
 is an incompatible failure; there is no capability table, rollout flag, second

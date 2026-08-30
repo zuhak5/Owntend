@@ -90,6 +90,7 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                       const SizedBox(height: HkSpacing.sm),
                       _AccountNavigationCard(
                         onSettings: () => context.push('/settings'),
+                        onSyncHealth: () => context.push('/sync-health'),
                         onBackup: () => context.push('/backup'),
                       ),
                       if (session != null) ...[
@@ -408,10 +409,12 @@ class _NicknameDialogState extends State<_NicknameDialog> {
 class _AccountNavigationCard extends StatelessWidget {
   const _AccountNavigationCard({
     required this.onSettings,
+    required this.onSyncHealth,
     required this.onBackup,
   });
 
   final VoidCallback onSettings;
+  final VoidCallback onSyncHealth;
   final VoidCallback onBackup;
 
   @override
@@ -425,6 +428,13 @@ class _AccountNavigationCard extends StatelessWidget {
             title: context.l10n.settings,
             subtitle: context.l10n.appearanceLocationAndNotifications,
             onTap: onSettings,
+          ),
+          const Divider(height: 1),
+          hk_ui.SettingsRow(
+            icon: Symbols.cloud_sync_rounded,
+            title: context.l10n.syncHealth,
+            subtitle: context.l10n.reviewChangesThatNeedSyncAttention,
+            onTap: onSyncHealth,
           ),
           const Divider(height: 1),
           hk_ui.SettingsRow(

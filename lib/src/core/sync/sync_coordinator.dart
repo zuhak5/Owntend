@@ -238,6 +238,13 @@ class SyncCoordinator implements CloudSyncRepository, _SyncScheduleEnv {
       );
     }
     final account = await _localStore.account();
+    if (account.migrationState == 'restorePaused' || account.restorePending) {
+      throw const SupabaseFailure(
+        kind: SupabaseFailureKind.conflict,
+        message: 'Cloud sync is paused after a local restore. Confirm uploading the restored snapshot before resuming.',
+        diagnosticCode: 'restore_sync_confirmation_required',
+      );
+    }
     if (account.boundUserId != null && account.boundUserId != session.userId) {
       throw const SupabaseFailure(
         kind: SupabaseFailureKind.permissionDenied,
@@ -257,6 +264,36 @@ class SyncCoordinator implements CloudSyncRepository, _SyncScheduleEnv {
     }
     await _awaitInitialHydrationReadiness(session.userId);
   });
+
+  @override
+  Future<void> resumeRestoredSnapshotToCloud() =>
+      _serializeAccountTransition(() async {
+        final session = _authRepository.currentSession;
+        if (session == null) {
+          throw const SupabaseFailure(
+            kind: SupabaseFailureKind.authentication,
+            message: 'Sign in before uploading the restored snapshot.',
+          );
+        }
+        final account = await _localStore.account();
+        if (account.migrationState != 'restorePaused' ||
+            !account.restorePending ||
+            account.boundUserId != null) {
+          throw const SupabaseFailure(
+            kind: SupabaseFailureKind.conflict,
+            message: 'There is no paused local restore waiting to be uploaded.',
+            diagnosticCode: 'restore_sync_not_paused',
+          );
+        }
+        _accountDeletionInProgress = false;
+        _deletingUserId = null;
+        _mergeConfirmationRequired = false;
+        await _localStore.resumeRestoredSnapshotForUser(
+          session.userId,
+          DateTime.now(),
+        );
+        await _awaitInitialHydrationReadiness(session.userId);
+      });
 
   Future<void> _awaitInitialHydrationReadiness(String expectedUserId) async {
     final deadline = DateTime.now().add(initialHydrationLeaseWaitTimeout);

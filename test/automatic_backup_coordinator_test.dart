@@ -153,7 +153,11 @@ class _FakeBackupRepository implements BackupRepository {
   }
 
   @override
-  Future<void> restoreBackup(String backupPath, {String? passphrase}) {
+  Future<void> restoreBackup(
+    String backupPath, {
+    String? passphrase,
+    required RestoreCloudDisposition cloudDisposition,
+  }) {
     throw UnimplementedError();
   }
 

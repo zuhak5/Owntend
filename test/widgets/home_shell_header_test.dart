@@ -997,6 +997,88 @@ void main() {
   });
 
   group('home stability', () {
+    testWidgets('Home reports domain stream errors instead of empty content', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            tasksProvider.overrideWith(
+              (ref) =>
+                  Stream<List<TaskItem>>.error(StateError('tasks unavailable')),
+            ),
+            assetsProvider.overrideWith((ref) => Stream.value(const <Asset>[])),
+            roomsProvider.overrideWith((ref) => Stream.value(const <Room>[])),
+          ],
+          child: MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            theme: testLightTheme(),
+            home: const DashboardScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Retry'), findsOneWidget);
+      expect(find.text('Set up your home'), findsNothing);
+    });
+
+    testWidgets('Home labels saved data when a live refresh fails', (
+      tester,
+    ) async {
+      final settings = FakeSettingsRepository(onboardingCompletedValue: true);
+      final task = makeTaskItem(DateTime(2026, 8, 30));
+      final assets = makeThings(DateTime(2026));
+      final rooms = makeRooms(DateTime(2026));
+      final snapshot = ValueNotifier<InitialHomeSnapshot?>(
+        InitialHomeSnapshot(
+          session: signedInTestSession,
+          profile: const AppProfile(nickname: 'Pilot'),
+          tasks: [task],
+          assets: assets,
+          rooms: rooms,
+          backupState: const BackupState(),
+          unreadNotifications: 0,
+          syncStatus: const SyncStatus(phase: SyncPhase.ready),
+          loadedAt: DateTime(2026, 8, 30),
+        ),
+      );
+      addTearDown(settings.close);
+      addTearDown(snapshot.dispose);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            ...testOverrides(
+              settings,
+              tasks: [task],
+              assets: assets,
+              rooms: rooms,
+              taskStream: Stream<List<TaskItem>>.error(
+                StateError('refresh unavailable'),
+              ),
+            ),
+            initialHomeSnapshotProvider.overrideWithValue(snapshot),
+          ],
+          child: MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            theme: testLightTheme(),
+            home: const DashboardScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('dashboard-stale-data-warning')),
+        findsOneWidget,
+      );
+      expect(find.text('Feed the fish'), findsOneWidget);
+      expect(find.text('Retry'), findsOneWidget);
+    });
+
     testWidgets('Home ignores equal database bursts and commits real changes', (
       tester,
     ) async {

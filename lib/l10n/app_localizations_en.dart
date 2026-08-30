@@ -592,7 +592,8 @@ class AppLocalizationsEn extends AppLocalizations {
       'Completion trends and task distribution';
 
   @override
-  String get exportOrRestoreZipBackups => 'Export or restore ZIP backups';
+  String get exportOrRestoreOwntendBackups =>
+      'Export or restore Owntend backups';
 
   @override
   String get completeTaskTitleCase => 'Complete Task';
@@ -854,7 +855,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get automaticLocalBackups => 'Automatic local backups';
 
   @override
-  String get chooseBackupZip => 'Choose backup ZIP';
+  String get chooseOwntendBackup => 'Choose Owntend backup';
 
   @override
   String get restoreThisBackup => 'Restore this backup?';
@@ -1127,6 +1128,142 @@ class AppLocalizationsEn extends AppLocalizations {
   String get advancedSyncDiagnostics => 'Advanced Sync Diagnostics';
 
   @override
+  String get syncHealth => 'Sync Health';
+
+  @override
+  String get reviewChangesThatNeedSyncAttention =>
+      'Review changes and conflicts that need your attention';
+
+  @override
+  String get refresh => 'Refresh';
+
+  @override
+  String pendingSyncChanges(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count pending changes',
+      one: '1 pending change',
+      zero: 'No pending changes',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get syncHealthUnavailable => 'Sync Health is unavailable';
+
+  @override
+  String get syncHealthUnavailableBody =>
+      'Owntend could not read the local sync state. Try again.';
+
+  @override
+  String get syncHealthLooksGood => 'No sync issues need attention';
+
+  @override
+  String get syncHealthLooksGoodBody =>
+      'Owntend will continue syncing saved changes automatically when cloud backup is active.';
+
+  @override
+  String get changesNeedingAttention => 'Changes needing attention';
+
+  @override
+  String get changesNeedingAttentionBody =>
+      'Automatic retries stopped for these saved changes. Retry them or dismiss changes you no longer want to sync.';
+
+  @override
+  String get syncConflicts => 'Sync conflicts';
+
+  @override
+  String get syncConflictsBody =>
+      'These records changed both here and in the cloud. Choose which version should win.';
+
+  @override
+  String get syncChangeQueuedForRetry => 'The change was queued for retry.';
+
+  @override
+  String get dismissSyncChange => 'Dismiss this sync change?';
+
+  @override
+  String get dismissSyncChangeBody =>
+      'This removes the pending cloud change. The current data on this device stays available, but this change will not be sent to your other devices.';
+
+  @override
+  String get dismiss => 'Dismiss';
+
+  @override
+  String get syncChangeDismissed => 'The pending sync change was dismissed.';
+
+  @override
+  String get keepThisDeviceVersion => 'Keep this device\'s version?';
+
+  @override
+  String get keepThisDeviceVersionBody =>
+      'This device\'s saved version will be queued for cloud sync and may replace the cloud version.';
+
+  @override
+  String get keepCloudVersion => 'Keep the cloud version?';
+
+  @override
+  String get keepCloudVersionBody =>
+      'This dismisses this device\'s conflicting pending change. This action cannot be undone from Sync Health.';
+
+  @override
+  String get keepThisDevice => 'Keep this device';
+
+  @override
+  String get keepCloud => 'Keep cloud';
+
+  @override
+  String get syncConflictResolved => 'The sync conflict was resolved.';
+
+  @override
+  String get syncHealthActionFailed =>
+      'Owntend could not update Sync Health. Try again.';
+
+  @override
+  String get syncStoppedAfterRepeatedAttempts =>
+      'Owntend stopped retrying this change after repeated failures.';
+
+  @override
+  String syncConflictForCategory(String category) {
+    return 'Conflicting $category';
+  }
+
+  @override
+  String get chooseWhichVersionToKeep => 'Choose the version you want to keep.';
+
+  @override
+  String removedCategoryCouldNotSync(String category) {
+    return 'Removed $category could not sync';
+  }
+
+  @override
+  String updatedCategoryCouldNotSync(String category) {
+    return 'Updated $category could not sync';
+  }
+
+  @override
+  String get syncCategoryHomeStructure => 'home structure';
+
+  @override
+  String get syncCategoryItem => 'item';
+
+  @override
+  String get syncCategoryPhoto => 'photo';
+
+  @override
+  String get syncCategoryTask => 'task';
+
+  @override
+  String get syncCategoryPreference => 'preference';
+
+  @override
+  String get syncCategoryNotification => 'notification';
+
+  @override
+  String get syncCategoryOther => 'saved data';
+
+  @override
   String get signOutOnThisDevice => 'Sign out on this device';
 
   @override
@@ -1258,6 +1395,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get allInSync => 'All in Sync';
+
+  @override
+  String get showingSavedHomeDataRefreshFailed =>
+      'Showing saved home data because the latest refresh failed.';
 
   @override
   String
@@ -1540,6 +1681,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get photoSaved => 'Photo saved.';
 
   @override
+  String get selectedPhotoIsNoLongerAvailable =>
+      'The selected photo is no longer available. Choose it again.';
+
+  @override
+  String get selectedPhotoIsTooLarge =>
+      'The selected photo is too large to save and sync. Choose a smaller photo.';
+
+  @override
+  String get selectedFileIsNotASupportedPhoto =>
+      'The selected file is damaged or is not a supported photo.';
+
+  @override
   String get enableThisTaskBeforeSnoozingIt =>
       'Enable this task before snoozing it.';
 
@@ -1806,12 +1959,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get accountAndCloudSync => 'Account & Cloud Sync';
 
   @override
-  String get optionalGoogleSignInAndPrivateDeviceSync =>
-      'Optional Google sign-in and private device sync';
+  String get requiredGoogleSignInAndPrivateDeviceSync =>
+      'Required Google sign-in with private device sync';
 
   @override
-  String get createShareOrRestoreLocalZipBackups =>
-      'Create, share, or restore local ZIP backups';
+  String get createShareOrRestoreEncryptedOwntendBackups =>
+      'Create, share, or restore encrypted Owntend backups';
 
   @override
   String get restoreRecentlyRemovedRoomsItemsAndTasks =>
@@ -1885,8 +2038,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get permissionBlocked => 'Permission blocked';
 
   @override
-  String get backupsAreSavedLocallyAsPrivateZipFiles =>
-      'Backups are saved locally as private ZIP files.';
+  String get backupsAreSavedLocallyAsEncryptedOwntendFiles =>
+      'Backups are saved locally as encrypted .owntend-backup files.';
 
   @override
   String get restoreFromABackup => 'Restore from a backup';
@@ -3757,6 +3910,29 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get authoritativeChargeChanged =>
       'The point cost changed. Review the latest quote and try again.';
+
+  @override
+  String get completeRequiredFields => 'Complete the required fields.';
+
+  @override
+  String get reviewInvalidFields => 'Review the invalid fields and try again.';
+
+  @override
+  String get serverSessionExpired =>
+      'Your server session expired. Sign in again and retry.';
+
+  @override
+  String get authoritativeEntityNoLongerAvailable =>
+      'The item, room, or task is no longer available.';
+
+  @override
+  String get authoritativeOperationConflict =>
+      'This change conflicts with newer server data. Refresh and try again.';
+
+  @override
+  String keepFieldWithinCharacters(int count) {
+    return 'Keep this field to $count characters or fewer.';
+  }
 
   @override
   String get confirmTaskMoveChargeTitle => 'Use points to move task?';

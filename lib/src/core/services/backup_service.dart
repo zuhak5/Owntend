@@ -243,19 +243,43 @@ class OwntendBackupService
   }
 
   @override
-  Future<void> restoreBackup(String zipPath, {String? passphrase}) =>
-      restoreZip(zipPath, passphrase: passphrase);
+  Future<void> restoreBackup(
+    String zipPath, {
+    String? passphrase,
+    required RestoreCloudDisposition cloudDisposition,
+  }) => restoreZip(
+    zipPath,
+    passphrase: passphrase,
+    cloudDisposition: cloudDisposition,
+  );
 
   @override
-  Future<void> restore(String zipPath, {String? passphrase}) =>
-      restoreZip(zipPath, passphrase: passphrase);
+  Future<void> restore(
+    String zipPath, {
+    String? passphrase,
+    required RestoreCloudDisposition cloudDisposition,
+  }) => restoreZip(
+    zipPath,
+    passphrase: passphrase,
+    cloudDisposition: cloudDisposition,
+  );
 
   @override
-  Future<void> restoreZip(String zipPath, {String? passphrase}) {
-    return _runExclusive(() => _restoreZipInternal(zipPath, passphrase));
+  Future<void> restoreZip(
+    String zipPath, {
+    String? passphrase,
+    required RestoreCloudDisposition cloudDisposition,
+  }) {
+    return _runExclusive(
+      () => _restoreZipInternal(zipPath, passphrase, cloudDisposition),
+    );
   }
 
-  Future<void> _restoreZipInternal(String zipPath, String? passphrase) async {
+  Future<void> _restoreZipInternal(
+    String zipPath,
+    String? passphrase,
+    RestoreCloudDisposition cloudDisposition,
+  ) async {
     final validation = await _validateBackup(
       zipPath,
       passphrase: passphrase,
@@ -269,9 +293,14 @@ class OwntendBackupService
     final accountScope = boundUserId == null || boundUserId.isEmpty
         ? 'localOnly'
         : boundUserId;
-    final updateCloudIntent =
-        accountScope != 'localOnly' &&
-        await localSyncStore.hasCompleteSnapshotForUser(accountScope);
+    if (cloudDisposition == RestoreCloudDisposition.updateCloud &&
+        (accountScope == 'localOnly' ||
+            !await localSyncStore.hasCompleteSnapshotForUser(accountScope))) {
+      await validation.dispose();
+      throw const BackupException(
+        'Cloud update requires the currently signed-in account to have a complete synchronized snapshot. Retry synchronization or restore locally instead.',
+      );
+    }
 
     var journalEntry = RestoreJournalEntry(
       version: kCurrentRestoreJournalVersion,
@@ -280,7 +309,7 @@ class OwntendBackupService
       archivePath: zipPath,
       archiveHash: archiveHash,
       phase: RestorePhase.validated,
-      updateCloudIntent: updateCloudIntent,
+      cloudDisposition: cloudDisposition,
       createdAt: now,
       updatedAt: now,
     );
@@ -392,7 +421,8 @@ class OwntendBackupService
       await journalStore.saveEntry(journalEntry);
       failpoints.maybeThrow('journal:mediaActivated');
 
-      if (journalEntry.updateCloudIntent) {
+      if (journalEntry.cloudDisposition ==
+          RestoreCloudDisposition.updateCloud) {
         await localSyncStore.enqueueRestoreSnapshot(DateTime.now());
       } else {
         await localSyncStore.pauseAfterLocalRestore();

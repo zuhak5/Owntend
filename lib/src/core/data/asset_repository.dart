@@ -696,6 +696,18 @@ class DriftAssetRepository implements AssetRepository {
     domain.PlantDetails? plantDetails,
     domain.SafetyDetails? safetyDetails,
   }) async {
+    validateAssetInput(
+      name: name,
+      roomId: roomId,
+      assetType: assetType,
+      placement: placement,
+      notes: notes,
+      tagNames: tagNames,
+      deviceDetails: deviceDetails,
+      petDetails: petDetails,
+      plantDetails: plantDetails,
+      safetyDetails: safetyDetails,
+    );
     final assetId = id ?? _uuid.v7();
     final now = DateTime.now();
     await db.transaction(() async {
@@ -1029,29 +1041,25 @@ class DriftAssetRepository implements AssetRepository {
     String? caption,
     bool makePrimary = false,
   }) async {
-    final source = File(sourcePath);
-    if (!await source.exists()) {
-      throw ArgumentError.value(
-        sourcePath,
-        'sourcePath',
-        'Photo file does not exist.',
-      );
-    }
+    final normalized = await const PhotoImportService().normalizeFile(
+      sourcePath,
+    );
     final docDir = await getApplicationDocumentsDirectory();
     final photoId = _uuid.v7();
-    final extension = p.extension(sourcePath).isEmpty
-        ? '.jpg'
-        : p.extension(sourcePath);
-    final relativePath = p.posix.join('photos', assetId, '$photoId$extension');
+    final relativePath = p.posix.join(
+      'photos',
+      assetId,
+      '$photoId${normalized.extension}',
+    );
     final destination = File(
       p.joinAll([docDir.path, ...relativePath.split('/')]),
     );
     await destination.parent.create(recursive: true);
-    await source.copy(destination.path);
-    final existingPhotos = await listPhotosForAsset(assetId);
-    final isPrimary = makePrimary || existingPhotos.isEmpty;
-    final createdAt = DateTime.now();
     try {
+      await destination.writeAsBytes(normalized.bytes, flush: true);
+      final existingPhotos = await listPhotosForAsset(assetId);
+      final isPrimary = makePrimary || existingPhotos.isEmpty;
+      final createdAt = DateTime.now();
       await db.transaction(() async {
         if (isPrimary) {
           await (db.update(db.assetPhotos)
@@ -1071,6 +1079,14 @@ class DriftAssetRepository implements AssetRepository {
               ),
             );
       });
+      return domain.AssetPhoto(
+        id: photoId,
+        assetId: assetId,
+        relativePath: relativePath,
+        caption: _blankToNull(caption),
+        isPrimary: isPrimary,
+        createdAt: createdAt,
+      );
     } catch (_) {
       try {
         if (await destination.exists()) {
@@ -1081,14 +1097,6 @@ class DriftAssetRepository implements AssetRepository {
       }
       rethrow;
     }
-    return domain.AssetPhoto(
-      id: photoId,
-      assetId: assetId,
-      relativePath: relativePath,
-      caption: _blankToNull(caption),
-      isPrimary: isPrimary,
-      createdAt: createdAt,
-    );
   }
 
   @override

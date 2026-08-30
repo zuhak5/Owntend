@@ -264,10 +264,15 @@ extension _SyncRunCoordinator on SyncCoordinator {
             },
           );
           if (failedVisibleCount > 0) {
-            final details = await _localStore.listFailedVisibleDetails();
+            final failures = await _localStore.listFailedVisibleMutations();
             AppLogger.info(
               'sync_failed_visible_detail',
-              fields: {'count': failedVisibleCount, 'details': details},
+              fields: {
+                'count': failedVisibleCount,
+                'details': [
+                  for (final failure in failures) failure.diagnosticDetails,
+                ],
+              },
             );
           }
         }

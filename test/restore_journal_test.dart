@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:owntend/src/core/database/app_database.dart';
+import 'package:owntend/src/core/domain/contracts.dart';
 import 'package:owntend/src/core/services/restore_journal.dart';
 import 'package:owntend/src/core/sync/local_sync_store.dart';
 import 'package:path/path.dart' as p;
@@ -101,7 +102,8 @@ void main() {
     required RestorePhase phase,
     String accountScope = 'user-a',
     String? mediaToken,
-    bool updateCloudIntent = true,
+    RestoreCloudDisposition cloudDisposition =
+        RestoreCloudDisposition.updateCloud,
     int version = kCurrentRestoreJournalVersion,
   }) {
     final now = DateTime.now();
@@ -113,7 +115,7 @@ void main() {
       archiveHash: 'hash-$journalId',
       mediaToken: mediaToken,
       phase: phase,
-      updateCloudIntent: updateCloudIntent,
+      cloudDisposition: cloudDisposition,
       createdAt: now,
       updatedAt: now,
     );
@@ -182,7 +184,7 @@ void main() {
         safetyBackupHash: 'hash-safety',
         mediaToken: 'token-xyz',
         phase: RestorePhase.mediaStaged,
-        updateCloudIntent: true,
+        cloudDisposition: RestoreCloudDisposition.updateCloud,
         createdAt: now,
         updatedAt: now,
       );
@@ -194,7 +196,7 @@ void main() {
       expect(restored.journalId, equals('j-101'));
       expect(restored.accountScope, equals('user-a'));
       expect(restored.phase, equals(RestorePhase.mediaStaged));
-      expect(restored.updateCloudIntent, isTrue);
+      expect(restored.cloudDisposition, RestoreCloudDisposition.updateCloud);
       expect(restored.mediaToken, equals('token-xyz'));
     });
 
@@ -371,7 +373,7 @@ void main() {
           journalId: 'j-local-post',
           phase: RestorePhase.cloudIntentDurable,
           accountScope: 'localOnly',
-          updateCloudIntent: false,
+          cloudDisposition: RestoreCloudDisposition.localOnlyPaused,
         ),
       );
 

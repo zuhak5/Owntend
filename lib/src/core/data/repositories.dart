@@ -13,10 +13,12 @@ import 'package:uuid/uuid.dart';
 
 import '../database/app_database.dart';
 import '../domain/contracts.dart';
+import '../domain/input_validation.dart';
 import '../domain/models.dart' as domain;
 import '../domain/render_fingerprints.dart';
 import '../domain/task_selectors.dart';
 import '../services/health_score_calculator.dart';
+import '../services/photo_import_service.dart';
 import '../services/recurrence_engine.dart';
 import '../utils/date_utils.dart';
 import '../utils/redacting_logger.dart';

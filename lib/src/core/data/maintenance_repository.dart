@@ -184,25 +184,15 @@ class DriftMaintenanceRepository
   }) async {
     final cleanAssetId = assetId.trim();
     final cleanTitle = title.trim();
+    validateMaintenancePlanInput(
+      assetId: cleanAssetId,
+      title: cleanTitle,
+      instructions: instructions,
+      recurrence: recurrence,
+      reminderDaysBefore: reminderDaysBefore,
+      metadata: metadata,
+    );
     await _validatePlanTargetAsset(cleanAssetId);
-    if (recurrence.interval < 1) {
-      throw const MaintenancePlanValidationException(
-        'Task recurrence must be greater than zero.',
-        code: 'invalid_recurrence',
-      );
-    }
-    if (cleanTitle.isEmpty) {
-      throw const MaintenancePlanValidationException(
-        'Task title is required.',
-        code: 'missing_title',
-      );
-    }
-    if (reminderDaysBefore < 0) {
-      throw const MaintenancePlanValidationException(
-        'Reminder lead time cannot be negative.',
-        code: 'invalid_reminder',
-      );
-    }
     if (!_reminderLeadFitsRecurrence(recurrence, reminderDaysBefore)) {
       throw const MaintenancePlanValidationException(
         'Reminder lead time must be shorter than the recurrence interval.',

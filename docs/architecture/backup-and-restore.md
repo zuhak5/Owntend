@@ -27,6 +27,8 @@ The backup service and tests are authoritative for exact file names, limits, and
 
 Backups are versioned, authenticated, streaming containers named `*.owntend-backup`. There is no plaintext ZIP format and no legacy reader: pre-launch had zero users, so no compatibility path exists.
 
+The user-facing restore picker allowlists only `owntend-backup`. Renaming a ZIP or another file does not make it valid: inspection still authenticates the container header and encrypted frames before restore.
+
 A container is a 52-byte plaintext header (magic `OWNTDBK1`, KDF/cipher identifiers, Argon2id salt and parameters, chunk size, base nonce, and an authenticated key-guard class) followed by AEAD frames. Every frame is AES-256-GCM encrypted with a per-frame nonce derived from the base nonce and authenticated against the full header; any tampering with header or payload fails authentication before data is used. The first frame is always the JSON manifest; remaining frames are the database snapshot followed by each media entry in manifest order.
 
 Key protection has two classes, recorded in the header:
@@ -81,7 +83,7 @@ Validation must occur before any file is written outside a controlled staging di
 
 1. Open the archive without trusting names or metadata.
 2. Validate the format version and required manifest fields. Before any destructive phase, write `validated` to the process-durable secure-storage journal (`RestoreJournalStore`). Production has no in-memory journal fallback.
-3. Capture the immutable local account scope and whether the current fully hydrated account requires `enqueueRestoreSnapshot`; local-only or non-ready state records the pause disposition instead. This decision is journaled before services are suspended.
+3. Require an explicit `RestoreCloudDisposition` from the caller and capture it with the immutable local account scope in restore-journal contract `3` before services are suspended. `localOnlyPaused` is honored even when the device has a fully hydrated bound account. `updateCloud` is accepted only when the current bound account has a complete synchronized snapshot; an unbound, partial, blocked, or hydrating cache fails before the restore barrier.
 4. Enforce entry-count, per-entry, total-expanded-size, and compression limits.
 5. Normalize every path and reject absolute, traversal, duplicate, or disallowed entries.
 6. Verify hashes and expected file types.
@@ -91,7 +93,7 @@ Validation must occur before any file is written outside a controlled staging di
 10. Extract media into a private staging directory (`.restore-$token`) **without touching canonical folders**, register the sidecar root in `SidecarRegistryStore`, and write `mediaStaged` phase. Canonical media is never renamed before the database commit is proven, so a crash can never pair the old database with new media.
 11. Begin the SQLite import transaction (`dbCommitStarted` journal phase is advisory only) and import table data. Inside that same transaction, write the restore-generation commit marker (`settings.restore_generation = journalId`). Because SQLite commits atomically, the marker exists only if the transaction actually committed; no post-commit journal write is required for proof. Record `dbCommitComplete` after the commit returns.
 12. Activate staged media per root (`photos`, `profile`, `cloud_media`): rename live -> `.previous-$token`, then staged -> live. Each rename pair is idempotent, so a crash between roots leaves states recovery can distinguish by which directories exist. Record `mediaActivated`.
-13. Make the recorded restore disposition durable (`pauseAfterLocalRestore` or `enqueueRestoreSnapshot`) and record `cloudIntentDurable` before terminal journal cleanup.
+13. Make the recorded restore disposition durable inside the restore service (`pauseAfterLocalRestore` or `enqueueRestoreSnapshot`) and record `cloudIntentDurable` before terminal journal cleanup. Presentation never recreates this ledger mutation after the service returns.
 14. Rebuild derived runtime state and notifications where owned by their lifecycle. Search is generation-bound: restored authoritative rows invalidate the FTS snapshot automatically, and the repository rebuilds it before a subsequent search can return results.
 15. Delete `.previous-$token` and `.restore-$token` media directories (`cleanupPending`), remove them from `SidecarRegistryStore`, and write `terminal` phase to clear journal. If deletion fails, update `SidecarRegistryStore` with `SidecarState.pendingCleanup` and error details for future startup sweepers or account deletion.
 16. If interrupted, the process-level restore recovery gate runs before deferred account cleanup, cloud bootstrap, authentication hydration, realtime, or background sync. `RestoreJournalResolver` determines truth by reading `settings.restore_generation`: when it equals the active journal id the SQLite transaction committed and recovery rolls forward (finishing partial media activations idempotently); otherwise recovery rolls back (deleting only staged copies and restoring any `.previous-$token` generation). Journal phases are never used to infer commit status. Recovery fails closed on account-scope mismatch, does not clear the journal until the recorded cloud disposition is durable, rejects retired journal formats without a compatibility ladder, and blocks startup on newer unsupported versions. After successful resolution, `SidecarRegistryStore.sweepOrphans(...)` cleans terminal or unregistered orphan sidecars.
@@ -119,6 +121,8 @@ Restore can introduce local state that differs from the cloud. The implementatio
 
 For the current signed-in restore path, ordinary synchronized entities are requeued through their normal contracts, but maintenance history is never emitted as direct table CRUD. `enqueueRestoreSnapshot` groups records by existing plan into deterministic batches of at most 100 and creates `maintenance_history_restore` execute intents. Before sending, the client reads the canonical cloud plan revision and snapshot. The server inserts exact missing rows, accepts exact replay, retains unrelated cloud rows, and persists either `plan_snapshot_conflict` or `history_record_conflict` when data diverges. A conflicted batch commits no history rows and remains visible/durable across restart. Previously pending generic history mutations are converted when restore-derived; unsupported mutations become `server_authority_required` conflicts rather than being discarded.
 
+A `localOnlyPaused` restore clears account binding and synchronization runtime state while retaining the restored domain rows. Authenticated startup does not call generic sync enable while `migrationState == restorePaused` and `restorePending` is true. Generic `enable()` also rejects that state. Only `resumeRestoredSnapshotToCloud()` may leave it: the local store atomically binds the current account and journals the complete restored snapshot in one transaction, then initial hydration owns convergence and publishes the final active state.
+
 This merge does not authenticate the historical truth of an imported archive. It only validates the current owner, plan match, bounded structure, timestamp precision, uniqueness, and exact replay. Product support must not describe restored history as independently verified.
 
 ## Media
@@ -139,7 +143,7 @@ Automatic backup retention should be bounded and deterministic. Safety backups c
 
 ## Privacy
 
-Backups may contain nearly all Owntend content. Do not upload them automatically, include them in Sentry, or expose their paths or contents in logs. Account deletion cannot remove files the user exported to external storage or shared with another application.
+Backups may contain nearly all Owntend content. Do not upload them automatically, include them in Sentry, or expose their paths or contents in logs. Passphrases are byte-significant user input: presentation does not trim them, retains a restore passphrase only for the active preview/restore operation, and clears and disposes dialog controllers with their owning routes. Account deletion cannot remove files the user exported to external storage or shared with another application.
 
 ## Tests
 

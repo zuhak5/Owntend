@@ -213,6 +213,9 @@ void main() {
         retained.requestPayload['request_hash'],
         equals(retained.requestHash),
       );
+      expect(retained.lastErrorCode, 'transport_or_unknown');
+      expect(retained.lastErrorMessage, 'TRANSPORT_OR_UNKNOWN');
+      expect(retained.lastErrorMessage, isNot(contains('Network timeout')));
       expect(syncStore.reconciledAssetIds, isEmpty);
     });
 
@@ -308,7 +311,42 @@ void main() {
       final op = await store.getOperation('op-reused-1');
       expect(op!.state, equals(TaskCreationOperationState.permanentRejected));
       expect(op.lastErrorCode, equals('operation_id_reused'));
+      expect(op.requestPayload, isEmpty);
     });
+
+    test(
+      'definitive RPC validation rejection is terminal and scrubbed',
+      () async {
+        final repo = _ScriptedMonetizationRepository(
+          createAssetThrow: () => const AuthoritativeRpcRejectionException(
+            code: AuthoritativeRpcRejectionCode.invalidPayload,
+            serverCode: 'INVALID_ASSET_PAYLOAD',
+          ),
+          createAssetResult: null,
+        );
+        final store = TaskCreationOperationStore();
+        final container = _container(repo: repo, store: store);
+
+        await expectLater(
+          container
+              .read(assetCreationControllerProvider)
+              .createChargedAsset(
+                assetId: 'asset-invalid-rpc',
+                assetPayload: _assetPayload('asset-invalid-rpc'),
+                detailsPayload: const {},
+                accountScope: 'user-a',
+                operationIdOverride: 'op-invalid-rpc',
+              ),
+          throwsA(isA<AuthoritativeRpcRejectionException>()),
+        );
+
+        final operation = await store.getOperation('op-invalid-rpc');
+        expect(operation!.state, TaskCreationOperationState.permanentRejected);
+        expect(operation.requestPayload, isEmpty);
+        expect(operation.lastErrorCode, 'invalid_payload');
+        expect(operation.lastErrorMessage, 'INVALID_ASSET_PAYLOAD');
+      },
+    );
 
     test('an ambiguous prior operation blocks new charged creation until '
         'recovery is available', () async {

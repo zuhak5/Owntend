@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -284,6 +286,83 @@ void main() {
   });
 
   group('calendar grid', () {
+    testWidgets('calendar follows the local clock across midnight', (
+      tester,
+    ) async {
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      tester.view.physicalSize = const Size(800, 1200);
+      tester.view.devicePixelRatio = 1;
+      final clock = StreamController<DateTime>.broadcast();
+      addTearDown(clock.close);
+      final beforeMidnight = DateTime(2026, 8, 30, 23, 59, 50);
+      final afterMidnight = DateTime(2026, 8, 31, 0, 0, 1);
+      final todayTask = makeTaskItem(
+        beforeMidnight,
+        id: 'before-midnight',
+        title: 'Before midnight task',
+      );
+      final tomorrowTask = makeTaskItem(
+        afterMidnight,
+        id: 'after-midnight',
+        title: 'After midnight task',
+        status: TaskStatus.upcoming,
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            localNowProvider.overrideWithValue(() => beforeMidnight),
+            localClockProvider.overrideWith((ref) => clock.stream),
+            tasksProvider.overrideWith(
+              (ref) => Stream.value([todayTask, tomorrowTask]),
+            ),
+          ],
+          child: const MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: CalendarScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Before midnight task'), findsOneWidget);
+      expect(find.text('After midnight task'), findsNothing);
+
+      clock.add(afterMidnight);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(find.text('Before midnight task'), findsNothing);
+      expect(find.text('After midnight task'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('calendar exposes task stream failures with retry', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            tasksProvider.overrideWith(
+              (ref) => Stream<List<TaskItem>>.error(
+                StateError('calendar unavailable'),
+              ),
+            ),
+          ],
+          child: const MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: CalendarScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Retry'), findsOneWidget);
+      expect(find.text('No tasks on this day'), findsNothing);
+    });
+
     testWidgets(
       'calendar renders an aligned month grid and selected day tasks',
       (tester) async {

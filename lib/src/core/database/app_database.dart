@@ -6,6 +6,7 @@ import 'package:sqlite3/common.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../domain/input_validation.dart';
 import '../domain/models.dart';
 
 part 'app_database.g.dart';
@@ -37,6 +38,15 @@ final databaseProvider = Provider<AppDatabase>((ref) {
   ref.onDispose(db.close);
   return db;
 });
+
+CustomExpression<bool> _maxLengthCheck(String column, int maximum) =>
+    CustomExpression<bool>('length($column) <= $maximum');
+
+CustomExpression<bool> _boundedLengthCheck(
+  String column, {
+  required int minimum,
+  required int maximum,
+}) => CustomExpression<bool>('length($column) BETWEEN $minimum AND $maximum');
 
 @DataClassName('AreaRow')
 class Areas extends Table {
@@ -78,7 +88,15 @@ class Rooms extends Table {
 @DataClassName('AssetRow')
 class Assets extends Table {
   TextColumn get id => text()();
-  TextColumn get name => text().withLength(min: 1, max: 200)();
+  TextColumn get name => text()
+      .withLength(min: 1, max: InputValidationLimits.assetName)
+      .check(
+        _boundedLengthCheck(
+          'name',
+          minimum: 1,
+          maximum: InputValidationLimits.assetName,
+        ),
+      )();
   TextColumn get assetType => text()
       .check(
         const CustomExpression<bool>(
@@ -88,8 +106,14 @@ class Assets extends Table {
       .withDefault(const Constant('general'))();
   TextColumn get roomId =>
       text().references(Rooms, #id, onDelete: KeyAction.cascade)();
-  TextColumn get placement => text().withLength(max: 300).nullable()();
-  TextColumn get notes => text().withLength(max: 10000).nullable()();
+  TextColumn get placement => text()
+      .withLength(max: InputValidationLimits.assetPlacement)
+      .check(_maxLengthCheck('placement', InputValidationLimits.assetPlacement))
+      .nullable()();
+  TextColumn get notes => text()
+      .withLength(max: InputValidationLimits.assetNotes)
+      .check(_maxLengthCheck('notes', InputValidationLimits.assetNotes))
+      .nullable()();
   DateTimeColumn get purchaseDate => dateTime().nullable()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
@@ -106,13 +130,45 @@ class DeviceDetailsTable extends Table {
 
   TextColumn get assetId =>
       text().references(Assets, #id, onDelete: KeyAction.cascade)();
-  TextColumn get brand => text().nullable()();
-  TextColumn get model => text().nullable()();
-  TextColumn get serialNumber => text().nullable()();
-  TextColumn get powerSource => text().nullable()();
+  TextColumn get brand => text()
+      .withLength(max: InputValidationLimits.deviceBrand)
+      .check(_maxLengthCheck('brand', InputValidationLimits.deviceBrand))
+      .nullable()();
+  TextColumn get model => text()
+      .withLength(max: InputValidationLimits.deviceModel)
+      .check(_maxLengthCheck('model', InputValidationLimits.deviceModel))
+      .nullable()();
+  TextColumn get serialNumber => text()
+      .withLength(max: InputValidationLimits.deviceSerialNumber)
+      .check(
+        _maxLengthCheck(
+          'serial_number',
+          InputValidationLimits.deviceSerialNumber,
+        ),
+      )
+      .nullable()();
+  TextColumn get powerSource => text()
+      .withLength(max: InputValidationLimits.devicePowerSource)
+      .check(
+        _maxLengthCheck(
+          'power_source',
+          InputValidationLimits.devicePowerSource,
+        ),
+      )
+      .nullable()();
   DateTimeColumn get warrantyUntil => dateTime().nullable()();
-  TextColumn get manualUrl => text().nullable()();
-  TextColumn get consumable => text().nullable()();
+  TextColumn get manualUrl => text()
+      .withLength(max: InputValidationLimits.deviceManualUrl)
+      .check(
+        _maxLengthCheck('manual_url', InputValidationLimits.deviceManualUrl),
+      )
+      .nullable()();
+  TextColumn get consumable => text()
+      .withLength(max: InputValidationLimits.deviceConsumable)
+      .check(
+        _maxLengthCheck('consumable', InputValidationLimits.deviceConsumable),
+      )
+      .nullable()();
 
   @override
   Set<Column<Object>> get primaryKey => {assetId};
@@ -125,14 +181,37 @@ class PetDetailsTable extends Table {
 
   TextColumn get assetId =>
       text().references(Assets, #id, onDelete: KeyAction.cascade)();
-  TextColumn get species => text().nullable()();
-  TextColumn get breed => text().nullable()();
+  TextColumn get species => text()
+      .withLength(max: InputValidationLimits.petSpecies)
+      .check(_maxLengthCheck('species', InputValidationLimits.petSpecies))
+      .nullable()();
+  TextColumn get breed => text()
+      .withLength(max: InputValidationLimits.petBreed)
+      .check(_maxLengthCheck('breed', InputValidationLimits.petBreed))
+      .nullable()();
   DateTimeColumn get birthDate => dateTime().nullable()();
-  TextColumn get microchipId => text().nullable()();
-  TextColumn get vetName => text().nullable()();
-  TextColumn get vetPhone => text().nullable()();
-  TextColumn get feedingNotes => text().nullable()();
-  TextColumn get medicalNotes => text().nullable()();
+  TextColumn get microchipId => text()
+      .withLength(max: InputValidationLimits.petMicrochipId)
+      .check(
+        _maxLengthCheck('microchip_id', InputValidationLimits.petMicrochipId),
+      )
+      .nullable()();
+  TextColumn get vetName => text()
+      .withLength(max: InputValidationLimits.petVetName)
+      .check(_maxLengthCheck('vet_name', InputValidationLimits.petVetName))
+      .nullable()();
+  TextColumn get vetPhone => text()
+      .withLength(max: InputValidationLimits.petVetPhone)
+      .check(_maxLengthCheck('vet_phone', InputValidationLimits.petVetPhone))
+      .nullable()();
+  TextColumn get feedingNotes => text()
+      .withLength(max: InputValidationLimits.petNotes)
+      .check(_maxLengthCheck('feeding_notes', InputValidationLimits.petNotes))
+      .nullable()();
+  TextColumn get medicalNotes => text()
+      .withLength(max: InputValidationLimits.petNotes)
+      .check(_maxLengthCheck('medical_notes', InputValidationLimits.petNotes))
+      .nullable()();
 
   @override
   Set<Column<Object>> get primaryKey => {assetId};
@@ -145,12 +224,35 @@ class PlantDetailsTable extends Table {
 
   TextColumn get assetId =>
       text().references(Assets, #id, onDelete: KeyAction.cascade)();
-  TextColumn get species => text().nullable()();
-  TextColumn get sunlight => text().nullable()();
-  IntColumn get wateringIntervalDays => integer().nullable()();
-  TextColumn get potSize => text().nullable()();
+  TextColumn get species => text()
+      .withLength(max: InputValidationLimits.plantSpecies)
+      .check(_maxLengthCheck('species', InputValidationLimits.plantSpecies))
+      .nullable()();
+  TextColumn get sunlight => text()
+      .withLength(max: InputValidationLimits.plantSunlight)
+      .check(_maxLengthCheck('sunlight', InputValidationLimits.plantSunlight))
+      .nullable()();
+  IntColumn get wateringIntervalDays => integer()
+      .check(
+        const CustomExpression<bool>(
+          'watering_interval_days IS NULL OR watering_interval_days > 0',
+        ),
+      )
+      .nullable()();
+  TextColumn get potSize => text()
+      .withLength(max: InputValidationLimits.plantPotSize)
+      .check(_maxLengthCheck('pot_size', InputValidationLimits.plantPotSize))
+      .nullable()();
   DateTimeColumn get lastRepottedAt => dateTime().nullable()();
-  TextColumn get toxicityNotes => text().nullable()();
+  TextColumn get toxicityNotes => text()
+      .withLength(max: InputValidationLimits.plantToxicityNotes)
+      .check(
+        _maxLengthCheck(
+          'toxicity_notes',
+          InputValidationLimits.plantToxicityNotes,
+        ),
+      )
+      .nullable()();
 
   @override
   Set<Column<Object>> get primaryKey => {assetId};
@@ -163,11 +265,28 @@ class SafetyDetailsTable extends Table {
 
   TextColumn get assetId =>
       text().references(Assets, #id, onDelete: KeyAction.cascade)();
-  TextColumn get safetyType => text().nullable()();
+  TextColumn get safetyType => text()
+      .withLength(max: InputValidationLimits.safetyType)
+      .check(_maxLengthCheck('safety_type', InputValidationLimits.safetyType))
+      .nullable()();
   DateTimeColumn get installedAt => dateTime().nullable()();
   DateTimeColumn get expiresAt => dateTime().nullable()();
-  TextColumn get batteryType => text().nullable()();
-  IntColumn get testIntervalDays => integer().nullable()();
+  TextColumn get batteryType => text()
+      .withLength(max: InputValidationLimits.safetyBatteryType)
+      .check(
+        _maxLengthCheck(
+          'battery_type',
+          InputValidationLimits.safetyBatteryType,
+        ),
+      )
+      .nullable()();
+  IntColumn get testIntervalDays => integer()
+      .check(
+        const CustomExpression<bool>(
+          'test_interval_days IS NULL OR test_interval_days > 0',
+        ),
+      )
+      .nullable()();
 
   @override
   Set<Column<Object>> get primaryKey => {assetId};
@@ -176,7 +295,15 @@ class SafetyDetailsTable extends Table {
 @DataClassName('TagRow')
 class Tags extends Table {
   TextColumn get id => text()();
-  TextColumn get name => text().withLength(min: 1, max: 120)();
+  TextColumn get name => text()
+      .withLength(min: 1, max: InputValidationLimits.tagName)
+      .check(
+        _boundedLengthCheck(
+          'name',
+          minimum: 1,
+          maximum: InputValidationLimits.tagName,
+        ),
+      )();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 
   @override
@@ -214,8 +341,24 @@ class MaintenancePlans extends Table {
   TextColumn get id => text()();
   TextColumn get assetId =>
       text().references(Assets, #id, onDelete: KeyAction.cascade)();
-  TextColumn get title => text().withLength(min: 1, max: 200)();
-  TextColumn get instructions => text().withLength(max: 4000).nullable()();
+  TextColumn get title => text()
+      .withLength(min: 1, max: InputValidationLimits.maintenanceTitle)
+      .check(
+        _boundedLengthCheck(
+          'title',
+          minimum: 1,
+          maximum: InputValidationLimits.maintenanceTitle,
+        ),
+      )();
+  TextColumn get instructions => text()
+      .withLength(max: InputValidationLimits.maintenanceInstructions)
+      .check(
+        _maxLengthCheck(
+          'instructions',
+          InputValidationLimits.maintenanceInstructions,
+        ),
+      )
+      .nullable()();
   IntColumn get recurrenceInterval => integer().check(
     const CustomExpression<bool>('recurrence_interval > 0'),
   )();
@@ -246,12 +389,47 @@ class MaintenancePlans extends Table {
 class MaintenancePlanMetadata extends Table {
   TextColumn get planId =>
       text().references(MaintenancePlans, #id, onDelete: KeyAction.cascade)();
-  TextColumn get taskType => text().nullable()();
-  TextColumn get locationLabel => text().nullable()();
-  IntColumn get estimatedDurationMinutes => integer().nullable()();
-  TextColumn get requiredMaterialsJson =>
-      text().withDefault(const Constant('[]'))();
-  TextColumn get reminderRecommendation => text().nullable()();
+  TextColumn get taskType => text()
+      .withLength(max: InputValidationLimits.maintenanceTaskType)
+      .check(
+        _maxLengthCheck('task_type', InputValidationLimits.maintenanceTaskType),
+      )
+      .nullable()();
+  TextColumn get locationLabel => text()
+      .withLength(max: InputValidationLimits.maintenanceLocation)
+      .check(
+        _maxLengthCheck(
+          'location_label',
+          InputValidationLimits.maintenanceLocation,
+        ),
+      )
+      .nullable()();
+  IntColumn get estimatedDurationMinutes => integer()
+      .check(
+        const CustomExpression<bool>(
+          'estimated_duration_minutes IS NULL OR '
+          'estimated_duration_minutes >= 0',
+        ),
+      )
+      .nullable()();
+  TextColumn get requiredMaterialsJson => text()
+      .withLength(max: InputValidationLimits.maintenanceRequiredMaterialsJson)
+      .check(
+        _maxLengthCheck(
+          'required_materials_json',
+          InputValidationLimits.maintenanceRequiredMaterialsJson,
+        ),
+      )
+      .withDefault(const Constant('[]'))();
+  TextColumn get reminderRecommendation => text()
+      .withLength(max: InputValidationLimits.maintenanceReminderRecommendation)
+      .check(
+        _maxLengthCheck(
+          'reminder_recommendation',
+          InputValidationLimits.maintenanceReminderRecommendation,
+        ),
+      )
+      .nullable()();
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();

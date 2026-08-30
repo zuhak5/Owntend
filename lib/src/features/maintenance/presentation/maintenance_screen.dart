@@ -13,6 +13,8 @@ class _MaintenanceScreenState extends ConsumerState<MaintenanceScreen> {
   @override
   Widget build(BuildContext context) {
     final tasks = ref.watch(tasksProvider);
+    final now =
+        ref.watch(localClockProvider).value ?? ref.read(localNowProvider)();
     final hasThings = ref.watch(
       assetsProvider.select((state) => state.value?.isNotEmpty ?? false),
     );
@@ -20,7 +22,7 @@ class _MaintenanceScreenState extends ConsumerState<MaintenanceScreen> {
       roomsProvider.select((state) => state.value?.isNotEmpty ?? false),
     );
     final taskItems = tasks.value ?? const <TaskItem>[];
-    final taskBuckets = getTaskBuckets(taskItems, DateTime.now());
+    final taskBuckets = getTaskBuckets(taskItems, now);
     final showFab =
         widget.initialFilter != 'today' || taskBuckets.today.isNotEmpty;
     return Scaffold(
@@ -103,7 +105,7 @@ class _MaintenanceScreenState extends ConsumerState<MaintenanceScreen> {
                   ),
                 );
               }
-              final buckets = getTaskBuckets(items, DateTime.now());
+              final buckets = getTaskBuckets(items, now);
               final groups = _visibleTaskGroups(
                 filter: widget.initialFilter,
                 buckets: buckets,

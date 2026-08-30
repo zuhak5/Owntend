@@ -79,10 +79,7 @@ class SupabaseMonetizationRepository extends MonetizationRepository {
       );
       return AssetCopyResult.fromJson(data);
     } on PostgrestException catch (error) {
-      if (error.message == 'OPERATION_ID_REUSED') {
-        throw const OperationIdReusedException();
-      }
-      rethrow;
+      throw classifyAuthoritativePostgrestException(error);
     }
   }
 
@@ -135,10 +132,7 @@ class SupabaseMonetizationRepository extends MonetizationRepository {
       );
       return ChargedOperationStatusResult.fromJson(data);
     } on PostgrestException catch (error) {
-      if (error.message == 'OPERATION_ID_REUSED') {
-        throw const OperationIdReusedException();
-      }
-      rethrow;
+      throw classifyAuthoritativePostgrestException(error);
     }
   }
 
@@ -165,10 +159,7 @@ class SupabaseMonetizationRepository extends MonetizationRepository {
         params: {'p_operation': payload},
       );
     } on PostgrestException catch (error) {
-      if (error.message == 'OPERATION_ID_REUSED') {
-        throw const OperationIdReusedException();
-      }
-      rethrow;
+      throw classifyAuthoritativePostgrestException(error);
     }
     if (data['status'] == 'insufficient_points') {
       throw InsufficientPointsException(balance: data['balance'] as int? ?? 0);
@@ -202,10 +193,7 @@ class SupabaseMonetizationRepository extends MonetizationRepository {
       }
       return result;
     } on PostgrestException catch (error) {
-      if (error.message == 'OPERATION_ID_REUSED') {
-        throw const OperationIdReusedException();
-      }
-      rethrow;
+      throw classifyAuthoritativePostgrestException(error);
     }
   }
 

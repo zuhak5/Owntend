@@ -243,7 +243,11 @@ class _MoveCopyItemDialogState extends ConsumerState<MoveCopyItemDialog> {
         }
         hk_ui.showToast(
           context,
-          content: Text(failureMessage(context, error)),
+          content: Text(
+            error is AuthoritativeRpcRejectionException
+                ? authoritativeRpcRejectionMessage(context, error)
+                : failureMessage(context, error),
+          ),
           severity: hk_ui.HkToastSeverity.error,
         );
       }
@@ -610,6 +614,25 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
     });
   }
 
+  bool get _detailNumbersValid => switch (_assetType) {
+    AssetType.plant => _optionalPositiveIntegerValid(_wateringController.text),
+    AssetType.safety => _optionalPositiveIntegerValid(
+      _testIntervalController.text,
+    ),
+    _ => true,
+  };
+
+  bool _optionalPositiveIntegerValid(String rawValue) {
+    final value = rawValue.trim();
+    return value.isEmpty || ((int.tryParse(value) ?? 0) > 0);
+  }
+
+  String? _positiveIntegerError(String rawValue) {
+    return _optionalPositiveIntegerValid(rawValue)
+        ? null
+        : context.l10n.use1OrMore;
+  }
+
   @override
   Widget build(BuildContext context) {
     final areas = ref.watch(areasProvider).value ?? [];
@@ -627,6 +650,7 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
     final saveEnabled =
         !_saving &&
         _nameController.text.trim().isNotEmpty &&
+        _detailNumbersValid &&
         selectedRoomId != null;
     return EditorSheetFrame(
       title: widget.asset == null
@@ -671,6 +695,7 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
           TextField(
             controller: _nameController,
             textInputAction: TextInputAction.next,
+            inputFormatters: limitInputLength(InputValidationLimits.assetName),
             decoration: InputDecoration(labelText: context.l10n.itemName),
           ),
           const SizedBox(height: 12),
@@ -749,6 +774,9 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
           TextField(
             controller: _placementController,
             textInputAction: TextInputAction.next,
+            inputFormatters: limitInputLength(
+              InputValidationLimits.assetPlacement,
+            ),
             decoration: InputDecoration(
               labelText: context.l10n.placement,
               hintText: context.l10n.shelfCornerBalconyKennelArea,
@@ -772,6 +800,7 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
           TextField(
             controller: _notesController,
             maxLines: 3,
+            inputFormatters: limitInputLength(InputValidationLimits.assetNotes),
             decoration: InputDecoration(labelText: context.l10n.notes),
           ),
           const SizedBox(height: 12),
@@ -808,16 +837,21 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
         ),
         TextField(
           controller: _brandController,
+          inputFormatters: limitInputLength(InputValidationLimits.deviceBrand),
           decoration: InputDecoration(labelText: context.l10n.brand),
         ),
         const SizedBox(height: 12),
         TextField(
           controller: _modelController,
+          inputFormatters: limitInputLength(InputValidationLimits.deviceModel),
           decoration: InputDecoration(labelText: context.l10n.model),
         ),
         const SizedBox(height: 12),
         TextField(
           controller: _serialController,
+          inputFormatters: limitInputLength(
+            InputValidationLimits.deviceSerialNumber,
+          ),
           decoration: InputDecoration(labelText: context.l10n.serialNumber),
         ),
         const SizedBox(height: 12),
@@ -851,11 +885,17 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
         const SizedBox(height: 12),
         TextField(
           controller: _manualController,
+          inputFormatters: limitInputLength(
+            InputValidationLimits.deviceManualUrl,
+          ),
           decoration: InputDecoration(labelText: context.l10n.manualUrl),
         ),
         const SizedBox(height: 12),
         TextField(
           controller: _consumableController,
+          inputFormatters: limitInputLength(
+            InputValidationLimits.deviceConsumable,
+          ),
           decoration: InputDecoration(
             labelText: context.l10n.consumable,
             hintText: context.l10n.filterBatteriesCartridges,
@@ -908,6 +948,7 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
           if (_fishType == 'Other') ...[
             TextField(
               controller: _petBreedController,
+              inputFormatters: limitInputLength(InputValidationLimits.petBreed),
               decoration: InputDecoration(
                 labelText: context.l10n.fishBreedOrType,
               ),
@@ -917,17 +958,20 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
         ] else if (_petType == 'Other') ...[
           TextField(
             controller: _petSpeciesController,
+            inputFormatters: limitInputLength(InputValidationLimits.petSpecies),
             decoration: InputDecoration(labelText: context.l10n.species),
           ),
           const SizedBox(height: 12),
           TextField(
             controller: _petBreedController,
+            inputFormatters: limitInputLength(InputValidationLimits.petBreed),
             decoration: InputDecoration(labelText: context.l10n.breed),
           ),
           const SizedBox(height: 12),
         ] else ...[
           TextField(
             controller: _petBreedController,
+            inputFormatters: limitInputLength(InputValidationLimits.petBreed),
             decoration: InputDecoration(labelText: context.l10n.breed),
           ),
           const SizedBox(height: 12),
@@ -948,29 +992,36 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
         const SizedBox(height: 12),
         TextField(
           controller: _microchipController,
+          inputFormatters: limitInputLength(
+            InputValidationLimits.petMicrochipId,
+          ),
           decoration: InputDecoration(labelText: context.l10n.microchipId),
         ),
         const SizedBox(height: 12),
         TextField(
           controller: _vetNameController,
+          inputFormatters: limitInputLength(InputValidationLimits.petVetName),
           decoration: InputDecoration(labelText: context.l10n.vetName),
         ),
         const SizedBox(height: 12),
         TextField(
           controller: _vetPhoneController,
           keyboardType: TextInputType.phone,
+          inputFormatters: limitInputLength(InputValidationLimits.petVetPhone),
           decoration: InputDecoration(labelText: context.l10n.vetPhone),
         ),
         const SizedBox(height: 12),
         TextField(
           controller: _feedingController,
           maxLines: 2,
+          inputFormatters: limitInputLength(InputValidationLimits.petNotes),
           decoration: InputDecoration(labelText: context.l10n.feedingNotes),
         ),
         const SizedBox(height: 12),
         TextField(
           controller: _medicalController,
           maxLines: 2,
+          inputFormatters: limitInputLength(InputValidationLimits.petNotes),
           decoration: InputDecoration(labelText: context.l10n.medicalNotes),
         ),
       ],
@@ -986,6 +1037,7 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
         ),
         TextField(
           controller: _plantSpeciesController,
+          inputFormatters: limitInputLength(InputValidationLimits.plantSpecies),
           decoration: InputDecoration(labelText: context.l10n.species),
         ),
         const SizedBox(height: 12),
@@ -1005,14 +1057,17 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
         TextField(
           controller: _wateringController,
           keyboardType: TextInputType.number,
+          onChanged: (_) => setState(() {}),
           decoration: InputDecoration(
             labelText: context.l10n.wateringInterval,
             suffixText: context.l10n.days2,
+            errorText: _positiveIntegerError(_wateringController.text),
           ),
         ),
         const SizedBox(height: 12),
         TextField(
           controller: _potSizeController,
+          inputFormatters: limitInputLength(InputValidationLimits.plantPotSize),
           decoration: InputDecoration(labelText: context.l10n.potSize),
         ),
         const SizedBox(height: 12),
@@ -1032,6 +1087,9 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
         const SizedBox(height: 12),
         TextField(
           controller: _toxicityController,
+          inputFormatters: limitInputLength(
+            InputValidationLimits.plantToxicityNotes,
+          ),
           decoration: InputDecoration(labelText: context.l10n.toxicityNotes),
         ),
       ],
@@ -1047,6 +1105,7 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
         ),
         TextField(
           controller: _safetyTypeController,
+          inputFormatters: limitInputLength(InputValidationLimits.safetyType),
           decoration: InputDecoration(labelText: context.l10n.safetyType),
         ),
         const SizedBox(height: 12),
@@ -1080,15 +1139,20 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
         const SizedBox(height: 12),
         TextField(
           controller: _batteryTypeController,
+          inputFormatters: limitInputLength(
+            InputValidationLimits.safetyBatteryType,
+          ),
           decoration: InputDecoration(labelText: context.l10n.batteryType),
         ),
         const SizedBox(height: 12),
         TextField(
           controller: _testIntervalController,
           keyboardType: TextInputType.number,
+          onChanged: (_) => setState(() {}),
           decoration: InputDecoration(
             labelText: context.l10n.testInterval,
             suffixText: context.l10n.days2,
+            errorText: _positiveIntegerError(_testIntervalController.text),
           ),
         ),
       ],
@@ -1185,11 +1249,73 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
         _roomId != null && visibleRooms.any((room) => room.id == _roomId)
         ? _roomId
         : visibleRooms.firstOrNull?.id;
-    if (_nameController.text.trim().isEmpty || roomId == null) {
+    if (_nameController.text.trim().isEmpty ||
+        roomId == null ||
+        !_detailNumbersValid) {
       return;
     }
     setState(() => _saving = true);
     try {
+      final deviceDetails = _assetType == AssetType.device
+          ? DeviceDetails(
+              brand: _brandController.text,
+              model: _modelController.text,
+              serialNumber: _serialController.text,
+              powerSource: _powerSource,
+              warrantyUntil: _warrantyUntil,
+              manualUrl: _manualController.text,
+              consumable: _consumableController.text,
+            )
+          : null;
+      final petDetails = _assetType == AssetType.pet
+          ? PetDetails(
+              species: _petType == 'Other'
+                  ? _petSpeciesController.text
+                  : _petType,
+              breed: _petType == 'Fish'
+                  ? _fishType == 'Other'
+                        ? _petBreedController.text
+                        : _fishType
+                  : _petBreedController.text,
+              birthDate: _petBirthDate,
+              microchipId: _microchipController.text,
+              vetName: _vetNameController.text,
+              vetPhone: _vetPhoneController.text,
+              feedingNotes: _feedingController.text,
+              medicalNotes: _medicalController.text,
+            )
+          : null;
+      final plantDetails = _assetType == AssetType.plant
+          ? PlantDetails(
+              species: _plantSpeciesController.text,
+              sunlight: _sunlight,
+              wateringIntervalDays: int.tryParse(_wateringController.text),
+              potSize: _potSizeController.text,
+              lastRepottedAt: _lastRepottedAt,
+              toxicityNotes: _toxicityController.text,
+            )
+          : null;
+      final safetyDetails = _assetType == AssetType.safety
+          ? SafetyDetails(
+              safetyType: _safetyTypeController.text,
+              installedAt: _installedAt,
+              expiresAt: _expiresAt,
+              batteryType: _batteryTypeController.text,
+              testIntervalDays: int.tryParse(_testIntervalController.text),
+            )
+          : null;
+      validateAssetInput(
+        name: _nameController.text,
+        roomId: roomId,
+        assetType: _assetType,
+        placement: _placementController.text,
+        notes: _notesController.text,
+        tagNames: _tagsController.text.split(','),
+        deviceDetails: deviceDetails,
+        petDetails: petDetails,
+        plantDetails: plantDetails,
+        safetyDetails: safetyDetails,
+      );
       final isCreating = widget.asset == null;
       final assetId = widget.asset?.id ?? (_creationAssetId ??= _uuid.v7());
       if (isCreating) {
@@ -1309,58 +1435,10 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
             notes: _notesController.text,
             purchaseDate: _purchaseDate,
             tagNames: _tagsController.text.split(','),
-            deviceDetails: _assetType == AssetType.device
-                ? DeviceDetails(
-                    brand: _brandController.text,
-                    model: _modelController.text,
-                    serialNumber: _serialController.text,
-                    powerSource: _powerSource,
-                    warrantyUntil: _warrantyUntil,
-                    manualUrl: _manualController.text,
-                    consumable: _consumableController.text,
-                  )
-                : null,
-            petDetails: _assetType == AssetType.pet
-                ? PetDetails(
-                    species: _petType == 'Other'
-                        ? _petSpeciesController.text
-                        : _petType,
-                    breed: _petType == 'Fish'
-                        ? _fishType == 'Other'
-                              ? _petBreedController.text
-                              : _fishType
-                        : _petBreedController.text,
-                    birthDate: _petBirthDate,
-                    microchipId: _microchipController.text,
-                    vetName: _vetNameController.text,
-                    vetPhone: _vetPhoneController.text,
-                    feedingNotes: _feedingController.text,
-                    medicalNotes: _medicalController.text,
-                  )
-                : null,
-            plantDetails: _assetType == AssetType.plant
-                ? PlantDetails(
-                    species: _plantSpeciesController.text,
-                    sunlight: _sunlight,
-                    wateringIntervalDays: int.tryParse(
-                      _wateringController.text,
-                    ),
-                    potSize: _potSizeController.text,
-                    lastRepottedAt: _lastRepottedAt,
-                    toxicityNotes: _toxicityController.text,
-                  )
-                : null,
-            safetyDetails: _assetType == AssetType.safety
-                ? SafetyDetails(
-                    safetyType: _safetyTypeController.text,
-                    installedAt: _installedAt,
-                    expiresAt: _expiresAt,
-                    batteryType: _batteryTypeController.text,
-                    testIntervalDays: int.tryParse(
-                      _testIntervalController.text,
-                    ),
-                  )
-                : null,
+            deviceDetails: deviceDetails,
+            petDetails: petDetails,
+            plantDetails: plantDetails,
+            safetyDetails: safetyDetails,
           );
       await ref.read(offlineCreationDraftStoreProvider).clear(_offlineDraftKey);
       if (mounted) {
@@ -1374,7 +1452,11 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
         }
         hk_ui.showToast(
           context,
-          content: Text(failureMessage(context, error)),
+          content: Text(
+            error is AuthoritativeRpcRejectionException
+                ? authoritativeRpcRejectionMessage(context, error)
+                : failureMessage(context, error),
+          ),
           severity: hk_ui.HkToastSeverity.error,
         );
       }

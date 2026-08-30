@@ -1,6 +1,6 @@
 # Owntend Privacy and Data Use
 
-_Last reviewed: August 29, 2026_
+_Last reviewed: August 30, 2026_
 
 This document describes the data-handling design represented by the current Owntend source code. It is technical project documentation, not a substitute for jurisdiction-specific legal review or store disclosures.
 
@@ -107,7 +107,7 @@ Plan entitlement, economy-operation, and history-restore operation rows referenc
 
 The browser cannot inspect or erase Owntend data, media, notifications, secure storage, or caches remaining on an installed device; users must clear or uninstall the app on each device. It also cannot erase copies held in user-exported backups or independently retained by service providers under their own disclosed obligations.
 
-Backup files previously exported outside the application are not automatically deleted by account deletion. Multiphase restore operations write technical state entries (archive/safety hash, media token, phase enum) to secure local storage (`RestoreJournalStore`) to guarantee deterministic recovery after process termination; journal entries do not store user-entered content and are cleared upon completion or rollback.
+Backup files previously exported outside the application are not automatically deleted by account deletion. Multiphase restore operations write technical state entries (archive/safety hash, media token, phase enum, and the user's explicit local-only or cloud-update disposition) to secure local storage (`RestoreJournalStore`) to guarantee deterministic recovery after process termination; journal entries do not store user-entered content or backup passphrases and are cleared upon completion or rollback.
 
 ## Security controls
 

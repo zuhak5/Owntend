@@ -67,6 +67,11 @@ class _FakeCloudSyncRepository implements CloudSyncRepository {
   }
 
   @override
+  Future<void> resumeRestoredSnapshotToCloud() async {
+    calls.add('resumeRestoredSnapshotToCloud');
+  }
+
+  @override
   Future<void> retry() async {
     calls.add('retry');
   }

@@ -48,6 +48,7 @@ class ChargedOperationResolver {
         await operationStore.saveOperation(
           op.copyWith(
             state: TaskCreationOperationState.permanentRejected,
+            requestPayload: const {},
             updatedAt: DateTime.now(),
             lastErrorCode: 'unqualified_request_hash',
             lastErrorMessage:
@@ -89,6 +90,7 @@ class ChargedOperationResolver {
             await operationStore.saveOperation(
               op.copyWith(
                 state: TaskCreationOperationState.permanentRejected,
+                requestPayload: const {},
                 updatedAt: DateTime.now(),
                 lastErrorCode: 'operation_identity_mismatch',
                 lastErrorMessage: 'Recovered operation identity did not match the local request.',
@@ -191,15 +193,19 @@ class ChargedOperationResolver {
               );
             } on OperationIdReusedException {
               await _markOperationIdConflict(op);
-            } on Object catch (error) {
-              await _markOutcomeUnknown(op, error);
+            } on AuthoritativeRpcRejectionException catch (error) {
+              await _markDefinitiveRejection(op, error);
+            } on Object catch (_) {
+              await _markOutcomeUnknown(op);
             }
           }
         }
       } on OperationIdReusedException {
         await _markOperationIdConflict(op);
-      } on Object catch (error) {
-        await _markOutcomeUnknown(op, error);
+      } on Object catch (_) {
+        // A failed status lookup cannot prove whether the earlier mutation
+        // committed, even when the lookup itself received a definitive error.
+        await _markOutcomeUnknown(op);
       }
     }
     await operationStore.purgeTerminalPayloads(accountScope);
@@ -239,6 +245,7 @@ class ChargedOperationResolver {
     return operationStore.saveOperation(
       op.copyWith(
         state: TaskCreationOperationState.permanentRejected,
+        requestPayload: const {},
         updatedAt: DateTime.now(),
         lastErrorCode: 'operation_id_reused',
         lastErrorMessage: 'OPERATION_ID_REUSED',
@@ -246,13 +253,28 @@ class ChargedOperationResolver {
     );
   }
 
-  Future<void> _markOutcomeUnknown(TaskCreationOperation op, Object error) {
+  Future<void> _markDefinitiveRejection(
+    TaskCreationOperation op,
+    AuthoritativeRpcRejectionException error,
+  ) {
+    return operationStore.saveOperation(
+      op.copyWith(
+        state: TaskCreationOperationState.permanentRejected,
+        requestPayload: const {},
+        updatedAt: DateTime.now(),
+        lastErrorCode: error.journalCode,
+        lastErrorMessage: error.serverCode,
+      ),
+    );
+  }
+
+  Future<void> _markOutcomeUnknown(TaskCreationOperation op) {
     return operationStore.saveOperation(
       op.copyWith(
         state: TaskCreationOperationState.outcomeUnknown,
         updatedAt: DateTime.now(),
         lastErrorCode: 'recovery_retryable',
-        lastErrorMessage: error.toString(),
+        lastErrorMessage: 'RECOVERY_RETRYABLE',
       ),
     );
   }

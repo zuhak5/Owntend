@@ -1,5 +1,7 @@
-import 'package:flutter/foundation.dart';
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/widgets.dart';
 
 import '../data/reactive_stream.dart';
 import '../data/repositories.dart';
@@ -77,13 +79,68 @@ final timeOfDayThemeEnabledProvider = StreamProvider<bool>((ref) {
   return ref.watch(settingsRepositoryProvider).watchTimeOfDayThemeEnabled();
 });
 
-final localThemeClockProvider = StreamProvider<DateTime>((ref) async* {
-  yield DateTime.now().toLocal();
-  yield* Stream.periodic(
-    const Duration(minutes: 1),
-    (_) => DateTime.now().toLocal(),
-  );
+typedef LocalNow = DateTime Function();
+
+final localNowProvider = Provider<LocalNow>(
+  (ref) =>
+      () => DateTime.now().toLocal(),
+);
+
+/// Shared local wall clock for date- and time-dependent presentation.
+///
+/// It emits on the next local minute boundary (which includes midnight), and
+/// immediately on resume so a suspended app observes clock or time-zone
+/// changes without waiting for unrelated provider activity.
+final localClockProvider = StreamProvider<DateTime>((ref) {
+  final now = ref.watch(localNowProvider);
+  final controller = StreamController<DateTime>();
+  Timer? timer;
+
+  void emitAndSchedule() {
+    if (controller.isClosed) return;
+    timer?.cancel();
+    final current = now().toLocal();
+    controller.add(current);
+    timer = Timer(nextLocalClockDelay(current), emitAndSchedule);
+  }
+
+  final observer = _LocalClockLifecycleObserver(emitAndSchedule);
+  WidgetsBinding.instance.addObserver(observer);
+  emitAndSchedule();
+  ref.onDispose(() {
+    timer?.cancel();
+    WidgetsBinding.instance.removeObserver(observer);
+    unawaited(controller.close());
+  });
+  return controller.stream;
 });
+
+Duration nextLocalClockDelay(DateTime now) {
+  final local = now.toLocal();
+  final nextMinute = DateTime(
+    local.year,
+    local.month,
+    local.day,
+    local.hour,
+    local.minute + 1,
+  );
+  final delay = nextMinute.difference(local);
+  if (delay <= Duration.zero || delay > const Duration(minutes: 2)) {
+    return const Duration(minutes: 1);
+  }
+  return delay + const Duration(milliseconds: 25);
+}
+
+class _LocalClockLifecycleObserver extends WidgetsBindingObserver {
+  _LocalClockLifecycleObserver(this.onResume);
+
+  final VoidCallback onResume;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) onResume();
+  }
+}
 
 final appLocalePreferenceProvider = StreamProvider<AppLocalePreference>((ref) {
   return ref.watch(settingsRepositoryProvider).watchAppLocalePreference();

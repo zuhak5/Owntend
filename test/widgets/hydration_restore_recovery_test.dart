@@ -43,6 +43,36 @@ void main() {
   });
 
   group('initial hydration', () {
+    testWidgets(
+      'startup preserves a local-only restore pause without enabling sync',
+      (tester) async {
+        final settings = FakeSettingsRepository(onboardingCompletedValue: true);
+        final sync = FakeCloudSyncRepository(
+          const SyncStatus(
+            phase: SyncPhase.disabled,
+            enabled: false,
+            migrationState: 'restorePaused',
+            restorePending: true,
+          ),
+        );
+        addTearDown(settings.close);
+
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              ...testOverrides(settings),
+              cloudSyncRepositoryProvider.overrideWithValue(sync),
+            ],
+            child: const OwntendApp(),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(sync.enableCount, 0);
+        expect(find.byType(HomeShell), findsOneWidget);
+      },
+    );
+
     testWidgets('initial hydration blocks Home until restoration completes', (
       tester,
     ) async {

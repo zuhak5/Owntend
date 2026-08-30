@@ -208,12 +208,43 @@ class _ThingDetailScreenState extends ConsumerState<ThingDetailScreen> {
             body: Center(child: Text(context.l10n.itemNotFound)),
           );
         }
-        final rooms = ref.watch(roomsProvider).value ?? [];
-        final room = rooms.where((item) => item.id == asset.roomId).firstOrNull;
+        final roomsState = ref.watch(roomsProvider);
         final tasks = ref.watch(assetSavedTasksProvider(asset.id));
-        final tags = ref.watch(assetTagsProvider(asset.id)).value ?? [];
-        final photos = ref.watch(assetPhotosProvider(asset.id)).value ?? [];
-        final relatedTasks = tasks.value ?? [];
+        final tagsState = ref.watch(assetTagsProvider(asset.id));
+        final photosState = ref.watch(assetPhotosProvider(asset.id));
+        final dependenciesReady =
+            roomsState.hasValue &&
+            tasks.hasValue &&
+            tagsState.hasValue &&
+            photosState.hasValue;
+        if (!dependenciesReady) {
+          final dependencyError =
+              roomsState.error ??
+              tasks.error ??
+              tagsState.error ??
+              photosState.error;
+          return Scaffold(
+            appBar: AppBar(
+              title: DynamicText(asset.name, contentType: 'asset.name'),
+            ),
+            body: dependencyError == null
+                ? const Center(child: CircularProgressIndicator())
+                : hk_ui.ErrorPanel(
+                    message: failureMessage(context, dependencyError),
+                    onRetry: () {
+                      ref.invalidate(roomsProvider);
+                      ref.invalidate(assetSavedTasksProvider(asset.id));
+                      ref.invalidate(assetTagsProvider(asset.id));
+                      ref.invalidate(assetPhotosProvider(asset.id));
+                    },
+                  ),
+          );
+        }
+        final rooms = roomsState.value!;
+        final room = rooms.where((item) => item.id == asset.roomId).firstOrNull;
+        final tags = tagsState.value!;
+        final photos = photosState.value!;
+        final relatedTasks = tasks.value!;
         final hasCriticalAlert = relatedTasks.any(
           (task) =>
               isTaskActionable(task) &&
@@ -510,7 +541,10 @@ class _ThingDetailScreenState extends ConsumerState<ThingDetailScreen> {
       },
       error: (error, _) => Scaffold(
         appBar: AppBar(title: Text(context.l10n.item)),
-        body: hk_ui.ErrorPanel(message: failureMessage(context, error)),
+        body: hk_ui.ErrorPanel(
+          message: failureMessage(context, error),
+          onRetry: () => ref.invalidate(assetDetailProvider(widget.assetId)),
+        ),
       ),
       loading: () =>
           const Scaffold(body: Center(child: CircularProgressIndicator())),

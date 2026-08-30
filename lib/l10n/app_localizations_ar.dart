@@ -592,7 +592,8 @@ class AppLocalizationsAr extends AppLocalizations {
       'اتجاهات الإنجاز وتوزيع المهام';
 
   @override
-  String get exportOrRestoreZipBackups => 'تصدير أو استعادة نسخ ZIP الاحتياطية';
+  String get exportOrRestoreOwntendBackups =>
+      'تصدير نسخ Owntend الاحتياطية أو استعادتها';
 
   @override
   String get completeTaskTitleCase => 'إكمال المهمة';
@@ -854,7 +855,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get automaticLocalBackups => 'نسخ احتياطية محلية تلقائية';
 
   @override
-  String get chooseBackupZip => 'اختيار ملف ZIP احتياطي';
+  String get chooseOwntendBackup => 'اختيار نسخة Owntend احتياطية';
 
   @override
   String get restoreThisBackup => 'استعادة هذه النسخة الاحتياطية؟';
@@ -1129,6 +1130,145 @@ class AppLocalizationsAr extends AppLocalizations {
   String get advancedSyncDiagnostics => 'تشخيصات المزامنة المتقدمة';
 
   @override
+  String get syncHealth => 'سلامة المزامنة';
+
+  @override
+  String get reviewChangesThatNeedSyncAttention =>
+      'راجع التغييرات والتعارضات التي تحتاج إلى انتباهك';
+
+  @override
+  String get refresh => 'تحديث';
+
+  @override
+  String pendingSyncChanges(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count تغيير معلّق',
+      many: '$count تغييرًا معلّقًا',
+      few: '$count تغييرات معلّقة',
+      two: 'تغييران معلّقان',
+      one: 'تغيير معلّق واحد',
+      zero: 'لا توجد تغييرات معلّقة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get syncHealthUnavailable => 'سلامة المزامنة غير متاحة';
+
+  @override
+  String get syncHealthUnavailableBody =>
+      'تعذر على Owntend قراءة حالة المزامنة المحلية. حاول مرة أخرى.';
+
+  @override
+  String get syncHealthLooksGood => 'لا توجد مشكلات مزامنة تحتاج إلى انتباه';
+
+  @override
+  String get syncHealthLooksGoodBody =>
+      'سيواصل Owntend مزامنة التغييرات المحفوظة تلقائيًا عند تفعيل النسخ الاحتياطي السحابي.';
+
+  @override
+  String get changesNeedingAttention => 'تغييرات تحتاج إلى انتباه';
+
+  @override
+  String get changesNeedingAttentionBody =>
+      'توقفت المحاولات التلقائية لهذه التغييرات المحفوظة. أعد المحاولة أو تجاهل التغييرات التي لم تعد تريد مزامنتها.';
+
+  @override
+  String get syncConflicts => 'تعارضات المزامنة';
+
+  @override
+  String get syncConflictsBody =>
+      'تغيرت هذه السجلات هنا وفي السحابة. اختر النسخة التي تريد اعتمادها.';
+
+  @override
+  String get syncChangeQueuedForRetry => 'تمت جدولة التغيير لإعادة المحاولة.';
+
+  @override
+  String get dismissSyncChange => 'هل تريد تجاهل تغيير المزامنة هذا؟';
+
+  @override
+  String get dismissSyncChangeBody =>
+      'سيؤدي هذا إلى إزالة التغيير السحابي المعلّق. ستبقى البيانات الحالية متاحة على هذا الجهاز، لكن لن يُرسل هذا التغيير إلى أجهزتك الأخرى.';
+
+  @override
+  String get dismiss => 'تجاهل';
+
+  @override
+  String get syncChangeDismissed => 'تم تجاهل تغيير المزامنة المعلّق.';
+
+  @override
+  String get keepThisDeviceVersion => 'هل تريد الاحتفاظ بنسخة هذا الجهاز؟';
+
+  @override
+  String get keepThisDeviceVersionBody =>
+      'ستُجدول النسخة المحفوظة على هذا الجهاز للمزامنة السحابية وقد تستبدل النسخة السحابية.';
+
+  @override
+  String get keepCloudVersion => 'هل تريد الاحتفاظ بالنسخة السحابية؟';
+
+  @override
+  String get keepCloudVersionBody =>
+      'سيؤدي هذا إلى تجاهل التغيير المتعارض المعلّق على هذا الجهاز. لا يمكن التراجع عن هذا الإجراء من شاشة سلامة المزامنة.';
+
+  @override
+  String get keepThisDevice => 'الاحتفاظ بنسخة الجهاز';
+
+  @override
+  String get keepCloud => 'الاحتفاظ بنسخة السحابة';
+
+  @override
+  String get syncConflictResolved => 'تم حل تعارض المزامنة.';
+
+  @override
+  String get syncHealthActionFailed =>
+      'تعذر على Owntend تحديث سلامة المزامنة. حاول مرة أخرى.';
+
+  @override
+  String get syncStoppedAfterRepeatedAttempts =>
+      'توقف Owntend عن إعادة محاولة هذا التغيير بعد إخفاقات متكررة.';
+
+  @override
+  String syncConflictForCategory(String category) {
+    return 'تعارض في $category';
+  }
+
+  @override
+  String get chooseWhichVersionToKeep => 'اختر النسخة التي تريد الاحتفاظ بها.';
+
+  @override
+  String removedCategoryCouldNotSync(String category) {
+    return 'تعذرت مزامنة إزالة $category';
+  }
+
+  @override
+  String updatedCategoryCouldNotSync(String category) {
+    return 'تعذرت مزامنة تحديث $category';
+  }
+
+  @override
+  String get syncCategoryHomeStructure => 'هيكل المنزل';
+
+  @override
+  String get syncCategoryItem => 'عنصر';
+
+  @override
+  String get syncCategoryPhoto => 'صورة';
+
+  @override
+  String get syncCategoryTask => 'مهمة';
+
+  @override
+  String get syncCategoryPreference => 'تفضيل';
+
+  @override
+  String get syncCategoryNotification => 'إشعار';
+
+  @override
+  String get syncCategoryOther => 'بيانات محفوظة';
+
+  @override
   String get signOutOnThisDevice => 'تسجيل الخروج من هذا الجهاز';
 
   @override
@@ -1260,6 +1400,10 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get allInSync => 'كلها متزامنة';
+
+  @override
+  String get showingSavedHomeDataRefreshFailed =>
+      'نعرض بيانات المنزل المحفوظة لأن آخر تحديث أخفق.';
 
   @override
   String
@@ -1556,6 +1700,18 @@ class AppLocalizationsAr extends AppLocalizations {
   String get photoSaved => 'تم حفظ الصورة.';
 
   @override
+  String get selectedPhotoIsNoLongerAvailable =>
+      'لم تعد الصورة المحددة متاحة. اخترها مرة أخرى.';
+
+  @override
+  String get selectedPhotoIsTooLarge =>
+      'الصورة المحددة كبيرة جدًا ولا يمكن حفظها ومزامنتها. اختر صورة أصغر.';
+
+  @override
+  String get selectedFileIsNotASupportedPhoto =>
+      'الملف المحدد تالف أو ليس صورة مدعومة.';
+
+  @override
   String get enableThisTaskBeforeSnoozingIt => 'فعّل هذه المهمة قبل تأجيلها.';
 
   @override
@@ -1821,12 +1977,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get accountAndCloudSync => 'الحساب والمزامنة السحابية';
 
   @override
-  String get optionalGoogleSignInAndPrivateDeviceSync =>
-      'تسجيل دخول اختياري عبر Google ومزامنة خاصة للأجهزة';
+  String get requiredGoogleSignInAndPrivateDeviceSync =>
+      'تسجيل الدخول المطلوب عبر Google مع مزامنة خاصة للأجهزة';
 
   @override
-  String get createShareOrRestoreLocalZipBackups =>
-      'أنشئ نسخ ZIP محلية أو شاركها أو استعدها';
+  String get createShareOrRestoreEncryptedOwntendBackups =>
+      'أنشئ نسخ Owntend الاحتياطية المشفّرة أو شاركها أو استعدها';
 
   @override
   String get restoreRecentlyRemovedRoomsItemsAndTasks =>
@@ -1900,8 +2056,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get permissionBlocked => 'الإذن محظور';
 
   @override
-  String get backupsAreSavedLocallyAsPrivateZipFiles =>
-      'تُحفظ النسخ الاحتياطية محليًا كملفات ZIP خاصة.';
+  String get backupsAreSavedLocallyAsEncryptedOwntendFiles =>
+      'تُحفظ النسخ الاحتياطية محليًا كملفات ‎.owntend-backup‎ مشفّرة.';
 
   @override
   String get restoreFromABackup => 'الاستعادة من نسخة احتياطية';
@@ -3849,6 +4005,29 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get authoritativeChargeChanged =>
       'تغيرت تكلفة النقاط. راجع السعر الأحدث وحاول مرة أخرى.';
+
+  @override
+  String get completeRequiredFields => 'أكمل الحقول المطلوبة.';
+
+  @override
+  String get reviewInvalidFields => 'راجع الحقول غير الصالحة ثم حاول مرة أخرى.';
+
+  @override
+  String get serverSessionExpired =>
+      'انتهت جلسة الخادم. سجّل الدخول مرة أخرى ثم أعد المحاولة.';
+
+  @override
+  String get authoritativeEntityNoLongerAvailable =>
+      'لم يعد العنصر أو الغرفة أو المهمة متاحًا.';
+
+  @override
+  String get authoritativeOperationConflict =>
+      'يتعارض هذا التغيير مع بيانات أحدث على الخادم. حدّث البيانات ثم حاول مرة أخرى.';
+
+  @override
+  String keepFieldWithinCharacters(int count) {
+    return 'اجعل هذا الحقل ضمن $count حرفًا أو أقل.';
+  }
 
   @override
   String get confirmTaskMoveChargeTitle => 'استخدام النقاط لنقل المهمة؟';

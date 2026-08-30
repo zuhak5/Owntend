@@ -4,17 +4,17 @@
 
 Owntend helps users inventory household assets and keep recurring or one-time maintenance work visible, scheduled, and recoverable across offline and signed-in use.
 
-The first Flutter frame is owned by one process-lifetime splash above deferred startup, theme loading, application, and failure branches. A non-blank startup surface remains available underneath. English/Arabic semantics, scaled compact layout, and reduced-motion behavior are part of the widget contract; a physical release launch still requires device validation.
+The first Flutter frame is owned by one process-lifetime splash above deferred startup, theme loading, application, and failure branches. A non-blank startup surface remains available underneath. Supabase initialization failure stays on a localized blocking surface with an explicit retry instead of silently launching a signed-out, cloud-disabled application. English/Arabic semantics, scaled compact layout, and reduced-motion behavior are part of the widget contract; a physical release launch still requires device validation.
 
 ## Navigation surfaces
 
-The current application exposes dashboard, assets, maintenance, calendar, search, trash, statistics, settings, account, backup, notifications, capability setup at `/permissions/setup`, and additional utility surfaces through GoRouter. `/profile` redirects to `/account`. The route definitions in `lib/src/features/navigation/app_router.dart`, composed by `navigation_presentation.dart`, are authoritative.
+The current application exposes dashboard, assets, maintenance, calendar, search, trash, statistics, settings, account, Sync Health at `/sync-health`, backup, notifications, capability setup at `/permissions/setup`, and additional utility surfaces through GoRouter. `/profile` redirects to `/account`. The route definitions in `lib/src/features/navigation/app_router.dart`, composed by `navigation_presentation.dart`, are authoritative.
 
 ## Organization model
 
 - Areas and rooms organize the home.
 - Item Type is the sole item classification: device, pet, plant, safety, or general.
-- Assets represent maintained things and can carry tags, photos, notes, warranty information, and type-specific detail.
+- Assets represent maintained things and can carry tags, photos, notes, warranty information, and type-specific detail. Imported photos are decoded by content, orientation-normalized, dimension/byte bounded, and stored as normalized JPEGs before metadata is committed; a misleading extension is never treated as image proof.
 - Specialized detail models support devices, pets, plants, and safety-related assets.
 - Trash and cleanup flows protect against accidental permanent deletion. Moving a task, asset, room, or area to Trash offers restoration through the protected Undo coordinator; permanent deletion remains separately confirmed.
 
@@ -38,6 +38,7 @@ Transient feedback has one protected queue. Passive messages and errors wait beh
 ## Search and insights
 
 - Search across supported home and maintenance data.
+- Search results are request-generation bound, so a slower response for an older query cannot replace the current query's results.
 - Statistics and chart-based summaries.
 - Dashboard summaries and actionable status.
 - Health, readiness, and warranty indicators where data is available.
@@ -48,6 +49,7 @@ Transient feedback has one protected queue. Passive messages and errors wait beh
 - Offline-first local operation.
 - Authenticated Supabase synchronization.
 - Initial hydration, incremental pull, queued local changes, retry, realtime invalidation, and conflict recovery.
+- A localized Sync Health surface lists privacy-safe categories for terminal failed changes and unresolved account-owned conflicts. Users can retry or explicitly dismiss failed intent and choose the local or cloud version for conflicts; record keys, payloads, and raw errors are not displayed.
 - Account deletion with recent reauthentication and coordinated local/remote cleanup.
 - A public VersionDeck deletion page that authenticates with Google OAuth PKCE through Supabase, requires explicit confirmation, and invokes the protected deletion function with the signed-in bearer token.
 
@@ -57,6 +59,8 @@ unavailable. The in-app authenticated deletion flow is unchanged. See the
 [production containment record](../operations/production-containment.md).
 
 Signed-out or offline operation must remain explicit; the application should not imply cloud protection when synchronization is unavailable.
+
+Google sign-in is the required production authentication method; it is not an optional enhancement to cloud synchronization.
 
 The public page is not an anonymous deletion endpoint. It accepts success only when the protected function returns a deletion receipt for the authenticated user. Repository coverage does not prove the page, OAuth redirect configuration, or Edge Function is deployed to production.
 
@@ -69,6 +73,7 @@ The public page is not an anonymous deletion endpoint. It accepts success only w
 - Boot and application-update restoration.
 - Foreground data-sync capability and Workmanager for bounded background work.
 - Time-zone-aware reminders.
+- A shared local presentation clock refreshes date-dependent Home, room, maintenance, and calendar state at minute boundaries and immediately after application resume so midnight and time-zone changes do not require unrelated data mutations.
 
 The first-dashboard education flow considers weather-area and notification setup; it does not pressure users for exact-alarm access. Exact timing is surfaced from settings or reminder/task scheduling context. Denied or unavailable access must leave useful manual-weather, in-app inbox, and inexact-reminder paths where their prerequisites are met.
 
@@ -82,6 +87,7 @@ The first-dashboard education flow considers weather-area and notification setup
 - Compatibility checks and rollback on failure.
 
 Backups exported outside the app are user-controlled sensitive files. The pre-launch application accepts only the canonical format-1/schema-1 contract and contains no obsolete Category table or old-format migration path.
+The restore picker exposes only the `.owntend-backup` extension; a generic `.zip` is not a supported backup.
 
 ## Monetization
 

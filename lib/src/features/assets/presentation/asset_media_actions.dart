@@ -22,6 +22,24 @@ Future<void> addPhotoToAsset(
       return;
     }
     hk_ui.showToast(context, content: Text(context.l10n.photoSaved));
+  } on PhotoImportException catch (error) {
+    if (context.mounted) {
+      final message = switch (error.code) {
+        PhotoImportFailureCode.fileMissing =>
+          context.l10n.selectedPhotoIsNoLongerAvailable,
+        PhotoImportFailureCode.sourceTooLarge ||
+        PhotoImportFailureCode.dimensionsTooLarge ||
+        PhotoImportFailureCode.outputTooLarge =>
+          context.l10n.selectedPhotoIsTooLarge,
+        PhotoImportFailureCode.invalidImage =>
+          context.l10n.selectedFileIsNotASupportedPhoto,
+      };
+      hk_ui.showToast(
+        context,
+        content: Text(message),
+        severity: hk_ui.HkToastSeverity.error,
+      );
+    }
   } catch (error) {
     if (context.mounted) {
       hk_ui.showToast(

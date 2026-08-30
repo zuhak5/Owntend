@@ -113,19 +113,36 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   @override
   Widget build(BuildContext context) {
     final startupSnapshot = ref.watch(initialHomeSnapshotProvider).value;
+    final tasksState = ref.watch(tasksProvider);
+    final assetsState = ref.watch(assetsProvider);
+    final roomsState = ref.watch(roomsProvider);
     final tasks =
-        ref.watch(tasksProvider).value ??
-        startupSnapshot?.tasks ??
-        const <TaskItem>[];
+        tasksState.value ?? startupSnapshot?.tasks ?? const <TaskItem>[];
     final assets =
-        ref.watch(assetsProvider).value ??
-        startupSnapshot?.assets ??
-        const <Asset>[];
-    final rooms =
-        ref.watch(roomsProvider).value ??
-        startupSnapshot?.rooms ??
-        const <Room>[];
-    final now = DateTime.now();
+        assetsState.value ?? startupSnapshot?.assets ?? const <Asset>[];
+    final rooms = roomsState.value ?? startupSnapshot?.rooms ?? const <Room>[];
+    final hasDomainFailure =
+        tasksState.hasError || assetsState.hasError || roomsState.hasError;
+    final waitingWithoutSnapshot =
+        startupSnapshot == null &&
+        (!tasksState.hasValue || !assetsState.hasValue || !roomsState.hasValue);
+    if (waitingWithoutSnapshot) {
+      final error = tasksState.error ?? assetsState.error ?? roomsState.error;
+      return Scaffold(
+        body: error == null
+            ? const Center(child: CircularProgressIndicator())
+            : hk_ui.ErrorPanel(
+                message: failureMessage(context, error),
+                onRetry: () {
+                  ref.invalidate(tasksProvider);
+                  ref.invalidate(assetsProvider);
+                  ref.invalidate(roomsProvider);
+                },
+              ),
+      );
+    }
+    final now =
+        ref.watch(localClockProvider).value ?? ref.read(localNowProvider)();
     final taskBuckets = getTaskBuckets(tasks, now);
     final homeTaskSections = _homeTaskSections(context, taskBuckets);
     const homeTaskLimit = 3;
@@ -153,8 +170,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           RepaintBoundary(
             key: const ValueKey('home-stability-boundary'),
             child: RefreshIndicator(
-              onRefresh: () =>
-                  ref.read(streakServiceProvider).refresh(DateTime.now()),
+              onRefresh: () => ref
+                  .read(streakServiceProvider)
+                  .refresh(ref.read(localNowProvider)()),
               child: CustomScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 slivers: [
@@ -183,6 +201,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
+                              if (hasDomainFailure) ...[
+                                _DashboardDataWarning(
+                                  onRetry: () {
+                                    ref.invalidate(tasksProvider);
+                                    ref.invalidate(assetsProvider);
+                                    ref.invalidate(roomsProvider);
+                                  },
+                                ),
+                                const SizedBox(height: HkSpacing.sm),
+                              ],
                               RepaintBoundary(
                                 child: _DashboardWeatherCard(
                                   educationLink: _weatherEducationLink,
@@ -346,6 +374,35 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   }
 }
 
+class _DashboardDataWarning extends StatelessWidget {
+  const _DashboardDataWarning({required this.onRetry});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return hk_ui.SurfaceCard(
+      key: const ValueKey('dashboard-stale-data-warning'),
+      padding: const EdgeInsets.all(HkSpacing.sm),
+      borderColor: scheme.error.withValues(alpha: 0.35),
+      child: Row(
+        children: [
+          Icon(Symbols.sync_problem_rounded, color: scheme.error),
+          const SizedBox(width: HkSpacing.xs),
+          Expanded(
+            child: Text(
+              context.l10n.showingSavedHomeDataRefreshFailed,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+          TextButton(onPressed: onRetry, child: Text(context.l10n.retry)),
+        ],
+      ),
+    );
+  }
+}
+
 class _HomeTaskSectionData {
   const _HomeTaskSectionData({required this.title, required this.tasks});
 
@@ -399,7 +456,7 @@ class _DashboardWeatherCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final snapshot = ref.watch(initialHomeSnapshotProvider).value;
     final themeNow =
-        ref.watch(localThemeClockProvider).value ?? DateTime.now().toLocal();
+        ref.watch(localClockProvider).value ?? ref.read(localNowProvider)();
     final brightness = Theme.of(context).brightness;
     final location =
         ref.watch(homeLocationProvider).value ?? snapshot?.homeLocation;
@@ -488,7 +545,7 @@ class _DashboardReadinessCard extends ConsumerWidget {
           ref.watch(backupStateProvider).value ??
           snapshot?.backupState ??
           const BackupState(),
-      now: DateTime.now(),
+      now: ref.watch(localClockProvider).value ?? ref.read(localNowProvider)(),
     );
     return AnimatedSwitcher(
       duration: reduceMotion

@@ -189,7 +189,7 @@
   "localDataBackupsAndExportVisibility": "Local data, backups, and export visibility",
   "inventoryAndMaintenanceHistoryExports": "Inventory and maintenance history exports",
   "completionTrendsAndTaskDistribution": "Completion trends and task distribution",
-  "exportOrRestoreZipBackups": "Export or restore ZIP backups",
+  "exportOrRestoreOwntendBackups": "Export or restore Owntend backups",
   "completeTaskTitleCase": "Complete Task",
   "areaName": "Area name",
   "areaType": "Area type",
@@ -276,7 +276,7 @@
   "koi": "Koi",
   "shareLatestBackup": "Share latest backup",
   "automaticLocalBackups": "Automatic local backups",
-  "chooseBackupZip": "Choose backup ZIP",
+  "chooseOwntendBackup": "Choose Owntend backup",
   "restoreThisBackup": "Restore this backup?",
   "restoreBackup": "Restore backup",
   "restoreThisBackup2": "Restore this backup",
@@ -436,6 +436,71 @@
   "resumeCloudBackup": "Resume cloud backup",
   "pauseCloudBackup": "Pause cloud backup",
   "advancedSyncDiagnostics": "Advanced Sync Diagnostics",
+  "syncHealth": "Sync Health",
+  "reviewChangesThatNeedSyncAttention": "Review changes and conflicts that need your attention",
+  "refresh": "Refresh",
+  "pendingSyncChanges": "{count, plural, =0{No pending changes} =1{1 pending change} other{{count} pending changes}}",
+  "@pendingSyncChanges": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "syncHealthUnavailable": "Sync Health is unavailable",
+  "syncHealthUnavailableBody": "Owntend could not read the local sync state. Try again.",
+  "syncHealthLooksGood": "No sync issues need attention",
+  "syncHealthLooksGoodBody": "Owntend will continue syncing saved changes automatically when cloud backup is active.",
+  "changesNeedingAttention": "Changes needing attention",
+  "changesNeedingAttentionBody": "Automatic retries stopped for these saved changes. Retry them or dismiss changes you no longer want to sync.",
+  "syncConflicts": "Sync conflicts",
+  "syncConflictsBody": "These records changed both here and in the cloud. Choose which version should win.",
+  "syncChangeQueuedForRetry": "The change was queued for retry.",
+  "dismissSyncChange": "Dismiss this sync change?",
+  "dismissSyncChangeBody": "This removes the pending cloud change. The current data on this device stays available, but this change will not be sent to your other devices.",
+  "dismiss": "Dismiss",
+  "syncChangeDismissed": "The pending sync change was dismissed.",
+  "keepThisDeviceVersion": "Keep this device''s version?",
+  "keepThisDeviceVersionBody": "This device''s saved version will be queued for cloud sync and may replace the cloud version.",
+  "keepCloudVersion": "Keep the cloud version?",
+  "keepCloudVersionBody": "This dismisses this device''s conflicting pending change. This action cannot be undone from Sync Health.",
+  "keepThisDevice": "Keep this device",
+  "keepCloud": "Keep cloud",
+  "syncConflictResolved": "The sync conflict was resolved.",
+  "syncHealthActionFailed": "Owntend could not update Sync Health. Try again.",
+  "syncStoppedAfterRepeatedAttempts": "Owntend stopped retrying this change after repeated failures.",
+  "syncConflictForCategory": "Conflicting {category}",
+  "@syncConflictForCategory": {
+    "placeholders": {
+      "category": {
+        "type": "String"
+      }
+    }
+  },
+  "chooseWhichVersionToKeep": "Choose the version you want to keep.",
+  "removedCategoryCouldNotSync": "Removed {category} could not sync",
+  "@removedCategoryCouldNotSync": {
+    "placeholders": {
+      "category": {
+        "type": "String"
+      }
+    }
+  },
+  "updatedCategoryCouldNotSync": "Updated {category} could not sync",
+  "@updatedCategoryCouldNotSync": {
+    "placeholders": {
+      "category": {
+        "type": "String"
+      }
+    }
+  },
+  "syncCategoryHomeStructure": "home structure",
+  "syncCategoryItem": "item",
+  "syncCategoryPhoto": "photo",
+  "syncCategoryTask": "task",
+  "syncCategoryPreference": "preference",
+  "syncCategoryNotification": "notification",
+  "syncCategoryOther": "saved data",
   "signOutOnThisDevice": "Sign out on this device",
   "unlinkLocalData": "Unlink local data",
   "deleteCloudAccount": "Delete cloud account",
@@ -479,6 +544,7 @@
   "backupComplete": "Backup complete",
   "yourTasks": "Your Tasks,",
   "allInSync": "All in Sync",
+  "showingSavedHomeDataRefreshFailed": "Showing saved home data because the latest refresh failed.",
   "organizeTasksRoutinesAndRemindersAcrossAllYourDevicesAnytimeAnywhere": "Organize tasks, routines, and reminders across all your devices, anytime, anywhere.",
   "anyDevice": "Any Device",
   "accessTasksAnywhere": "Access tasks anywhere",
@@ -589,6 +655,9 @@
   "reminderNote": "Reminder note",
   "optionalContextForNotifications": "Optional context for notifications",
   "photoSaved": "Photo saved.",
+  "selectedPhotoIsNoLongerAvailable": "The selected photo is no longer available. Choose it again.",
+  "selectedPhotoIsTooLarge": "The selected photo is too large to save and sync. Choose a smaller photo.",
+  "selectedFileIsNotASupportedPhoto": "The selected file is damaged or is not a supported photo.",
   "enableThisTaskBeforeSnoozingIt": "Enable this task before snoozing it.",
   "taskRestored": "Task restored.",
   "move": "Move",
@@ -831,8 +900,8 @@
   "insights": "Insights",
   "data": "Data",
   "accountAndCloudSync": "Account & Cloud Sync",
-  "optionalGoogleSignInAndPrivateDeviceSync": "Optional Google sign-in and private device sync",
-  "createShareOrRestoreLocalZipBackups": "Create, share, or restore local ZIP backups",
+  "requiredGoogleSignInAndPrivateDeviceSync": "Required Google sign-in with private device sync",
+  "createShareOrRestoreEncryptedOwntendBackups": "Create, share, or restore encrypted Owntend backups",
   "restoreRecentlyRemovedRoomsItemsAndTasks": "Restore recently removed rooms, items, and tasks",
   "themeRemindersPrivacyAndReleaseReadiness": "Theme, reminders, privacy, and release readiness",
   "searchYourHome": "Search your home",
@@ -856,7 +925,7 @@
   "locationServicesAreOff": "Location services are off",
   "permissionNeeded": "Permission needed",
   "permissionBlocked": "Permission blocked",
-  "backupsAreSavedLocallyAsPrivateZipFiles": "Backups are saved locally as private ZIP files.",
+  "backupsAreSavedLocallyAsEncryptedOwntendFiles": "Backups are saved locally as encrypted .owntend-backup files.",
   "restoreFromABackup": "Restore from a backup",
   "skipThisOccurrence2": "Skip this occurrence?",
   "postponeTask": "Postpone task?",
@@ -1531,7 +1600,18 @@
   ,"recurrenceYears": "{count, plural, =1{Every year} other{Every {count} years}}"
   ,"@recurrenceYears": {"placeholders": {"count": {"type": "int"}}}
   ,"authoritativeChangeRequiresOnline": "This change needs an active server session. Your current edit remains unfinished."
-  ,"authoritativeChargeChanged": "The point cost changed. Review the latest quote and try again."
+  ,"authoritativeChargeChanged": "The point cost changed. Review the latest quote and try again.",
+  "completeRequiredFields": "Complete the required fields.",
+  "reviewInvalidFields": "Review the invalid fields and try again.",
+  "serverSessionExpired": "Your server session expired. Sign in again and retry.",
+  "authoritativeEntityNoLongerAvailable": "The item, room, or task is no longer available.",
+  "authoritativeOperationConflict": "This change conflicts with newer server data. Refresh and try again.",
+  "keepFieldWithinCharacters": "Keep this field to {count} characters or fewer.",
+  "@keepFieldWithinCharacters": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  }
   ,"confirmTaskMoveChargeTitle": "Use points to move task?"
   ,"confirmTaskMoveChargeBody": "Moving this task requires {count, plural, =1{1 point} other{{count} points}}. No refund is issued later."
   ,"@confirmTaskMoveChargeBody": {"placeholders": {"count": {"type": "int"}}}

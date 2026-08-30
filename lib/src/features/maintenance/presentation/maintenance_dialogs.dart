@@ -178,7 +178,7 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
     final reminderText = _reminderDaysController.text.trim();
     final duration = durationText.isEmpty ? null : int.tryParse(durationText);
     final reminder = reminderText.isEmpty ? 0 : int.tryParse(reminderText);
-    return (durationText.isEmpty || (duration != null && duration > 0)) &&
+    return (durationText.isEmpty || (duration != null && duration >= 0)) &&
         reminder != null &&
         reminder >= 0;
   }
@@ -265,12 +265,18 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
               TextField(
                 controller: _titleController,
                 textInputAction: TextInputAction.next,
+                inputFormatters: limitInputLength(
+                  InputValidationLimits.maintenanceTitle,
+                ),
                 decoration: InputDecoration(labelText: context.l10n.taskTitle),
               ),
               const SizedBox(height: HkSpacing.xs),
               TextField(
                 controller: _instructionsController,
                 maxLines: 3,
+                inputFormatters: limitInputLength(
+                  InputValidationLimits.maintenanceInstructions,
+                ),
                 decoration: InputDecoration(
                   labelText: context.l10n.instructions,
                 ),
@@ -323,6 +329,9 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
               TextField(
                 controller: _taskTypeController,
                 textInputAction: TextInputAction.next,
+                inputFormatters: limitInputLength(
+                  InputValidationLimits.maintenanceTaskType,
+                ),
                 decoration: InputDecoration(
                   labelText: context.l10n.taskType,
                   hintText: context.l10n.inspectionCleaningFeeding,
@@ -332,6 +341,9 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
               TextField(
                 controller: _locationController,
                 textInputAction: TextInputAction.next,
+                inputFormatters: limitInputLength(
+                  InputValidationLimits.maintenanceLocation,
+                ),
                 decoration: InputDecoration(
                   labelText: context.l10n.locationLabel,
                   hintText: context.l10n.topShelfLeftCabinet,
@@ -351,9 +363,9 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
                                 (int.tryParse(
                                           _durationController.text.trim(),
                                         ) ??
-                                        0) <
-                                    1
-                            ? context.l10n.use1OrMore
+                                        -1) <
+                                    0
+                            ? context.l10n.use0OrMore
                             : null,
                       ),
                     ),
@@ -391,6 +403,9 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
               TextField(
                 controller: _reminderRecommendationController,
                 maxLines: 2,
+                inputFormatters: limitInputLength(
+                  InputValidationLimits.maintenanceReminderRecommendation,
+                ),
                 decoration: InputDecoration(
                   labelText: context.l10n.reminderNote,
                   hintText: context.l10n.optionalContextForNotifications,
@@ -488,6 +503,14 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
     final metadata = _metadataFromForm();
     setState(() => _saving = true);
     try {
+      validateMaintenancePlanInput(
+        assetId: assetId,
+        title: _titleController.text,
+        instructions: _instructionsController.text,
+        recurrence: RecurrenceRule(interval: interval, unit: _unit),
+        reminderDaysBefore: reminderDaysBefore,
+        metadata: metadata,
+      );
       final isCreating = widget.task == null;
       final planId = widget.task?.plan.id ?? (_creationPlanId ??= _uuid.v7());
       final operationId = _creationOperationId ??= _uuid.v7();
@@ -553,7 +576,15 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
             }
             hk_ui.showToast(
               context,
-              content: Text(failureMessage(context, state.failure!.message)),
+              content: Text(switch (state.failure!.code) {
+                TaskCreationFailureCode.invalidPayload =>
+                  context.l10n.reviewInvalidFields,
+                TaskCreationFailureCode.unauthenticated =>
+                  context.l10n.serverSessionExpired,
+                TaskCreationFailureCode.assetNotFound =>
+                  context.l10n.authoritativeEntityNoLongerAvailable,
+                _ => failureMessage(context, state.failure!.message),
+              }),
               severity: hk_ui.HkToastSeverity.error,
             );
           }
@@ -674,7 +705,13 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
         hk_ui.showToast(
           context,
           content: Text(
-            failureMessage(context, error, fallback: AppFailureCode.taskUpdate),
+            error is AuthoritativeRpcRejectionException
+                ? authoritativeRpcRejectionMessage(context, error)
+                : failureMessage(
+                    context,
+                    error,
+                    fallback: AppFailureCode.taskUpdate,
+                  ),
           ),
           severity: hk_ui.HkToastSeverity.error,
         );

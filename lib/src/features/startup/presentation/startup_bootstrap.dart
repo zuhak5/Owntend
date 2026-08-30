@@ -183,12 +183,17 @@ Future<void> _removeUnsupportedCloudSession(
   await store.clearBinding();
 }
 
+typedef SupabaseClientInitializer = Future<SupabaseClient> Function(
+  AppConfig config,
+);
+
 class DeferredOwntendBootstrap extends StatefulWidget {
   const DeferredOwntendBootstrap({
     required this.database,
     required this.config,
     required this.elapsedBeforeFirstFrame,
     required this.appBuilder,
+    this.supabaseClientInitializer,
     super.key,
   });
 
@@ -196,6 +201,7 @@ class DeferredOwntendBootstrap extends StatefulWidget {
   final AppConfig config;
   final Duration elapsedBeforeFirstFrame;
   final BootstrappedAppBuilder appBuilder;
+  final SupabaseClientInitializer? supabaseClientInitializer;
 
   @override
   State<DeferredOwntendBootstrap> createState() =>
@@ -205,7 +211,9 @@ class DeferredOwntendBootstrap extends StatefulWidget {
 class _DeferredOwntendBootstrapState extends State<DeferredOwntendBootstrap> {
   SupabaseClient? _supabaseClient;
   Object? _accountCleanupRecoveryFailure;
+  Object? _cloudInitializationFailure;
   bool _accountCleanupRetrying = false;
+  bool _cloudInitializationRetrying = false;
   bool _ready = false;
 
   @override
@@ -263,6 +271,18 @@ class _DeferredOwntendBootstrapState extends State<DeferredOwntendBootstrap> {
     }
   }
 
+  Future<void> _retryCloudInitialization() async {
+    if (_cloudInitializationRetrying) return;
+    setState(() => _cloudInitializationRetrying = true);
+    try {
+      await _initializeAfterFirstFrame();
+    } finally {
+      if (mounted) {
+        setState(() => _cloudInitializationRetrying = false);
+      }
+    }
+  }
+
   Future<void> _initializeAfterFirstFrame() async {
     final deviceLanguage = supportedDeviceLanguage(
       WidgetsBinding.instance.platformDispatcher.locale,
@@ -280,15 +300,20 @@ class _DeferredOwntendBootstrapState extends State<DeferredOwntendBootstrap> {
       AppLogger.warning('startup_diagnostics', error: error);
     }
 
-    final cloud = SupabaseBootstrap.initialize(widget.config);
     final locale = DriftSettingsRepository(widget.database)
         .appLocalePreference();
 
-    SupabaseClient? client;
+    late final SupabaseClient client;
     try {
-      client = await cloud;
+      client =
+          await (widget.supabaseClientInitializer ??
+              SupabaseBootstrap.initialize)(widget.config);
     } on Object catch (error) {
       AppLogger.warning('startup_cloud_initialization', error: error);
+      if (mounted) {
+        setState(() => _cloudInitializationFailure = error);
+      }
+      return;
     }
 
     var restoreLanguage = deviceLanguage;
@@ -304,16 +329,15 @@ class _DeferredOwntendBootstrapState extends State<DeferredOwntendBootstrap> {
       initializeRestoreForegroundService(localeCode: restoreLanguage.name);
     }
 
-    if (client != null) {
-      try {
-        await _removeUnsupportedCloudSession(client, widget.database);
-      } on Object catch (error) {
-        AppLogger.warning('unsupported_cloud_session_cleanup', error: error);
-      }
+    try {
+      await _removeUnsupportedCloudSession(client, widget.database);
+    } on Object catch (error) {
+      AppLogger.warning('unsupported_cloud_session_cleanup', error: error);
     }
     if (!mounted) return;
     setState(() {
       _supabaseClient = client;
+      _cloudInitializationFailure = null;
       _ready = true;
     });
   }
@@ -324,6 +348,14 @@ class _DeferredOwntendBootstrapState extends State<DeferredOwntendBootstrap> {
       return OwntendStartupFailure(
         accountCleanupBlocked: true,
         onRetry: _accountCleanupRetrying ? null : _retryPendingAccountCleanup,
+      );
+    }
+    if (_cloudInitializationFailure != null) {
+      return OwntendStartupFailure(
+        cloudUnavailable: true,
+        onRetry: _cloudInitializationRetrying
+            ? null
+            : _retryCloudInitialization,
       );
     }
     if (!_ready) {
@@ -392,7 +424,7 @@ class OwntendStartupFailure extends StatelessWidget {
                             : context.l10n.thisBuildIsNotConfiguredCorrectly,
                         textAlign: TextAlign.center,
                       ),
-                      if (accountCleanupBlocked) ...[
+                      if (accountCleanupBlocked || cloudUnavailable) ...[
                         const SizedBox(height: 16),
                         FilledButton(
                           onPressed: onRetry == null
@@ -967,6 +999,12 @@ class StartupBootstrapController {
 
   Future<void> _runCloudRestore(int generation) async {
     final repository = _ref.read(cloudSyncRepositoryProvider);
+    final currentStatus = await repository.status();
+    if (currentStatus.migrationState == 'restorePaused' &&
+        currentStatus.restorePending) {
+      AppLogger.info('startup_restore_sync_remains_paused');
+      return;
+    }
     if (repository is! SyncCoordinator) {
       return _criticalStartup<void>(
         'cloud_restore',

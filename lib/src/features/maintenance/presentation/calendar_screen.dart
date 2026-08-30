@@ -10,19 +10,44 @@ class CalendarScreen extends ConsumerStatefulWidget {
 class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   late DateTime _visibleMonth;
   late DateTime _selectedDate;
+  late DateTime _observedToday;
 
   @override
   void initState() {
     super.initState();
-    final today = hk_dates.dateOnly(DateTime.now());
+    final today = hk_dates.dateOnly(ref.read(localNowProvider)());
     _visibleMonth = DateTime(today.year, today.month);
     _selectedDate = today;
+    _observedToday = today;
   }
 
   @override
   Widget build(BuildContext context) {
-    final tasks = ref.watch(tasksProvider).value ?? [];
-    final buckets = getTaskBuckets(tasks, DateTime.now());
+    final now =
+        ref.watch(localClockProvider).value ?? ref.read(localNowProvider)();
+    final today = hk_dates.dateOnly(now);
+    if (today != _observedToday) {
+      final wasFollowingToday = _selectedDate == _observedToday;
+      _observedToday = today;
+      if (wasFollowingToday) {
+        _selectedDate = today;
+        _visibleMonth = DateTime(today.year, today.month);
+      }
+    }
+    final tasksState = ref.watch(tasksProvider);
+    if (!tasksState.hasValue) {
+      return Scaffold(
+        appBar: AppBar(title: Text(context.l10n.calendar)),
+        body: tasksState.hasError
+            ? hk_ui.ErrorPanel(
+                message: failureMessage(context, tasksState.error!),
+                onRetry: () => ref.invalidate(tasksProvider),
+              )
+            : const Center(child: CircularProgressIndicator()),
+      );
+    }
+    final tasks = tasksState.value!;
+    final buckets = getTaskBuckets(tasks, now);
     final grouped = groupTasksByDueDate(tasks);
     final taskCounts = {
       for (final entry in grouped.entries) entry.key: entry.value.length,
@@ -55,6 +80,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                   delay: const Duration(milliseconds: 80),
                   child: _CalendarMonthCard(
                     month: _visibleMonth,
+                    today: today,
                     selectedDate: _selectedDate,
                     taskCounts: taskCounts,
                     onDateSelected: (date) {
@@ -271,6 +297,7 @@ class _MiniCalendarMetric extends StatelessWidget {
 class _CalendarMonthCard extends StatelessWidget {
   const _CalendarMonthCard({
     required this.month,
+    required this.today,
     required this.selectedDate,
     required this.taskCounts,
     required this.onDateSelected,
@@ -279,6 +306,7 @@ class _CalendarMonthCard extends StatelessWidget {
   });
 
   final DateTime month;
+  final DateTime today;
   final DateTime selectedDate;
   final Map<DateTime, int> taskCounts;
   final ValueChanged<DateTime> onDateSelected;
@@ -288,7 +316,6 @@ class _CalendarMonthCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final weeks = hk_dates.calendarMonthGrid(month);
-    final today = hk_dates.dateOnly(DateTime.now());
     final weekdayFormat = DateFormat.E(localeTag(context));
     final weekdays = [
       for (var offset = 0; offset < DateTime.daysPerWeek; offset += 1)

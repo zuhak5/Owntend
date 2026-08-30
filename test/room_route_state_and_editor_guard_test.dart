@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -39,6 +41,31 @@ void main() {
   );
 
   group('RoomDetailScreen route rehydration and error states', () {
+    testWidgets('does not report not found while the room stream is loading', (
+      tester,
+    ) async {
+      final rooms = StreamController<List<Room>>();
+      addTearDown(rooms.close);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [roomsProvider.overrideWith((ref) => rooms.stream)],
+          child: const MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: RoomDetailScreen(roomId: 'room-1'),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(find.text('Room not found.'), findsNothing);
+
+      rooms.add(const []);
+      await tester.pump();
+      expect(find.text('Room not found.'), findsOneWidget);
+    });
+
     testWidgets('reconstructs room detail from roomId identity', (
       tester,
     ) async {
@@ -117,6 +144,40 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('لم يتم العثور على الغرفة.'), findsOneWidget);
+    });
+  });
+
+  group('ThingDetailScreen dependency states', () {
+    testWidgets('shows a retryable error instead of partial empty content', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            assetDetailProvider('asset-1')
+                .overrideWith((ref) => Stream.value(testAsset)),
+            roomsProvider.overrideWith(
+              (ref) =>
+                  Stream<List<Room>>.error(StateError('rooms unavailable')),
+            ),
+            assetSavedTasksProvider('asset-1')
+                .overrideWith((ref) => Stream.value(const <TaskItem>[])),
+            assetTagsProvider('asset-1')
+                .overrideWith((ref) => Stream.value(const <Tag>[])),
+            assetPhotosProvider('asset-1')
+                .overrideWith((ref) => Stream.value(const <AssetPhoto>[])),
+          ],
+          child: const MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: ThingDetailScreen(assetId: 'asset-1'),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Retry'), findsOneWidget);
+      expect(find.text('No tasks yet'), findsNothing);
     });
   });
 

@@ -77,6 +77,32 @@ class LocalSyncStore extends _LocalSyncStoreBase
   static Future<void> _deleteFileFromDisk(File file) async {
     await file.delete();
   }
+
+  /// Atomically binds a deliberately paused restored snapshot and creates all
+  /// durable upload/merge intent. Generic account binding must never be used
+  /// to resume this state because a crash between binding and restore-specific
+  /// history journaling could lose the authoritative merge operation.
+  Future<void> resumeRestoredSnapshotForUser(
+    String userId,
+    DateTime restoredAt,
+  ) async {
+    final normalizedUserId = userId.trim();
+    if (normalizedUserId.isEmpty) {
+      throw StateError('A cloud identity is required to resume restore sync.');
+    }
+    await db.transaction(() async {
+      final current = await account();
+      if (current.migrationState != 'restorePaused' ||
+          !current.restorePending ||
+          current.boundUserId != null) {
+        throw StateError(
+          'Only an explicitly paused local restore can be resumed to cloud.',
+        );
+      }
+      await bindIdentity(normalizedUserId);
+      await enqueueRestoreSnapshot(restoredAt);
+    });
+  }
 }
 
 const _localSyncUuid = Uuid();

@@ -12,6 +12,7 @@ import 'package:owntend/main.dart';
 import 'package:owntend/src/core/domain/contracts.dart';
 import 'package:owntend/src/core/domain/models.dart';
 import 'package:owntend/src/core/services/app_permission_coordinator.dart';
+import 'package:owntend/src/core/services/backup_service.dart';
 import 'package:owntend/src/core/sync/sync_contracts.dart';
 import 'package:owntend/src/features/auth/domain/auth_repository.dart';
 import 'package:owntend/src/features/monetization/monetization.dart';
@@ -652,6 +653,7 @@ class FakeBackupRepository implements BackupRepository {
     this.exportDelay,
     this.exportError,
     this.exportCompleter,
+    this.requireRestorePassphrase = false,
   }) : state = state ?? const BackupState(),
        preview = preview ?? defaultBackupPreview;
 
@@ -661,9 +663,14 @@ class FakeBackupRepository implements BackupRepository {
   bool? automaticBackupsEnabled;
   var exportCount = 0;
   var restoreCount = 0;
+  String? lastExportPassphrase;
+  String? lastRestorePassphrase;
+  RestoreCloudDisposition? lastRestoreCloudDisposition;
+  final List<String?> inspectedPassphrases = [];
   final Duration? exportDelay;
   final Object? exportError;
   final Completer<String>? exportCompleter;
+  final bool requireRestorePassphrase;
 
   @override
   Future<String> exportBackup({
@@ -671,6 +678,7 @@ class FakeBackupRepository implements BackupRepository {
     String? passphrase,
   }) async {
     exportCount++;
+    lastExportPassphrase = passphrase;
     if (exportCompleter != null) {
       final path = await exportCompleter!.future;
       if (exportError != null) {
@@ -730,12 +738,22 @@ class FakeBackupRepository implements BackupRepository {
     String? passphrase,
   }) async {
     inspectedPath = backupPath;
+    inspectedPassphrases.add(passphrase);
+    if (requireRestorePassphrase && passphrase == null) {
+      throw const BackupPassphraseRequiredException();
+    }
     return preview;
   }
 
   @override
-  Future<void> restoreBackup(String backupPath, {String? passphrase}) async {
+  Future<void> restoreBackup(
+    String backupPath, {
+    String? passphrase,
+    required RestoreCloudDisposition cloudDisposition,
+  }) async {
     restoreCount++;
+    lastRestorePassphrase = passphrase;
+    lastRestoreCloudDisposition = cloudDisposition;
   }
 }
 
@@ -747,6 +765,7 @@ class FakeCloudSyncRepository implements CloudSyncRepository {
   var enableCount = 0;
   var disableCount = 0;
   var fullReconcileCount = 0;
+  var resumeRestoredSnapshotCount = 0;
   var syncNowCount = 0;
 
   @override
@@ -764,6 +783,11 @@ class FakeCloudSyncRepository implements CloudSyncRepository {
   @override
   Future<void> fullReconcile() async {
     fullReconcileCount++;
+  }
+
+  @override
+  Future<void> resumeRestoredSnapshotToCloud() async {
+    resumeRestoredSnapshotCount++;
   }
 
   @override
@@ -817,6 +841,7 @@ class FakeFilePicker extends FilePickerPlatform {
 
   final String? path;
   var pickCount = 0;
+  List<String>? lastAllowedExtensions;
 
   @override
   Future<List<PlatformFile>> pickFiles({
@@ -837,6 +862,7 @@ class FakeFilePicker extends FilePickerPlatform {
     WindowsOptions windowsOptions = const WindowsOptions(),
   }) async {
     pickCount++;
+    lastAllowedExtensions = allowedExtensions;
     if (path == null) {
       return const [];
     }

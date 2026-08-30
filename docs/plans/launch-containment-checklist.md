@@ -31,8 +31,15 @@ in `docs/operations/production-containment.md`.
 
 ## 5. VersionDeck
 
-- [ ] Set `tool/versiondeck-control.json` publication mode to `verified` after
-      a real artifact passes `tool/validate_versiondeck.mjs`.
+- [ ] After an authorized production Shorebird publication succeeds, confirm
+      `Verify Production APK Artifact Set` validates the APK set and that its
+      successful `workflow_run` triggers `Deploy VersionDeck`. That downstream
+      run selects the `verified` workflow input and generates an active manifest
+      from `tool/versiondeck-control.json`; the control file itself has no
+      publication-mode field.
+- [ ] Do not manually dispatch `verified` publication as a containment or
+      artifact-verification bypass. Use the documented disabled-publication
+      procedure when downloads must remain contained.
 - [ ] Confirm repository identity (`zuhak5/Owntend`) and domain
       (`owntend.app`) are still correct before enabling.
 

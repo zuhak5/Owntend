@@ -1040,10 +1040,12 @@ class $AssetsTable extends Assets with TableInfo<$AssetsTable, AssetRow> {
     'name',
     aliasedName,
     false,
-    additionalChecks: GeneratedColumn.checkTextLength(
-      minTextLength: 1,
-      maxTextLength: 200,
+    check: () => _boundedLengthCheck(
+      'name',
+      minimum: 1,
+      maximum: InputValidationLimits.assetName,
     ),
+    additionalChecks: GeneratedColumn.checkTextLength(minTextLength: 1),
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
@@ -1082,7 +1084,9 @@ class $AssetsTable extends Assets with TableInfo<$AssetsTable, AssetRow> {
     'placement',
     aliasedName,
     true,
-    additionalChecks: GeneratedColumn.checkTextLength(maxTextLength: 300),
+    check: () =>
+        _maxLengthCheck('placement', InputValidationLimits.assetPlacement),
+    additionalChecks: GeneratedColumn.checkTextLength(),
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
@@ -1092,7 +1096,8 @@ class $AssetsTable extends Assets with TableInfo<$AssetsTable, AssetRow> {
     'notes',
     aliasedName,
     true,
-    additionalChecks: GeneratedColumn.checkTextLength(maxTextLength: 10000),
+    check: () => _maxLengthCheck('notes', InputValidationLimits.assetNotes),
+    additionalChecks: GeneratedColumn.checkTextLength(),
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
@@ -1664,6 +1669,8 @@ class $DeviceDetailsTableTable extends DeviceDetailsTable
     'brand',
     aliasedName,
     true,
+    check: () => _maxLengthCheck('brand', InputValidationLimits.deviceBrand),
+    additionalChecks: GeneratedColumn.checkTextLength(),
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
@@ -1673,6 +1680,8 @@ class $DeviceDetailsTableTable extends DeviceDetailsTable
     'model',
     aliasedName,
     true,
+    check: () => _maxLengthCheck('model', InputValidationLimits.deviceModel),
+    additionalChecks: GeneratedColumn.checkTextLength(),
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
@@ -1684,6 +1693,11 @@ class $DeviceDetailsTableTable extends DeviceDetailsTable
     'serial_number',
     aliasedName,
     true,
+    check: () => _maxLengthCheck(
+      'serial_number',
+      InputValidationLimits.deviceSerialNumber,
+    ),
+    additionalChecks: GeneratedColumn.checkTextLength(),
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
@@ -1695,6 +1709,11 @@ class $DeviceDetailsTableTable extends DeviceDetailsTable
     'power_source',
     aliasedName,
     true,
+    check: () => _maxLengthCheck(
+      'power_source',
+      InputValidationLimits.devicePowerSource,
+    ),
+    additionalChecks: GeneratedColumn.checkTextLength(),
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
@@ -1718,6 +1737,9 @@ class $DeviceDetailsTableTable extends DeviceDetailsTable
     'manual_url',
     aliasedName,
     true,
+    check: () =>
+        _maxLengthCheck('manual_url', InputValidationLimits.deviceManualUrl),
+    additionalChecks: GeneratedColumn.checkTextLength(),
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
@@ -1729,6 +1751,9 @@ class $DeviceDetailsTableTable extends DeviceDetailsTable
     'consumable',
     aliasedName,
     true,
+    check: () =>
+        _maxLengthCheck('consumable', InputValidationLimits.deviceConsumable),
+    additionalChecks: GeneratedColumn.checkTextLength(),
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
@@ -2209,6 +2234,8 @@ class $PetDetailsTableTable extends PetDetailsTable
     'species',
     aliasedName,
     true,
+    check: () => _maxLengthCheck('species', InputValidationLimits.petSpecies),
+    additionalChecks: GeneratedColumn.checkTextLength(),
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
@@ -2218,6 +2245,8 @@ class $PetDetailsTableTable extends PetDetailsTable
     'breed',
     aliasedName,
     true,
+    check: () => _maxLengthCheck('breed', InputValidationLimits.petBreed),
+    additionalChecks: GeneratedColumn.checkTextLength(),
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
@@ -2240,6 +2269,9 @@ class $PetDetailsTableTable extends PetDetailsTable
     'microchip_id',
     aliasedName,
     true,
+    check: () =>
+        _maxLengthCheck('microchip_id', InputValidationLimits.petMicrochipId),
+    additionalChecks: GeneratedColumn.checkTextLength(),
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
@@ -2251,6 +2283,8 @@ class $PetDetailsTableTable extends PetDetailsTable
     'vet_name',
     aliasedName,
     true,
+    check: () => _maxLengthCheck('vet_name', InputValidationLimits.petVetName),
+    additionalChecks: GeneratedColumn.checkTextLength(),
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
@@ -2262,6 +2296,9 @@ class $PetDetailsTableTable extends PetDetailsTable
     'vet_phone',
     aliasedName,
     true,
+    check: () =>
+        _maxLengthCheck('vet_phone', InputValidationLimits.petVetPhone),
+    additionalChecks: GeneratedColumn.checkTextLength(),
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
@@ -2273,6 +2310,9 @@ class $PetDetailsTableTable extends PetDetailsTable
     'feeding_notes',
     aliasedName,
     true,
+    check: () =>
+        _maxLengthCheck('feeding_notes', InputValidationLimits.petNotes),
+    additionalChecks: GeneratedColumn.checkTextLength(),
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
@@ -2284,6 +2324,9 @@ class $PetDetailsTableTable extends PetDetailsTable
     'medical_notes',
     aliasedName,
     true,
+    check: () =>
+        _maxLengthCheck('medical_notes', InputValidationLimits.petNotes),
+    additionalChecks: GeneratedColumn.checkTextLength(),
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
@@ -2798,6 +2841,8 @@ class $PlantDetailsTableTable extends PlantDetailsTable
     'species',
     aliasedName,
     true,
+    check: () => _maxLengthCheck('species', InputValidationLimits.plantSpecies),
+    additionalChecks: GeneratedColumn.checkTextLength(),
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
@@ -2809,6 +2854,9 @@ class $PlantDetailsTableTable extends PlantDetailsTable
     'sunlight',
     aliasedName,
     true,
+    check: () =>
+        _maxLengthCheck('sunlight', InputValidationLimits.plantSunlight),
+    additionalChecks: GeneratedColumn.checkTextLength(),
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
@@ -2819,6 +2867,9 @@ class $PlantDetailsTableTable extends PlantDetailsTable
     'watering_interval_days',
     aliasedName,
     true,
+    check: () => const CustomExpression<bool>(
+      'watering_interval_days IS NULL OR watering_interval_days > 0',
+    ),
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
@@ -2830,6 +2881,9 @@ class $PlantDetailsTableTable extends PlantDetailsTable
     'pot_size',
     aliasedName,
     true,
+    check: () =>
+        _maxLengthCheck('pot_size', InputValidationLimits.plantPotSize),
+    additionalChecks: GeneratedColumn.checkTextLength(),
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
@@ -2853,6 +2907,11 @@ class $PlantDetailsTableTable extends PlantDetailsTable
     'toxicity_notes',
     aliasedName,
     true,
+    check: () => _maxLengthCheck(
+      'toxicity_notes',
+      InputValidationLimits.plantToxicityNotes,
+    ),
+    additionalChecks: GeneratedColumn.checkTextLength(),
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
@@ -3300,6 +3359,9 @@ class $SafetyDetailsTableTable extends SafetyDetailsTable
     'safety_type',
     aliasedName,
     true,
+    check: () =>
+        _maxLengthCheck('safety_type', InputValidationLimits.safetyType),
+    additionalChecks: GeneratedColumn.checkTextLength(),
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
@@ -3333,6 +3395,11 @@ class $SafetyDetailsTableTable extends SafetyDetailsTable
     'battery_type',
     aliasedName,
     true,
+    check: () => _maxLengthCheck(
+      'battery_type',
+      InputValidationLimits.safetyBatteryType,
+    ),
+    additionalChecks: GeneratedColumn.checkTextLength(),
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
@@ -3344,6 +3411,9 @@ class $SafetyDetailsTableTable extends SafetyDetailsTable
     'test_interval_days',
     aliasedName,
     true,
+    check: () => const CustomExpression<bool>(
+      'test_interval_days IS NULL OR test_interval_days > 0',
+    ),
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
@@ -3740,10 +3810,12 @@ class $TagsTable extends Tags with TableInfo<$TagsTable, TagRow> {
     'name',
     aliasedName,
     false,
-    additionalChecks: GeneratedColumn.checkTextLength(
-      minTextLength: 1,
-      maxTextLength: 120,
+    check: () => _boundedLengthCheck(
+      'name',
+      minimum: 1,
+      maximum: InputValidationLimits.tagName,
     ),
+    additionalChecks: GeneratedColumn.checkTextLength(minTextLength: 1),
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
@@ -4707,10 +4779,12 @@ class $MaintenancePlansTable extends MaintenancePlans
     'title',
     aliasedName,
     false,
-    additionalChecks: GeneratedColumn.checkTextLength(
-      minTextLength: 1,
-      maxTextLength: 200,
+    check: () => _boundedLengthCheck(
+      'title',
+      minimum: 1,
+      maximum: InputValidationLimits.maintenanceTitle,
     ),
+    additionalChecks: GeneratedColumn.checkTextLength(minTextLength: 1),
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
@@ -4722,7 +4796,11 @@ class $MaintenancePlansTable extends MaintenancePlans
     'instructions',
     aliasedName,
     true,
-    additionalChecks: GeneratedColumn.checkTextLength(maxTextLength: 4000),
+    check: () => _maxLengthCheck(
+      'instructions',
+      InputValidationLimits.maintenanceInstructions,
+    ),
+    additionalChecks: GeneratedColumn.checkTextLength(),
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
@@ -5488,6 +5566,9 @@ class $MaintenancePlanMetadataTable extends MaintenancePlanMetadata
     'task_type',
     aliasedName,
     true,
+    check: () =>
+        _maxLengthCheck('task_type', InputValidationLimits.maintenanceTaskType),
+    additionalChecks: GeneratedColumn.checkTextLength(),
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
@@ -5499,6 +5580,11 @@ class $MaintenancePlanMetadataTable extends MaintenancePlanMetadata
     'location_label',
     aliasedName,
     true,
+    check: () => _maxLengthCheck(
+      'location_label',
+      InputValidationLimits.maintenanceLocation,
+    ),
+    additionalChecks: GeneratedColumn.checkTextLength(),
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
@@ -5510,6 +5596,10 @@ class $MaintenancePlanMetadataTable extends MaintenancePlanMetadata
         'estimated_duration_minutes',
         aliasedName,
         true,
+        check: () => const CustomExpression<bool>(
+          'estimated_duration_minutes IS NULL OR '
+          'estimated_duration_minutes >= 0',
+        ),
         type: DriftSqlType.int,
         requiredDuringInsert: false,
       );
@@ -5521,6 +5611,11 @@ class $MaintenancePlanMetadataTable extends MaintenancePlanMetadata
         'required_materials_json',
         aliasedName,
         false,
+        check: () => _maxLengthCheck(
+          'required_materials_json',
+          InputValidationLimits.maintenanceRequiredMaterialsJson,
+        ),
+        additionalChecks: GeneratedColumn.checkTextLength(),
         type: DriftSqlType.string,
         requiredDuringInsert: false,
         defaultValue: const Constant('[]'),
@@ -5533,6 +5628,11 @@ class $MaintenancePlanMetadataTable extends MaintenancePlanMetadata
         'reminder_recommendation',
         aliasedName,
         true,
+        check: () => _maxLengthCheck(
+          'reminder_recommendation',
+          InputValidationLimits.maintenanceReminderRecommendation,
+        ),
+        additionalChecks: GeneratedColumn.checkTextLength(),
         type: DriftSqlType.string,
         requiredDuringInsert: false,
       );

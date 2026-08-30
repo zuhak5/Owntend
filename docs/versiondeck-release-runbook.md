@@ -64,8 +64,12 @@ The generated manifest must never exceed a 24-hour absolute trust lease. The
 runtime and cache policy treat any network-fetched or cached manifest past that
 lease as expired and disable downloads until a fresh manifest is revalidated.
 
-In the clean pre-release state, the checked-in control keeps publication disabled
-until the first official `1.0.0 (Build 1)` release is signed, verified, and published.
+The checked-in control uses `publication.status = "active"` so the verified
+downstream `workflow_run` can publish only after the official release and APK-set
+workflows succeed. This control value is not a workflow publication mode and does
+not independently publish an artifact. To deploy a disabled manifest during
+containment, make a reviewed change to `publication.status = "disabled"` and use
+the manual `disabled` workflow input as described under failure handling.
 
 ## Pull-request validation
 
@@ -78,11 +82,11 @@ For changes affecting VersionDeck:
    ```
 3. Build a revisioned static artifact into a temporary directory:
    ```powershell
-   $SourceSha = (git rev-parse HEAD).Trim()
+   $ManifestRevision = node -p "require('./download-site/releases.json').generatorCommit"
    node tool/build_versiondeck_site.mjs `
      --source download-site `
      --output .versiondeck-site `
-     --revision $SourceSha `
+     --revision $ManifestRevision `
      --allow-inert-account-deletion-config true
    ```
 4. Run `tool/validate_versiondeck.mjs` on the generated artifact:
@@ -90,6 +94,14 @@ For changes affecting VersionDeck:
    node tool/validate_versiondeck.mjs .versiondeck-site
    ```
 5. Review accessibility, reduced motion, responsive behavior, stale/error/offline states, and service-worker changes.
+
+The pull-request artifact deliberately uses the checked-in manifest's generator
+revision, matching the pull-request job in `deploy-download-site.yml`. This check
+proves that the checked-in static snapshot is internally consistent; it does not
+claim that the manifest was generated from the current working-tree commit or
+that any release is publishable. The protected deployment job regenerates the
+manifest and binds the build, verified release evidence, and exact authorized
+source SHA before publication.
 
 ## Manifest rules
 

@@ -63,6 +63,12 @@ On sign-in or account transition, the coordinator must:
 
 Never silently reassign local records between accounts.
 
+### Restore pause and explicit resume
+
+A restore caller must choose `localOnlyPaused` or `updateCloud` explicitly; account/cache state never silently changes that choice. A local-only restore persists `migrationState = restorePaused`, `restorePending = true`, disables sync, clears the binding and remote runtime metadata, and preserves the restored domain rows. Startup recognizes that durable state and opens the local working set without invoking cloud enable.
+
+Generic `enable()` cannot claim a paused restored working set. The separate `resumeRestoredSnapshotToCloud()` operation requires the current authenticated identity and an exact unbound `restorePaused`/`restorePending` state. It atomically binds that identity and enqueues the restore snapshot before hydration begins, so a restart cannot observe an account binding without its upload intent. The intermediate migration state is `binding`; only successful hydration advances it to `active`.
+
 ## Local mutation path
 
 A synchronized mutation should:
@@ -173,6 +179,7 @@ Conflict behavior is entity-specific, durable, and verifiable in tests:
 - **No Silent Discard**: The sync engine has no discard-on-conflict path across snapshot, pull, and push. An outbox entry is removed only when (a) the exact server operation is acknowledged with a generation-checked CAS delete, (b) a newer local edit replaces it through the outbox trigger's generation bump, or (c) the user explicitly resolves the conflict.
 - **Durable Conflict State**: When a remote edit wins a conflict — by higher server revision, newer client timestamp, or clock-skew policy — the client applies the canonical remote row locally but moves the losing outbox entry into the durable `conflict` state instead of deleting or resolving it. Conflicted rows are excluded from automatic pushes and survive restart and process death indefinitely. Each preserved conflict records the serialized local payload snapshot plus remote payload/revision evidence in `sync_conflicts`; `resolution_status` stays `unresolved` and `resolved_at` stays null until explicit resolution.
 - **Explicit Resolution Only**: `LocalSyncStore.resolveSyncConflict` is the sole resolution entry point. Keep-local restores the newest preserved payload into the local table and returns the mutation to the push queue; keep-remote deletes the conflicted intent. Exact server acknowledgement resolves outstanding ledger rows as `resolved_server_acknowledged`. A fresh local edit on a conflicted record supersedes the stale conflict through the trigger's generation bump and returns the row to the pending queue.
+- **User Resolution Surface**: Account links to `/sync-health`, which reads payload-free `FailedSyncMutationSummary` and `SyncConflictSummary` values. Failed-visible work offers retry or confirmed dismissal. Unresolved conflicts offer confirmed keep-local or keep-cloud choices and pass the current bound account and device identity to `resolveSyncConflict`; a foreign or stale conflict cannot be resolved. The UI never exposes record keys, serialized preimages, account IDs, or raw error text.
 - **Server-Authoritative State**: Maintenance completion RPCs and wallet/point debits are strictly server-authoritative and idempotent.
 
 ## Clock skew
@@ -246,6 +253,7 @@ to Supabase.
 
 Media requires coordination between local metadata, file availability, Storage objects, upload state, and deletion cleanup.
 
+- **Normalized local source**: Before local photo metadata or upload intent exists, the client decodes actual image content, bakes orientation, bounds decoded pixels and dimensions, and encodes a JPEG no larger than the 10 MiB cloud limit. Corrupt, renamed, over-budget, or unwritable input fails before the row is committed.
 - **Prepare-first ledger**: `prepare_asset_photo_upload` creates an owner-scoped stage before any Storage mutation and returns a server-issued `{user_id}/media/{staging_uuid}/{attempt}.{ext}` path. The preparation binds asset, photo, expected size/MIME, an idempotency key, and the client digest (explicitly advisory). Exact retries use atomic `ON CONFLICT`; expired/failed attempts retain identity, queue the previous path, and issue a new attempt.
 - **Exact quota authority**: one per-user transaction advisory lock serializes quota evaluation. Fresh `staged` rows may not exceed 20 or 100 MiB aggregate expected bytes. Concurrent exact replays consume quota once; concurrent distinct prepares cannot oversubscribe either limit.
 - **Storage policy binding**: authenticated INSERT requires the exact fresh staged path and active session. Prefix ownership alone is insufficient. Authenticated DELETE is not granted; `delete_asset_photo` records cleanup intent and the service worker removes bytes.

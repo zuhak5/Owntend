@@ -177,18 +177,24 @@ void main() {
       expect(dashboard, isNot(contains('ref.listenManual(assetsProvider')));
       expect(dashboard, isNot(contains('ref.listenManual(roomsProvider')));
 
-      final taskLiveRead = dashboard.indexOf('ref.watch(tasksProvider).value');
+      final taskLiveRead = dashboard.indexOf(
+        'final tasksState = ref.watch(tasksProvider);',
+      );
       final taskSeedFallback = dashboard.indexOf('startupSnapshot?.tasks');
       final assetLiveRead = dashboard.indexOf(
-        'ref.watch(assetsProvider).value',
+        'final assetsState = ref.watch(assetsProvider);',
       );
       final assetSeedFallback = dashboard.indexOf('startupSnapshot?.assets');
-      final roomLiveRead = dashboard.indexOf('ref.watch(roomsProvider).value');
+      final roomLiveRead = dashboard.indexOf(
+        'final roomsState = ref.watch(roomsProvider);',
+      );
       final roomSeedFallback = dashboard.indexOf('startupSnapshot?.rooms');
       expect(taskLiveRead, greaterThanOrEqualTo(0));
       expect(taskLiveRead, lessThan(taskSeedFallback));
       expect(assetLiveRead, lessThan(assetSeedFallback));
       expect(roomLiveRead, lessThan(roomSeedFallback));
+      expect(dashboard, contains('waitingWithoutSnapshot'));
+      expect(dashboard, contains('dashboard-stale-data-warning'));
 
       expect(rooms, isNot(contains('_RoomsRenderData')));
       expect(rooms, isNot(contains('_roomsDataTimer')));

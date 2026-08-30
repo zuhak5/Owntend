@@ -26,6 +26,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   List<SearchResult> _results = const [];
   bool _loading = false;
   String? _error;
+  int _searchGeneration = 0;
 
   @override
   void initState() {
@@ -35,6 +36,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   @override
   void dispose() {
+    _searchGeneration += 1;
     _debounce?.cancel();
     _controller.removeListener(_scheduleSearch);
     _controller.dispose();
@@ -42,14 +44,22 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   }
 
   void _scheduleSearch() {
+    final generation = ++_searchGeneration;
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 220), () {
-      unawaited(_runSearch(_controller.text));
+      unawaited(_runSearch(_controller.text, generation));
     });
   }
 
-  Future<void> _runSearch(String rawQuery) async {
+  void _submitSearch(String rawQuery) {
+    _debounce?.cancel();
+    final generation = ++_searchGeneration;
+    unawaited(_runSearch(rawQuery, generation));
+  }
+
+  Future<void> _runSearch(String rawQuery, int generation) async {
     final query = rawQuery.trim();
+    if (generation != _searchGeneration) return;
     if (query.isEmpty) {
       if (mounted) {
         setState(() {
@@ -66,13 +76,21 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     });
     try {
       final results = await ref.read(searchRepositoryProvider).search(query);
-      if (!mounted) return;
+      if (!mounted ||
+          generation != _searchGeneration ||
+          query != _controller.text.trim()) {
+        return;
+      }
       setState(() {
         _results = results;
         _loading = false;
       });
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted ||
+          generation != _searchGeneration ||
+          query != _controller.text.trim()) {
+        return;
+      }
       setState(() {
         _error = localizedFailureMessage(
           context.l10n,
@@ -115,7 +133,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                       : null,
                   labelText: context.l10n.searchRoomsItemsTasksNotes,
                 ),
-                onSubmitted: _runSearch,
+                onSubmitted: _submitSearch,
               ),
               if (_loading) ...[
                 const SizedBox(height: HkSpacing.sm),

@@ -717,6 +717,93 @@ void main() {
       }
     });
 
+    testWidgets('item editor blocks zero watering intervals', (tester) async {
+      final settings = FakeSettingsRepository(onboardingCompletedValue: true);
+      addTearDown(settings.close);
+      final asset = makeThing('plant-validation', 'Plant', AssetType.plant);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            ...testOverrides(settings),
+            assetTagsProvider(asset.id).overrideWithValue(const AsyncData([])),
+          ],
+          child: MaterialApp(
+            theme: testLightTheme(),
+            home: Scaffold(
+              body: AssetEditorDialog(asset: asset, roomId: 'room_kitchen'),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final watering = find.widgetWithText(TextField, 'Watering interval');
+      await tester.ensureVisible(watering);
+      await tester.enterText(watering, '0');
+      await tester.pump();
+
+      expect(find.text('Use 1 or more'), findsOneWidget);
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.widgetWithText(FilledButton, 'Save item'),
+            )
+            .onPressed,
+        isNull,
+      );
+    });
+
+    testWidgets('task duration accepts zero and rejects negative values', (
+      tester,
+    ) async {
+      final now = DateTime(2026);
+      final settings = FakeSettingsRepository(onboardingCompletedValue: true);
+      addTearDown(settings.close);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [...testOverrides(settings, assets: makeThings(now))],
+          child: MaterialApp(
+            theme: testLightTheme(),
+            home: const Scaffold(
+              body: PlanEditorDialog(assetId: 'asset_dishwasher'),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Task title'),
+        'Check duration',
+      );
+      final duration = find.widgetWithText(TextField, 'Est. minutes');
+      await tester.ensureVisible(duration);
+      await tester.enterText(duration, '0');
+      await tester.pump();
+      expect(find.text('Use 0 or more'), findsNothing);
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.widgetWithText(FilledButton, 'Create task'),
+            )
+            .onPressed,
+        isNotNull,
+      );
+
+      await tester.enterText(duration, '-1');
+      await tester.pump();
+      expect(find.text('Use 0 or more'), findsOneWidget);
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.widgetWithText(FilledButton, 'Create task'),
+            )
+            .onPressed,
+        isNull,
+      );
+    });
+
     testWidgets('task editor can create and add another task', (tester) async {
       final maintenance = FakeMaintenanceRepository();
       final monetization = FakeMonetizationRepository();

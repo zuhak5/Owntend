@@ -74,6 +74,35 @@ void main() {
   });
 
   group('create backup button', () {
+    testWidgets('backup passphrases preserve intentional whitespace', (
+      tester,
+    ) async {
+      final repository = FakeBackupRepository();
+      await pumpBackupScreen(tester, repository: repository);
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Create backup'));
+      await tester.pumpAndSettle();
+      final dialog = find.byType(AlertDialog);
+      final fields = find.descendant(
+        of: dialog,
+        matching: find.byType(TextField),
+      );
+      expect(fields, findsNWidgets(2));
+      const passphrase = ' secret12 ';
+      await tester.enterText(fields.at(0), passphrase);
+      await tester.enterText(fields.at(1), passphrase);
+      await tester.tap(
+        find.descendant(
+          of: dialog,
+          matching: find.widgetWithText(FilledButton, 'Create backup'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(repository.lastExportPassphrase, passphrase);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets(
       'backup button stays inline and never flickers for fast success',
       (tester) async {
@@ -243,11 +272,77 @@ void main() {
 
   group('restore preview flow', () {
     testWidgets(
-      'backup screen previews a selected zip and opens restore dialog',
+      'restore preserves passphrase bytes and forwards the local-only choice',
+      (tester) async {
+        final repository = FakeBackupRepository(
+          requireRestorePassphrase: true,
+          preview: BackupPreview(
+            path: 'C:\\backups\\selected.owntend-backup',
+            createdAt: DateTime(2026, 8, 30, 9),
+            formatVersion: 1,
+            schemaVersion: 1,
+            backupSizeBytes: 1024,
+            databaseSizeBytes: 512,
+            fileCount: 0,
+            counts: const {},
+            includedData: const [],
+            excludedData: const [],
+            warnings: const [],
+          ),
+        );
+        final picker = FakeFilePicker('C:\\backups\\selected.owntend-backup');
+        final previousPicker = installFilePicker(picker);
+        addTearDown(() {
+          if (previousPicker != null) {
+            FilePickerPlatform.instance = previousPicker;
+          }
+        });
+        final sync = FakeCloudSyncRepository(
+          const SyncStatus(phase: SyncPhase.ready, enabled: true),
+        );
+        await pumpBackupScreen(tester, repository: repository, sync: sync);
+
+        await tester.tap(find.text('Choose Owntend backup'));
+        await tester.pumpAndSettle();
+        expect(find.text('Backup passphrase'), findsOneWidget);
+        const passphrase = ' secret12 ';
+        await tester.enterText(find.byType(TextField), passphrase);
+        await tester.tap(
+          find.descendant(
+            of: find.byType(AlertDialog),
+            matching: find.widgetWithText(FilledButton, 'Restore backup'),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final restoreButton = find.widgetWithText(
+          FilledButton,
+          'Restore this backup',
+        );
+        await tester.scrollUntilVisible(restoreButton, 300);
+        await tester.pumpAndSettle();
+        await tester.tap(restoreButton);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Restore locally and pause cloud backup'));
+        await tester.pumpAndSettle();
+
+        expect(repository.inspectedPassphrases, [null, passphrase]);
+        expect(repository.lastRestorePassphrase, passphrase);
+        expect(
+          repository.lastRestoreCloudDisposition,
+          RestoreCloudDisposition.localOnlyPaused,
+        );
+        expect(sync.disableCount, 1);
+        expect(sync.fullReconcileCount, 0);
+      },
+    );
+
+    testWidgets(
+      'backup screen accepts only an Owntend backup and opens restore dialog',
       (tester) async {
         final repository = FakeBackupRepository(
           preview: BackupPreview(
-            path: 'C:\\backups\\selected.zip',
+            path: 'C:\\backups\\selected.owntend-backup',
             createdAt: DateTime(2026, 7, 11, 8, 15),
             formatVersion: 2,
             schemaVersion: 12,
@@ -267,7 +362,7 @@ void main() {
             warnings: const ['This backup was created on another device.'],
           ),
         );
-        final picker = FakeFilePicker('C:\\backups\\selected.zip');
+        final picker = FakeFilePicker('C:\\backups\\selected.owntend-backup');
         final previousPicker = installFilePicker(picker);
         addTearDown(() {
           if (previousPicker != null) {
@@ -283,11 +378,15 @@ void main() {
           ),
         );
 
-        await tester.tap(find.text('Choose backup ZIP'));
+        await tester.tap(find.text('Choose Owntend backup'));
         await tester.pumpAndSettle();
 
         expect(picker.pickCount, 1);
-        expect(repository.inspectedPath, 'C:\\backups\\selected.zip');
+        expect(picker.lastAllowedExtensions, ['owntend-backup']);
+        expect(
+          repository.inspectedPath,
+          'C:\\backups\\selected.owntend-backup',
+        );
         expect(find.textContaining('Backup from'), findsOneWidget);
         expect(find.text('Tasks 4'), findsOneWidget);
         expect(find.text('Items 3'), findsOneWidget);

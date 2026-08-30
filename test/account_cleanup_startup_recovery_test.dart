@@ -84,4 +84,44 @@ void main() {
 
     expect(retries, 1);
   });
+
+  test('cloud bootstrap failures remain blocking until an explicit retry', () {
+    final source = File(
+      'lib/src/features/startup/presentation/startup_bootstrap.dart',
+    ).readAsStringSync();
+
+    expect(source, contains('_cloudInitializationFailure = error'));
+    expect(source, contains('cloudUnavailable: true'));
+    expect(source, contains('_retryCloudInitialization'));
+    expect(
+      source,
+      isNot(contains('_supabaseClient = client;\n      _ready = true')),
+    );
+  });
+
+  testWidgets('cloud startup failure surface exposes an explicit retry', (
+    tester,
+  ) async {
+    var retries = 0;
+
+    await tester.pumpWidget(
+      OwntendStartupFailure(
+        cloudUnavailable: true,
+        onRetry: () async {
+          retries++;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Cloud services are unavailable. Please try again later.'),
+      findsOneWidget,
+    );
+    expect(find.byType(FilledButton), findsOneWidget);
+    await tester.tap(find.byType(FilledButton));
+    await tester.pump();
+
+    expect(retries, 1);
+  });
 }

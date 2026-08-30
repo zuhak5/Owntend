@@ -79,7 +79,7 @@ void main() {
           ProviderScope(
             overrides: [
               ...testOverrides(settings),
-              localThemeClockProvider.overrideWithValue(AsyncData(now)),
+              localClockProvider.overrideWithValue(AsyncData(now)),
             ],
             child: const OwntendApp(),
           ),

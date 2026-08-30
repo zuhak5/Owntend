@@ -32,6 +32,7 @@ flutter gen-l10n
 - Do not expose raw backend error text directly to users.
 - Keep capability status distinct from permission outcome in user-facing wording: an application preference is not proof that Android delivery, location service, or exact-alarm access is effective.
 - Treat permission, account-deletion, ads/consent, backup, permanent deletion, and Undo strings as high-impact translations that require semantic review in both languages.
+- Authentication copy must describe Google sign-in as required for the production account/cloud path. Backup copy must name the encrypted `.owntend-backup` container and must not call it a ZIP.
 
 ## Controlled domain values
 

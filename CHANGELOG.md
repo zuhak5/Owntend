@@ -6,6 +6,37 @@ The current application version is defined only in `pubspec.yaml`. Released vers
 
 ## Unreleased
 
+- Aligned item/detail and maintenance/metadata validation across localized
+  editors, shared Dart domain validation, physical Drift `CHECK` constraints,
+  and authoritative PostgreSQL constraints. Charged RPC failures now use a
+  deterministic SQLSTATE-plus-token taxonomy: definitive rejections are
+  terminal and scrub retained payloads, while genuinely ambiguous transport or
+  status failures remain recoverable without persisting raw exception text.
+- Made Supabase initialization failure a blocking, explicitly retryable startup
+  state and restored auth-stream error propagation through Riverpod without
+  discarding the cached session. Added a localized Account-linked Sync Health
+  surface for privacy-safe retry/dismiss handling of failed mutations and
+  account-scoped keep-device/keep-cloud conflict resolution.
+- Hardened photo import by decoding actual content off the UI isolate, baking
+  orientation, bounding decoded dimensions and byte budgets, and committing
+  only a normalized JPEG after storage succeeds. Corrupt, renamed, oversized,
+  and storage-failed inputs no longer create photo metadata.
+- Made Home, room, item, and calendar provider loading/error states explicit;
+  Home retains a labeled last-good startup snapshot when a live refresh fails.
+  A shared injectable local clock now updates date-dependent presentation on
+  minute boundaries and application resume, including calendar rollover at
+  midnight. Search discards out-of-order completions from older queries.
+- Corrected English and Arabic account/backup copy to describe required Google
+  sign-in and encrypted `.owntend-backup` files, restricted restore picking to
+  that canonical extension, and corrected the VersionDeck launch checklist to
+  distinguish workflow publication mode from control-file publication status.
+
+### Restore intent and passphrase hardening (2026-08-30)
+
+- Made the restore cloud disposition an explicit service contract and durable journal field. A local-only choice now wins even for a fully hydrated bound account, survives restart, and cannot be bypassed by startup or generic sync enable; explicit resume atomically binds the current account and journals the restored snapshot before hydration.
+- Moved post-restore pause/requeue ownership into the restore service, removed duplicate presentation mutations, and added focused coverage for local/update-cloud prerequisites, crash recovery, startup pause preservation, and atomic resume.
+- Preserved passphrases byte-for-byte instead of trimming intentional whitespace, limited restore-passphrase retention to the active operation, and moved text-controller cleanup into route-owned dialog lifecycles.
+
 ### Android release identity (2026-08-29)
 
 - Advanced the protected production release identity to `1.0.0+9` so the sync, database-contract, hydration, and observability fixes ship as a new immutable Shorebird release rather than attempting to overwrite the already-published Build 8 artifact.

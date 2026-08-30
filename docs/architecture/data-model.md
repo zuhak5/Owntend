@@ -92,6 +92,8 @@ The Flutter client may cache representations for UX, but it must not become the 
 
 Media can exist locally, in backup archives, and in private Supabase Storage. Metadata and object lifecycle must stay coordinated. Deletion and account cleanup should tolerate retries and partial failures without exposing another user's objects.
 
+`asset_photos.relative_path` points only to repository-controlled local content. New imports are actual-content decoded, orientation-baked, dimension bounded, and normalized to JPEG before the row is inserted. A source extension or picker MIME hint is not authoritative. A decode, resource-budget, encoded-size, or filesystem failure leaves no photo row, while a later database failure removes the newly written file.
+
 ## Schema-change procedure
 
 For every new or changed field:
@@ -113,6 +115,14 @@ All static schema objects — tables, CHECK constraints, indexes, the FTS cache,
 
 Structural invariants enforced by the schema itself include:
 
+- Asset names, placement, notes, specialized device/pet/plant/safety details,
+  tag names, maintenance titles/instructions, and maintenance metadata use the
+  same maximum lengths as the authoritative Supabase schema. Plant watering
+  and safety-test intervals are positive when present; estimated task duration
+  and reminder lead time are non-negative. Presentation formatters and
+  repository validators reuse `InputValidationLimits`, while physical SQLite
+  `CHECK` constraints protect imports and raw writes that bypass generated
+  Drift companions.
 - Outbox operation/state/attempt/generation domains (`upsert`/`delete` trigger operations plus the durable `execute` completion journal; states `pending`, `inFlight`, `conflictRecovery`, `failedVisible`, `conflict`; attempts use `-1` as the terminal sentinel; generations start at 1).
 - Cursor sequence/generation domains and singleton runtime/account rows with all-or-nothing lease pairing.
 - Conflict resolution and notification-reconciliation reason domains.

@@ -52,13 +52,14 @@ class MoreScreen extends ConsumerWidget {
               hk_ui.ToolTile(
                 icon: Symbols.cloud_sync_rounded,
                 title: context.l10n.accountAndCloudSync,
-                subtitle: context.l10n.optionalGoogleSignInAndPrivateDeviceSync,
+                subtitle: context.l10n.requiredGoogleSignInAndPrivateDeviceSync,
                 onTap: () => context.push('/account'),
               ),
               hk_ui.ToolTile(
                 icon: Symbols.cloud_upload_rounded,
                 title: context.l10n.backupAndRestore,
-                subtitle: context.l10n.createShareOrRestoreLocalZipBackups,
+                subtitle:
+                    context.l10n.createShareOrRestoreEncryptedOwntendBackups,
                 onTap: () => context.push('/backup'),
               ),
               hk_ui.ToolTile(

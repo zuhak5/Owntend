@@ -5,17 +5,19 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../domain/contracts.dart';
 import '../supabase/secure_supabase_storage.dart';
 import '../sync/local_sync_store.dart';
 import '../utils/redacting_logger.dart';
 import 'sidecar_registry.dart';
 
-/// Journal format 2 stores advisory progress only. Whether the SQLite import
+/// Journal format 3 stores advisory progress and the explicit user-authorized
+/// cloud disposition. Whether the SQLite import
 /// actually committed is proven by reading the restore-generation marker that
 /// was written inside the import transaction itself
 /// (`LocalSyncStore.restoreGenerationSettingKey == journalId`). A pre-commit
 /// journal label can therefore never claim an uncommitted database.
-const int kCurrentRestoreJournalVersion = 2;
+const int kCurrentRestoreJournalVersion = 3;
 
 /// Canonical media roots restored as one generation.
 const List<String> kRestoreMediaRoots = ['photos', 'profile', 'cloud_media'];
@@ -45,7 +47,7 @@ class RestoreJournalEntry {
     this.safetyBackupHash,
     this.mediaToken,
     required this.phase,
-    required this.updateCloudIntent,
+    required this.cloudDisposition,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -59,7 +61,7 @@ class RestoreJournalEntry {
   final String? safetyBackupHash;
   final String? mediaToken;
   final RestorePhase phase;
-  final bool updateCloudIntent;
+  final RestoreCloudDisposition cloudDisposition;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -68,7 +70,7 @@ class RestoreJournalEntry {
     String? safetyBackupPath,
     String? safetyBackupHash,
     String? mediaToken,
-    bool? updateCloudIntent,
+    RestoreCloudDisposition? cloudDisposition,
     DateTime? updatedAt,
   }) {
     return RestoreJournalEntry(
@@ -81,7 +83,7 @@ class RestoreJournalEntry {
       safetyBackupHash: safetyBackupHash ?? this.safetyBackupHash,
       mediaToken: mediaToken ?? this.mediaToken,
       phase: phase ?? this.phase,
-      updateCloudIntent: updateCloudIntent ?? this.updateCloudIntent,
+      cloudDisposition: cloudDisposition ?? this.cloudDisposition,
       createdAt: createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -97,7 +99,7 @@ class RestoreJournalEntry {
     if (safetyBackupHash != null) 'safety_backup_hash': safetyBackupHash,
     if (mediaToken != null) 'media_token': mediaToken,
     'phase': phase.name,
-    'update_cloud_intent': updateCloudIntent,
+    'cloud_disposition': cloudDisposition.name,
     'created_at': createdAt.toUtc().toIso8601String(),
     'updated_at': updatedAt.toUtc().toIso8601String(),
   };
@@ -113,7 +115,9 @@ class RestoreJournalEntry {
       safetyBackupHash: json['safety_backup_hash'] as String?,
       mediaToken: json['media_token'] as String?,
       phase: RestorePhase.values.byName(json['phase'] as String),
-      updateCloudIntent: json['update_cloud_intent'] as bool? ?? false,
+      cloudDisposition: RestoreCloudDisposition.values.byName(
+        json['cloud_disposition'] as String,
+      ),
       createdAt: DateTime.parse(json['created_at'] as String),
       updatedAt: DateTime.parse(json['updated_at'] as String),
     );
@@ -133,7 +137,7 @@ class RestoreJournalStore {
             aOptions: owntendAndroidSecureStorageOptions,
           );
 
-  static const _activeKey = 'owntend_active_restore_journal_v2';
+  static const _activeKey = 'owntend_active_restore_journal_v3';
 
   final FlutterSecureStorage _storage;
 
@@ -408,7 +412,7 @@ class RestoreJournalResolver {
     final account = await store.existingAccount();
     final boundUserId = account?.boundUserId;
     if (entry.accountScope == 'localOnly') {
-      if (entry.updateCloudIntent) {
+      if (entry.cloudDisposition == RestoreCloudDisposition.updateCloud) {
         throw StateError(
           'Restore recovery cloud intent is inconsistent with local-only scope.',
         );
@@ -420,7 +424,8 @@ class RestoreJournalResolver {
         'Restore recovery is blocked because local data is bound to a different account.',
       );
     }
-    if (entry.updateCloudIntent && boundUserId != entry.accountScope) {
+    if (entry.cloudDisposition == RestoreCloudDisposition.updateCloud &&
+        boundUserId != entry.accountScope) {
       throw StateError(
         'Restore recovery cannot update cloud data without the expected local account binding.',
       );
@@ -434,7 +439,7 @@ class RestoreJournalResolver {
         'Restore recovery requires the local synchronization store after database commit.',
       );
     }
-    if (entry.updateCloudIntent) {
+    if (entry.cloudDisposition == RestoreCloudDisposition.updateCloud) {
       await store.enqueueRestoreSnapshot(DateTime.now());
     } else {
       await store.pauseAfterLocalRestore();

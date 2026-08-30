@@ -87,6 +87,23 @@ Test:
 - Statement-stable RLS helpers such as `auth.uid()` and `current_setting()` use init-plan-safe `SELECT` wrapping when their result does not depend on the current row.
 - The effective authenticated UPDATE-column set for every synchronized table matches the client update allowlist exactly, table-wide UPDATE remains absent, server metadata advances through its trigger, and protected/cross-user writes fail closed.
 
+## Authoritative input and RPC error contract
+
+Asset/detail and maintenance/metadata size and numeric constraints are enforced
+at PostgreSQL even when a caller bypasses Flutter. The matching client limits
+live in `InputValidationLimits`; Drift installs physical SQLite `CHECK`
+constraints in addition to repository validation. The RPC implementations wrap
+constraint and cast failures into stable `22023` tokens such as
+`INVALID_ASSET_PAYLOAD` and `INVALID_TASK_PAYLOAD`.
+
+Flutter branches only on an expected SQLSTATE plus an exact allowlisted server
+token. A mutation RPC response that proves validation, authentication,
+not-found, conflict, or missing-wallet rejection is terminal. A network error,
+an unrecognized PostgREST error, or a failed status lookup stays ambiguous and
+is recovered through the idempotent operation journal. The journal stores only
+bounded technical codes. [`0036_input_validation_contract.test.sql`](../../supabase/tests/database/0036_input_validation_contract.test.sql)
+asserts maximum/max-plus-one, zero/negative, and stable RPC rejection behavior.
+
 ## Generic sync UPDATE ACL rollout
 
 The client serializer, column privileges, pgTAP matrix, and real PostgREST

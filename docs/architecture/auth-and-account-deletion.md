@@ -15,6 +15,8 @@ The Flutter authentication layer is responsible for:
 
 A successful Google UI interaction is not sufficient if the Supabase session cannot be established.
 
+Supabase client initialization is a blocking deferred-startup prerequisite. Failure presents a localized retry surface and does not publish the application as ready with cloud functionality silently absent. Once initialized, authentication stream failures propagate through `authStateProvider` as Riverpod error state; cached repository session state remains available to continuity-sensitive consumers, and a stream transport error is never converted into a signed-out event.
+
 ## Sign-out sequence
 
 Ordinary user sign-out is deliberately **non-destructive**. It does not clear the local database, unlink the stored account binding, or reuse the account-deletion cleanup path. Production authentication is wrapped by `AccountSafetyAuthRepository`, which requires an `AccountSafetyBarrier` before it delegates to Supabase/Google sign-out.

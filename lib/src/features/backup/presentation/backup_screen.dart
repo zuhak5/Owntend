@@ -4,8 +4,6 @@ import '../../monetization/monetization.dart';
 import '../../../ui/components.dart' as hk_ui;
 import '../../../ui/presentation_support.dart';
 
-enum _RestoreCloudChoice { localOnlyPause, updateCloud }
-
 class BackupScreen extends ConsumerStatefulWidget {
   const BackupScreen({super.key});
 
@@ -103,82 +101,10 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
 
   /// Returns null when cancelled, an empty string for a device-protected
   /// backup, or the chosen passphrase.
-  Future<String?> _promptForExportPassphrase() async {
-    final controller = TextEditingController();
-    final confirmController = TextEditingController();
-    return showDialog<String>(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (dialogContext, setDialogState) => AlertDialog(
-          title: Text(context.l10n.backupPassphraseDialogTitle),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                TextField(
-                  controller: controller,
-                  obscureText: true,
-                  autofillHints: const [AutofillHints.newPassword],
-                  decoration: InputDecoration(
-                    labelText: context.l10n.backupPassphraseLabel,
-                    helperText: context.l10n.backupPassphraseHelp,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: confirmController,
-                  obscureText: true,
-                  autofillHints: const [AutofillHints.newPassword],
-                  decoration: InputDecoration(
-                    labelText: context.l10n.backupPassphraseConfirmLabel,
-                    errorText: _passphraseError(
-                      controller.text,
-                      confirmController.text,
-                    ),
-                  ),
-                  onChanged: (_) => setDialogState(() {}),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: Text(MaterialLocalizations.of(context).cancelButtonLabel),
-            ),
-            FilledButton(
-              onPressed: () {
-                final error = _passphraseError(
-                  controller.text,
-                  confirmController.text,
-                );
-                if (error != null) {
-                  setDialogState(() {});
-                  return;
-                }
-                Navigator.of(dialogContext).pop(controller.text.trim());
-              },
-              child: Text(context.l10n.createBackup),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  String? _passphraseError(String passphrase, String confirm) {
-    if (passphrase.isEmpty) {
-      return null;
-    }
-    if (passphrase.length < 8) {
-      return context.l10n.backupPassphraseTooShort;
-    }
-    if (passphrase != confirm) {
-      return context.l10n.backupPassphraseMismatch;
-    }
-    return null;
-  }
+  Future<String?> _promptForExportPassphrase() => showDialog<String>(
+    context: context,
+    builder: (_) => const _ExportPassphraseDialog(),
+  );
 
   Future<void> _exportBackup() async {
     if (_busy) {
@@ -280,7 +206,7 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
   Future<void> _chooseRestoreBackup() async {
     final result = await FilePickerPlatform.instance.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['owntend-backup', 'zip'],
+      allowedExtensions: ['owntend-backup'],
     );
     final path = result.isNotEmpty ? result.first.path : null;
     if (path == null) {
@@ -333,36 +259,10 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
     }
   }
 
-  Future<String?> _promptForRestorePassphrase() async {
-    final controller = TextEditingController();
-    return showDialog<String>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(context.l10n.backupEnterPassphraseTitle),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          obscureText: true,
-          autofillHints: const [AutofillHints.password],
-          onSubmitted: (value) => Navigator.of(dialogContext).pop(value.trim()),
-          decoration: InputDecoration(
-            labelText: context.l10n.backupPassphraseLabel,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: Text(MaterialLocalizations.of(context).cancelButtonLabel),
-          ),
-          FilledButton(
-            onPressed: () =>
-                Navigator.of(dialogContext).pop(controller.text.trim()),
-            child: Text(context.l10n.restoreBackup),
-          ),
-        ],
-      ),
-    );
-  }
+  Future<String?> _promptForRestorePassphrase() => showDialog<String>(
+    context: context,
+    builder: (_) => const _RestorePassphraseDialog(),
+  );
 
   Future<void> _confirmRestore() async {
     final preview = _restorePreview;
@@ -371,7 +271,7 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
     }
     final syncStatus = await ref.read(cloudSyncRepositoryProvider).status();
     if (!mounted) return;
-    final choice = await showDialog<_RestoreCloudChoice>(
+    final choice = await showDialog<RestoreCloudDisposition>(
       context: context,
       builder: (context) => AlertDialog(
         icon: const _BackupIconBadge(
@@ -415,12 +315,14 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
           if (syncStatus.enabled)
             TextButton(
               onPressed: () =>
-                  Navigator.of(context).pop(_RestoreCloudChoice.updateCloud),
+                  Navigator.of(context)
+                      .pop(RestoreCloudDisposition.updateCloud),
               child: Text(context.l10n.restoreAndUpdateCloudBackup),
             ),
           FilledButton(
             onPressed: () =>
-                Navigator.of(context).pop(_RestoreCloudChoice.localOnlyPause),
+                Navigator.of(context)
+                    .pop(RestoreCloudDisposition.localOnlyPaused),
             child: Text(
               syncStatus.enabled
                   ? context.l10n.restoreLocallyAndPauseCloudBackup
@@ -430,30 +332,37 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
         ],
       ),
     );
-    if (choice != null) {
-      await _restoreSelectedBackup(preview, choice);
+    if (choice == null) {
+      if (mounted) {
+        setState(() {
+          _restorePreview = null;
+          _restorePassphrase = null;
+        });
+      }
+      return;
     }
+    await _restoreSelectedBackup(preview, choice);
   }
 
   Future<void> _restoreSelectedBackup(
     BackupPreview preview,
-    _RestoreCloudChoice choice,
+    RestoreCloudDisposition choice,
   ) async {
     _setBusy(context.l10n.restoringBackup);
     try {
-      if (choice == _RestoreCloudChoice.updateCloud) {
+      if (choice == RestoreCloudDisposition.updateCloud) {
         await ref.read(cloudSyncRepositoryProvider).syncNow();
       } else {
         await ref.read(cloudSyncRepositoryProvider).disable();
       }
       await ref
           .read(backupRepositoryProvider)
-          .restoreBackup(preview.path, passphrase: _restorePassphrase);
-      final localStore = ref.read(localSyncStoreProvider);
-      if (choice == _RestoreCloudChoice.localOnlyPause) {
-        await localStore?.pauseAfterLocalRestore();
-      } else {
-        await localStore?.enqueueRestoreSnapshot(DateTime.now());
+          .restoreBackup(
+            preview.path,
+            passphrase: _restorePassphrase,
+            cloudDisposition: choice,
+          );
+      if (choice == RestoreCloudDisposition.updateCloud) {
         await ref.read(cloudSyncRepositoryProvider).fullReconcile();
       }
       // WP-005 (F-007): the restore service publishes the database epoch on
@@ -469,7 +378,10 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
       if (!mounted) {
         return;
       }
-      setState(() => _restorePreview = null);
+      setState(() {
+        _restorePreview = null;
+        _restorePassphrase = null;
+      });
       hk_ui.showToast(context, content: Text(context.l10n.backupRestored));
     } catch (error) {
       if (mounted) {
@@ -484,7 +396,13 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
       }
     } finally {
       if (mounted) {
+        setState(() {
+          _restorePreview = null;
+          _restorePassphrase = null;
+        });
         _clearBusy();
+      } else {
+        _restorePassphrase = null;
       }
     }
   }
@@ -531,6 +449,7 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
   @override
   void dispose() {
     _backupLoadingTimer?.cancel();
+    _restorePassphrase = null;
     super.dispose();
   }
 
@@ -556,6 +475,140 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
     return context.l10n.backupFailedAt(
       action,
       _formatDate(context, status.updatedAt),
+    );
+  }
+}
+
+class _ExportPassphraseDialog extends StatefulWidget {
+  const _ExportPassphraseDialog();
+
+  @override
+  State<_ExportPassphraseDialog> createState() =>
+      _ExportPassphraseDialogState();
+}
+
+class _ExportPassphraseDialogState extends State<_ExportPassphraseDialog> {
+  final _passphraseController = TextEditingController();
+  final _confirmController = TextEditingController();
+
+  @override
+  void dispose() {
+    _passphraseController.clear();
+    _confirmController.clear();
+    _passphraseController.dispose();
+    _confirmController.dispose();
+    super.dispose();
+  }
+
+  String? _validationError() {
+    final passphrase = _passphraseController.text;
+    if (passphrase.isEmpty) return null;
+    if (passphrase.length < 8) {
+      return context.l10n.backupPassphraseTooShort;
+    }
+    if (passphrase != _confirmController.text) {
+      return context.l10n.backupPassphraseMismatch;
+    }
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(context.l10n.backupPassphraseDialogTitle),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              controller: _passphraseController,
+              obscureText: true,
+              autofillHints: const [AutofillHints.newPassword],
+              decoration: InputDecoration(
+                labelText: context.l10n.backupPassphraseLabel,
+                helperText: context.l10n.backupPassphraseHelp,
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _confirmController,
+              obscureText: true,
+              autofillHints: const [AutofillHints.newPassword],
+              decoration: InputDecoration(
+                labelText: context.l10n.backupPassphraseConfirmLabel,
+                errorText: _validationError(),
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(MaterialLocalizations.of(context).cancelButtonLabel),
+        ),
+        FilledButton(
+          onPressed: () {
+            if (_validationError() != null) {
+              setState(() {});
+              return;
+            }
+            Navigator.of(context).pop(_passphraseController.text);
+          },
+          child: Text(context.l10n.createBackup),
+        ),
+      ],
+    );
+  }
+}
+
+class _RestorePassphraseDialog extends StatefulWidget {
+  const _RestorePassphraseDialog();
+
+  @override
+  State<_RestorePassphraseDialog> createState() =>
+      _RestorePassphraseDialogState();
+}
+
+class _RestorePassphraseDialogState extends State<_RestorePassphraseDialog> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.clear();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() => Navigator.of(context).pop(_controller.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(context.l10n.backupEnterPassphraseTitle),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        obscureText: true,
+        autofillHints: const [AutofillHints.password],
+        onSubmitted: (_) => _submit(),
+        decoration: InputDecoration(
+          labelText: context.l10n.backupPassphraseLabel,
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(MaterialLocalizations.of(context).cancelButtonLabel),
+        ),
+        FilledButton(
+          onPressed: _submit,
+          child: Text(context.l10n.restoreBackup),
+        ),
+      ],
     );
   }
 }
@@ -690,7 +743,8 @@ class _BackupCreatePanel extends StatelessWidget {
             icon: Symbols.backup_rounded,
             color: HkColors.green,
             title: context.l10n.createBackup,
-            subtitle: context.l10n.backupsAreSavedLocallyAsPrivateZipFiles,
+            subtitle:
+                context.l10n.backupsAreSavedLocallyAsEncryptedOwntendFiles,
           ),
           const SizedBox(height: HkSpacing.md),
           LayoutBuilder(
@@ -855,7 +909,7 @@ class _BackupRestorePanel extends StatelessWidget {
             child: OutlinedButton.icon(
               onPressed: busy ? null : onChoose,
               icon: const Icon(Symbols.upload_file_rounded),
-              label: Text(context.l10n.chooseBackupZip),
+              label: Text(context.l10n.chooseOwntendBackup),
             ),
           ),
           if (preview != null) ...[

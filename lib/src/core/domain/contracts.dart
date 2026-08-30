@@ -264,10 +264,21 @@ abstract interface class BackupRepository {
   Future<BackupState> backupState();
   Future<void> setAutomaticBackupsEnabled(bool enabled);
   Future<BackupPreview> inspectBackup(String backupPath, {String? passphrase});
-  Future<void> restoreBackup(String backupPath, {String? passphrase});
+  Future<void> restoreBackup(
+    String backupPath, {
+    String? passphrase,
+    required RestoreCloudDisposition cloudDisposition,
+  });
 }
 
 enum BackupTrigger { manual, automatic, preRestore }
+
+/// The user-authorized cloud behavior for one manual restore transaction.
+///
+/// This is required input rather than inferred from the current sync state so
+/// process-death recovery can honor the exact choice made before local data is
+/// replaced.
+enum RestoreCloudDisposition { localOnlyPaused, updateCloud }
 
 class BackupState {
   const BackupState({this.lastBackup, this.automaticBackupsEnabled = true});
@@ -371,11 +382,19 @@ abstract interface class BackupService {
     BackupTrigger trigger = BackupTrigger.manual,
     String? passphrase,
   });
-  Future<void> restoreZip(String backupPath, {String? passphrase});
+  Future<void> restoreZip(
+    String backupPath, {
+    String? passphrase,
+    required RestoreCloudDisposition cloudDisposition,
+  });
 }
 
 abstract interface class RestoreService {
-  Future<void> restore(String backupPath, {String? passphrase});
+  Future<void> restore(
+    String backupPath, {
+    String? passphrase,
+    required RestoreCloudDisposition cloudDisposition,
+  });
 }
 
 abstract interface class CrashReporter {

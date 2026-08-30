@@ -53,6 +53,14 @@ void main() {
       final jsonString = item.toString();
       expect(jsonString.contains('private information'), isFalse);
       expect(jsonString.contains('comp-1234-uuid'), isFalse);
+
+      final visible = (await store.listFailedVisibleMutations()).single;
+      expect(visible.entity, 'maintenance_completion');
+      expect(visible.recordKey, 'comp-1234-uuid');
+      expect(
+        visible.diagnosticDetails.toString(),
+        isNot(contains('comp-1234-uuid')),
+      );
     });
 
     test('resolveFailedMutation dismisses only the selected row and leaves others intact', () async {

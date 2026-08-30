@@ -5,6 +5,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:owntend/src/core/database/app_database.dart';
 import 'package:owntend/src/core/sync/local_sync_store.dart';
 
+String _text(int length, String value) =>
+    List<String>.filled(length, value).join();
+
 void main() {
   group('AppDatabase production v1 schema', () {
     late File dbFile;
@@ -230,6 +233,76 @@ void main() {
           "INSERT INTO maintenance_plans("
           "id, asset_id, title, recurrence_interval, recurrence_unit, priority, next_due_date"
           ") VALUES ('bad-plan', 'asset-a', 'Bad', 1, 'months', 'medium', NULL)",
+        ),
+        throwsA(anything),
+      );
+    });
+
+    test('mirrors authoritative detail and metadata boundaries locally', () async {
+      await db.customStatement(
+        "INSERT INTO areas(id, name, kind) VALUES ('area-a', 'Home', 'indoor')",
+      );
+      await db.customStatement(
+        "INSERT INTO rooms(id, area_id, name) VALUES ('room-a', 'area-a', 'Kitchen')",
+      );
+      await db.customStatement(
+        "INSERT INTO assets(id, name, asset_type, room_id) "
+        "VALUES ('asset-a', 'Plant', 'plant', 'room-a')",
+      );
+      await db.customStatement(
+        "INSERT INTO plant_details(asset_id, species, watering_interval_days) "
+        "VALUES ('asset-a', '${_text(200, 's')}', 1)",
+      );
+      await db.customStatement(
+        "INSERT INTO safety_details(asset_id, safety_type, test_interval_days) "
+        "VALUES ('asset-a', 'Alarm', 1)",
+      );
+      await db.customStatement(
+        "INSERT INTO maintenance_plans("
+        "id, asset_id, title, recurrence_interval, recurrence_unit, priority, next_due_date"
+        ") VALUES ('plan-a', 'asset-a', 'Water', 1, 'days', 'medium', 1)",
+      );
+      await db.customStatement(
+        "INSERT INTO maintenance_plan_metadata("
+        "plan_id, estimated_duration_minutes, required_materials_json"
+        ") VALUES ('plan-a', 0, '${_text(4000, 'm')}')",
+      );
+
+      for (final value in [0, -1]) {
+        await expectLater(
+          db.customStatement(
+            'UPDATE plant_details SET watering_interval_days = $value '
+            "WHERE asset_id = 'asset-a'",
+          ),
+          throwsA(anything),
+        );
+        await expectLater(
+          db.customStatement(
+            'UPDATE safety_details SET test_interval_days = $value '
+            "WHERE asset_id = 'asset-a'",
+          ),
+          throwsA(anything),
+        );
+      }
+      await expectLater(
+        db.customStatement(
+          "UPDATE plant_details SET species = '${_text(201, 's')}' "
+          "WHERE asset_id = 'asset-a'",
+        ),
+        throwsA(anything),
+      );
+      await expectLater(
+        db.customStatement(
+          "UPDATE maintenance_plan_metadata "
+          "SET required_materials_json = '${_text(4001, 'm')}' "
+          "WHERE plan_id = 'plan-a'",
+        ),
+        throwsA(anything),
+      );
+      await expectLater(
+        db.customStatement(
+          "UPDATE maintenance_plan_metadata SET estimated_duration_minutes = -1 "
+          "WHERE plan_id = 'plan-a'",
         ),
         throwsA(anything),
       );

@@ -352,7 +352,7 @@ class _OwntendAppState extends ConsumerState<OwntendApp>
         ref.watch(timeOfDayThemeEnabledProvider).value ??
         startupTheme.timeOfDayEnabled;
     final themeNow =
-        ref.watch(localThemeClockProvider).value ?? DateTime.now().toLocal();
+        ref.watch(localClockProvider).value ?? ref.read(localNowProvider)();
     final themeMode = effectiveThemeMode(
       themePreference,
       timeOfDayThemeEnabled: timeOfDayThemeEnabled,

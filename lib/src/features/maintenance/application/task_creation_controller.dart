@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../core/domain/input_validation.dart';
 import '../../../core/domain/models.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../core/sync/sync_providers.dart';
@@ -135,6 +136,14 @@ class TaskCreationController extends ValueNotifier<TaskCreationState> {
     value = value.copyWith(isSubmitting: true);
 
     try {
+      validateMaintenancePlanInput(
+        assetId: assetId,
+        title: title,
+        instructions: instructions,
+        recurrence: recurrence,
+        reminderDaysBefore: reminderDaysBefore,
+        metadata: metadata,
+      );
       final monetizationRepo = ref.read(monetizationRepositoryProvider);
       final localSyncStore = ref.read(localSyncStoreProvider);
       final operationStore = ref.read(taskCreationOperationStoreProvider);
@@ -263,6 +272,7 @@ class TaskCreationController extends ValueNotifier<TaskCreationState> {
           await operationStore.saveOperation(
             operation.copyWith(
               state: TaskCreationOperationState.permanentRejected,
+              requestPayload: const {},
               lastErrorCode: 'operation_id_reused',
               lastErrorMessage: 'OPERATION_ID_REUSED',
             ),
@@ -271,10 +281,24 @@ class TaskCreationController extends ValueNotifier<TaskCreationState> {
             'OPERATION_ID_REUSED',
             code: TaskCreationFailureCode.operationIdReused,
           );
-        } catch (e) {
+        } on AuthoritativeRpcRejectionException catch (error) {
+          await operationStore.saveOperation(
+            operation.copyWith(
+              state: TaskCreationOperationState.permanentRejected,
+              requestPayload: const {},
+              lastErrorCode: error.journalCode,
+              lastErrorMessage: error.serverCode,
+            ),
+          );
+          throw TaskCreationFailure(
+            error.journalCode,
+            code: _taskFailureCodeFor(error.code),
+          );
+        } catch (_) {
           final updatedOp = operation.copyWith(
             state: TaskCreationOperationState.outcomeUnknown,
-            lastErrorMessage: e.toString(),
+            lastErrorCode: 'transport_or_unknown',
+            lastErrorMessage: 'TRANSPORT_OR_UNKNOWN',
           );
           await operationStore.saveOperation(updatedOp);
           throw const TaskCreationFailure(
@@ -315,6 +339,15 @@ class TaskCreationController extends ValueNotifier<TaskCreationState> {
         value = TaskCreationState(isSubmitting: false, completedPlanId: planId);
       }
       return true;
+    } on InputValidationException catch (error) {
+      value = value.copyWith(
+        isSubmitting: false,
+        failure: TaskCreationFailure(
+          error.code,
+          code: TaskCreationFailureCode.invalidPayload,
+        ),
+      );
+      return false;
     } on TaskCreationFailure catch (failure) {
       value = value.copyWith(isSubmitting: false, failure: failure);
       return false;
@@ -365,3 +398,17 @@ class TaskCreationController extends ValueNotifier<TaskCreationState> {
       operation.state == TaskCreationOperationState.submitting ||
       operation.state == TaskCreationOperationState.outcomeUnknown;
 }
+
+TaskCreationFailureCode _taskFailureCodeFor(
+  AuthoritativeRpcRejectionCode code,
+) => switch (code) {
+  AuthoritativeRpcRejectionCode.invalidPayload =>
+    TaskCreationFailureCode.invalidPayload,
+  AuthoritativeRpcRejectionCode.unauthenticated =>
+    TaskCreationFailureCode.unauthenticated,
+  AuthoritativeRpcRejectionCode.entityNotFound =>
+    TaskCreationFailureCode.assetNotFound,
+  AuthoritativeRpcRejectionCode.conflict => TaskCreationFailureCode.serverError,
+  AuthoritativeRpcRejectionCode.walletUnavailable =>
+    TaskCreationFailureCode.serverError,
+};

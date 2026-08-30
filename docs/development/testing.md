@@ -213,6 +213,25 @@ while zero-balance asset creation succeeds with a zero charge and no negative
 ledger entry. Widget coverage proves the task-shortage dialog remains visible
 with inline recovery status when rewarded ads are unavailable.
 
+Input-boundary and authoritative error-taxonomy coverage:
+
+```powershell
+flutter test --no-pub `
+  test/input_validation_test.dart `
+  test/database_schema_test.dart `
+  test/wallet_error_taxonomy_test.dart `
+  test/asset_creation_controller_test.dart `
+  test/task_creation_insufficient_points_test.dart
+
+supabase test db --local `
+  supabase/tests/database/0036_input_validation_contract.test.sql
+```
+
+These tests cover accepted maxima, max-plus-one rejection, zero/negative
+numeric boundaries, physical SQLite and PostgreSQL constraints, definitive
+terminal journal states, payload scrubbing, and privacy-safe ambiguous failure
+records.
+
 Authentication/deletion client contracts:
 
 ```powershell
@@ -220,6 +239,44 @@ flutter test --no-pub test/native_google_sign_in_test.dart
 flutter test --no-pub test/supabase_auth_repository_test.dart
 flutter test --no-pub test/supabase_android_config_test.dart
 ```
+
+Auth-stream, cloud-startup, and Sync Health recovery contracts:
+
+```powershell
+flutter test --no-pub --concurrency=1 --timeout 3m `
+  test/auth_state_provider_test.dart `
+  test/account_cleanup_startup_recovery_test.dart `
+  test/failed_mutation_diagnostics_test.dart `
+  test/sync_conflict_preservation_test.dart `
+  test/widgets/sync_health_screen_test.dart `
+  test/account_screen_test.dart
+```
+
+This matrix proves auth errors remain observable, cloud initialization failure
+has an explicit retry surface, failed mutation summaries omit record keys from
+diagnostics and UI, and keep-device/keep-cloud resolution stays explicit and
+account scoped.
+
+Photo-import, asynchronous-screen, local-clock, search-ordering, and canonical
+backup-picker contracts:
+
+```powershell
+flutter test --no-pub --concurrency=1 --timeout 3m `
+  test/photo_import_service_test.dart `
+  test/local_clock_test.dart `
+  test/room_route_state_and_editor_guard_test.dart `
+  test/widgets/home_shell_header_test.dart `
+  test/widgets/search_screen_ordering_test.dart `
+  test/widgets/statistics_calendar_trash_test.dart `
+  test/widgets/backup_restore_screens_test.dart
+```
+
+These tests cover real content decoding and normalized JPEG budgets, no metadata
+after storage failure, loading/error/not-found separation, labeled last-good
+Home data, midnight and resume clock updates, superseded search responses, and
+the `.owntend-backup` picker allowlist. They do not establish low-storage or
+performance behavior on a physical Android device, OS time-zone delivery,
+hosted synchronization, or protected release/publication evidence.
 
 Edge Functions, public browser deletion, and release/static contracts:
 

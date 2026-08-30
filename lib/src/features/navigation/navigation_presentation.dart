@@ -17,6 +17,7 @@ import 'app_navigation.dart';
 import '../search/presentation/search_screen.dart';
 import '../../ui/widgets/location_picker_sheet.dart';
 import '../settings/presentation/settings_screen.dart';
+import '../settings/presentation/sync_health_screen.dart';
 import '../statistics/presentation/statistics_screen.dart';
 import '../trash/presentation/trash_screen.dart';
 

@@ -494,6 +494,35 @@ void main() {
     },
   );
 
+  test(
+    'restore resume atomically binds the account and journals the snapshot',
+    () async {
+      final repository = DriftAssetRepository(db);
+      await _seedTestAreas(db, store);
+      final roomId = await repository.saveRoom(
+        areaId: 'area_first_floor',
+        name: 'Restored room to upload',
+      );
+      await store.pauseAfterLocalRestore();
+
+      await store.resumeRestoredSnapshotForUser(
+        'user-a',
+        DateTime.utc(2026, 8, 30, 9),
+      );
+
+      final account = await store.account();
+      expect(account.enabled, isTrue);
+      expect(account.boundUserId, 'user-a');
+      expect(account.migrationState, 'binding');
+      expect(account.restorePending, isFalse);
+      final outbox = await db.select(db.syncOutbox).get();
+      expect(
+        outbox.any((row) => row.entity == 'room' && row.recordKey == roomId),
+        isTrue,
+      );
+    },
+  );
+
   test('complete snapshot eligibility rejects unsafe caches', () async {
     final syncedAt = DateTime.utc(2026, 7, 26, 8);
 

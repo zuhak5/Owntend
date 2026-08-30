@@ -203,22 +203,23 @@ mixin _LocalSyncMutationStore on _LocalSyncStoreBase {
     ];
   }
 
-  Future<List<Map<String, String>>> listFailedVisibleDetails() async {
+  Future<List<FailedSyncMutationSummary>> listFailedVisibleMutations() async {
     final rows =
         await (db.select(db.syncOutbox)..where(
               (row) =>
                   row.state.equals('failedVisible') |
-                  row.state.equals('conflict') |
-                  row.attempts.equals(-1),
+                  (row.attempts.equals(-1) &
+                      row.state.isNotValue(SyncMutationState.conflict.name)),
             ))
             .get();
     return [
       for (final row in rows)
-        {
-          'entity': row.entity,
-          'operation': row.operation,
-          'error_code': row.lastErrorCode ?? 'unknown',
-        },
+        FailedSyncMutationSummary(
+          entity: row.entity,
+          recordKey: row.recordKey,
+          operation: row.operation,
+          errorCode: row.lastErrorCode ?? 'unknown',
+        ),
     ];
   }
 
@@ -234,6 +235,31 @@ mixin _LocalSyncMutationStore on _LocalSyncStoreBase {
       query.where((row) => row.resolutionStatus.equals(resolutionStatus));
     }
     return query.get();
+  }
+
+  Future<List<SyncConflictSummary>> listUnresolvedSyncConflictSummaries({
+    required String accountId,
+  }) async {
+    final rows =
+        await (db.select(db.syncConflicts)
+              ..where(
+                (row) =>
+                    row.accountId.equals(accountId) &
+                    row.resolutionStatus.equals('unresolved') &
+                    row.resolvedAt.isNull(),
+              )
+              ..orderBy([(row) => OrderingTerm.desc(row.createdAt)]))
+            .get();
+    final seen = <String>{};
+    return [
+      for (final row in rows)
+        if (seen.add('${row.entity}\u0000${row.recordKey}'))
+          SyncConflictSummary(
+            entity: row.entity,
+            recordKey: row.recordKey,
+            createdAt: row.createdAt,
+          ),
+    ];
   }
 
   /// Reads the transactional restore-generation marker written inside the

@@ -346,6 +346,107 @@ class OperationIdReusedException implements Exception {
   String toString() => 'OPERATION_ID_REUSED';
 }
 
+enum AuthoritativeRpcRejectionCode {
+  invalidPayload,
+  unauthenticated,
+  entityNotFound,
+  conflict,
+  walletUnavailable,
+}
+
+/// A definitive server rejection. The PostgreSQL transaction did not commit,
+/// so callers must not retain the operation as an ambiguous network outcome.
+class AuthoritativeRpcRejectionException implements Exception {
+  const AuthoritativeRpcRejectionException({
+    required this.code,
+    required this.serverCode,
+  });
+
+  final AuthoritativeRpcRejectionCode code;
+  final String serverCode;
+
+  String get journalCode => switch (code) {
+    AuthoritativeRpcRejectionCode.invalidPayload => 'invalid_payload',
+    AuthoritativeRpcRejectionCode.unauthenticated => 'unauthenticated',
+    AuthoritativeRpcRejectionCode.entityNotFound => 'entity_not_found',
+    AuthoritativeRpcRejectionCode.conflict => 'operation_conflict',
+    AuthoritativeRpcRejectionCode.walletUnavailable => 'wallet_unavailable',
+  };
+
+  @override
+  String toString() => journalCode;
+}
+
+Object classifyAuthoritativePostgrestException(PostgrestException error) {
+  if (error.code == '23505' && error.message == 'OPERATION_ID_REUSED') {
+    return const OperationIdReusedException();
+  }
+  if (error.code == '22023' &&
+      _authoritativeInvalidMessages.contains(error.message)) {
+    return AuthoritativeRpcRejectionException(
+      code: AuthoritativeRpcRejectionCode.invalidPayload,
+      serverCode: error.message,
+    );
+  }
+  if (error.code == '42501' && error.message == 'AUTH_REQUIRED') {
+    return const AuthoritativeRpcRejectionException(
+      code: AuthoritativeRpcRejectionCode.unauthenticated,
+      serverCode: 'AUTH_REQUIRED',
+    );
+  }
+  if (_authoritativeNotFoundMessages.contains(error.message) &&
+      (error.code == '23503' || error.code == '42501')) {
+    return AuthoritativeRpcRejectionException(
+      code: AuthoritativeRpcRejectionCode.entityNotFound,
+      serverCode: error.message,
+    );
+  }
+  if (error.code == '23505' &&
+      _authoritativeConflictMessages.contains(error.message)) {
+    return AuthoritativeRpcRejectionException(
+      code: AuthoritativeRpcRejectionCode.conflict,
+      serverCode: error.message,
+    );
+  }
+  if (error.code == 'P0001' && error.message == 'WALLET_NOT_FOUND') {
+    return const AuthoritativeRpcRejectionException(
+      code: AuthoritativeRpcRejectionCode.walletUnavailable,
+      serverCode: 'WALLET_NOT_FOUND',
+    );
+  }
+  return error;
+}
+
+const _authoritativeInvalidMessages = <String>{
+  'INVALID_OPERATION',
+  'INVALID_OPERATION_ID',
+  'INVALID_REQUEST_HASH',
+  'INVALID_ASSET_PAYLOAD',
+  'INVALID_TASK_PAYLOAD',
+  'INVALID_COPY_OPERATION',
+  'INVALID_PLAN_ID_MAP',
+  'COPY_TASK_LIMIT_EXCEEDED',
+  'INVALID_MOVE_OPERATION',
+  'INVALID_ASSET_TYPE',
+  'INVALID_TYPE_CHANGE_OPERATION',
+  'INVALID_GENERAL_DETAILS',
+  'TYPE_CHANGE_CHARGE_LIMIT_EXCEEDED',
+};
+
+const _authoritativeConflictMessages = <String>{
+  'TARGET_ASSET_EXISTS',
+  'TARGET_PLAN_EXISTS',
+};
+
+const _authoritativeNotFoundMessages = <String>{
+  'ASSET_NOT_FOUND',
+  'ROOM_NOT_FOUND',
+  'SOURCE_ASSET_NOT_FOUND',
+  'DESTINATION_ROOM_NOT_FOUND',
+  'PLAN_NOT_FOUND',
+  'TARGET_ASSET_NOT_FOUND',
+};
+
 abstract class MonetizationRepository {
   const MonetizationRepository();
 

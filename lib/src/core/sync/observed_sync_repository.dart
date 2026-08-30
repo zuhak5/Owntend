@@ -43,6 +43,13 @@ class ObservedCloudSyncRepository implements CloudSyncRepository {
   );
 
   @override
+  Future<void> resumeRestoredSnapshotToCloud() => _run<void>(
+    operation: 'sync.restore_resume',
+    syncMode: 'restore_resume',
+    callback: _delegate.resumeRestoredSnapshotToCloud,
+  );
+
+  @override
   Future<void> disable() => _run<void>(
     operation: 'sync.pause',
     syncMode: 'disable',

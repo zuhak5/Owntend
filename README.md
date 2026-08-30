@@ -18,7 +18,7 @@ The authoritative dependency and SDK versions are in [`pubspec.yaml`](pubspec.ya
 
 ## Product capabilities
 
-Owntend manages areas, rooms, categories, assets, tags, photos, maintenance plans and history, calendar views, health and readiness summaries, warranty alerts, notifications, search, statistics, settings, cloud accounts, and encrypted-platform storage for sensitive session material. The app supports English and Arabic, including right-to-left layout.
+Owntend manages areas, rooms, assets, tags, normalized photos, maintenance plans and history, calendar views, health and readiness summaries, warranty alerts, notifications, search, statistics, settings, cloud accounts, user-resolvable synchronization health, and encrypted-platform storage for sensitive session material. The app supports English and Arabic, including right-to-left layout.
 
 See [`docs/product/feature-catalog.md`](docs/product/feature-catalog.md) for the complete product map.
 

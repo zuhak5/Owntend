@@ -858,6 +858,41 @@ void main() {
     );
   });
 
+  test('generic enable cannot bypass a paused local restore', () async {
+    final db = AppDatabase(executor: NativeDatabase.memory());
+    addTearDown(db.close);
+    final store = LocalSyncStore(db);
+    await store.account();
+    await store.pauseAfterLocalRestore();
+    final auth = _FakeAuthRepository(const AuthSession(userId: 'user-1'));
+    addTearDown(auth.controller.close);
+    final coordinator = SyncCoordinator(auth, store, _MockGateway());
+    addTearDown(coordinator.dispose);
+
+    await expectLater(
+      coordinator.enable(),
+      throwsA(
+        isA<SupabaseFailure>()
+            .having(
+              (failure) => failure.kind,
+              'kind',
+              SupabaseFailureKind.conflict,
+            )
+            .having(
+              (failure) => failure.diagnosticCode,
+              'diagnosticCode',
+              'restore_sync_confirmation_required',
+            ),
+      ),
+    );
+
+    final account = await store.account();
+    expect(account.enabled, isFalse);
+    expect(account.boundUserId, isNull);
+    expect(account.migrationState, 'restorePaused');
+    expect(account.restorePending, isTrue);
+  });
+
   test('account deletion barrier discards late active pull results', () async {
     final db = AppDatabase(executor: NativeDatabase.memory());
     addTearDown(db.close);

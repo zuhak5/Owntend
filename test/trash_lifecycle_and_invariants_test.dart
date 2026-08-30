@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:drift/drift.dart' hide isNull, isNotNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image/image.dart' as image;
 import 'package:owntend/src/core/data/repositories.dart';
 import 'package:owntend/src/core/database/app_database.dart';
 import 'package:owntend/src/core/domain/models.dart';
@@ -71,9 +72,8 @@ void main() {
         ),
       );
 
-      // Create a fake photo file
       final photoFile = File(p.join(tempDir.path, 'source_photo.jpg'));
-      await photoFile.writeAsString('fake_image_content');
+      await _writeTestPhoto(photoFile, image.ColorRgb8(30, 100, 160));
       await assetRepo.addPhoto(assetId, photoFile.path);
 
       // Create a maintenance plan and complete it once
@@ -509,10 +509,10 @@ void main() {
           name: 'Photo asset',
           roomId: roomId,
         );
-        final sourceA = File(p.join(tempDir.path, 'a.jpg'))
-          ..writeAsBytesSync([1, 2, 3]);
-        final sourceB = File(p.join(tempDir.path, 'b.jpg'))
-          ..writeAsBytesSync([4, 5, 6]);
+        final sourceA = File(p.join(tempDir.path, 'a.jpg'));
+        final sourceB = File(p.join(tempDir.path, 'b.jpg'));
+        await _writeTestPhoto(sourceA, image.ColorRgb8(100, 30, 10));
+        await _writeTestPhoto(sourceB, image.ColorRgb8(10, 80, 140));
         final first = await assetRepo.addPhoto(assetId, sourceA.path);
         final second = await assetRepo.addPhoto(assetId, sourceB.path);
         await db.delete(db.syncOutbox).go();
@@ -540,4 +540,9 @@ void main() {
       },
     );
   });
+}
+
+Future<void> _writeTestPhoto(File file, image.Color color) async {
+  final pixels = image.Image(width: 12, height: 12)..clear(color);
+  await file.writeAsBytes(image.encodeJpg(pixels));
 }

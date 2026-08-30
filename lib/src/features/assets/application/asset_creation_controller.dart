@@ -5,6 +5,7 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../core/domain/input_validation.dart';
 import '../../../core/sync/sync_providers.dart';
 import '../../maintenance/application/task_creation_controller.dart';
 import '../../../core/services/charged_operation_journal/charged_operation_store.dart';
@@ -73,6 +74,7 @@ class AssetCreationController {
     required String accountScope,
     String? operationIdOverride,
   }) async {
+    validateAuthoritativeAssetPayload(assetPayload, detailsPayload);
     final monetizationRepo = ref.read(monetizationRepositoryProvider);
     if (monetizationRepo == null) {
       throw StateError('Cloud points service is unavailable.');
@@ -132,16 +134,28 @@ class AssetCreationController {
       await operationStore.saveOperation(
         operation.copyWith(
           state: TaskCreationOperationState.permanentRejected,
+          requestPayload: const {},
           lastErrorCode: 'operation_id_reused',
           lastErrorMessage: 'OPERATION_ID_REUSED',
         ),
       );
       rethrow;
-    } catch (error) {
+    } on AuthoritativeRpcRejectionException catch (error) {
+      await operationStore.saveOperation(
+        operation.copyWith(
+          state: TaskCreationOperationState.permanentRejected,
+          requestPayload: const {},
+          lastErrorCode: error.journalCode,
+          lastErrorMessage: error.serverCode,
+        ),
+      );
+      rethrow;
+    } catch (_) {
       await operationStore.saveOperation(
         operation.copyWith(
           state: TaskCreationOperationState.outcomeUnknown,
-          lastErrorMessage: error.toString(),
+          lastErrorCode: 'transport_or_unknown',
+          lastErrorMessage: 'TRANSPORT_OR_UNKNOWN',
         ),
       );
       throw StateError(
@@ -247,16 +261,28 @@ class AssetCreationController {
       await operationStore.saveOperation(
         operation.copyWith(
           state: TaskCreationOperationState.permanentRejected,
+          requestPayload: const {},
           lastErrorCode: 'operation_id_reused',
           lastErrorMessage: 'OPERATION_ID_REUSED',
         ),
       );
       rethrow;
-    } on Object catch (error) {
+    } on AuthoritativeRpcRejectionException catch (error) {
+      await operationStore.saveOperation(
+        operation.copyWith(
+          state: TaskCreationOperationState.permanentRejected,
+          requestPayload: const {},
+          lastErrorCode: error.journalCode,
+          lastErrorMessage: error.serverCode,
+        ),
+      );
+      rethrow;
+    } on Object catch (_) {
       await operationStore.saveOperation(
         operation.copyWith(
           state: TaskCreationOperationState.outcomeUnknown,
-          lastErrorMessage: error.toString(),
+          lastErrorCode: 'transport_or_unknown',
+          lastErrorMessage: 'TRANSPORT_OR_UNKNOWN',
         ),
       );
       throw StateError('Asset copy outcome is unknown; recovery is journaled.');

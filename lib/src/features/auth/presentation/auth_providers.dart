@@ -80,13 +80,11 @@ final authStateProvider = StreamProvider<AuthStateChange>((ref) {
       const AuthStateChange(event: AuthEventType.initialSession, session: null),
     );
   }
-  return repository.watchAuthState().handleError((
-    Object error,
-    StackTrace stackTrace,
-  ) {
-    // Keep auth stream failures contained. Riverpod exposes the failure to
-    // account UI while the authenticated cache remains available.
-  });
+  // Let Riverpod surface stream failures as AsyncError. Consumers that need
+  // continuity can still use the repository's cached session while presenting
+  // an explicit degraded state instead of mistaking a transport failure for a
+  // signed-out event.
+  return repository.watchAuthState();
 });
 
 final authSessionProvider = Provider<AsyncValue<AuthSession?>>((ref) {

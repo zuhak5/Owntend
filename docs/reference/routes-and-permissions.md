@@ -27,6 +27,7 @@ GoRouter definitions in [`lib/src/features/navigation/app_router.dart`](../../li
 /trash
 /statistics
 /settings
+/sync-health
 /profile -> /account
 /account
 /backup
@@ -35,6 +36,8 @@ GoRouter definitions in [`lib/src/features/navigation/app_router.dart`](../../li
 ```
 
 Route parameters are untrusted input. Screens must handle missing, deleted, unauthorized, malformed, or not-yet-hydrated entities without crashing or exposing another account's data.
+
+`/sync-health` is linked from Account. It reads local failed-visible mutations and unresolved conflicts, displays only localized privacy-safe categories, and routes retry, dismissal, and keep-local/keep-cloud choices through the account-scoped sync store. It never renders record keys, preserved payloads, or raw exception text.
 
 ### Entity rehydration and route state
 

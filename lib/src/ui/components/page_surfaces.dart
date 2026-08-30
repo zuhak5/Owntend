@@ -1,9 +1,10 @@
 part of '../components.dart';
 
 class ErrorPanel extends StatelessWidget {
-  const ErrorPanel({required this.message, super.key});
+  const ErrorPanel({required this.message, this.onRetry, super.key});
 
   final String message;
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -24,6 +25,14 @@ class ErrorPanel extends StatelessWidget {
               textAlign: TextAlign.center,
               style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
+            if (onRetry != null) ...[
+              const SizedBox(height: HkSpacing.sm),
+              FilledButton.icon(
+                onPressed: onRetry,
+                icon: const Icon(Symbols.refresh_rounded),
+                label: Text(context.l10n.retry),
+              ),
+            ],
           ],
         ),
       ),

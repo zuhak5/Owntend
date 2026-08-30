@@ -5,11 +5,18 @@
 Charged asset creation mirrors tasks: `AssetCreationController`
 (features/assets/application) persists a durable operation journal entry
 (shared `TaskCreationOperationStore`, payload discriminator `asset`) BEFORE the
-`createAsset` RPC. Insufficient points and operation-id reuse are terminal;
-transport ambiguity is `outcomeUnknown` and is reconciled at startup by
+`createAsset` RPC. Insufficient points, operation-id reuse, and allowlisted
+PostgreSQL validation, authentication, not-found, conflict, or wallet
+rejections are terminal and their retained user payload is scrubbed. The client
+classifies them by server-owned SQLSTATE plus an exact stable error token;
+unrecognized PostgREST and transport failures are never guessed from human
+text. Transport ambiguity is `outcomeUnknown` and is reconciled at startup by
 `ChargedOperationResolver` using the server's idempotent status lookup — the
 same recovery walk tasks use. A new charged operation is blocked while any
-ambiguous one awaits recovery.
+ambiguous one awaits recovery. A failed status lookup stays ambiguous because
+that lookup cannot prove whether the earlier mutation committed. Durable
+journal error fields contain only allowlisted technical codes, never raw
+server, network, or user-content-bearing exception text.
 
 ## Scope and sources of truth
 

@@ -36,11 +36,13 @@ Riverpod is the dependency and state-management mechanism. GoRouter is the navig
 
 `OwntendProcessSplash` is the first child passed to every `runApp` branch. It remains mounted while deferred initialization, startup-theme loading, the application, or a startup-failure surface changes beneath it, so those branches cannot reset the fixed splash lifetime or expose a blank Flutter frame. A static startup surface remains underneath if initialization outlives the overlay. The splash selects English or Arabic from the device locale, exposes one localized semantic label, supports compact and scaled layouts, and stops repeating animation when the platform requests reduced motion. These are repository and widget-test contracts; launch behavior on a physical release device remains separate evidence.
 
+Deferred startup treats Supabase client initialization as a required cloud boundary. A failure is logged through the privacy-scrubbed logger and presents the localized cloud-unavailable surface with an explicit retry; the application is not published ready with a null client. Authentication stream failures likewise remain Riverpod `AsyncError` states while consumers may retain the repository's cached session, so transport failure cannot masquerade as sign-out.
+
 ## Local persistence
 
 Drift manages the SQLite database. The schema stores product entities and operational state including synchronization outbox entries, pull cursors, remote shadows, hydration/runtime state, account binding, reminder snapshots, and cleanup work.
 
-The FTS5 search index is a derived local materialized view. SQLite invalidation triggers advance a durable source generation whenever any searchable authoritative table changes, while the search repository records the generation represented by the last successful full index rebuild. Search queries validate those generations and rebuild transactionally when needed, so route lifetime, sync-origin writes, restore, or process restart cannot make a stale index an accepted source of truth.
+The FTS5 search index is a derived local materialized view. SQLite invalidation triggers advance a durable source generation whenever any searchable authoritative table changes, while the search repository records the generation represented by the last successful full index rebuild. Search queries validate those generations and rebuild transactionally when needed, so route lifetime, sync-origin writes, restore, or process restart cannot make a stale index an accepted source of truth. The search screen separately binds each asynchronous request to the current input generation and ignores late results or failures from superseded queries.
 
 The local database is the immediate user-facing working set. Cloud synchronization does not make every UI read depend on network availability.
 
@@ -50,7 +52,9 @@ Ordinary local-first domain screens render from Drift-backed Riverpod providers.
 
 The startup `InitialHomeSnapshot` is a first-ready-frame seed, not an ongoing competing source of truth. Home uses a live provider value whenever that concern has one and falls back to the startup seed only while the live concern has never produced usable data. Non-domain startup concerns such as profile, weather, backup state, notification count, and avatar/session state retain their own live-first fallbacks where appropriate.
 
-For populated streams, ordinary revalidation keeps the last usable provider value visible while replacement data is loading or converging. A first-load spinner remains valid when no usable value exists yet. Stable domain IDs remain widget identity for mutable lists.
+For populated streams, ordinary revalidation keeps the last usable provider value visible while replacement data is loading or converging. Home labels its retained startup snapshot as saved data when a live domain refresh fails. Without usable data, Home, room detail, item detail, and calendar distinguish loading, retryable error, authoritative not-found, and true empty states instead of coercing `AsyncValue` failures to empty collections. Stable domain IDs remain widget identity for mutable lists.
+
+`localNowProvider` is the injectable local wall-time source and `localClockProvider` is the shared presentation clock. It emits at the next local minute boundary and immediately on application resume, allowing date bucketing, calendar selection, room health, dashboard readiness, and time-of-day theme state to react to midnight or time-zone changes without a database event.
 
 ## Cloud backend
 
@@ -67,6 +71,8 @@ The backend is authoritative for ownership, point balances, charged operations, 
 ## Synchronization
 
 Local mutations become durable outbox work. The coordinator binds work to an authenticated account, pushes idempotent operations, pulls cloud changes using cursors and revisions, records shadows, handles retry and conflicts, and uses realtime events as invalidation rather than as complete authoritative payloads.
+
+Sync Health is the user-resolution boundary for work that automatic synchronization cannot safely finish. The store returns payload-free summaries; failed-visible work can be requeued or explicitly dismissed, and unresolved conflicts can be resolved only for their bound account by keeping the newest preserved local intent or the canonical cloud state.
 
 The synchronization implementation is divided behind stable public facades. `LocalSyncStore` delegates account/hydration, outbox, remote application, composite mutation, and media-cleanup responsibilities to focused store modules. `SyncCoordinator` retains the public lifecycle and account-deletion surface while focused modules own run/pull/snapshot, push/conflict, post-ready media, and runtime/connectivity/realtime behavior. These are one store and one state machine, not parallel protocols or compatibility paths.
 
@@ -110,6 +116,10 @@ Durable notification-reconciliation requests live in Drift and are consumed afte
 ## Backup and restore
 
 Owntend produces versioned, authenticated `.owntend-backup` containers — an `OWNTDBK1` header with Argon2id key derivation and AES-256-GCM framing; there is no plaintext ZIP reader. Restore treats every imported container as untrusted input, validates compatibility and extraction bounds, creates a safety backup, stages media, applies data, and rolls back on failure. Derived search state is not imported as user authority; restored searchable rows invalidate the local FTS generation and are rebuilt before search results are returned.
+
+## Media import
+
+Local photo import validates the file and source-byte budget before decoding on a worker isolate, rejects undecodable or excessive-pixel content, bakes orientation, scales to the configured maximum dimension, and searches a bounded JPEG-quality ladder for an output within the cloud 10 MiB contract. The repository writes that normalized output first and inserts photo metadata only after the filesystem succeeds; database failure removes the just-written file.
 
 ## Observability
 

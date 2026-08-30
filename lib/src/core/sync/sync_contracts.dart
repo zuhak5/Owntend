@@ -107,10 +107,48 @@ class SyncStatus {
   final int payloadParseFailures;
 }
 
+/// Privacy-safe description of an outbox mutation that automatic sync stopped
+/// retrying. The record key is retained only so an explicit user action can
+/// target the exact mutation; presentation and diagnostic logging must not
+/// display it.
+class FailedSyncMutationSummary {
+  const FailedSyncMutationSummary({
+    required this.entity,
+    required this.recordKey,
+    required this.operation,
+    required this.errorCode,
+  });
+
+  final String entity;
+  final String recordKey;
+  final String operation;
+  final String errorCode;
+
+  Map<String, String> get diagnosticDetails => {
+    'entity': entity,
+    'operation': operation,
+    'error_code': errorCode,
+  };
+}
+
+/// Payload-free summary of a preserved synchronization conflict.
+class SyncConflictSummary {
+  const SyncConflictSummary({
+    required this.entity,
+    required this.recordKey,
+    required this.createdAt,
+  });
+
+  final String entity;
+  final String recordKey;
+  final DateTime createdAt;
+}
+
 abstract interface class CloudSyncRepository {
   Stream<SyncStatus> watchStatus();
   Future<SyncStatus> status();
   Future<void> enable();
+  Future<void> resumeRestoredSnapshotToCloud();
   Future<void> disable();
   Future<void> unlink();
   Future<void> retry();
@@ -126,6 +164,9 @@ class DisabledCloudSyncRepository implements CloudSyncRepository {
 
   @override
   Future<void> enable() async {}
+
+  @override
+  Future<void> resumeRestoredSnapshotToCloud() async {}
 
   @override
   Future<void> unlink() async {}

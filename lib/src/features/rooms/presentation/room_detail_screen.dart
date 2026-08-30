@@ -7,10 +7,15 @@ class RoomDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final rooms = ref.watch(roomsProvider).value ?? [];
-    final areas = ref.watch(areasProvider).value ?? [];
-    final assets = ref.watch(roomAssetsProvider(roomId));
-    final tasks = ref.watch(tasksProvider).value ?? [];
+    final roomsState = ref.watch(roomsProvider);
+    if (!roomsState.hasValue) {
+      return _roomDetailStateScaffold(
+        context,
+        error: roomsState.error,
+        onRetry: () => ref.invalidate(roomsProvider),
+      );
+    }
+    final rooms = roomsState.value!;
     final room = rooms.where((item) => item.id == roomId).firstOrNull;
     if (room == null) {
       return Scaffold(
@@ -24,6 +29,28 @@ class RoomDetailScreen extends ConsumerWidget {
         ),
       );
     }
+    final assets = ref.watch(roomAssetsProvider(roomId));
+    final areasState = ref.watch(areasProvider);
+    final tasksState = ref.watch(tasksProvider);
+    if (!areasState.hasValue || !tasksState.hasValue) {
+      return Scaffold(
+        appBar: AppBar(title: DynamicText(room.name, contentType: 'room.name')),
+        body: areasState.hasError || tasksState.hasError
+            ? hk_ui.ErrorPanel(
+                message: failureMessage(
+                  context,
+                  areasState.error ?? tasksState.error!,
+                ),
+                onRetry: () {
+                  ref.invalidate(areasProvider);
+                  ref.invalidate(tasksProvider);
+                },
+              )
+            : const Center(child: CircularProgressIndicator()),
+      );
+    }
+    final areas = areasState.value!;
+    final tasks = tasksState.value!;
     final areaName = areas
         .where((area) => area.id == room.areaId)
         .firstOrNull
@@ -56,7 +83,9 @@ class RoomDetailScreen extends ConsumerWidget {
           final roomTasks = tasks
               .where((task) => task.room.id == roomId)
               .toList();
-          final now = DateTime.now();
+          final now =
+              ref.watch(localClockProvider).value ??
+              ref.read(localNowProvider)();
           final roomHealth = feature_selectors.roomHealthScore(
             room: room,
             assets: items,
@@ -159,10 +188,28 @@ class RoomDetailScreen extends ConsumerWidget {
             ),
           );
         },
-        error: (error, _) =>
-            hk_ui.ErrorPanel(message: failureMessage(context, error)),
+        error: (error, _) => hk_ui.ErrorPanel(
+          message: failureMessage(context, error),
+          onRetry: () => ref.invalidate(roomAssetsProvider(roomId)),
+        ),
         loading: () => const Center(child: CircularProgressIndicator()),
       ),
     );
   }
+}
+
+Widget _roomDetailStateScaffold(
+  BuildContext context, {
+  required Object? error,
+  required VoidCallback onRetry,
+}) {
+  return Scaffold(
+    appBar: AppBar(title: Text(context.l10n.room)),
+    body: error == null
+        ? const Center(child: CircularProgressIndicator())
+        : hk_ui.ErrorPanel(
+            message: failureMessage(context, error),
+            onRetry: onRetry,
+          ),
+  );
 }

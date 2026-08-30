@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 import 'package:owntend/l10n/app_localizations_ext.dart';
 
+import '../core/domain/input_validation.dart';
 import '../core/domain/models.dart';
 import '../core/utils/app_failure.dart';
 
@@ -15,10 +17,27 @@ String failureMessage(
   BuildContext context,
   Object error, {
   AppFailureCode fallback = AppFailureCode.general,
-}) => localizedFailureMessage(
-  context.l10n,
-  appFailureCodeFor(error, fallback: fallback),
-);
+}) {
+  if (error is InputValidationException) {
+    return switch (error.issue) {
+      InputValidationIssue.required => context.l10n.completeRequiredFields,
+      InputValidationIssue.invalidFormat => context.l10n.reviewInvalidFields,
+      InputValidationIssue.tooLong => context.l10n.keepFieldWithinCharacters(
+        error.maxLength ?? 0,
+      ),
+      InputValidationIssue.mustBePositive => context.l10n.use1OrMore,
+      InputValidationIssue.mustBeNonNegative => context.l10n.use0OrMore,
+    };
+  }
+  return localizedFailureMessage(
+    context.l10n,
+    appFailureCodeFor(error, fallback: fallback),
+  );
+}
+
+List<TextInputFormatter> limitInputLength(int maximumLength) => [
+  LengthLimitingTextInputFormatter(maximumLength),
+];
 
 String localeTag(BuildContext context) =>
     Localizations.localeOf(context).toLanguageTag();

@@ -13,6 +13,16 @@ class _InsufficientPointsRepository extends MonetizationRepository {
   }
 }
 
+class _DefinitiveTaskRejectionRepository extends MonetizationRepository {
+  @override
+  Future<PointDebitResult> createTask(Map<String, dynamic> operation) {
+    throw const AuthoritativeRpcRejectionException(
+      code: AuthoritativeRpcRejectionCode.invalidPayload,
+      serverCode: 'INVALID_TASK_PAYLOAD',
+    );
+  }
+}
+
 void main() {
   test(
     'task creation preserves insufficient points as a permanent rejection',
@@ -59,6 +69,53 @@ void main() {
       );
       expect(operations.single.lastErrorCode, 'insufficient_points');
       expect(operations.single.lastErrorMessage, 'INSUFFICIENT_POINTS');
+    },
+  );
+
+  test(
+    'definitive task rejection is terminal and scrubs request content',
+    () async {
+      final operationStore = TaskCreationOperationStore();
+      final container = ProviderContainer(
+        overrides: [
+          monetizationRepositoryProvider.overrideWithValue(
+            _DefinitiveTaskRejectionRepository(),
+          ),
+          taskCreationOperationStoreProvider.overrideWithValue(operationStore),
+        ],
+      );
+      addTearDown(container.dispose);
+      final controller = container.read(taskCreationControllerProvider);
+      addTearDown(controller.dispose);
+
+      final created = await controller.createNewTask(
+        assetId: 'asset-1',
+        title: 'Invalid on server',
+        recurrence: const RecurrenceRule(
+          interval: 1,
+          unit: RecurrenceUnit.months,
+        ),
+        priority: PriorityLevel.medium,
+        nextDueDate: DateTime.utc(2026, 8, 10),
+        accountScope: 'account-1',
+      );
+
+      expect(created, isFalse);
+      expect(
+        controller.value.failure?.code,
+        TaskCreationFailureCode.invalidPayload,
+      );
+      final operations = await operationStore.listOperationsForAccount(
+        'account-1',
+      );
+      expect(operations, hasLength(1));
+      expect(
+        operations.single.state,
+        TaskCreationOperationState.permanentRejected,
+      );
+      expect(operations.single.requestPayload, isEmpty);
+      expect(operations.single.lastErrorCode, 'invalid_payload');
+      expect(operations.single.lastErrorMessage, 'INVALID_TASK_PAYLOAD');
     },
   );
 }

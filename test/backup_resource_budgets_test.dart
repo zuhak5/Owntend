@@ -7,6 +7,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:owntend/src/core/database/app_database.dart';
+import 'package:owntend/src/core/domain/contracts.dart';
 import 'package:owntend/src/core/services/backup/backup_container.dart';
 import 'package:owntend/src/core/services/backup_service.dart';
 import 'package:path/path.dart' as p;
@@ -146,7 +147,10 @@ void main() {
           final tampered = File(p.join(root.path, 'tampered-$index.bk'))
             ..writeAsBytesSync(mutated, flush: true);
           await expectLater(
-            service.restoreBackup(tampered.path),
+            service.restoreBackup(
+              tampered.path,
+              cloudDisposition: RestoreCloudDisposition.localOnlyPaused,
+            ),
             throwsA(isA<BackupException>()),
             reason: 'a flipped byte at offset $index must fail authentication',
           );
@@ -170,7 +174,11 @@ void main() {
 
       // Wrong passphrase is an authentication failure.
       await expectLater(
-        service.restoreBackup(backupPath, passphrase: 'wrong-passphrase'),
+        service.restoreBackup(
+          backupPath,
+          passphrase: 'wrong-passphrase',
+          cloudDisposition: RestoreCloudDisposition.localOnlyPaused,
+        ),
         throwsA(isA<BackupException>()),
       );
 
