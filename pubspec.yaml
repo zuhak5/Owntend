@@ -65,7 +65,7 @@ dependencies:
   supabase_flutter: ^2.17.2
   connectivity_plus: ^7.3.0
   package_info_plus: ^10.2.1
-  sentry_flutter: ^9.27.0
+  sentry_flutter: ^9.28.0
   shorebird_code_push: ^2.0.7
 
 dev_dependencies:
