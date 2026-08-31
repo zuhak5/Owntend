@@ -33,7 +33,7 @@
   "devDependencies": {
     "@supabase/supabase-js": "^2.112.3",
     "esbuild": "^0.28.2",
-    "supabase": "^2.115.0",
+    "supabase": "^2.116.0",
     "yaml": "^2.9.0"
   }
 }
