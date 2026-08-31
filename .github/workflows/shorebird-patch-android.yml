@@ -87,7 +87,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Could not fetch release base." }
           node tool/shorebird_patch_eligibility.mjs --base-ref "${{ inputs.release_base_sha }}" --candidate-ref "${{ inputs.candidate_sha }}" --output release/shorebird-patch-eligibility.json
       - name: Set up Java 21
-        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
         with:
           distribution: temurin
           java-version: "21"
