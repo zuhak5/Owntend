@@ -690,6 +690,10 @@ void main() {
     expect(stale.retryable, isFalse);
     expect(stale.plan?.values['title'], 'Revision advanced');
     expect(stale.currentPlanRevision, staleCanonical['revision'] + 1);
+    final hydrationCompletedAt = DateTime.now()
+        .toUtc()
+        .subtract(const Duration(minutes: 1))
+        .toIso8601String();
 
     final hydrationDatabase = AppDatabase(executor: NativeDatabase.memory());
     final hydrationStore = LocalSyncStore(hydrationDatabase);
@@ -711,12 +715,12 @@ void main() {
                 'plan_id': stalePlanId,
                 'occurrence_id': 'next:completion-contract-stale-record',
                 'expected_plan_revision': stale.currentPlanRevision,
-                'completed_at': nextDueDate,
+                'completed_at': hydrationCompletedAt,
                 'time_zone_id': 'UTC',
                 'notes': null,
               }),
             ),
-            changedAt: Value(DateTime.parse(completedAt)),
+            changedAt: Value(DateTime.parse(hydrationCompletedAt)),
             attempts: const Value(0),
           ),
         );
