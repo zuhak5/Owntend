@@ -89,6 +89,7 @@ void main() {
         'recurrence_unit': 'months',
         'priority': 'high',
         'next_due_date': '2026-10-01T00:00:00.000Z',
+        'current_occurrence_id': 'server-owned-occurrence',
         'reminder_days_before': 3,
         'is_enabled': true,
         'created_at': '2026-08-01T00:00:00.000Z',
@@ -107,6 +108,10 @@ void main() {
       'purchase_date': null,
       'archived_at': null,
     });
+    expect(
+      plan.toRemoteUpdatePayload(),
+      isNot(contains('current_occurrence_id')),
+    );
     expect(plan.toRemoteUpdatePayload(), {
       'title': 'Updated plan',
       'instructions': null,
@@ -170,6 +175,18 @@ void main() {
       );
       expect(record.toRemoteUpdatePayload, throwsStateError);
     }
+  });
+
+  test('occurrence identity stays on its authoritative remote entities', () {
+    final photo = syncSpecByEntity['asset_photo']!;
+    final plan = syncSpecByEntity['maintenance_plan']!;
+
+    expect(photo.remoteSelectColumns, isNot(contains('current_occurrence_id')));
+    expect(plan.remoteSelectColumns, contains('current_occurrence_id'));
+    expect(
+      plan.updatableLocalColumns,
+      isNot(contains('current_occurrence_id')),
+    );
   });
 
   group('maintenance completion response contract', () {

@@ -424,7 +424,6 @@ const syncEntitySpecs = <SyncEntitySpec>[
     keyColumns: ['id'],
     localColumns: [
       'id',
-      'current_occurrence_id',
       'asset_id',
       'relative_path',
       'caption',
@@ -467,7 +466,6 @@ const syncEntitySpecs = <SyncEntitySpec>[
       'recurrence_unit',
       'priority',
       'next_due_date',
-      'current_occurrence_id',
       'reminder_days_before',
       'is_enabled',
       'archived_at',

@@ -6,6 +6,9 @@ The current application version is defined only in `pubspec.yaml`. Released vers
 
 ## Unreleased
 
+- Fixed cloud hydration and task-edit synchronization after the occurrence-based
+  completion rebuild by keeping occurrence identity off asset-photo selects and
+  out of generic maintenance-plan PATCH payloads.
 - Rebuilt task completion as an occurrence-identified, compare-and-set command:
   local history, provisional recurrence, inbox acknowledgement, reminder intent,
   and stable-sequence outbox work commit atomically; the server locks the
