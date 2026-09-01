@@ -12,7 +12,7 @@ This directory is the canonical entry point for product, architecture, developme
 - [`architecture/system-overview.md`](architecture/system-overview.md): major components and data flows.
 - [`architecture/data-model.md`](architecture/data-model.md): local and cloud data domains.
 - [`architecture/sync-protocol.md`](architecture/sync-protocol.md): offline-first synchronization model.
-- [`architecture/v1-contracts.md`](architecture/v1-contracts.md): canonical production-v1 data, sync, security, error, media, retention, version, and composition contracts.
+- [`architecture/current-contracts.md`](architecture/current-contracts.md): canonical current data, sync, completion, reminder, security, media, retention, version, and composition contracts.
 - [`architecture/auth-and-account-deletion.md`](architecture/auth-and-account-deletion.md): identity and deletion lifecycle.
 - [`architecture/monetization.md`](architecture/monetization.md): ads, points, charged creation, and SSV.
 - [`architecture/backup-and-restore.md`](architecture/backup-and-restore.md): archive format and restore safety.
@@ -63,6 +63,10 @@ This directory is the canonical entry point for product, architecture, developme
 ## Plans
 
 - [`plans/`](plans/): working planning documents for pre-launch hardening, including the implementation plan and its report.
+
+## Audits
+
+- [`audits/complete-task-and-versioning-audit-2026-08-31.md`](audits/complete-task-and-versioning-audit-2026-08-31.md): evidence-backed Complete Task race, sync, reminder, recurrence, and pre-launch versioning audit and remediation plan.
 
 ## Agent workflows
 

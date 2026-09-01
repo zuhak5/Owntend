@@ -11,7 +11,7 @@ import '../sync/local_sync_store.dart';
 import '../utils/redacting_logger.dart';
 import 'sidecar_registry.dart';
 
-/// Journal format 3 stores advisory progress and the explicit user-authorized
+/// The current journal format stores advisory progress and the explicit user-authorized
 /// cloud disposition. Whether the SQLite import
 /// actually committed is proven by reading the restore-generation marker that
 /// was written inside the import transaction itself
@@ -105,8 +105,14 @@ class RestoreJournalEntry {
   };
 
   factory RestoreJournalEntry.fromJson(Map<String, dynamic> json) {
+    final version = json['version'];
+    if (version is! int || version != kCurrentRestoreJournalVersion) {
+      throw FormatException(
+        'Restore journal format must be exactly $kCurrentRestoreJournalVersion.',
+      );
+    }
     return RestoreJournalEntry(
-      version: json['version'] as int? ?? kCurrentRestoreJournalVersion,
+      version: version,
       journalId: json['journal_id'] as String,
       accountScope: json['account_scope'] as String,
       archivePath: json['archive_path'] as String,
@@ -137,7 +143,7 @@ class RestoreJournalStore {
             aOptions: owntendAndroidSecureStorageOptions,
           );
 
-  static const _activeKey = 'owntend_active_restore_journal_v3';
+  static const _activeKey = 'owntend_active_restore_journal';
 
   final FlutterSecureStorage _storage;
 

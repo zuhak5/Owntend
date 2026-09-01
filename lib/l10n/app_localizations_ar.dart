@@ -3600,26 +3600,6 @@ class AppLocalizationsAr extends AppLocalizations {
   String get adInspectorOpenFailed => 'تعذر فتح أداة فحص الإعلانات الآن.';
 
   @override
-  String get todayCareComplete => 'اكتملت رعاية اليوم';
-
-  @override
-  String get optionalDailyRewardDescription =>
-      'شاهد فيديو قصيرًا لتحصل على نقطتين إضافيتين.';
-
-  @override
-  String get earnTwoPoints => 'احصل على نقطتين';
-
-  @override
-  String get rewardWatchedVerifyingTwo => 'جارٍ التحقق من مكافأتك…';
-
-  @override
-  String get noRewardAvailable => 'لا توجد مكافأة متاحة الآن.';
-
-  @override
-  String get dailyRewardAlreadyClaimed =>
-      'تم الحصول على مكافأة إكمال اليوم أو أنها غير متاحة.';
-
-  @override
   String get pointsWallet => 'محفظة النقاط';
 
   @override

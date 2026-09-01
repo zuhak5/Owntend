@@ -28,8 +28,8 @@ insert into public.maintenance_plans(
 insert into owntend_monetization_private.maintenance_plan_entitlements(
   user_id, plan_id, paid_cost, origin
 ) values
-  ('cccccccc-cccc-4ccc-8ccc-cccccccccccc', 'adversary-active', 0, 'legacy_unverified'),
-  ('cccccccc-cccc-4ccc-8ccc-cccccccccccc', 'adversary-archived', 0, 'legacy_unverified');
+  ('cccccccc-cccc-4ccc-8ccc-cccccccccccc', 'adversary-active', 0, 'task_creation'),
+  ('cccccccc-cccc-4ccc-8ccc-cccccccccccc', 'adversary-archived', 0, 'task_creation');
 update public.point_wallets
 set balance = 1
 where user_id = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
@@ -165,8 +165,11 @@ select jsonb_build_object(
     'id', 'snapshot-conflict-record',
     'operation_id', 'snapshot-conflict-record',
     'plan_id', p.id,
+    'occurrence_id', 'snapshot-conflict-occurrence',
     'due_date', '2026-09-01T00:00:00Z',
     'completed_at', '2026-09-01T01:00:00Z',
+    'accepted_at', '2026-09-01T01:00:00Z',
+    'time_zone_id', 'UTC',
     'notes', null,
     'created_at', '2026-09-01T01:00:00Z',
     'revision', 1
@@ -203,11 +206,12 @@ select extensions.is(
 );
 
 insert into public.maintenance_records(
-  user_id, id, plan_id, completed_at, notes, due_date, operation_id,
-  revision, created_at, updated_at
+  user_id, id, plan_id, occurrence_id, completed_at, accepted_at,
+  time_zone_id, notes, due_date, operation_id, revision, created_at, updated_at
 ) values (
   'cccccccc-cccc-4ccc-8ccc-cccccccccccc', 'existing-history',
-  'adversary-active', '2026-08-01T01:00:00Z', 'cloud value',
+  'adversary-active', 'existing-occurrence', '2026-08-01T01:00:00Z',
+  '2026-08-01T01:00:00Z', 'UTC', 'cloud value',
   '2026-08-01T00:00:00Z', 'existing-history-operation', 1,
   '2026-08-01T01:00:00Z', '2026-08-01T01:00:00Z'
 );
@@ -235,8 +239,11 @@ select jsonb_build_object(
       'id', 'existing-history',
       'operation_id', 'existing-history-operation',
       'plan_id', p.id,
+      'occurrence_id', 'existing-occurrence',
       'due_date', '2026-08-01T00:00:00Z',
       'completed_at', '2026-08-01T01:00:00Z',
+      'accepted_at', '2026-08-01T01:00:00Z',
+      'time_zone_id', 'UTC',
       'notes', 'divergent backup value',
       'created_at', '2026-08-01T01:00:00Z',
       'revision', 1
@@ -245,8 +252,11 @@ select jsonb_build_object(
       'id', 'must-not-partially-insert',
       'operation_id', 'must-not-partially-insert',
       'plan_id', p.id,
+      'occurrence_id', 'must-not-partially-insert-occurrence',
       'due_date', '2026-08-02T00:00:00Z',
       'completed_at', '2026-08-02T01:00:00Z',
+      'accepted_at', '2026-08-02T01:00:00Z',
+      'time_zone_id', 'UTC',
       'notes', null,
       'created_at', '2026-08-02T01:00:00Z',
       'revision', 1

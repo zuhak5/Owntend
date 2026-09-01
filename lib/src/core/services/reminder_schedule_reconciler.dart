@@ -87,6 +87,7 @@ ReminderScheduleDiff diffReminderSchedules({
 abstract interface class ReminderScheduleStore {
   Future<List<ReminderScheduleEntry>> readAll();
   Future<void> replaceAll(Iterable<ReminderScheduleEntry> entries);
+  Future<void> stageSnooze(ReminderScheduleEntry entry);
 }
 
 class DriftReminderScheduleStore implements ReminderScheduleStore {
@@ -136,6 +137,42 @@ class DriftReminderScheduleStore implements ReminderScheduleStore {
       }
     });
   }
+
+  @override
+  Future<void> stageSnooze(ReminderScheduleEntry entry) {
+    return db.transaction(() async {
+      final now = DateTime.now();
+      await db
+          .into(db.reminderScheduleSnapshots)
+          .insertOnConflictUpdate(
+            ReminderScheduleSnapshotsCompanion.insert(
+              identity: entry.identity,
+              notificationId: entry.notificationId,
+              planRevision: entry.planRevision,
+              scheduledAt: entry.scheduledAt,
+              timezone: entry.timezone,
+              localComponents: entry.localComponents,
+              scheduleMode: entry.scheduleMode,
+              contentVersion: entry.contentVersion,
+              updatedAt: Value(now),
+            ),
+          );
+      final planId = entry.identity.startsWith('snooze:')
+          ? entry.identity.substring('snooze:'.length)
+          : null;
+      await db
+          .into(db.notificationReconciliationRequests)
+          .insertOnConflictUpdate(
+            NotificationReconciliationRequestsCompanion.insert(
+              scopeKey: planId == null ? 'all' : 'plan:$planId',
+              planId: Value(planId),
+              reason: 'schedule_inputs_changed',
+              createdAt: Value(now),
+              updatedAt: Value(now),
+            ),
+          );
+    });
+  }
 }
 
 class MemoryReminderScheduleStore implements ReminderScheduleStore {
@@ -148,6 +185,15 @@ class MemoryReminderScheduleStore implements ReminderScheduleStore {
   @override
   Future<void> replaceAll(Iterable<ReminderScheduleEntry> entries) async {
     _entries = List.unmodifiable(entries);
+  }
+
+  @override
+  Future<void> stageSnooze(ReminderScheduleEntry entry) async {
+    _entries = List.unmodifiable([
+      for (final existing in _entries)
+        if (existing.identity != entry.identity) existing,
+      entry,
+    ]);
   }
 }
 

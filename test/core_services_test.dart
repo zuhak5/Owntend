@@ -270,6 +270,7 @@ TaskItem _task({
   return TaskItem(
     plan: MaintenancePlan(
       id: 'plan_$assetType',
+      currentOccurrenceId: 'occurrence-$assetType',
       assetId: asset.id,
       title: 'Task',
       recurrence: const RecurrenceRule(

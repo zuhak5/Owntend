@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 import 'package:sqlite3/common.dart';
+import 'package:uuid/uuid.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -339,6 +340,8 @@ class AssetPhotos extends Table {
 @DataClassName('MaintenancePlanRow')
 class MaintenancePlans extends Table {
   TextColumn get id => text()();
+  TextColumn get currentOccurrenceId =>
+      text().clientDefault(() => const Uuid().v7())();
   TextColumn get assetId =>
       text().references(Assets, #id, onDelete: KeyAction.cascade)();
   TextColumn get title => text()
@@ -443,13 +446,22 @@ class MaintenanceRecords extends Table {
   TextColumn get id => text()();
   TextColumn get planId =>
       text().references(MaintenancePlans, #id, onDelete: KeyAction.cascade)();
+  TextColumn get occurrenceId =>
+      text().clientDefault(() => const Uuid().v7())();
   DateTimeColumn get dueDate => dateTime()();
   DateTimeColumn get completedAt =>
       dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get acceptedAt => dateTime().nullable()();
+  TextColumn get timeZoneId => text().clientDefault(() => 'UTC')();
   TextColumn get notes => text().withLength(max: 4000).nullable()();
 
   @override
   Set<Column<Object>> get primaryKey => {id};
+
+  @override
+  List<Set<Column<Object>>> get uniqueKeys => [
+    {planId, occurrenceId},
+  ];
 }
 
 @DataClassName('InboxNotificationRow')
@@ -513,6 +525,7 @@ class SyncOutbox extends Table {
   @override
   String get tableName => 'offline_mutation_queue';
 
+  IntColumn get localSequence => integer().autoIncrement()();
   TextColumn get entity => text()();
   TextColumn get recordKey => text()();
   TextColumn get operation => text().check(
@@ -545,7 +558,9 @@ class SyncOutbox extends Table {
       .check(const CustomExpression<bool>('generation >= 1'))();
 
   @override
-  Set<Column<Object>> get primaryKey => {entity, recordKey};
+  List<Set<Column<Object>>> get uniqueKeys => [
+    {entity, recordKey},
+  ];
 }
 
 class ReminderScheduleSnapshots extends Table {
@@ -574,10 +589,7 @@ class NotificationReconciliationRequests extends Table {
   TextColumn get scopeKey => text()();
   TextColumn get planId => text().nullable()();
   TextColumn get reason => text().check(
-    const CustomExpression<bool>(
-      "reason IN ('local_completion', 'undo_completion', "
-      "'occurrence_completed_elsewhere', 'completion_rejected')",
-    ),
+    const CustomExpression<bool>('length(reason) BETWEEN 1 AND 80'),
   )();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();

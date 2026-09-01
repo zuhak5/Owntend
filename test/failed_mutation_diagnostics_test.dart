@@ -77,13 +77,13 @@ void main() {
               attempts: const Value(-1),
             ),
           );
-      await db
-          .into(db.syncOutbox)
-          .insertOnConflictUpdate(
-            SyncOutboxCompanion.insert(
-              entity: 'user_setting',
-              recordKey: 'theme',
-              operation: 'upsert',
+      await (db.update(db.syncOutbox)..where(
+            (row) =>
+                row.entity.equals('user_setting') &
+                row.recordKey.equals('theme'),
+          ))
+          .write(
+            SyncOutboxCompanion(
               changedAt: Value(now),
               state: const Value('failedVisible'),
               attempts: const Value(-1),
@@ -148,13 +148,13 @@ void main() {
       'resolveFailedMutation retry resets mutation state to pending for retry',
       () async {
         final now = DateTime.now().toUtc();
-        await db
-            .into(db.syncOutbox)
-            .insertOnConflictUpdate(
-              SyncOutboxCompanion.insert(
-                entity: 'user_setting',
-                recordKey: 'permission_education_seen',
-                operation: 'upsert',
+        await (db.update(db.syncOutbox)..where(
+              (row) =>
+                  row.entity.equals('user_setting') &
+                  row.recordKey.equals('permission_education_seen'),
+            ))
+            .write(
+              SyncOutboxCompanion(
                 changedAt: Value(now),
                 state: const Value('failedVisible'),
                 attempts: const Value(-1),

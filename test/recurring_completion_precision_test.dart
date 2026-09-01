@@ -1,9 +1,11 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:owntend/src/core/data/repositories.dart';
 import 'package:owntend/src/core/database/app_database.dart';
+import 'package:owntend/src/core/domain/contracts.dart';
 import 'package:owntend/src/core/domain/models.dart';
 
 void main() {
@@ -51,6 +53,9 @@ void main() {
         priority: PriorityLevel.medium,
         nextDueDate: originalDue,
       );
+      final firstOccurrenceId = (await maintenance.getTask(planId))!
+          .plan
+          .currentOccurrenceId;
 
       // Sub-second completion timestamp with non-zero milliseconds and microseconds
       final fractionalCompletedAt = DateTime.utc(
@@ -66,8 +71,8 @@ void main() {
 
       final result = await maintenance.completePlanResult(
         planId,
+        expectedOccurrenceId: firstOccurrenceId,
         completedAt: fractionalCompletedAt,
-        expectedNextDueDate: originalDue,
       );
 
       expect(result.isApplied, isTrue);
@@ -99,30 +104,20 @@ void main() {
 
       final payload =
           jsonDecode(outboxRow.payloadJson!) as Map<String, dynamic>;
-      final payloadRecord = payload['record'] as Map<String, dynamic>;
-      final payloadPlan = payload['plan'] as Map<String, dynamic>;
-
-      final payloadCompletedAt = payloadRecord['completed_at'] as String;
-      final payloadNextDueDate = payloadPlan['next_due_date'] as String;
-      final payloadExpectedNextDueDate =
-          payload['expected_next_due_date'] as String;
+      final payloadCompletedAt = payload['completed_at'] as String;
 
       // Outbox payload dates must equal stored Drift dates byte-for-byte
       expect(
         payloadCompletedAt,
         equals(record.completedAt.toUtc().toIso8601String()),
       );
-      expect(
-        payloadNextDueDate,
-        equals(plan.nextDueDate.toUtc().toIso8601String()),
-      );
-      expect(
-        payloadExpectedNextDueDate,
-        equals(originalDue.toUtc().toIso8601String()),
-      );
+      expect(payload['contract_version'], 1);
+      expect(payload['occurrence_id'], firstOccurrenceId);
+      expect(payload.containsKey('plan'), isFalse);
+      expect(payload.containsKey('record'), isFalse);
+      expect(payload.containsKey('expected_next_due_date'), isFalse);
 
       expect(payloadCompletedAt, endsWith('.000Z'));
-      expect(payloadNextDueDate, endsWith('.000Z'));
 
       // Perform a second completion for the next recurrence
       final secondFractionalCompletedAt = DateTime.utc(
@@ -138,8 +133,8 @@ void main() {
 
       final secondResult = await maintenance.completePlanResult(
         planId,
+        expectedOccurrenceId: plan.currentOccurrenceId,
         completedAt: secondFractionalCompletedAt,
-        expectedNextDueDate: plan.nextDueDate,
       );
 
       expect(secondResult.isApplied, isTrue);
@@ -180,13 +175,15 @@ void main() {
         nextDueDate: due,
       );
       final completedAt = DateTime(2026, 8, 13, 14, 30);
+      final occurrenceId = (await maintenance.getTask(planId))!
+          .plan
+          .currentOccurrenceId;
       final result = await maintenance.completePlanResult(
         planId,
+        expectedOccurrenceId: occurrenceId,
         completedAt: completedAt,
-        expectedNextDueDate: due,
       );
       expect(result.isApplied, isTrue);
-      expect(result.duplicateIgnored, isFalse);
       expect(
         (await maintenance.getTask(planId))!.plan.nextDueDate.toLocal(),
         DateTime(2026, 9, 13, 14, 30),
@@ -197,13 +194,11 @@ void main() {
     },
   );
 
-  test('rapid repeated completions use the action clock while a later action is allowed', () async {
+  test('occurrence and operation identities distinguish replay, loser, and next occurrence', () async {
     final actionNow = DateTime(2026, 8, 16, 14, 30, 10);
-    var actionElapsed = Duration.zero;
     final guardedMaintenance = DriftMaintenanceRepository(
       db,
       now: () => actionNow,
-      actionElapsed: () => actionElapsed,
     );
     await assetRepo.saveArea(
       id: 'area_repeat',
@@ -227,57 +222,56 @@ void main() {
       priority: PriorityLevel.medium,
       nextDueDate: due,
     );
+    final firstOccurrenceId = (await guardedMaintenance.getTask(planId))!
+        .plan
+        .currentOccurrenceId;
     final firstAt = DateTime(2026, 8, 16, 14, 30, 10);
     final first = await guardedMaintenance.completePlanResult(
       planId,
+      expectedOccurrenceId: firstOccurrenceId,
+      operationId: 'operation-repeat',
       completedAt: firstAt,
-      expectedNextDueDate: due,
     );
     expect(first.isApplied, isTrue);
-    for (var i = 1; i <= 4; i++) {
-      actionElapsed = Duration(milliseconds: 500 * i);
-      final repeat = await guardedMaintenance.completePlanResult(
-        planId,
-        completedAt: i == 2
-            ? firstAt.add(const Duration(hours: 1))
-            : firstAt.add(Duration(milliseconds: 500 * i)),
-        expectedNextDueDate: first.nextDueDate,
-      );
-      expect(repeat.isApplied, isTrue);
-      expect(repeat.duplicateIgnored, isTrue);
-      expect(repeat.operationId, first.operationId);
-    }
-    expect(await guardedMaintenance.listRecordsForPlan(planId), hasLength(1));
-    expect(
-      (await guardedMaintenance.getTask(planId))!.plan.nextDueDate.toLocal(),
-      DateTime(2026, 8, 17, 14, 30, 10),
+    final replay = await guardedMaintenance.completePlanResult(
+      planId,
+      expectedOccurrenceId: firstOccurrenceId,
+      operationId: 'operation-repeat',
+      completedAt: firstAt.add(const Duration(milliseconds: 250)),
     );
+    expect(
+      replay.status,
+      LocalMaintenanceCompletionStatus.alreadyAppliedByThisOperation,
+    );
+    final loser = await guardedMaintenance.completePlanResult(
+      planId,
+      expectedOccurrenceId: firstOccurrenceId,
+      operationId: 'operation-other-screen',
+      completedAt: firstAt.add(const Duration(milliseconds: 500)),
+    );
+    expect(loser.status, LocalMaintenanceCompletionStatus.completedElsewhere);
+    expect(await guardedMaintenance.listRecordsForPlan(planId), hasLength(1));
 
-    final afterWindowAt = firstAt.add(const Duration(seconds: 5));
-    actionElapsed = const Duration(seconds: 5);
+    final nextOccurrenceId = (await guardedMaintenance.getTask(planId))!
+        .plan
+        .currentOccurrenceId;
     final second = await guardedMaintenance.completePlanResult(
       planId,
-      completedAt: afterWindowAt,
-      expectedNextDueDate: first.nextDueDate,
+      expectedOccurrenceId: nextOccurrenceId,
+      completedAt: firstAt.add(const Duration(seconds: 1)),
     );
     expect(second.isApplied, isTrue);
-    expect(second.duplicateIgnored, isFalse);
     expect(await guardedMaintenance.listRecordsForPlan(planId), hasLength(2));
     expect(
       (await guardedMaintenance.getTask(planId))!.plan.nextDueDate.toLocal(),
-      DateTime(2026, 8, 17, 14, 30, 15),
+      DateTime(2026, 8, 17, 14, 30, 11),
     );
   });
   test(
-    'Undo clears the duplicate guard for an immediate legitimate re-completion',
+    'Undo restores occurrence identity for immediate re-completion',
     () async {
-      var actionElapsed = Duration.zero;
       final now = DateTime(2026, 8, 16, 14, 30);
-      final guardedMaintenance = DriftMaintenanceRepository(
-        db,
-        now: () => now,
-        actionElapsed: () => actionElapsed,
-      );
+      final guardedMaintenance = DriftMaintenanceRepository(db, now: () => now);
       await assetRepo.saveArea(
         id: 'area_undo_guard',
         name: 'Undo guard',
@@ -304,27 +298,30 @@ void main() {
         priority: PriorityLevel.medium,
         nextDueDate: due,
       );
+      final occurrenceId = (await guardedMaintenance.getTask(planId))!
+          .plan
+          .currentOccurrenceId;
       final first = await guardedMaintenance.completePlanResult(
         planId,
+        expectedOccurrenceId: occurrenceId,
         completedAt: now,
-        expectedNextDueDate: due,
       );
       expect(first.isApplied, isTrue);
       await guardedMaintenance.undoCompletion(
         planId: planId,
         completionId: first.operationId!,
+        completedOccurrenceId: first.completedOccurrenceId!,
+        expectedCurrentOccurrenceId: first.nextOccurrenceId!,
         previousDueDate: first.previousDueDate!,
         expectedCurrentNextDueDate: first.nextDueDate!,
       );
 
-      actionElapsed = const Duration(seconds: 1);
       final second = await guardedMaintenance.completePlanResult(
         planId,
+        expectedOccurrenceId: occurrenceId,
         completedAt: now.add(const Duration(minutes: 1)),
-        expectedNextDueDate: due,
       );
       expect(second.isApplied, isTrue);
-      expect(second.duplicateIgnored, isFalse);
       expect(second.operationId, isNot(first.operationId));
       expect(await guardedMaintenance.listRecordsForPlan(planId), hasLength(1));
     },
@@ -388,8 +385,10 @@ void main() {
         );
         final result = await maintenance.completePlanResult(
           planId,
+          expectedOccurrenceId: (await maintenance.getTask(planId))!
+              .plan
+              .currentOccurrenceId,
           completedAt: completedAt,
-          expectedNextDueDate: due,
         );
         expect(result.isApplied, isTrue, reason: name);
         expect(
@@ -431,8 +430,10 @@ void main() {
     );
     await maintenance.completePlanResult(
       exactPlan,
+      expectedOccurrenceId: (await maintenance.getTask(exactPlan))!
+          .plan
+          .currentOccurrenceId,
       completedAt: exactDue,
-      expectedNextDueDate: exactDue,
     );
     expect(
       (await maintenance.getTask(exactPlan))!.plan.nextDueDate.toLocal(),
@@ -454,8 +455,10 @@ void main() {
     );
     await maintenance.completePlanResult(
       latePlan,
+      expectedOccurrenceId: (await maintenance.getTask(latePlan))!
+          .plan
+          .currentOccurrenceId,
       completedAt: lateAt,
-      expectedNextDueDate: lateDue,
     );
     expect(
       (await maintenance.getTask(latePlan))!.plan.nextDueDate.toLocal(),
@@ -497,8 +500,10 @@ void main() {
         );
         await maintenance.completePlanResult(
           planId,
+          expectedOccurrenceId: (await maintenance.getTask(planId))!
+              .plan
+              .currentOccurrenceId,
           completedAt: completedAt,
-          expectedNextDueDate: completedAt,
         );
         expect(
           (await maintenance.getTask(planId))!.plan.nextDueDate.toUtc(),
@@ -525,6 +530,77 @@ void main() {
         rule: const RecurrenceRule(interval: 1, unit: RecurrenceUnit.days),
         expected: DateTime.utc(2026, 8, 14, 21, 30),
       );
+    },
+  );
+
+  test(
+    'operation replay remains idempotent after a file-backed database reopen',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'owntend-occurrence-reopen-',
+      );
+      addTearDown(() async {
+        if (directory.existsSync()) {
+          await directory.delete(recursive: true);
+        }
+      });
+      final file = File('${directory.path}/owntend.sqlite');
+      var restartDb = AppDatabase(executor: NativeDatabase(file));
+      final restartAssets = DriftAssetRepository(restartDb);
+      var restartMaintenance = DriftMaintenanceRepository(restartDb);
+
+      await restartAssets.saveArea(
+        id: 'area_durable_dedupe',
+        name: 'Durable Dedupe',
+        kind: AreaKind.indoor,
+        sortOrder: 0,
+      );
+      final roomId = await restartAssets.saveRoom(
+        areaId: 'area_durable_dedupe',
+        name: 'Durable Room',
+      );
+      final assetId = await restartAssets.saveAsset(
+        name: 'Durable Device',
+        roomId: roomId,
+      );
+      final planId = await restartMaintenance.savePlan(
+        assetId: assetId,
+        title: 'Water filter check',
+        recurrence: const RecurrenceRule(
+          interval: 1,
+          unit: RecurrenceUnit.months,
+        ),
+        priority: PriorityLevel.high,
+        nextDueDate: DateTime.utc(2026, 9, 1, 9),
+      );
+      final occurrenceId = (await restartMaintenance.getTask(planId))!
+          .plan
+          .currentOccurrenceId;
+      final firstResult = await restartMaintenance.completePlanResult(
+        planId,
+        expectedOccurrenceId: occurrenceId,
+        operationId: 'durable-completion-operation',
+        completedAt: DateTime.utc(2026, 9, 1, 9, 15),
+      );
+      expect(firstResult.isApplied, isTrue);
+      await restartDb.close();
+
+      restartDb = AppDatabase(executor: NativeDatabase(file));
+      restartMaintenance = DriftMaintenanceRepository(restartDb);
+      addTearDown(restartDb.close);
+
+      final replay = await restartMaintenance.completePlanResult(
+        planId,
+        expectedOccurrenceId: occurrenceId,
+        operationId: 'durable-completion-operation',
+        completedAt: DateTime.utc(2026, 9, 1, 9, 20),
+      );
+      expect(
+        replay.status,
+        LocalMaintenanceCompletionStatus.alreadyAppliedByThisOperation,
+      );
+      expect(replay.operationId, firstResult.operationId);
+      expect(await restartMaintenance.listRecordsForPlan(planId), hasLength(1));
     },
   );
 }

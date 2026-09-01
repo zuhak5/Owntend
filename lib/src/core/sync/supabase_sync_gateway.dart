@@ -84,6 +84,7 @@ class MaintenanceCompletionResult {
     this.currentPlanRevision,
     this.resultingRecordId,
     this.resultingNextDueDate,
+    this.rewardEligibilityToken,
     this.conflictReason,
   });
 
@@ -94,6 +95,7 @@ class MaintenanceCompletionResult {
   final int? currentPlanRevision;
   final String? resultingRecordId;
   final DateTime? resultingNextDueDate;
+  final String? rewardEligibilityToken;
   final String? conflictReason;
 
   bool get acknowledged =>
@@ -715,7 +717,8 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
           'The queued maintenance completion payload is invalid.',
         );
       }
-      final operation = Map<String, dynamic>.from(decoded);
+      final queuedOperation = Map<String, dynamic>.from(decoded);
+      final operation = _serverMaintenanceCompletionOperation(queuedOperation);
       final Object? response = await _withDataTimeout<Object?>(
         () async => _client.rpc<Map<String, dynamic>>(
           'complete_maintenance_task',
@@ -741,6 +744,30 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
     } on Object catch (error, stackTrace) {
       Error.throwWithStackTrace(SupabaseFailure.from(error), stackTrace);
     }
+  }
+
+  Map<String, dynamic> _serverMaintenanceCompletionOperation(
+    Map<String, dynamic> queued,
+  ) {
+    const requiredKeys = <String>{
+      'contract_version',
+      'operation_id',
+      'plan_id',
+      'occurrence_id',
+      'completed_at',
+      'time_zone_id',
+      'notes',
+    };
+    if (queued['contract_version'] != 1 ||
+        requiredKeys.any((key) => !queued.containsKey(key))) {
+      throw const FormatException(
+        'The queued maintenance completion payload is invalid.',
+      );
+    }
+    return <String, dynamic>{
+      for (final key in requiredKeys) key: queued[key],
+      'expected_plan_revision': queued['expected_plan_revision'],
+    };
   }
 
   Future<String> prepareMaintenanceHistoryRestorePayload({
@@ -1487,19 +1514,21 @@ MaintenanceCompletionStatus _maintenanceCompletionStatus(Object? value) {
 const _maintenanceCompletionInvalidReasons = <String>{
   'invalid_device_id',
   'invalid_payload_version',
+  'unexpected_payload_field',
   'incomplete_payload',
   'invalid_identifiers',
   'invalid_values',
   'invalid_completion',
-  'task_creation_not_authorized',
+  'invalid_time_zone',
+  'invalid_recurrence',
+  'plan_unavailable',
 };
 
 const _maintenanceCompletionConflictReasons = <String>{
   'operation_id_reused',
   'plan_inactive',
   'occurrence_completed_elsewhere',
-  'occurrence_changed',
-  'stale_plan_revision',
+  'stale_occurrence',
 };
 
 const _maintenanceCompletionConflictsWithRecord = <String>{
@@ -1523,6 +1552,7 @@ MaintenanceCompletionResult parseMaintenanceCompletionResult(
     'current_plan_revision',
     'resulting_record_id',
     'resulting_next_due_date',
+    'reward_eligibility_token',
     'plan',
     'record',
   };
@@ -1563,6 +1593,15 @@ MaintenanceCompletionResult parseMaintenanceCompletionResult(
       (rawDueDate is! String || resultingDueDate == null)) {
     _throwMaintenanceCompletionContractMismatch();
   }
+  final rewardEligibilityToken = body['reward_eligibility_token'];
+  if (rewardEligibilityToken != null &&
+      (rewardEligibilityToken is! String ||
+          !RegExp(
+            r'^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+            caseSensitive: false,
+          ).hasMatch(rewardEligibilityToken))) {
+    _throwMaintenanceCompletionContractMismatch();
+  }
 
   final rawPlan = body['plan'];
   final rawRecord = body['record'];
@@ -1576,14 +1615,12 @@ MaintenanceCompletionResult parseMaintenanceCompletionResult(
   final recordData = rawRecord == null
       ? null
       : Map<String, dynamic>.from(rawRecord as Map);
-  final planPayload = operation['plan'];
-  final recordPayload = operation['record'];
-  if (planPayload is! Map || recordPayload is! Map) {
-    _throwMaintenanceCompletionContractMismatch();
-  }
-  final expectedPlanId = planPayload['id'];
-  final expectedRecordId = recordPayload['id'];
-  if (expectedPlanId is! String || expectedRecordId is! String) {
+  final expectedPlanId = operation['plan_id'];
+  final expectedRecordId = operation['operation_id'];
+  final expectedOccurrenceId = operation['occurrence_id'];
+  if (expectedPlanId is! String ||
+      expectedRecordId is! String ||
+      expectedOccurrenceId is! String) {
     _throwMaintenanceCompletionContractMismatch();
   }
   if ((planData != null &&
@@ -1591,7 +1628,8 @@ MaintenanceCompletionResult parseMaintenanceCompletionResult(
               planData['id'] != expectedPlanId)) ||
       (recordData != null &&
           (recordData['user_id'] != userId ||
-              recordData['plan_id'] != expectedPlanId))) {
+              recordData['plan_id'] != expectedPlanId ||
+              recordData['occurrence_id'] != expectedOccurrenceId))) {
     throw const SupabaseFailure(
       kind: SupabaseFailureKind.permissionDenied,
       message: 'The cloud returned maintenance data for another account.',
@@ -1609,7 +1647,8 @@ MaintenanceCompletionResult parseMaintenanceCompletionResult(
           recordData == null ||
           resultingRecordId == null ||
           recordData['id'] != resultingRecordId ||
-          recordData['id'] != expectedRecordId)) {
+          recordData['id'] != expectedRecordId ||
+          recordData['time_zone_id'] != operation['time_zone_id'])) {
     _throwMaintenanceCompletionContractMismatch();
   }
   if (status == MaintenanceCompletionStatus.invalid &&
@@ -1619,6 +1658,7 @@ MaintenanceCompletionResult parseMaintenanceCompletionResult(
           currentRevision != null ||
           resultingRecordId != null ||
           resultingDueDate != null ||
+          rewardEligibilityToken != null ||
           planData != null ||
           recordData != null)) {
     _throwMaintenanceCompletionContractMismatch();
@@ -1626,6 +1666,9 @@ MaintenanceCompletionResult parseMaintenanceCompletionResult(
   if (status == MaintenanceCompletionStatus.conflict) {
     if (reason is! String ||
         !_maintenanceCompletionConflictReasons.contains(reason)) {
+      _throwMaintenanceCompletionContractMismatch();
+    }
+    if (rewardEligibilityToken != null) {
       _throwMaintenanceCompletionContractMismatch();
     }
     final reusedAcrossPlans =
@@ -1650,12 +1693,12 @@ MaintenanceCompletionResult parseMaintenanceCompletionResult(
       if (requiresRecord != (recordData != null) ||
           requiresRecord != (resultingRecordId != null) ||
           (requiresRecord && recordData!['id'] != resultingRecordId) ||
-          (reason == 'stale_plan_revision') != (body['retryable'] == true)) {
+          body['retryable'] == true) {
         _throwMaintenanceCompletionContractMismatch();
       }
     }
   }
-  if (body['retryable'] == true && reason != 'stale_plan_revision') {
+  if (body['retryable'] == true) {
     _throwMaintenanceCompletionContractMismatch();
   }
   if (planData != null &&
@@ -1684,6 +1727,7 @@ MaintenanceCompletionResult parseMaintenanceCompletionResult(
       resultingRecordId: resultingRecordId as String?,
       resultingNextDueDate: resultingDueDate,
       conflictReason: reason as String?,
+      rewardEligibilityToken: rewardEligibilityToken as String?,
     );
   } on Object {
     _throwMaintenanceCompletionContractMismatch();

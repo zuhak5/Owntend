@@ -93,7 +93,7 @@ test('verifyShorebirdPatchEvidence validates correct evidence and flags invalid 
 
   const validEvidence = {
     schemaVersion: SHOREBIRD_PATCH_EVIDENCE_SCHEMA_VERSION,
-    releaseVersion: '1.0.0+4',
+    releaseVersion: '1.0.0+1',
     patchNumber: 1,
     flavor: 'prod',
     track: 'stable',

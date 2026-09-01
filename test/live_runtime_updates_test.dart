@@ -91,7 +91,15 @@ void main() {
     final assetPopulatedAt = _firstPopulatedIndex(assetStates);
     final taskPopulatedAt = _firstPopulatedIndex(taskStates);
 
-    await assets.saveRoom(id: roomId, areaId: areaId, name: 'Mechanical room');
+    final roomEditBase = (await assets.listRooms()).singleWhere(
+      (room) => room.id == roomId,
+    );
+    await assets.saveRoom(
+      id: roomId,
+      areaId: areaId,
+      name: 'Mechanical room',
+      expectedUpdatedAt: roomEditBase.updatedAt,
+    );
     await assets.saveAsset(
       name: 'Leak sensor',
       roomId: roomId,
@@ -99,8 +107,10 @@ void main() {
     );
     final completion = await maintenance.completePlanResult(
       planId,
+      expectedOccurrenceId: (await maintenance.getTask(planId))!
+          .plan
+          .currentOccurrenceId,
       completedAt: DateTime.utc(2026, 8, 20, 10),
-      expectedNextDueDate: due,
     );
     expect(completion.isApplied, isTrue);
 

@@ -442,13 +442,14 @@ void main() {
       await restartStore.account();
       await restartStore.setEnabled(enabled: true, boundUserId: 'user-1');
       final now = DateTime.now().toUtc();
-      await first
-          .into(first.syncOutbox)
-          .insertOnConflictUpdate(
-            SyncOutboxCompanion.insert(
-              entity: 'user_setting',
-              recordKey: 'theme',
-              operation: 'upsert',
+      await (first.update(first.syncOutbox)..where(
+            (row) =>
+                row.entity.equals('user_setting') &
+                row.recordKey.equals('theme'),
+          ))
+          .write(
+            SyncOutboxCompanion(
+              operation: const Value('upsert'),
               userId: const Value('user-1'),
               changedAt: Value(now),
               state: const Value('pending'),

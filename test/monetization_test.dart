@@ -605,9 +605,8 @@ void main() {
       });
       await store.clear('task_user_asset');
       verify(
-        () => secureStorage.delete(
-          key: 'owntend_creation_draft_v1_task_user_asset',
-        ),
+        () =>
+            secureStorage.delete(key: 'owntend_creation_draft_task_user_asset'),
       ).called(1);
     },
   );
@@ -615,10 +614,10 @@ void main() {
   test('offline draft account cleanup preserves other accounts', () async {
     final secureStorage = _MockSecureStorage();
     final stored = <String, String>{
-      'owntend_creation_draft_v1_task_user-1_asset-a': '{}',
-      'owntend_creation_draft_v1_asset_user-1_room-a': '{}',
-      'owntend_creation_draft_v1_asset_copy_user-1_asset-b': '{}',
-      'owntend_creation_draft_v1_task_user-10_asset-c': '{}',
+      'owntend_creation_draft_task_user-1_asset-a': '{}',
+      'owntend_creation_draft_asset_user-1_room-a': '{}',
+      'owntend_creation_draft_asset_copy_user-1_asset-b': '{}',
+      'owntend_creation_draft_task_user-10_asset-c': '{}',
       'unrelated': '{}',
     };
     when(() => secureStorage.readAll()).thenAnswer((_) async => stored);
@@ -630,7 +629,7 @@ void main() {
     await OfflineCreationDraftStore(secureStorage).clearForAccount('user-1');
 
     expect(stored.keys, {
-      'owntend_creation_draft_v1_task_user-10_asset-c',
+      'owntend_creation_draft_task_user-10_asset-c',
       'unrelated',
     });
   });

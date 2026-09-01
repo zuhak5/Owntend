@@ -414,6 +414,7 @@ TaskItem _task(
   return TaskItem(
     plan: MaintenancePlan(
       id: id,
+      currentOccurrenceId: 'occurrence-$id',
       assetId: resolvedAsset.id,
       title: title,
       recurrence: const RecurrenceRule(

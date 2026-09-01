@@ -1,32 +1,5 @@
 part of 'monetization_presentation.dart';
 
-Future<void> offerDailyCompletionReward(
-  BuildContext context,
-  WidgetRef ref,
-) async {
-  final config =
-      ref.read(monetizationConfigProvider).value ??
-      const MonetizationConfig.failClosed();
-  final wallet = ref.read(pointWalletProvider).value;
-  if (!config.adsEnabled ||
-      !config.rewardedInterstitialEnabled ||
-      (wallet?.balance ?? config.walletCap) + 2 > config.walletCap) {
-    return;
-  }
-  final accepted = await showDailyCompletionRewardSheet(context);
-  if (accepted != true || !context.mounted) return;
-  final result = await ref
-      .read(owntendAdsProvider)
-      .showReward(
-        RewardAdType.rewardedInterstitial,
-        timeZone: wallet?.timeZone,
-        entryPoint: 'today_complete_milestone',
-      );
-  if (!context.mounted) return;
-  final message = dailyCompletionRewardResultMessage(context, result);
-  hk_ui.showToast(context, content: Text(message));
-}
-
 Future<void> showPointsWalletSheet(BuildContext context, WidgetRef ref) async {
   final repository = ref.read(monetizationRepositoryProvider);
   final transactions = repository?.listTransactions();

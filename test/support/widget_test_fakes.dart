@@ -601,6 +601,7 @@ TaskItem makeTaskItem(
   return TaskItem(
     plan: MaintenancePlan(
       id: id,
+      currentOccurrenceId: 'occurrence-$id',
       assetId: asset.id,
       title: title,
       recurrence: const RecurrenceRule(interval: 1, unit: RecurrenceUnit.days),
@@ -1279,6 +1280,7 @@ class StartupAssetRepository implements AssetRepository {
     required String name,
     required AreaKind kind,
     int? sortOrder,
+    DateTime? expectedUpdatedAt,
   }) async {
     savedAreaNames.add(name.trim());
     return id ?? 'area-${savedAreaNames.length}';
@@ -1385,41 +1387,37 @@ class FakeMaintenanceRepository implements MaintenanceRepository {
     required DateTime nextDueDate,
     int reminderDaysBefore = 0,
     TaskMetadata? metadata,
+    String? expectedOccurrenceId,
+    DateTime? expectedUpdatedAt,
   }) async {
     savedTitles.add(title);
     return id ?? 'plan_${savedTitles.length}';
   }
 
   @override
-  Future<bool> completePlan(
-    String planId, {
-    DateTime? completedAt,
-    DateTime? expectedNextDueDate,
-    String? notes,
-  }) async => true;
-
-  @override
   Future<LocalMaintenanceCompletionResult> completePlanResult(
     String planId, {
+    required String expectedOccurrenceId,
+    String? operationId,
+    String timeZoneId = 'UTC',
     DateTime? completedAt,
-    DateTime? expectedNextDueDate,
     String? notes,
   }) async {
-    final ok = await completePlan(
-      planId,
-      completedAt: completedAt,
-      expectedNextDueDate: expectedNextDueDate,
-      notes: notes,
-    );
     final completed = completedAt ?? DateTime.now();
-    final previousDue = expectedNextDueDate ?? completed;
+    final previousDue =
+        initialTasks
+            .where((task) => task.plan.id == planId)
+            .firstOrNull
+            ?.plan
+            .nextDueDate ??
+        completed;
     return LocalMaintenanceCompletionResult(
-      status: ok
-          ? LocalMaintenanceCompletionStatus.applied
-          : LocalMaintenanceCompletionStatus.occurrenceChanged,
-      operationId: ok ? 'fake-completion-$planId' : null,
-      previousDueDate: ok ? previousDue : null,
-      nextDueDate: ok ? previousDue.add(const Duration(days: 1)) : null,
+      status: LocalMaintenanceCompletionStatus.appliedPendingSync,
+      operationId: operationId ?? 'fake-completion-$planId',
+      completedOccurrenceId: expectedOccurrenceId,
+      nextOccurrenceId: 'next-$expectedOccurrenceId',
+      previousDueDate: previousDue,
+      nextDueDate: previousDue.add(const Duration(days: 1)),
     );
   }
 
@@ -1427,6 +1425,8 @@ class FakeMaintenanceRepository implements MaintenanceRepository {
   Future<void> undoCompletion({
     required String planId,
     required String completionId,
+    required String completedOccurrenceId,
+    required String expectedCurrentOccurrenceId,
     required DateTime previousDueDate,
     required DateTime expectedCurrentNextDueDate,
   }) async {
@@ -1457,6 +1457,7 @@ class FakeMaintenanceRepository implements MaintenanceRepository {
   @override
   Future<void> skipPlanOccurrence(
     String planId, {
+    required String expectedOccurrenceId,
     DateTime? skippedAt,
     String? reason,
   }) async {}
@@ -1465,6 +1466,7 @@ class FakeMaintenanceRepository implements MaintenanceRepository {
   Future<void> postponePlan(
     String planId,
     DateTime nextDueDate, {
+    required String expectedOccurrenceId,
     String? reason,
   }) async {}
 

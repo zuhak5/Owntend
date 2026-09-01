@@ -200,6 +200,22 @@ void main() {
       expect(restored.mediaToken, equals('token-xyz'));
     });
 
+    test('rejects journals that do not use the exact current format', () {
+      final json = entryFor(
+        journalId: 'j-format',
+        phase: RestorePhase.validated,
+      ).toJson();
+
+      expect(
+        () => RestoreJournalEntry.fromJson({...json, 'version': 2}),
+        throwsFormatException,
+      );
+      expect(
+        () => RestoreJournalEntry.fromJson(Map.of(json)..remove('version')),
+        throwsFormatException,
+      );
+    });
+
     test('durable store survives a new store instance', () async {
       final entry = entryFor(
         journalId: 'j-durable',

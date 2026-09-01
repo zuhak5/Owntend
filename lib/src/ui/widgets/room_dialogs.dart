@@ -81,6 +81,7 @@ class _AreaEditorDialogState extends ConsumerState<AreaEditorDialog> {
         id: widget.area?.id,
         name: _nameController.text,
         kind: _kind,
+        expectedUpdatedAt: widget.area?.updatedAt,
       );
       final localAreaCount = (await repository.listAreas()).length;
       AppLogger.info(
@@ -306,6 +307,7 @@ class _RoomEditorDialogState extends ConsumerState<RoomEditorDialog> {
                 ? _roomType
                 : allowedTypes.first,
             notes: _notesController.text,
+            expectedUpdatedAt: widget.room?.updatedAt,
           );
       if (mounted) {
         Navigator.of(context).pop(roomId);

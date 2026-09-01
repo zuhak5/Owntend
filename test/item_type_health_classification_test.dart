@@ -84,6 +84,7 @@ TaskItem _task({
   return TaskItem(
     plan: MaintenancePlan(
       id: 'plan-${asset.id}',
+      currentOccurrenceId: 'occurrence-${asset.id}',
       assetId: asset.id,
       title: taskType ?? 'Care task',
       recurrence: const RecurrenceRule(interval: 1, unit: RecurrenceUnit.days),

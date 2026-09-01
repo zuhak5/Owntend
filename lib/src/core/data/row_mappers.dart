@@ -134,6 +134,7 @@ domain.MaintenancePlan _planFromRow(
   MaintenancePlanMetadataRow? metadata,
 ]) => domain.MaintenancePlan(
   id: row.id,
+  currentOccurrenceId: row.currentOccurrenceId,
   assetId: row.assetId,
   title: row.title,
   instructions: row.instructions,
@@ -183,8 +184,11 @@ domain.MaintenanceRecord _recordFromRow(MaintenanceRecordRow row) =>
     domain.MaintenanceRecord(
       id: row.id,
       planId: row.planId,
+      occurrenceId: row.occurrenceId,
       dueDate: row.dueDate,
       completedAt: row.completedAt,
+      acceptedAt: row.acceptedAt,
+      timeZoneId: row.timeZoneId,
       notes: row.notes,
     );
 

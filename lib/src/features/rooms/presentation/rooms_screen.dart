@@ -352,12 +352,14 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen> {
       name: area.name,
       kind: area.kind,
       sortOrder: target.sortOrder,
+      expectedUpdatedAt: area.updatedAt,
     );
     await repo.saveArea(
       id: target.id,
       name: target.name,
       kind: target.kind,
       sortOrder: area.sortOrder,
+      expectedUpdatedAt: target.updatedAt,
     );
   }
 
@@ -376,6 +378,7 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen> {
       roomType: room.roomType,
       notes: room.notes,
       sortOrder: target.sortOrder,
+      expectedUpdatedAt: room.updatedAt,
     );
     await repo.saveRoom(
       id: target.id,
@@ -384,6 +387,7 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen> {
       roomType: target.roomType,
       notes: target.notes,
       sortOrder: room.sortOrder,
+      expectedUpdatedAt: target.updatedAt,
     );
   }
 }

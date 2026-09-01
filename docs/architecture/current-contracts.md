@@ -1,22 +1,22 @@
-# Production v1 contracts
+# Current contracts
 
 ## Purpose
 
-This document fixes Owntend's canonical pre-launch contracts. Owntend has no
-production users or production data, so these are direct baseline contracts,
-not compatibility promises to unpublished implementations.
+This document describes Owntend's canonical pre-launch contracts. Owntend has
+no production users or production data, so unpublished shapes are replaced
+directly instead of being treated as compatibility promises.
 
 ## Version authorities
 
-| Concern | Authority | Baseline |
+| Concern | Authority | Current contract |
 | --- | --- | --- |
 | Product version and Android build | [`pubspec.yaml`](../../pubspec.yaml) | not copied here; the authoritative version/build live in [`pubspec.yaml`](../../pubspec.yaml) |
 | Local SQLite schema | `AppDatabase.currentSchemaVersion` | `1` |
 | Backup archive and embedded database | backup manifest constants | `1` |
 | Mobile/backend sync boundary | change-feed response contract | `1` |
-| Native-ad platform channel | shared Dart/Kotlin contract assertion | `1` |
+| Native-ad platform channel | shared Dart/Kotlin contract assertion | `2` |
 | VersionDeck manifest and cache contract | generic VersionDeck schema modules | `1` |
-| Supabase application schema | the single initial migration | baseline `1` without a runtime marker table |
+| Supabase application schema | [`20260821124930_initial_schema.sql`](../../supabase/migrations/20260821124930_initial_schema.sql) | one clean pre-launch baseline without a runtime marker table |
 
 External API, Android SDK, ABI, PostgreSQL, SPDX, dependency, and file-format
 versions remain governed by their external contracts.
@@ -34,6 +34,10 @@ versions remain governed by their external contracts.
 - An enabled maintenance plan has a required next due date. Recurrence interval,
   priority, enum values, and bounded text are checked in both databases where
   the engines can express the same invariant.
+- Each maintenance plan carries one `current_occurrence_id`. Each maintenance
+  record captures the completed `occurrence_id`, server/local acceptance time,
+  and IANA time-zone identity. `(plan_id, occurrence_id)` is unique, so an
+  occurrence can be completed once even when devices race.
 - Maintenance records contain only the fields implemented end to end by the
   domain, Drift, sync mapping, backup, UI, and PostgreSQL contracts.
 - Cloud ownership is derived from `auth.uid()`. A client-supplied user ID is
@@ -58,7 +62,9 @@ Owntend has one account-scoped sync engine:
    checkpoint is one local transaction.
 5. A checkpoint never advances when any entry is malformed, unauthorized, or
    not applied. Replay is idempotent.
-6. A local mutation is removed from the outbox only after the matching remote
+6. Outbox rows receive a database-assigned monotonic `local_sequence` and are
+   dequeued in that stable order. Completion dependencies name the exact prior
+   operation; a local mutation is removed only after the matching remote
    operation succeeds. An unknown entity or contract blocks visibly and is not
    discarded.
 7. Server revision and durable local intent determine conflicts. Timestamps do
@@ -66,7 +72,13 @@ Owntend has one account-scoped sync engine:
 8. Account binding, account epoch, deletion suspension, retry classification,
    backoff, maintenance-completion idempotency, and reminder reconciliation
    remain durable across restart.
-9. A local-only restore remains durably unbound and paused across startup.
+9. Maintenance completion is a compare-and-set on the expected occurrence. The
+   client sends intent, while the server computes recurrence from the locked
+   canonical plan and returns one fixed response envelope. A losing device
+   adopts the canonical plan/record and does not retry a stale projection.
+10. Undo identifies the completed occurrence and expected successor occurrence;
+    it rewinds only that exact latest state and is idempotent on replay.
+11. A local-only restore remains durably unbound and paused across startup.
    Generic sync enable cannot resume it; explicit restore resume atomically binds
    the authenticated identity and creates the complete restore outbox intent
    before hydration may advance the account to active.
@@ -74,6 +86,17 @@ Owntend has one account-scoped sync engine:
 The mobile/backend response carries integer contract `1`. A different contract
 is an incompatible failure; there is no capability table, rollout flag, second
 incremental pull, or mid-page fallback.
+
+## Local concurrency and reminders
+
+- Editors for plans, areas, rooms, and assets use compare-and-set updates so a
+  stale form cannot silently overwrite a newer local value. Removing a primary
+  asset photo and selecting its replacement is one database transaction.
+- Reminder snapshots are durable desired state. Schedule reconciliation is
+  serialized, verifies the platform's pending identifiers before accepting a
+  no-op, and removes only the exact reconciliation request version covered by a
+  successful refresh. Snooze intent is persisted before scheduling so restart
+  can replay it.
 
 ## Failure model
 

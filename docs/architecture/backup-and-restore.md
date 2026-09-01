@@ -38,7 +38,13 @@ Key protection has two classes, recorded in the header:
 
 The manifest declares format version, schema version, total payload bytes, and per-entry sizes with SHA-256 hashes. The format version is independent from the Flutter package version and the Drift schema version. Compatibility must be decided explicitly rather than inferred from application version alone.
 
-Production v1 accepts backup format `1` with database schema `1` only. `search_index_state` and synchronization runtime tables are not imported as user-domain authority: importing authoritative searchable tables fires local invalidation triggers, leaving search dirty until `DriftSearchRepository` rebuilds the FTS snapshot on the next query or explicit recovery rebuild.
+The current application accepts backup format `1` with database schema `1`
+only. Those are technical format identities, not support for an unpublished
+historical application shape. `search_index_state` and synchronization runtime
+tables are not imported as user-domain authority: importing authoritative
+searchable tables fires local invalidation triggers, leaving search dirty until
+`DriftSearchRepository` rebuilds the FTS snapshot on the next query or explicit
+recovery rebuild.
 
 ## Export sequence
 
@@ -119,7 +125,7 @@ Derived caches and local generation markers do not become user-domain backup aut
 
 Restore can introduce local state that differs from the cloud. The implementation must use an explicit policy for signed-in users, such as requiring sign-out, rebuilding outbox work, rehydrating, or reconciling entity revisions. Do not allow restored rows to bypass ownership and conflict rules.
 
-For the current signed-in restore path, ordinary synchronized entities are requeued through their normal contracts, but maintenance history is never emitted as direct table CRUD. `enqueueRestoreSnapshot` groups records by existing plan into deterministic batches of at most 100 and creates `maintenance_history_restore` execute intents. Before sending, the client reads the canonical cloud plan revision and snapshot. The server inserts exact missing rows, accepts exact replay, retains unrelated cloud rows, and persists either `plan_snapshot_conflict` or `history_record_conflict` when data diverges. A conflicted batch commits no history rows and remains visible/durable across restart. Previously pending generic history mutations are converted when restore-derived; unsupported mutations become `server_authority_required` conflicts rather than being discarded.
+For the current signed-in restore path, ordinary synchronized entities are requeued through their normal contracts, but maintenance history is never emitted as direct table CRUD. `enqueueRestoreSnapshot` groups records by existing plan into deterministic batches of at most 100 and creates `maintenance_history_restore` execute intents. Each history entry carries its occurrence identity, acceptance instant, and IANA time-zone identity. Before sending, the client reads the canonical cloud plan revision and snapshot. The server inserts exact missing rows, accepts exact replay, retains unrelated cloud rows, and persists either `plan_snapshot_conflict` or `history_record_conflict` when data diverges. A record-ID, operation-ID, or plan/occurrence collision is a conflict; a conflicted batch commits no history rows and remains visible/durable across restart. Previously pending generic history mutations are converted when restore-derived; unsupported mutations become `server_authority_required` conflicts rather than being discarded.
 
 A `localOnlyPaused` restore clears account binding and synchronization runtime state while retaining the restored domain rows. Authenticated startup does not call generic sync enable while `migrationState == restorePaused` and `restorePending` is true. Generic `enable()` also rejects that state. Only `resumeRestoredSnapshotToCloud()` may leave it: the local store atomically binds the current account and journals the complete restored snapshot in one transaction, then initial hydration owns convergence and publishes the final active state.
 

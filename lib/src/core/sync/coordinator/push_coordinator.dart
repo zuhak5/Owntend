@@ -555,7 +555,7 @@ extension _SyncPushCoordinator on SyncCoordinator {
       },
     );
 
-    var result = await _remoteGateway.completeMaintenance(
+    final result = await _remoteGateway.completeMaintenance(
       payloadJson: payloadJson,
       userId: userId,
       deviceId: deviceId,
@@ -588,52 +588,6 @@ extension _SyncPushCoordinator on SyncCoordinator {
     if (result.status == MaintenanceCompletionStatus.conflict) {
       final reason = result.conflictReason ?? '';
       if (reason == 'occurrence_completed_elsewhere' &&
-          result.plan != null &&
-          result.record != null) {
-        await _localStore.reconcileMaintenanceOccurrenceCompletedElsewhere(
-          mutation,
-          plan: result.plan!,
-          record: result.record!,
-        );
-        return _MutationPushDisposition.applied;
-      }
-
-      if (result.retryable &&
-          result.currentPlanRevision != null &&
-          result.plan != null) {
-        final recoveredPayload = _maintenancePayloadWithRevision(
-          payloadJson,
-          result.currentPlanRevision!,
-        );
-        await _localStore.markMaintenanceConflictRecovery(
-          mutation,
-          payloadJson: recoveredPayload,
-          errorCode: result.conflictReason ?? 'stale_plan_revision',
-          message:
-              'The current maintenance plan was fetched for one safe retry.',
-        );
-        final retried = await _remoteGateway.completeMaintenance(
-          payloadJson: recoveredPayload,
-          userId: userId,
-          deviceId: deviceId,
-        );
-        await _ensureActiveAccountScope(scope);
-        if (retried.status == MaintenanceCompletionStatus.applied ||
-            retried.status == MaintenanceCompletionStatus.alreadyApplied) {
-          if (retried.plan != null && retried.record != null) {
-            await _localStore.markMaintenanceCompletionSucceeded(
-              mutation,
-              plan: retried.plan!,
-              record: retried.record!,
-            );
-            await _reconcileMaintenanceCompletionReminders(mutation);
-            return _MutationPushDisposition.applied;
-          }
-        }
-        result = retried;
-      }
-
-      if (result.conflictReason == 'occurrence_completed_elsewhere' &&
           result.plan != null &&
           result.record != null) {
         await _localStore.reconcileMaintenanceOccurrenceCompletedElsewhere(
@@ -704,20 +658,6 @@ extension _SyncPushCoordinator on SyncCoordinator {
     }
   }
 
-  String _maintenancePayloadWithRevision(String payloadJson, int revision) {
-    final payload = _decodeMaintenancePayload(payloadJson);
-    payload['expected_plan_revision'] = revision;
-    return jsonEncode(payload);
-  }
-
-  Map<String, dynamic> _decodeMaintenancePayload(String payloadJson) {
-    final decoded = jsonDecode(payloadJson);
-    if (decoded is! Map) {
-      throw const FormatException('Invalid maintenance completion payload.');
-    }
-    return Map<String, dynamic>.from(decoded);
-  }
-
   String _maintenanceConflictMessage(MaintenanceCompletionResult result) {
     if (result.status == MaintenanceCompletionStatus.invalid) {
       return 'The cloud could not accept this maintenance completion. '
@@ -727,7 +667,7 @@ extension _SyncPushCoordinator on SyncCoordinator {
       'occurrence_completed_elsewhere' =>
         'This occurrence was completed on another device. '
             'Your local completion was reconciled with the cloud.',
-      'occurrence_changed' =>
+      'stale_occurrence' =>
         'The maintenance recurrence changed on another device. '
             'Review the task and confirm the completion again.',
       'plan_inactive' =>

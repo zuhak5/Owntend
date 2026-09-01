@@ -156,6 +156,7 @@ void main() {
         'recurrence_interval': 30,
         'recurrence_unit': 'days',
         'priority': 'medium',
+        'current_occurrence_id': 'task-occurrence-101',
         'next_due_date': now.toIso8601String(),
         'reminder_days_before': 1,
         'created_at': now.toIso8601String(),

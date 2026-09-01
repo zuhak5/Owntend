@@ -10,6 +10,42 @@ Future<void> _deletePlansCascade(AppDatabase db, List<String> planIds) async {
   await (db.delete(
     db.maintenancePlans,
   )..where((row) => row.id.isIn(planIds))).go();
+  await _enqueueFullScheduleReconciliation(db);
+}
+
+Future<void> _enqueueFullScheduleReconciliation(
+  AppDatabase db, {
+  DateTime? changedAt,
+}) {
+  final now = changedAt ?? DateTime.now();
+  return db
+      .into(db.notificationReconciliationRequests)
+      .insertOnConflictUpdate(
+        NotificationReconciliationRequestsCompanion.insert(
+          scopeKey: 'all',
+          reason: 'schedule_inputs_changed',
+          createdAt: Value(now),
+          updatedAt: Value(now),
+        ),
+      );
+}
+
+Future<void> _enqueuePlanScheduleReconciliation(
+  AppDatabase db,
+  String planId,
+  DateTime changedAt,
+) {
+  return db
+      .into(db.notificationReconciliationRequests)
+      .insertOnConflictUpdate(
+        NotificationReconciliationRequestsCompanion.insert(
+          scopeKey: 'plan:$planId',
+          planId: Value(planId),
+          reason: 'schedule_inputs_changed',
+          createdAt: Value(changedAt),
+          updatedAt: Value(changedAt),
+        ),
+      );
 }
 
 Future<void> _syncPlantWateringPlansForInterval({
@@ -71,6 +107,7 @@ Future<void> _syncPlantWateringPlansForInterval({
         updatedAt: Value(updatedAt),
       ),
     );
+    await _enqueuePlanScheduleReconciliation(db, plan.id, updatedAt);
   }
 }
 
@@ -116,6 +153,16 @@ final RegExp _wateringIntentPattern = RegExp(
 final RegExp _nonWateringPlantIntentPattern = RegExp(
   r'\b(fertiliz|feed|prun|trim|repot|sunlight|light|pest|leaf|leaves|temperature|aquarium|fish|gravel)\b',
 );
+
+DateTime _nextUpdatedAt(DateTime previous, DateTime now) {
+  final candidate = DateTime.fromMillisecondsSinceEpoch(
+    (now.millisecondsSinceEpoch ~/ 1000) * 1000,
+    isUtc: now.isUtc,
+  );
+  return candidate.isAfter(previous)
+      ? candidate
+      : previous.add(const Duration(seconds: 1));
+}
 
 class DriftAssetRepository implements AssetRepository {
   DriftAssetRepository(this.db);
@@ -191,6 +238,7 @@ class DriftAssetRepository implements AssetRepository {
     required String name,
     required domain.AreaKind kind,
     int? sortOrder,
+    DateTime? expectedUpdatedAt,
   }) async {
     final areaId = id ?? _uuid.v7();
     final now = DateTime.now();
@@ -215,33 +263,29 @@ class DriftAssetRepository implements AssetRepository {
             ),
           );
     } else {
-      await (db.update(
-        db.areas,
-      )..where((area) => area.id.equals(areaId))).write(
-        AreasCompanion(
-          name: Value(name.trim()),
-          kind: Value(kind.name),
-          sortOrder: Value(resolvedSortOrder),
-          updatedAt: Value(now),
-        ),
-      );
+      if (expectedUpdatedAt == null) {
+        throw StateError('Editing an existing area requires its revision.');
+      }
+      final changedAt = _nextUpdatedAt(existing.updatedAt, now);
+      final changed =
+          await (db.update(db.areas)..where(
+                (area) =>
+                    area.id.equals(areaId) &
+                    area.updatedAt.equals(expectedUpdatedAt),
+              ))
+              .write(
+                AreasCompanion(
+                  name: Value(name.trim()),
+                  kind: Value(kind.name),
+                  sortOrder: Value(resolvedSortOrder),
+                  updatedAt: Value(changedAt),
+                ),
+              );
+      if (changed != 1) {
+        throw StateError('This area changed while it was being edited.');
+      }
     }
     return areaId;
-  }
-
-  @override
-  Future<void> archiveArea(String id) async {
-    final roomCount =
-        await (db.select(db.rooms)..where(
-              (room) => room.areaId.equals(id) & room.archivedAt.isNull(),
-            ))
-            .get();
-    if (roomCount.isNotEmpty) {
-      throw StateError('Move or archive rooms before archiving this area.');
-    }
-    await (db.update(db.areas)..where((area) => area.id.equals(id))).write(
-      AreasCompanion(archivedAt: Value(DateTime.now())),
-    );
   }
 
   @override
@@ -340,6 +384,7 @@ class DriftAssetRepository implements AssetRepository {
                 updatedAt: Value(now),
               ),
             );
+        await _enqueueFullScheduleReconciliation(db, changedAt: now);
       }
     });
   }
@@ -394,6 +439,7 @@ class DriftAssetRepository implements AssetRepository {
                 updatedAt: Value(now),
               ),
             );
+        await _enqueueFullScheduleReconciliation(db, changedAt: now);
       }
     });
   }
@@ -443,6 +489,7 @@ class DriftAssetRepository implements AssetRepository {
     domain.RoomType roomType = domain.RoomType.other,
     String? notes,
     int? sortOrder,
+    DateTime? expectedUpdatedAt,
   }) async {
     final roomId = id ?? _uuid.v7();
     final now = DateTime.now();
@@ -455,7 +502,7 @@ class DriftAssetRepository implements AssetRepository {
         sortOrder ??
         (existing?.areaId == areaId ? existing?.sortOrder : null) ??
         await _nextRoomSortOrder(areaId);
-    if (id == null) {
+    if (existing == null) {
       await db
           .into(db.rooms)
           .insert(
@@ -471,38 +518,31 @@ class DriftAssetRepository implements AssetRepository {
             ),
           );
     } else {
-      await (db.update(
-        db.rooms,
-      )..where((room) => room.id.equals(roomId))).write(
-        RoomsCompanion(
-          areaId: Value(areaId),
-          name: Value(name.trim()),
-          roomType: Value(roomType.name),
-          notes: Value(_blankToNull(notes)),
-          sortOrder: Value(resolvedSortOrder),
-          updatedAt: Value(now),
-        ),
-      );
+      if (expectedUpdatedAt == null) {
+        throw StateError('Editing an existing room requires its revision.');
+      }
+      final changedAt = _nextUpdatedAt(existing.updatedAt, now);
+      final changed =
+          await (db.update(db.rooms)..where(
+                (room) =>
+                    room.id.equals(roomId) &
+                    room.updatedAt.equals(expectedUpdatedAt),
+              ))
+              .write(
+                RoomsCompanion(
+                  areaId: Value(areaId),
+                  name: Value(name.trim()),
+                  roomType: Value(roomType.name),
+                  notes: Value(_blankToNull(notes)),
+                  sortOrder: Value(resolvedSortOrder),
+                  updatedAt: Value(changedAt),
+                ),
+              );
+      if (changed != 1) {
+        throw StateError('This room changed while it was being edited.');
+      }
     }
     return roomId;
-  }
-
-  @override
-  Future<void> archiveRoom(String id) async {
-    final assetRows =
-        await (db.select(db.assets)..where(
-              (asset) => asset.roomId.equals(id) & asset.archivedAt.isNull(),
-            ))
-            .get();
-    if (assetRows.isNotEmpty) {
-      throw StateError('Move or archive items before archiving this room.');
-    }
-    await (db.update(db.rooms)..where((room) => room.id.equals(id))).write(
-      RoomsCompanion(
-        archivedAt: Value(DateTime.now()),
-        updatedAt: Value(DateTime.now()),
-      ),
-    );
   }
 
   @override
@@ -576,6 +616,7 @@ class DriftAssetRepository implements AssetRepository {
                 updatedAt: Value(now),
               ),
             );
+        await _enqueueFullScheduleReconciliation(db, changedAt: now);
       }
     });
   }
@@ -622,6 +663,7 @@ class DriftAssetRepository implements AssetRepository {
                 updatedAt: Value(now),
               ),
             );
+        await _enqueueFullScheduleReconciliation(db, changedAt: now);
       }
     });
   }
@@ -695,6 +737,7 @@ class DriftAssetRepository implements AssetRepository {
     domain.PetDetails? petDetails,
     domain.PlantDetails? plantDetails,
     domain.SafetyDetails? safetyDetails,
+    DateTime? expectedUpdatedAt,
   }) async {
     validateAssetInput(
       name: name,
@@ -736,19 +779,30 @@ class DriftAssetRepository implements AssetRepository {
               ),
             );
       } else {
-        await (db.update(
-          db.assets,
-        )..where((asset) => asset.id.equals(assetId))).write(
-          AssetsCompanion(
-            name: Value(name.trim()),
-            assetType: Value(assetType.name),
-            roomId: Value(roomId),
-            placement: Value(_blankToNull(placement)),
-            notes: Value(_blankToNull(notes)),
-            purchaseDate: Value(purchaseDate),
-            updatedAt: Value(now),
-          ),
-        );
+        if (expectedUpdatedAt == null) {
+          throw StateError('Editing an existing item requires its revision.');
+        }
+        final changedAt = _nextUpdatedAt(existingAsset.updatedAt, now);
+        final changed =
+            await (db.update(db.assets)..where(
+                  (asset) =>
+                      asset.id.equals(assetId) &
+                      asset.updatedAt.equals(expectedUpdatedAt),
+                ))
+                .write(
+                  AssetsCompanion(
+                    name: Value(name.trim()),
+                    assetType: Value(assetType.name),
+                    roomId: Value(roomId),
+                    placement: Value(_blankToNull(placement)),
+                    notes: Value(_blankToNull(notes)),
+                    purchaseDate: Value(purchaseDate),
+                    updatedAt: Value(changedAt),
+                  ),
+                );
+        if (changed != 1) {
+          throw StateError('This item changed while it was being edited.');
+        }
       }
 
       await _replaceAssetDetails(
@@ -813,6 +867,7 @@ class DriftAssetRepository implements AssetRepository {
       petDetails: asset.petDetails,
       plantDetails: asset.plantDetails,
       safetyDetails: asset.safetyDetails,
+      expectedUpdatedAt: asset.updatedAt,
     );
   }
 
@@ -884,16 +939,6 @@ class DriftAssetRepository implements AssetRepository {
   }
 
   @override
-  Future<void> archiveAsset(String id) async {
-    await (db.update(db.assets)..where((asset) => asset.id.equals(id))).write(
-      AssetsCompanion(
-        archivedAt: Value(DateTime.now()),
-        updatedAt: Value(DateTime.now()),
-      ),
-    );
-  }
-
-  @override
   Future<void> deleteAsset(String id) async {
     final photoRows = await _photoRowsForAssets([id]);
     await db.transaction(() async {
@@ -950,6 +995,7 @@ class DriftAssetRepository implements AssetRepository {
               updatedAt: Value(now),
             ),
           );
+      await _enqueueFullScheduleReconciliation(db, changedAt: now);
     });
   }
 
@@ -991,6 +1037,7 @@ class DriftAssetRepository implements AssetRepository {
               updatedAt: Value(now),
             ),
           );
+      await _enqueueFullScheduleReconciliation(db, changedAt: now);
     });
   }
 
@@ -1103,78 +1150,95 @@ class DriftAssetRepository implements AssetRepository {
   Future<void> setPrimaryPhoto(String assetId, String photoId) async {
     final now = DateTime.now();
     await db.transaction(() async {
-      final target =
-          await (db.select(db.assetPhotos)..where(
-                (photo) =>
-                    photo.id.equals(photoId) & photo.assetId.equals(assetId),
-              ))
-              .getSingleOrNull();
-      if (target == null) return;
+      await _setPrimaryPhotoInTransaction(assetId, photoId, now);
+    });
+  }
 
-      await (db.update(db.syncRuntime)..where((row) => row.id.equals(1))).write(
-        const SyncRuntimeCompanion(suppressOutbox: Value(true)),
-      );
-      try {
-        await (db.update(db.assetPhotos)
-              ..where((photo) => photo.assetId.equals(assetId)))
-            .write(const AssetPhotosCompanion(isPrimary: Value(false)));
-        await (db.update(db.assetPhotos)..where(
+  Future<void> _setPrimaryPhotoInTransaction(
+    String assetId,
+    String photoId,
+    DateTime changedAt,
+  ) async {
+    final target =
+        await (db.select(db.assetPhotos)..where(
               (photo) =>
                   photo.id.equals(photoId) & photo.assetId.equals(assetId),
             ))
-            .write(const AssetPhotosCompanion(isPrimary: Value(true)));
-      } finally {
-        await (db.update(db.syncRuntime)..where((row) => row.id.equals(1)))
-            .write(const SyncRuntimeCompanion(suppressOutbox: Value(false)));
-      }
+            .getSingleOrNull();
+    if (target == null) return;
 
-      final account = await (db.select(
-        db.syncAccount,
-      )..where((row) => row.id.equals(1))).getSingleOrNull();
-      await db
-          .into(db.syncOutbox)
-          .insertOnConflictUpdate(
-            SyncOutboxCompanion.insert(
-              entity: 'asset_photo_primary',
-              recordKey: assetId,
-              operation: 'execute',
-              changedAt: Value(now),
-              payloadJson: Value(
-                jsonEncode({
-                  'version': 1,
-                  'asset_id': assetId,
-                  'photo_id': photoId,
-                }),
-              ),
-              userId: Value(account?.boundUserId),
+    await (db.update(db.syncRuntime)..where((row) => row.id.equals(1))).write(
+      const SyncRuntimeCompanion(suppressOutbox: Value(true)),
+    );
+    try {
+      await (db.update(db.assetPhotos)
+            ..where((photo) => photo.assetId.equals(assetId)))
+          .write(const AssetPhotosCompanion(isPrimary: Value(false)));
+      await (db.update(db.assetPhotos)..where(
+            (photo) => photo.id.equals(photoId) & photo.assetId.equals(assetId),
+          ))
+          .write(const AssetPhotosCompanion(isPrimary: Value(true)));
+    } finally {
+      await (db.update(db.syncRuntime)..where((row) => row.id.equals(1))).write(
+        const SyncRuntimeCompanion(suppressOutbox: Value(false)),
+      );
+    }
+
+    final account = await (db.select(
+      db.syncAccount,
+    )..where((row) => row.id.equals(1))).getSingleOrNull();
+    await db
+        .into(db.syncOutbox)
+        .insertOnConflictUpdate(
+          SyncOutboxCompanion.insert(
+            entity: 'asset_photo_primary',
+            recordKey: assetId,
+            operation: 'execute',
+            changedAt: Value(changedAt),
+            payloadJson: Value(
+              jsonEncode({
+                'version': 1,
+                'asset_id': assetId,
+                'photo_id': photoId,
+              }),
             ),
-          );
-    });
+            userId: Value(account?.boundUserId),
+          ),
+        );
   }
 
   @override
   Future<void> deletePhoto(String photoId) async {
-    final row = await (db.select(
-      db.assetPhotos,
-    )..where((photo) => photo.id.equals(photoId))).getSingleOrNull();
-    if (row == null) {
-      return;
-    }
-    await (db.delete(
-      db.assetPhotos,
-    )..where((photo) => photo.id.equals(photoId))).go();
-    if (row.isPrimary) {
-      final next =
-          await (db.select(db.assetPhotos)
-                ..where((photo) => photo.assetId.equals(row.assetId))
-                ..orderBy([(photo) => OrderingTerm.desc(photo.createdAt)])
-                ..limit(1))
-              .getSingleOrNull();
-      if (next != null) {
-        await setPrimaryPhoto(row.assetId, next.id);
+    AssetPhotoRow? deletedRow;
+    await db.transaction(() async {
+      final row = await (db.select(
+        db.assetPhotos,
+      )..where((photo) => photo.id.equals(photoId))).getSingleOrNull();
+      if (row == null) return;
+
+      await (db.delete(
+        db.assetPhotos,
+      )..where((photo) => photo.id.equals(photoId))).go();
+      if (row.isPrimary) {
+        final next =
+            await (db.select(db.assetPhotos)
+                  ..where((photo) => photo.assetId.equals(row.assetId))
+                  ..orderBy([(photo) => OrderingTerm.desc(photo.createdAt)])
+                  ..limit(1))
+                .getSingleOrNull();
+        if (next != null) {
+          await _setPrimaryPhotoInTransaction(
+            row.assetId,
+            next.id,
+            DateTime.now(),
+          );
+        }
       }
+      deletedRow = row;
+    });
+    if (deletedRow case final row?) {
+      await _deletePhotoFile(row);
     }
-    await _deletePhotoFile(row);
   }
 
   @override

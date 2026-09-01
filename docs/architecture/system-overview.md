@@ -70,7 +70,7 @@ The backend is authoritative for ownership, point balances, charged operations, 
 
 ## Synchronization
 
-Local mutations become durable outbox work. The coordinator binds work to an authenticated account, pushes idempotent operations, pulls cloud changes using cursors and revisions, records shadows, handles retry and conflicts, and uses realtime events as invalidation rather than as complete authoritative payloads.
+Local mutations become durable outbox work. The coordinator binds work to an authenticated account, pushes idempotent operations in database-assigned local sequence, pulls cloud changes using cursors and revisions, records shadows, handles retry and conflicts, and uses realtime events as invalidation rather than as complete authoritative payloads. Maintenance completion is occurrence-based: local state is optimistic, while the server locks the canonical plan, computes recurrence, and returns the winning plan/history state without accepting a client projection or retrying one with only a new revision.
 
 Sync Health is the user-resolution boundary for work that automatic synchronization cannot safely finish. The store returns payload-free summaries; failed-visible work can be requeued or explicitly dismissed, and unresolved conflicts can be resolved only for their bound account by keeping the newest preserved local intent or the canonical cloud state.
 
@@ -88,7 +88,7 @@ The public VersionDeck deletion page is an entry point, not an unauthenticated d
 
 ## Monetization
 
-Google Mobile Ads runs in Flutter with consent-aware presentation. Points and charged creation are implemented as backend-authoritative operations. Reward callbacks become pending claims and are credited only after server verification and replay protection.
+Google Mobile Ads runs in Flutter with consent-aware presentation. Points and charged creation are implemented as backend-authoritative operations. Reward callbacks become pending claims and are credited only after server verification and replay protection. A maintenance-qualified rewarded-interstitial claim additionally requires a short-lived, account-bound, single-use eligibility token minted only for an accepted canonical completion; local task counts and losing-device results are never eligibility authority.
 
 Ad eligibility fails closed across supported platform, resumed lifecycle, launch-fresh consent state, UMP permission, global remote enablement, and per-format switches. Eligibility generations invalidate stale loads and retries; bounded retry classes can become dormant; cached ads expire at 55 minutes; leases own native ads exactly once; and one fullscreen gate serializes interstitial and rewarded presentation. These contracts and the Android native-ad schema have local tests. They do not establish AdMob ownership, UMP/SSV console configuration, resolved release-SDK behavior, hosted settlement, or physical rendering. See [Monetization architecture](monetization.md) and the [Data safety evidence worksheet](../operations/google-play-data-safety-evidence.md).
 
@@ -96,7 +96,7 @@ Ad eligibility fails closed across supported platform, resumed lifecycle, launch
 
 Permission education does not treat an application preference as proof that a feature works. Its snapshots combine:
 
-1. user intent, such as reminders enabled or exact timing preferred;
+1. user intent, such as reminders enabled and configured lead time;
 2. Android permission, special-access, and location-service state;
 3. runtime service truth, such as whether notification delivery is enabled and alarm scheduling is available; and
 4. the derived effective capability: active, degraded, blocked, disabled by the user, unavailable, or not configured.
@@ -111,7 +111,7 @@ Application SnackBars are coordinated through one protected queue. An active Und
 
 The Android host declares permissions and components required for internet access, optional approximate location, notifications, boot handling, wake locks, vibration, foreground data synchronization, and local notification receivers. Notification plugin initialization is separate from account-scoped periodic registration: after authenticated readiness, `NotificationBootstrap` verifies that the active Supabase session matches the bound local account before it registers or updates the unique daily WorkManager refresh. The worker independently reloads and revalidates the same account boundary before reading or scheduling anything.
 
-Durable notification-reconciliation requests live in Drift and are consumed after authenticated notification bootstrap, after relevant foreground maintenance reconciliation, and by the daily WorkManager path. A consumer coalesces pending requests into one schedule refresh and removes only the exact request versions covered by a successful refresh; failures retain the request with bounded retry metadata, so restart or a later trigger can replay it safely. Background work restores or reconciles reminders and synchronization without introducing fine or background location.
+Durable notification-reconciliation requests live in Drift and are consumed after authenticated notification bootstrap, after relevant foreground maintenance reconciliation, and by the daily WorkManager path. A serialized consumer coalesces pending requests into one schedule refresh, compares durable desired state with platform pending IDs, and removes only the exact request versions covered by verified convergence. Failures and snooze intent remain durable with bounded retry metadata, so restart or a later trigger can replay them safely. Background work restores or reconciles reminders and synchronization without introducing fine or background location.
 
 ## Backup and restore
 
@@ -125,7 +125,7 @@ Local photo import validates the file and source-byte budget before decoding on 
 
 Sentry is optional by configuration. Events are scrubbed and should contain only technical diagnostics; Shorebird patch attribution is bounded to `base` or an integer while release/dist remain unchanged. Production workflows associate releases with source and artifacts without uploading user data or mutating Sentry.
 
-Shorebird is the Android release/code-push boundary. Each existing flavor maps to a distinct app ID. The updater checks Shorebird for a signed Dart patch at startup and applies it on a subsequent launch. Repository and Shorebird dry-run gates reject native, asset, dependency, toolchain, and unknown changes. Google Cloud KMS signs patches without exporting a private key. Production stable promotion is a separate exact-patch operation after staging device evidence.
+Shorebird is the Android release/code-push boundary. Each existing flavor maps to a distinct app ID. The updater checks Shorebird for a signed Dart patch at startup and applies it on a subsequent launch. Repository and Shorebird dry-run gates reject native, asset, dependency, toolchain, and unknown changes. Google Cloud KMS signs patches without exporting a private key. A production patch is separately authorized and published directly to `stable`; there is no promotion workflow or unpublished-base exception.
 
 ## Build and distribution
 

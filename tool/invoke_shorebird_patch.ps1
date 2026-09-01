@@ -60,21 +60,7 @@ function Get-ReleasePatches {
 
 $patchesBefore = if ($DryRun) { @() } else { @(Get-ReleasePatches) }
 
-# Release 1.0.0+4 was published with a transient generated shorebird.yaml whose
-# packaged bytes cannot be reproduced by the current generator. Runs #5 and #6
-# proved that the only Shorebird compatibility difference is exactly
-# base/assets/flutter_assets/shorebird.yaml; the Android build and native checks
-# otherwise pass. Shorebird cannot patch assets, so for this one legacy base we
-# may safely ignore that generated-config-only difference. Guard the exception by
-# flavor, release version, exact base SHA, and the exact generated config hash
-# observed in run #6. Any future config or release change fails closed.
 $shorebirdConfigHash = (Get-FileHash -LiteralPath $shorebirdConfigPath -Algorithm SHA256).Hash.ToLowerInvariant()
-$legacyConfigAssetDiffAllowed = (
-    $Flavor -eq 'prod' -and
-    $ReleaseVersion -eq '1.0.0+4' -and
-    $ReleaseBaseSha -eq 'a2740314447514e03063a15cd0726de632171d2d' -and
-    $shorebirdConfigHash -eq 'e020e0f579713e5c4849924db9ecd7b6495de68cc3a87b8f7aa71b9cd38bd88c'
-)
 
 $targetTrack = if ($Flavor -eq 'prod') { 'stable' } else { $Flavor }
 $symbols = Join-Path $workspace "build\shorebird-symbols\$Flavor\patch-$($ReleaseVersion.Replace('+', '-'))"
@@ -91,10 +77,6 @@ $arguments = @(
     '--public-key-cmd=bash tool/shorebird_kms_public_key.sh',
     '--sign-cmd=bash tool/shorebird_kms_sign.sh'
 )
-if ($legacyConfigAssetDiffAllowed) {
-    Write-Warning 'Allowing the known generated shorebird.yaml asset difference for legacy prod release 1.0.0+4 only.'
-    $arguments += '--allow-asset-diffs'
-}
 if ($DryRun) { $arguments += '--dry-run' }
 $arguments += @('--', '--no-pub')
 
@@ -151,8 +133,8 @@ $evidence = [ordered]@{
     ci_run_id = [string]$env:GITHUB_RUN_ID
     ci_run_attempt = [string]$env:GITHUB_RUN_ATTEMPT
     native_diff_bypass = $false
-    asset_diff_bypass = [bool]$legacyConfigAssetDiffAllowed
-    asset_diff_bypass_reason = if ($legacyConfigAssetDiffAllowed) { 'legacy-generated-shorebird-yaml-only' } else { $null }
+    asset_diff_bypass = $false
+    asset_diff_bypass_reason = $null
     shorebird_config_sha256 = $shorebirdConfigHash
     generated_at_utc = [DateTime]::UtcNow.ToString('o')
 }

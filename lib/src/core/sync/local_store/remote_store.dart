@@ -57,12 +57,47 @@ mixin _LocalSyncRemoteStore on _LocalSyncStoreBase {
   /// record, or returns null when no intent exists. Active intents
   /// (pending/inFlight/conflictRecovery) may still win; conflict/terminal
   /// intents are user-owned but their local rows must eventually converge.
-  Future<String?> _maskingOutboxIntentState(String entity, String key) async {
-    final row =
-        await (db.select(db.syncOutbox)
-              ..where((r) => r.entity.equals(entity) & r.recordKey.equals(key)))
+  Future<String?> _maskingOutboxIntentState(SyncRecord record) async {
+    final direct =
+        await (db.select(db.syncOutbox)..where(
+              (row) =>
+                  row.entity.equals(record.spec.entity) &
+                  row.recordKey.equals(record.recordKey),
+            ))
             .getSingleOrNull();
-    return row?.state;
+    if (direct != null) return direct.state;
+
+    if (record.spec.entity != 'maintenance_plan' &&
+        record.spec.entity != 'maintenance_record') {
+      return null;
+    }
+
+    final planId = record.spec.entity == 'maintenance_plan'
+        ? record.recordKey
+        : record.values['plan_id'] as String?;
+    final occurrenceId = record.spec.entity == 'maintenance_record'
+        ? record.values['occurrence_id'] as String?
+        : null;
+    if (planId == null) return null;
+
+    final completionRows = await (db.select(
+      db.syncOutbox,
+    )..where((row) => row.entity.equals('maintenance_completion'))).get();
+    for (final row in completionRows) {
+      final payloadJson = row.payloadJson;
+      if (payloadJson == null) continue;
+      try {
+        final payload = jsonDecode(payloadJson) as Map<String, dynamic>;
+        if (payload['plan_id'] != planId) continue;
+        if (occurrenceId != null && payload['occurrence_id'] != occurrenceId) {
+          continue;
+        }
+        return row.state;
+      } on Object {
+        payloadParseFailures++;
+      }
+    }
+    return null;
   }
 
   bool _isActiveIntentState(String? state) =>
@@ -110,10 +145,7 @@ mixin _LocalSyncRemoteStore on _LocalSyncStoreBase {
   }
 
   Future<void> applyRemoteFeedRecord(SyncRecord record) async {
-    final maskingState = await _maskingOutboxIntentState(
-      record.spec.entity,
-      record.recordKey,
-    );
+    final maskingState = await _maskingOutboxIntentState(record);
     await db.transaction(() async {
       await withOutboxSuppressed(() async {
         if (maskingState == null) {
@@ -150,10 +182,7 @@ mixin _LocalSyncRemoteStore on _LocalSyncStoreBase {
   }
 
   Future<void> applyRemoteFeedDelete(SyncRecord record) async {
-    final maskingState = await _maskingOutboxIntentState(
-      record.spec.entity,
-      record.recordKey,
-    );
+    final maskingState = await _maskingOutboxIntentState(record);
     await db.transaction(() async {
       await withOutboxSuppressed(() async {
         if (maskingState == null) {
@@ -562,9 +591,7 @@ ON CONFLICT(key) DO UPDATE SET
           try {
             final decoded =
                 jsonDecode(row.payloadJson!) as Map<String, dynamic>;
-            final compPlanId =
-                decoded['plan_id'] as String? ??
-                (decoded['plan'] as Map<String, dynamic>?)?['id'] as String?;
+            final compPlanId = decoded['plan_id'] as String?;
             if (compPlanId == plan.recordKey) {
               hasLaterPendingPlanMutation = true;
               break;

@@ -6,6 +6,28 @@ The current application version is defined only in `pubspec.yaml`. Released vers
 
 ## Unreleased
 
+- Rebuilt task completion as an occurrence-identified, compare-and-set command:
+  local history, provisional recurrence, inbox acknowledgement, reminder intent,
+  and stable-sequence outbox work commit atomically; the server locks the
+  canonical plan, computes recurrence, records acceptance time/time zone, and
+  returns one strict ten-field contract without accepting or retrying a stale
+  client projection. Duplicate, replay, restart, and two-device losers
+  reconcile to the canonical occurrence instead of showing false success.
+- Guarded completion Undo with the exact completed and successor occurrence so
+  it cannot rewind a later edit/completion, and made plan/area/room/asset edits
+  compare-and-set. Primary-photo deletion and replacement now commit atomically.
+- Serialized reminder reconciliation around durable desired state, verified
+  platform pending IDs, exact request-version acknowledgement, and persistent
+  snooze intent. Direct completion cancel/refresh races and completion-only
+  reason codes were removed.
+- Removed the locally inferred daily-completion reward prompt. A canonical final
+  due completion may mint a 30-minute, account-bound, single-use eligibility
+  token; only that token can authorize a maintenance-qualified rewarded-
+  interstitial claim, while device callbacks remain non-crediting.
+- Collapsed the zero-user Supabase schema to one blank-reset-tested initial
+  migration; removed compatibility entitlement origins, request-shape ladders,
+  internal version-suffixed storage keys, native-ad schema 1, and the unpublished
+  Shorebird base exception. Native ads now use only bridge schema 2.
 - Aligned item/detail and maintenance/metadata validation across localized
   editors, shared Dart domain validation, physical Drift `CHECK` constraints,
   and authoritative PostgreSQL constraints. Charged RPC failures now use a
@@ -31,6 +53,10 @@ The current application version is defined only in `pubspec.yaml`. Released vers
   that canonical extension, and corrected the VersionDeck launch checklist to
   distinguish workflow publication mode from control-file publication status.
 
+### Android release identity (2026-09-01)
+
+- Advanced the protected production release identity to `1.0.1+2` for the next release cycle.
+
 ### Android release identity (2026-08-30)
 
 - Advanced the protected production release identity to `1.0.1+1` for the next release cycle.
@@ -48,12 +74,12 @@ The current application version is defined only in `pubspec.yaml`. Released vers
 ### Sync PATCH and least-privilege repair (2026-08-28)
 
 - Fixed asset, maintenance-plan, and other generic cloud updates that could send full local rows into column-restricted PostgREST PATCH operations and fail with `403` / PostgreSQL `42501`. Creation and update serializers are now separate, every entity owns an explicit mutable-column contract, nullable clears remain supported, and ownership, keys, timestamps, revisions, local-only fields, and RPC-authoritative fields are excluded from updates by construction.
-- Added a forward migration that removes table-wide and stale authenticated UPDATE grants across all synchronized tables, then grants only the exact client update matrix. New pgTAP and real authenticated gateway coverage locks allowed writes, server revision/timestamp advancement, protected-column denial, stale-revision conflicts, and cross-account isolation.
+- Restricted table-wide and stale authenticated UPDATE grants across all synchronized tables in the canonical baseline, then granted only the exact client update matrix. New pgTAP and real authenticated gateway coverage locks allowed writes, server revision/timestamp advancement, protected-column denial, stale-revision conflicts, and cross-account isolation.
 - Classified explicit Data API privilege drift separately from RLS denial as the non-retryable `data_api_acl_contract_mismatch` protocol failure, with diagnostics limited to entity, operation, and SQLSTATE so authorization failures cannot create retry storms or expose record/account data.
 
 ### Maintenance hydration and Sentry hardening (2026-08-29)
 
-- Prevented well-formed maintenance completion conflicts and validation outcomes from aborting initial hydration. Rejected mutations remain failed-visible, later independent work continues, stale plan revisions retry exactly once, and only run-wide authorization/schema or retryable infrastructure failures stop synchronization.
+- Prevented well-formed maintenance completion conflicts and validation outcomes from aborting initial hydration. Rejected mutations remain failed-visible, later independent work continues, canonical conflict rows reconcile without a stale-projection retry, and only run-wide authorization/schema or retryable infrastructure failures stop synchronization.
 - Versioned `complete_maintenance_task` with one fixed contract-1 envelope and a strict ownership/relationship/type/status parser. Malformed or unknown responses fail once with `maintenance_completion_rpc_contract_mismatch`; expected payload rejections use bounded privacy-safe diagnostics.
 - Added stable Sentry fingerprints and allowlisted completion breadcrumbs while strengthening removal of user, IP, geography, request, URL, payload, and custom context data. Expected business conflicts no longer become exception events.
 - Hardened Sentry publication evidence so exact Dart, obfuscation, R8, and engine symbols are hash-bound to the release/source identity and verified through Sentry before finalization. Production IP-storage settings, hosted symbol processing, and affected-event deletion remain separately authorized protected operations.
@@ -69,7 +95,7 @@ The current application version is defined only in `pubspec.yaml`. Released vers
 - Made maintenance history read-only through table access and introduced bounded validated merge restore with durable plan/history conflict outcomes and exact replay.
 - Bound Storage upload permission to a fresh exact staging row, removed authenticated object deletion, made expired attempts recoverable, and enforced concurrent per-account limits of 20 active stages and 100 MiB expected bytes.
 - Replaced no-argument change-feed parity with the service-role-only target-user form and added a protected, redacted per-account parity workflow artifact.
-- Added four ordered forward migrations, adversarial pgTAP coverage, real two-client Storage/economy/restore concurrency coverage, and synchronized backend, monetization, sync, backup, privacy, and operations documentation. The chain is intentionally not squashed until a separately approved destructive pre-launch reset.
+- Folded authoritative mutation, Storage, economy, and restore definitions into the single pre-launch baseline, with adversarial pgTAP coverage, real two-client Storage/economy/restore concurrency coverage, and synchronized backend, monetization, sync, backup, privacy, and operations documentation. No hosted reset or deployment is implied.
 
 ### Pre-launch hardening implementation (2026-08-25)
 
@@ -77,7 +103,7 @@ Implements `docs/pre-launch-hardening-implementation-plan.md` end to end.
 
 - **Idempotent generic batch creation and canonical AdMob event IDs**: new synchronized-row batches now use an exact-primary-key `ON CONFLICT DO NOTHING` path so response-loss replays no longer emit PostgREST `409` / PostgreSQL `23505` noise or abort otherwise-fresh batch inserts. Skipped keys are fetched and acknowledged only when semantic data matches; divergent same-key rows become durable conflicts. A forward Supabase migration accepts the real canonical `ca-app-pub-<16 digits>/<10 digits>` AdMob unit format while retaining the strict technical-property allowlist, fixing production `INVALID_EVENT_PROPERTY` failures for native impression/click events.
 
-- **VersionDeck publication activated**: with the verified production release published, `tool/versiondeck-control.json` flips from pre-release containment to the active state required by verified deployment mode; the pinned control test now asserts active status, and the fail-closed release-evidence requirements are unchanged.
+- **VersionDeck publication remains contained**: `tool/versiondeck-control.json` stays fail-closed in pre-release mode until a separately authorized, verified production artifact exists; repository checks do not claim public deployment.
 
 - **Production release unblocked from dev-plugin leak**: removed the unused `integration_test` SDK dependency and device-lane scaffold; Flutter tool issue flutter/flutter#169336 leaked that dev plugin into `GeneratedPluginRegistrant` during `--no-pub` release assembly, failing `compileProdReleaseJavaWithJavac` (`package dev.flutter.plugins.integration_test does not exist`) on every Shorebird production build. Verified by a local signed release compile with a clean registrant; the existing registrant guard remains as a regression tripwire. The analyzer-exclude policy now accepts flutter_tools-managed platform excludes (3.47 re-adds them on every `pub get`/`gen-l10n`), keeping drift protection for any other absent directory.
 
@@ -94,7 +120,7 @@ Implements `docs/pre-launch-hardening-implementation-plan.md` end to end.
 - **Restore integrity (WP-005, F-007/F-009/F-012)**: restore epoch is published by the backup service on verified commit (`onRestoreCommit`), not the screen; `enqueueRestoreSnapshot` no longer resurrects `failedVisible`/`conflict` rows; staged-media activation lives once in `restore_journal.activateStagedMediaGenerations`.
 - **Sync efficiency and observability (WP-006, F-010/F-015/F-038)**: bounded due-window dequeue with targeted dependency lookups; payload-decode failures increment `SyncStatus.payloadParseFailures` instead of vanishing; feed photo download failures defer to the post-ready worker like first sync; run-level deferral no longer forges per-row error text.
 - **Coordinator decomposition (WP-007, F-011)**: schedule controller owns queued-work flags and the automatic-sync timer; repair workers (drain/media-deferral/integrity) extracted to their own part; ownership enforced by source-scan contract test.
-- **Feature boundaries (WP-009, F-016/F-017)**: settings↔dashboard, rooms↔assets(dialogs moved to ui/widgets), monetization↔maintenance (charged journal hoisted to core/services/charged_operation_journal; reward sheet moved into monetization), trash↔maintenance (task disposal actions moved into maintenance) broken; `presentation_support.dart` exports only ui primitives; boundary contract test added (single documented assets↔maintenance exception).
+- **Feature boundaries (WP-009, F-016/F-017)**: settings↔dashboard, rooms↔assets (dialogs moved to ui/widgets), monetization↔maintenance (charged journal hoisted to core/services/charged_operation_journal; obsolete completion reward sheet removed), and trash↔maintenance (task disposal actions moved into maintenance) cycles broken; `presentation_support.dart` exports only UI primitives; boundary contract test added (single documented assets↔maintenance exception).
 - **Dead code deleted (WP-010, F-013)**: `NotificationMessageGenerator`, `homeKeeperWorkManagerCallback` alias, gateway `syncHead`, and the legacy per-entity cursor API removed together with their pinning tests; health-selector strings localized en/ar; reminder schedule store parameter is required.
 - **Navigation correctness (WP-011, F-019)**: exact-segment notification-route validation; pre-readiness destinations captured in `PendingNotificationRoute` and honored after authentication.
 - **Android explicitness (WP-012, F-025/F-029/F-032/F-033)**: deny-cleartext network security config; AdMob sourcing documented; back-button tooltip; portraitDown accepted.
@@ -138,7 +164,7 @@ Implements `docs/pre-launch-hardening-implementation-plan.md` end to end.
 - Upgraded `archive` to `^4.2.0` (resolving large archive streaming and `XZDecoder` fixes) and verified 100% compliance across all 312 package dependencies under license and vulnerability review policies.
 - Implemented comprehensive pre-release native Android foundation hardening: parameterized Google AdMob Application ID via Gradle `manifestPlaceholders` per flavor, removed `SCHEDULE_EXACT_ALARM` in favor of standard battery-friendly inexact scheduling, pinned toolchain compilation target to `compileSdk = 37` and `minSdk = 26`, eliminated deprecated legacy system UI flags in favor of modern AndroidX `WindowCompat`, added ProGuard/R8 protection for `flutter_foreground_task` and `androidx.media3`, fixed Android 12+ dark mode splash background to `#0D2118`, resolved edge-to-edge `NormalTheme` windowFullscreen conflicts, ensured RTL-safe `paddingStart`/`paddingEnd` across all native ad layout XML resources, and strengthened Drift database schema v1 with `SyncAccount.migrationState` CHECK constraints, nullable `InboxNotifications.dedupeKey`, and idempotent startup triggers.
 - Replaced the duplicate Android APK/AAB build rails with one exact-commit-pinned Shorebird release rail, strict fail-closed Dart-only patch validation, staging-to-stable exact-patch promotion, non-exportable Google Cloud KMS signing, runtime Sentry patch attribution, retained engine symbols, and VersionDeck APK derivation from the canonical AAB without a second Flutter compile. Production publication remains protected and disabled until operator account/app IDs, tokens, environments, KMS, device evidence, and explicit authorization are complete.
-- Rebuilt the never-published production-v1 baseline around one app/build, Drift/backup schema 1, one canonical Supabase migration, one contract-1 change feed plus authoritative snapshots, prepare-before-upload media staging, bounded deletion recovery, and VersionDeck manifest/cache contract 1.
+- Rebuilt the never-published current baseline around one app/build, Drift/backup schema 1, one canonical Supabase migration, one contract-1 change feed plus authoritative snapshots, prepare-before-upload media staging, bounded deletion recovery, and VersionDeck manifest/cache contract 1.
 - Extracted application bootstrap and dependency composition from `main.dart`, split shared UI and monetization buckets into focused modules, removed quarantine and other pre-release compatibility paths, and renamed remediation-era tests around the behavior they protect.
 - Added real loopback Supabase integration coverage for two-user RLS isolation, two local app databases converging through outbox/snapshot/feed, and the private Storage prepare/upload/finalize saga; expanded CI with generated-source drift, documentation-link, secret, dependency-audit, Deno, and application/backend gates.
 - Updated Flutter, WorkManager, foreground-task, archive, SQLite, Supabase CLI, and Java policy baselines and regenerated their locks and derived sources.
@@ -163,7 +189,7 @@ Implements `docs/pre-launch-hardening-implementation-plan.md` end to end.
 - Pinned generated `*.g.dart` files to LF checkouts so the Windows Flutter CI runner can reproduce Drift output without false CRLF-only generated-source failures.
 - Revoked inherited Supabase Data API execution from anonymous and authenticated callers for the four server-only account-cleanup, recent-session, and AdMob settlement `SECURITY DEFINER` RPCs, with explicit service-role grants and pgTAP regression coverage.
 - Removed editable/persisted task Health Group; task scoring, statistics, and icons now derive from the linked item's Item Type. General remains explicitly excluded from weighted health-score normalization, while Cleaning remains task semantics.
-- Made the “Today’s care is complete” reward prompt content-sized and accessible, with concise English/Arabic copy, responsive non-truncated actions, reduced-motion handling, and verification-pending messaging that never implies device-side reward credit.
+- Removed the pre-acceptance “Today’s care is complete” reward prompt so local task counts cannot imply server reward eligibility; maintenance-qualified claims now require canonical single-use eligibility.
 - Removed Category as a duplicate item classification: Item Type is now the sole item classifier across UI/domain, Drift schema/search, asset sync payloads, current backups, and the pre-launch Supabase asset/RPC contract; safety checks use `asset_type`, while task Health Group behavior remains an independent domain rule.
 - Unified the English/Arabic language selector across onboarding and Settings with anchor-width menus, directional RTL positioning, centered selected labels, and visible open-state accessibility feedback.
 - Standardized Settings row gutters, leading-icon columns, text starts, trailing controls, and RTL-aware dividers across Language, Weather, permissions, and notification preferences without changing their behavior.
@@ -193,8 +219,8 @@ Implements `docs/pre-launch-hardening-implementation-plan.md` end to end.
   - Multi-factor resilient Google Sign-In authentication with secure session persistence.
   - Fully automated, privacy-compliant account deletion lifecycle with cryptographic recovery tokens and complete media cleanup.
   - Server-authoritative points and monetization engine supporting Google AdMob rewarded ads with server-side verification (SSV), 0-point free asset creation, and task-based point debiting.
-  - Contextual notification scheduling, background WorkManager synchronization, exact alarm support, and periodic maintenance reminders.
-  - Local backup and restore subsystem with ZIP archive integrity validation, SHA-256 manifest checks, and rollback safety.
+  - Contextual inexact notification scheduling, background WorkManager synchronization, durable reconciliation, and periodic maintenance reminders.
+  - Local backup and restore subsystem with authenticated streaming `.owntend-backup` container integrity validation, SHA-256 manifest checks, and rollback safety.
   - Complete dual-language internationalization and RTL layout support for English and Arabic.
   - Privacy-preserving Sentry observability with strict PII scrubbing and symbolicated crash reporting.
   - First-class Empty Trash bulk purge capability with transactional cascading deletion, photo file unlinking, and UI confirmation.

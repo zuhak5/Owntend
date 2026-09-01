@@ -6,6 +6,9 @@ import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:owntend/src/core/data/repositories.dart';
+
+import 'support/maintenance_test_extensions.dart';
+
 import 'package:owntend/src/core/database/app_database.dart';
 import 'package:owntend/src/core/domain/contracts.dart';
 import 'package:owntend/src/core/domain/models.dart';
@@ -108,6 +111,7 @@ void main() {
         await Future<void>.delayed(const Duration(milliseconds: 180));
         expect(emissionCount, 1);
 
+        final editBase = (await maintenance.getTask(planId))!.plan;
         await maintenance.savePlan(
           id: planId,
           assetId: assetId,
@@ -118,12 +122,72 @@ void main() {
           ),
           priority: PriorityLevel.medium,
           nextDueDate: DateTime(2026, 7, 1),
+          expectedOccurrenceId: editBase.currentOccurrenceId,
+          expectedUpdatedAt: editBase.updatedAt,
         );
         await changed.future.timeout(const Duration(seconds: 2));
 
         expect(emissionCount, 2);
       },
     );
+
+    test('stale task editor cannot overwrite a newer plan edit', () async {
+      final maintenance = DriftMaintenanceRepository(db);
+      final roomId = await repo.saveRoom(
+        areaId: 'area_first_floor',
+        name: 'Concurrent edit room',
+      );
+      final assetId = await repo.saveAsset(
+        name: 'Concurrent edit asset',
+        roomId: roomId,
+      );
+      final planId = await maintenance.savePlan(
+        assetId: assetId,
+        title: 'Original title',
+        recurrence: const RecurrenceRule(
+          interval: 1,
+          unit: RecurrenceUnit.months,
+        ),
+        priority: PriorityLevel.medium,
+        nextDueDate: DateTime(2026, 9, 1),
+      );
+      final sharedBase = (await maintenance.getTask(planId))!.plan;
+
+      await maintenance.savePlan(
+        id: planId,
+        assetId: assetId,
+        title: 'First editor title',
+        recurrence: sharedBase.recurrence,
+        priority: sharedBase.priority,
+        nextDueDate: sharedBase.nextDueDate,
+        expectedOccurrenceId: sharedBase.currentOccurrenceId,
+        expectedUpdatedAt: sharedBase.updatedAt,
+      );
+
+      await expectLater(
+        maintenance.savePlan(
+          id: planId,
+          assetId: assetId,
+          title: 'Stale editor title',
+          recurrence: sharedBase.recurrence,
+          priority: sharedBase.priority,
+          nextDueDate: sharedBase.nextDueDate,
+          expectedOccurrenceId: sharedBase.currentOccurrenceId,
+          expectedUpdatedAt: sharedBase.updatedAt,
+        ),
+        throwsA(
+          isA<MaintenancePlanValidationException>().having(
+            (error) => error.code,
+            'code',
+            'stale_plan_edit',
+          ),
+        ),
+      );
+      expect(
+        (await maintenance.getTask(planId))!.plan.title,
+        'First editor title',
+      );
+    });
 
     test(
       'item detail stream tracks detail rows without duplicate emissions',
@@ -158,12 +222,14 @@ void main() {
         await Future<void>.delayed(const Duration(milliseconds: 180));
         expect(emissionCount, 1);
 
+        final editBase = (await repo.getAsset(assetId))!;
         await repo.saveAsset(
           id: assetId,
           name: 'Washer',
           assetType: AssetType.device,
           roomId: roomId,
           deviceDetails: const DeviceDetails(brand: 'LG', model: 'ThinQ'),
+          expectedUpdatedAt: editBase.updatedAt,
         );
         await changed.future.timeout(const Duration(seconds: 2));
 
@@ -220,7 +286,7 @@ void main() {
         await Future<void>.delayed(const Duration(milliseconds: 180));
         expect(emissionCount, 1);
 
-        await maintenance.completePlan(
+        await maintenance.completeCurrentOccurrence(
           planId,
           completedAt: DateTime(2026, 7, 1),
         );
@@ -262,16 +328,21 @@ void main() {
         name: 'Laundry',
         sortOrder: 7,
       );
+      final room = (await repo.listRooms()).singleWhere(
+        (candidate) => candidate.id == roomId,
+      );
 
       await repo.saveArea(
         id: area.id,
         name: 'Upper Floor',
         kind: AreaKind.indoor,
+        expectedUpdatedAt: area.updatedAt,
       );
       await repo.saveRoom(
         id: roomId,
         areaId: 'area_first_floor',
         name: 'Laundry Room',
+        expectedUpdatedAt: room.updatedAt,
       );
 
       final updatedArea = await (db.select(
@@ -399,12 +470,14 @@ void main() {
         );
         await db.customStatement('DELETE FROM offline_mutation_queue');
 
+        final editBase = (await repo.getAsset(assetId))!;
         await repo.saveAsset(
           id: assetId,
           name: 'Dieffenbachia',
           assetType: AssetType.plant,
           roomId: roomId,
           plantDetails: const PlantDetails(wateringIntervalDays: 5),
+          expectedUpdatedAt: editBase.updatedAt,
         );
 
         final plans = {
@@ -451,17 +524,19 @@ void main() {
           priority: PriorityLevel.medium,
           nextDueDate: DateTime(2026, 7, 1, 9),
         );
-        await maintenance.completePlan(
+        await maintenance.completeCurrentOccurrence(
           planId,
           completedAt: DateTime(2026, 7, 1, 9),
         );
 
+        final editBase = (await repo.getAsset(assetId))!;
         await repo.saveAsset(
           id: assetId,
           name: 'Dieffenbachia',
           assetType: AssetType.plant,
           roomId: roomId,
           plantDetails: const PlantDetails(wateringIntervalDays: 5),
+          expectedUpdatedAt: editBase.updatedAt,
         );
 
         final plan = await (db.select(
@@ -471,30 +546,6 @@ void main() {
         expect(plan.nextDueDate, DateTime(2026, 7, 6, 9));
       },
     );
-
-    test('archives things and empty rooms from active lists', () async {
-      final roomId = await repo.saveRoom(
-        areaId: 'area_second_floor',
-        name: 'Spare Room',
-      );
-      final assetId = await repo.saveAsset(
-        name: 'Spare lamp',
-        assetType: AssetType.device,
-        roomId: roomId,
-      );
-
-      expect(() => repo.archiveRoom(roomId), throwsStateError);
-
-      await repo.archiveAsset(assetId);
-      expect(await repo.listAssets(roomId: roomId), isEmpty);
-
-      await repo.archiveRoom(roomId);
-      expect(
-        (await repo.listRooms(areaId: 'area_second_floor'))
-            .map((room) => room.id),
-        isNot(contains(roomId)),
-      );
-    });
 
     test('moves and copies items with active tasks', () async {
       final maintenance = DriftMaintenanceRepository(db);
@@ -662,7 +713,10 @@ void main() {
       final savedDisabled = (await maintenance.listSavedTasks()).single;
       expect(savedDisabled.plan.isEnabled, isFalse);
       expect(savedDisabled.plan.nextDueDate, originalDue);
-      expect(await maintenance.completePlan(planId), isFalse);
+      expect(
+        (await maintenance.completeCurrentOccurrence(planId)).status,
+        LocalMaintenanceCompletionStatus.planInactive,
+      );
       expect(await maintenance.listRecordsForPlan(planId), hasLength(1));
 
       await maintenance.setTaskEnabled(planId, true);
@@ -700,6 +754,9 @@ void main() {
 
       await maintenance.skipPlanOccurrence(
         planId,
+        expectedOccurrenceId: (await maintenance.getTask(planId))!
+            .plan
+            .currentOccurrenceId,
         skippedAt: DateTime(2026, 1, 1, 10),
         reason: 'Already clean',
       );
@@ -711,6 +768,9 @@ void main() {
       await maintenance.postponePlan(
         planId,
         DateTime(2026, 1, 10, 9),
+        expectedOccurrenceId: (await maintenance.getTask(planId))!
+            .plan
+            .currentOccurrenceId,
         reason: 'Waiting for supplies',
       );
       expect(
@@ -742,7 +802,7 @@ void main() {
           priority: PriorityLevel.medium,
           nextDueDate: DateTime(2026),
         );
-        await maintenance.completePlan(
+        await maintenance.completeCurrentOccurrence(
           planId,
           completedAt: DateTime(2026, 1, 2),
         );
@@ -792,21 +852,29 @@ void main() {
         nextDueDate: originalDue,
       );
 
-      final first = await maintenance.completePlan(
+      final occurrenceId = (await maintenance.getTask(planId))!
+          .plan
+          .currentOccurrenceId;
+      final first = await maintenance.completePlanResult(
         planId,
+        expectedOccurrenceId: occurrenceId,
+        operationId: 'clean-filter-first',
         completedAt: completedAt,
-        expectedNextDueDate: originalDue,
       );
-      final duplicate = await maintenance.completePlan(
+      final duplicate = await maintenance.completePlanResult(
         planId,
+        expectedOccurrenceId: occurrenceId,
+        operationId: 'clean-filter-second-screen',
         completedAt: completedAt,
-        expectedNextDueDate: originalDue,
       );
       final updated = await maintenance.getTask(planId);
       final records = await maintenance.listRecordsForPlan(planId);
 
-      expect(first, isTrue);
-      expect(duplicate, isFalse);
+      expect(first.isApplied, isTrue);
+      expect(
+        duplicate.status,
+        LocalMaintenanceCompletionStatus.completedElsewhere,
+      );
       expect(records, hasLength(1));
       expect(records.single.dueDate, originalDue);
       expect(
@@ -839,7 +907,7 @@ void main() {
         nextDueDate: dueToday,
       );
 
-      await maintenance.completePlan(
+      await maintenance.completeCurrentOccurrence(
         planId,
         completedAt: DateTime(2026, 6, 15, 9),
       );
@@ -852,9 +920,14 @@ void main() {
     test('does not crash when completing a missing plan', () async {
       final maintenance = DriftMaintenanceRepository(db);
 
-      final completed = await maintenance.completePlan('missing_plan');
+      final completed = await maintenance.completeCurrentOccurrence(
+        'missing_plan',
+      );
 
-      expect(completed, isFalse);
+      expect(
+        completed.status,
+        LocalMaintenanceCompletionStatus.planUnavailable,
+      );
     });
 
     test(
@@ -885,7 +958,7 @@ void main() {
       },
     );
 
-    test('rejects maintenance plans for archived assets', () async {
+    test('rejects maintenance plans for trashed assets', () async {
       final maintenance = DriftMaintenanceRepository(db);
       final roomId = await repo.saveRoom(
         areaId: 'area_first_floor',
@@ -896,7 +969,7 @@ void main() {
         assetType: AssetType.plant,
         roomId: roomId,
       );
-      await repo.archiveAsset(assetId);
+      await repo.trashAsset(assetId);
 
       expect(
         () => maintenance.savePlan(
@@ -937,7 +1010,10 @@ void main() {
         priority: PriorityLevel.high,
         nextDueDate: DateTime(2026),
       );
-      await maintenance.completePlan(planId, completedAt: DateTime(2026, 1, 2));
+      await maintenance.completeCurrentOccurrence(
+        planId,
+        completedAt: DateTime(2026, 1, 2),
+      );
       await db
           .into(db.assetPhotos)
           .insert(
@@ -1490,6 +1566,7 @@ void main() {
         );
         expect(await inbox.unreadCount(), 1);
 
+        final editBase = (await maintenance.getTask(planId))!.plan;
         await maintenance.savePlan(
           id: planId,
           assetId: assetId,
@@ -1501,6 +1578,8 @@ void main() {
           priority: PriorityLevel.medium,
           nextDueDate: DateTime(2026, 8, 16, 9),
           metadata: null,
+          expectedOccurrenceId: editBase.currentOccurrenceId,
+          expectedUpdatedAt: editBase.updatedAt,
         );
 
         expect((await maintenance.getTask(planId))!.plan.metadata, isNull);
@@ -1533,14 +1612,34 @@ void main() {
           nextDueDate: due,
         );
         await expectLater(
-          maintenance.postponePlan(planId, DateTime(2026, 8, 15, 9)),
+          maintenance.postponePlan(
+            planId,
+            DateTime(2026, 8, 15, 9),
+            expectedOccurrenceId: (await maintenance.getTask(planId))!
+                .plan
+                .currentOccurrenceId,
+          ),
           throwsA(isA<MaintenancePlanValidationException>()),
         );
         final target = DateTime(2026, 8, 18, 9);
-        await maintenance.postponePlan(planId, target, reason: 'Travel');
+        await maintenance.postponePlan(
+          planId,
+          target,
+          expectedOccurrenceId: (await maintenance.getTask(planId))!
+              .plan
+              .currentOccurrenceId,
+          reason: 'Travel',
+        );
         expect((await maintenance.getTask(planId))!.plan.nextDueDate, target);
         await expectLater(
-          maintenance.postponePlan(planId, target, reason: 'Duplicate'),
+          maintenance.postponePlan(
+            planId,
+            target,
+            expectedOccurrenceId: (await maintenance.getTask(planId))!
+                .plan
+                .currentOccurrenceId,
+            reason: 'Duplicate',
+          ),
           throwsA(isA<MaintenancePlanValidationException>()),
         );
       },
@@ -1571,8 +1670,10 @@ void main() {
       );
       final completion = await maintenance.completePlanResult(
         planId,
+        expectedOccurrenceId: (await maintenance.getTask(planId))!
+            .plan
+            .currentOccurrenceId,
         completedAt: now,
-        expectedNextDueDate: due,
       );
       var streak = await streaks.refresh(now);
       expect(streak.currentStreak, 1);
@@ -1581,6 +1682,8 @@ void main() {
       await maintenance.undoCompletion(
         planId: planId,
         completionId: completion.operationId!,
+        completedOccurrenceId: completion.completedOccurrenceId!,
+        expectedCurrentOccurrenceId: completion.nextOccurrenceId!,
         previousDueDate: completion.previousDueDate!,
         expectedCurrentNextDueDate: completion.nextDueDate!,
       );

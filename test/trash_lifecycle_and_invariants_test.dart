@@ -1,11 +1,13 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:drift/drift.dart' hide isNull, isNotNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as image;
 import 'package:owntend/src/core/data/repositories.dart';
+
+import 'support/maintenance_test_extensions.dart';
+
 import 'package:owntend/src/core/database/app_database.dart';
 import 'package:owntend/src/core/domain/models.dart';
 import 'package:owntend/src/core/sync/local_sync_store.dart';
@@ -88,7 +90,7 @@ void main() {
         priority: PriorityLevel.high,
         nextDueDate: planDueDate,
       );
-      await maintenanceRepo.completePlan(
+      await maintenanceRepo.completeCurrentOccurrence(
         planId,
         completedAt: DateTime.utc(2026, 8, 20, 9, 0, 0),
       );
@@ -195,8 +197,10 @@ void main() {
         final earlyCompletedAt = DateTime.utc(2026, 8, 20, 10, 0, 0);
         final result = await maintenanceRepo.completePlanResult(
           planId,
+          expectedOccurrenceId: (await maintenanceRepo.getTask(planId))!
+              .plan
+              .currentOccurrenceId,
           completedAt: earlyCompletedAt,
-          expectedNextDueDate: scheduledDueDate,
         );
 
         expect(result.isApplied, isTrue);
@@ -243,8 +247,10 @@ void main() {
 
         final completion = await maintenanceRepo.completePlanResult(
           planId,
+          expectedOccurrenceId: (await maintenanceRepo.getTask(planId))!
+              .plan
+              .currentOccurrenceId,
           completedAt: initialDue,
-          expectedNextDueDate: initialDue,
         );
 
         // Verify outbox has the completion mutation
@@ -257,6 +263,8 @@ void main() {
         await maintenanceRepo.undoCompletion(
           planId: planId,
           completionId: completion.operationId!,
+          completedOccurrenceId: completion.completedOccurrenceId!,
+          expectedCurrentOccurrenceId: completion.nextOccurrenceId!,
           previousDueDate: completion.previousDueDate!,
           expectedCurrentNextDueDate: completion.nextDueDate!,
         );
@@ -301,8 +309,10 @@ void main() {
 
       final completion = await maintenanceRepo.completePlanResult(
         planId,
+        expectedOccurrenceId: (await maintenanceRepo.getTask(planId))!
+            .plan
+            .currentOccurrenceId,
         completedAt: initialDue,
-        expectedNextDueDate: initialDue,
       );
 
       // Simulate that the sync outbox was already processed and purged
@@ -312,6 +322,8 @@ void main() {
       await maintenanceRepo.undoCompletion(
         planId: planId,
         completionId: completion.operationId!,
+        completedOccurrenceId: completion.completedOccurrenceId!,
+        expectedCurrentOccurrenceId: completion.nextOccurrenceId!,
         previousDueDate: completion.previousDueDate!,
         expectedCurrentNextDueDate: completion.nextDueDate!,
       );
@@ -397,7 +409,7 @@ void main() {
         roomId: roomId,
       );
 
-      final planId = await maintenanceRepo.savePlan(
+      await maintenanceRepo.savePlan(
         assetId: assetId,
         title: 'Clean Coils',
         recurrence: const RecurrenceRule(
@@ -408,16 +420,12 @@ void main() {
         nextDueDate: DateTime.utc(2026, 9, 1),
       );
 
-      // Insert a notification reconciliation request
-      await db
-          .into(db.notificationReconciliationRequests)
-          .insert(
-            NotificationReconciliationRequestsCompanion.insert(
-              scopeKey: 'plan:$planId',
-              planId: Value(planId),
-              reason: 'local_completion',
-            ),
-          );
+      // Saving the plan atomically persisted its schedule-reconciliation
+      // request, so account deletion must clear it with the domain rows.
+      expect(
+        await db.select(db.notificationReconciliationRequests).get(),
+        isNotEmpty,
+      );
 
       await searchRepo.rebuildIndex();
       expect(await searchRepo.search('Refrigerator'), isNotEmpty);
@@ -535,6 +543,56 @@ void main() {
         );
         expect(
           photos.singleWhere((photo) => photo.id == second.id).isPrimary,
+          isTrue,
+        );
+      },
+    );
+
+    test(
+      'deleting the primary photo atomically promotes a successor',
+      () async {
+        final areaId = await assetRepo.saveArea(
+          name: 'Delete photo area',
+          kind: AreaKind.indoor,
+        );
+        final roomId = await assetRepo.saveRoom(
+          areaId: areaId,
+          name: 'Delete photo room',
+        );
+        final assetId = await assetRepo.saveAsset(
+          name: 'Delete photo asset',
+          roomId: roomId,
+        );
+        final sourceA = File(p.join(tempDir.path, 'delete-a.jpg'));
+        final sourceB = File(p.join(tempDir.path, 'delete-b.jpg'));
+        await _writeTestPhoto(sourceA, image.ColorRgb8(100, 30, 10));
+        await _writeTestPhoto(sourceB, image.ColorRgb8(10, 80, 140));
+        final primary = await assetRepo.addPhoto(
+          assetId,
+          sourceA.path,
+          makePrimary: true,
+        );
+        final successor = await assetRepo.addPhoto(assetId, sourceB.path);
+        await db.delete(db.syncOutbox).go();
+
+        await assetRepo.deletePhoto(primary.id);
+
+        final photos = await assetRepo.listPhotosForAsset(assetId);
+        expect(photos, hasLength(1));
+        expect(photos.single.id, successor.id);
+        expect(photos.single.isPrimary, isTrue);
+        final outbox = await db.select(db.syncOutbox).get();
+        expect(
+          outbox.any(
+            (row) => row.entity == 'asset_photo' && row.recordKey == primary.id,
+          ),
+          isTrue,
+        );
+        expect(
+          outbox.any(
+            (row) =>
+                row.entity == 'asset_photo_primary' && row.recordKey == assetId,
+          ),
           isTrue,
         );
       },

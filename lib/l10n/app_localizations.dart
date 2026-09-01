@@ -5980,42 +5980,6 @@ abstract class AppLocalizations {
   /// **'Ad Inspector could not be opened right now.'**
   String get adInspectorOpenFailed;
 
-  /// No description provided for @todayCareComplete.
-  ///
-  /// In en, this message translates to:
-  /// **'Today’s care is complete'**
-  String get todayCareComplete;
-
-  /// No description provided for @optionalDailyRewardDescription.
-  ///
-  /// In en, this message translates to:
-  /// **'Watch a short video to earn 2 bonus points.'**
-  String get optionalDailyRewardDescription;
-
-  /// No description provided for @earnTwoPoints.
-  ///
-  /// In en, this message translates to:
-  /// **'Earn 2 points'**
-  String get earnTwoPoints;
-
-  /// No description provided for @rewardWatchedVerifyingTwo.
-  ///
-  /// In en, this message translates to:
-  /// **'Verifying your reward…'**
-  String get rewardWatchedVerifyingTwo;
-
-  /// No description provided for @noRewardAvailable.
-  ///
-  /// In en, this message translates to:
-  /// **'No reward is available right now.'**
-  String get noRewardAvailable;
-
-  /// No description provided for @dailyRewardAlreadyClaimed.
-  ///
-  /// In en, this message translates to:
-  /// **'Today’s completion reward was already claimed or is unavailable.'**
-  String get dailyRewardAlreadyClaimed;
-
   /// No description provided for @pointsWallet.
   ///
   /// In en, this message translates to:

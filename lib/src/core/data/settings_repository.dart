@@ -314,11 +314,15 @@ class DriftSettingsRepository implements SettingsRepository {
     domain.NotificationPreferences preferences,
   ) async {
     final normalized = _normalizeNotificationPreferences(preferences);
-    await _setSettingAt(
-      'notification_preferences',
-      jsonEncode(_notificationPreferencesToJson(normalized)),
-      DateTime.now(),
-    );
+    final now = DateTime.now();
+    await db.transaction(() async {
+      await _setSettingAt(
+        'notification_preferences',
+        jsonEncode(_notificationPreferencesToJson(normalized)),
+        now,
+      );
+      await _enqueueFullScheduleReconciliation(db, changedAt: now);
+    });
   }
 
   Future<SettingRow?> _setting(String key) {

@@ -8,10 +8,14 @@ import 'support/wait_for.dart';
 
 import 'package:owntend/src/core/data/repositories.dart';
 import 'package:owntend/src/core/database/app_database.dart';
+import 'package:owntend/src/core/domain/contracts.dart';
 import 'package:owntend/src/core/domain/models.dart';
 import 'package:owntend/src/core/services/reminder_schedule_reconciler.dart';
 import 'package:owntend/src/core/supabase/supabase_failure.dart';
 import 'package:owntend/src/core/sync/local_sync_store.dart';
+
+import 'support/maintenance_test_extensions.dart';
+
 import 'package:owntend/src/core/sync/sync_dtos.dart';
 
 void main() {
@@ -98,48 +102,6 @@ void main() {
   });
 
   test(
-    'maintenance mutation state survives conflict recovery and restart',
-    () async {
-      final createdAt = DateTime.utc(2026, 7, 28, 12);
-      await db
-          .into(db.syncOutbox)
-          .insert(
-            SyncOutboxCompanion.insert(
-              entity: 'maintenance_completion',
-              recordKey: 'operation-1',
-              operation: 'execute',
-              payloadJson: const Value('{"version":1}'),
-              userId: const Value('user-a'),
-              changedAt: Value(createdAt),
-              createdAt: Value(createdAt),
-              state: const Value('pending'),
-            ),
-          );
-      final pending = (await store.pendingMutations()).singleWhere(
-        (mutation) => mutation.entity == 'maintenance_completion',
-      );
-
-      await store.markMutationInFlight(pending, userId: 'user-a');
-      await store.markMaintenanceConflictRecovery(
-        pending,
-        payloadJson: '{"version":1,"expected_plan_revision":7}',
-        errorCode: 'stale_plan_revision',
-        message: 'Safe retry required.',
-      );
-
-      final persisted = (await store.pendingMutations()).singleWhere(
-        (mutation) => mutation.entity == 'maintenance_completion',
-      );
-      expect(persisted.operationId, 'operation-1');
-      expect(persisted.userId, 'user-a');
-      expect(persisted.createdAt?.toUtc(), createdAt);
-      expect(persisted.state, SyncMutationState.conflictRecovery);
-      expect(persisted.lastErrorCode, 'stale_plan_revision');
-      expect(persisted.payloadJson, contains('"expected_plan_revision":7'));
-    },
-  );
-
-  test(
     'rejected maintenance completion rolls back committed local state',
     () async {
       final repository = DriftAssetRepository(db);
@@ -191,12 +153,11 @@ void main() {
         now: () => DateTime.utc(2026, 7, 28, 9),
       );
       expect(
-        await maintenance.completePlan(
+        (await maintenance.completeCurrentOccurrence(
           'rejected-maintenance-plan',
           completedAt: initialDueDate,
-          expectedNextDueDate: initialDueDate,
-        ),
-        isTrue,
+        )).status,
+        LocalMaintenanceCompletionStatus.appliedPendingSync,
       );
 
       final mutation = (await store.pendingMutations()).singleWhere(
@@ -204,11 +165,11 @@ void main() {
       );
       final queuedPayload =
           jsonDecode(mutation.payloadJson!) as Map<String, dynamic>;
-      expect(queuedPayload['idempotency_key'], mutation.operationId);
-      expect(queuedPayload['expected_next_due_date'], isNotNull);
-      final preimage = queuedPayload['preimage'] as Map<String, dynamic>;
-      final preimagePlan = preimage['plan'] as Map<String, dynamic>;
-      expect(preimagePlan['next_due_date'], initialDueDate.toIso8601String());
+      expect(queuedPayload['operation_id'], mutation.operationId);
+      expect(queuedPayload['contract_version'], 1);
+      expect(queuedPayload.containsKey('expected_next_due_date'), isFalse);
+      final preimage = queuedPayload['local_preimage'] as Map<String, dynamic>;
+      expect(preimage['next_due_date'], initialDueDate.toIso8601String());
       expect(
         await (db.select(
           db.maintenanceRecords,
@@ -219,7 +180,7 @@ void main() {
 
       await store.markMaintenanceCompletionFailedVisible(
         mutation,
-        errorCode: 'occurrence_changed',
+        errorCode: 'stale_occurrence',
         message: 'The maintenance plan changed on another device.',
       );
 
@@ -242,7 +203,7 @@ void main() {
         (row) => row.recordKey == mutation.operationId,
       );
       expect(failed.state, SyncMutationState.failedVisible.name);
-      expect(failed.lastErrorCode, 'occurrence_changed');
+      expect(failed.lastErrorCode, 'stale_occurrence');
 
       final reminders = await DriftReminderScheduleStore(db).readAll();
       expect(reminders, hasLength(1));
@@ -407,29 +368,37 @@ void main() {
       final records = payload['records'] as List<dynamic>;
       expect(records, hasLength(1));
       expect((records.single as Map)['operation_id'], 'restore-record');
+      expect((records.single as Map)['occurrence_id'], isNotEmpty);
+      expect((records.single as Map)['accepted_at'], isNotNull);
+      expect((records.single as Map)['time_zone_id'], 'UTC');
     },
   );
 
   test(
-    'legacy generic history mutations are deduplicated or quarantined visibly',
+    'exact undo subsumes its trigger mutation and rejects unauthorized history',
     () async {
       await db.delete(db.syncOutbox).go();
       final changedAt = DateTime.utc(2026, 8, 27, 2);
       await db.batch((batch) {
         batch.insertAll(db.syncOutbox, [
           SyncOutboxCompanion.insert(
-            entity: 'maintenance_completion',
+            entity: 'maintenance_undo',
             recordKey: 'authorized-record',
             operation: 'execute',
             payloadJson: const Value(
-              '{"record":{"id":"authorized-record"},"plan":{"id":"plan"}}',
+              '{"contract_version":1,"operation_id":"undo:authorized-record",'
+              '"plan_id":"plan","completion_id":"authorized-record",'
+              '"completed_occurrence_id":"occurrence",'
+              '"expected_current_occurrence_id":"next:authorized-record",'
+              '"previous_due_date":"2026-08-27T02:00:00.000Z",'
+              '"expected_current_next_due_date":"2026-09-27T02:00:00.000Z"}',
             ),
             changedAt: Value(changedAt),
           ),
           SyncOutboxCompanion.insert(
             entity: 'maintenance_record',
             recordKey: 'authorized-record',
-            operation: 'upsert',
+            operation: 'delete',
             payloadJson: const Value('{}'),
             changedAt: Value(changedAt),
           ),
@@ -645,6 +614,79 @@ void main() {
     expect(relationIndex, isNonNegative);
     expect(assetIndex, lessThan(relationIndex));
     expect(tagIndex, lessThan(relationIndex));
+  });
+
+  test('terminal completion predecessor releases its successor', () async {
+    await db.delete(db.syncOutbox).go();
+    final changedAt = DateTime.utc(2026, 8, 31, 10);
+    await db.batch((batch) {
+      batch.insertAll(db.syncOutbox, [
+        SyncOutboxCompanion.insert(
+          entity: 'maintenance_completion',
+          recordKey: 'terminal-predecessor',
+          operation: 'execute',
+          changedAt: Value(changedAt),
+          payloadJson: const Value(
+            '{"contract_version":1,"operation_id":"terminal-predecessor",'
+            '"plan_id":"plan-a","occurrence_id":"occurrence-a",'
+            '"depends_on_operation_id":null}',
+          ),
+          attempts: const Value(-1),
+          state: const Value('failedVisible'),
+        ),
+        SyncOutboxCompanion.insert(
+          entity: 'maintenance_completion',
+          recordKey: 'released-successor',
+          operation: 'execute',
+          changedAt: Value(changedAt),
+          payloadJson: const Value(
+            '{"contract_version":1,"operation_id":"released-successor",'
+            '"plan_id":"plan-a","occurrence_id":"occurrence-b",'
+            '"depends_on_operation_id":"terminal-predecessor"}',
+          ),
+        ),
+      ]);
+    });
+
+    final pending = await store.pendingMutations();
+
+    expect(
+      pending.map((mutation) => mutation.recordKey),
+      contains('released-successor'),
+    );
+    expect(
+      pending.map((mutation) => mutation.recordKey),
+      isNot(contains('terminal-predecessor')),
+    );
+  });
+
+  test('timestamp ties preserve monotonically assigned local order', () async {
+    await db.delete(db.syncOutbox).go();
+    final changedAt = DateTime.utc(2026, 8, 31, 11);
+    await db.batch((batch) {
+      batch.insertAll(db.syncOutbox, [
+        SyncOutboxCompanion.insert(
+          entity: 'tag',
+          recordKey: 'inserted-first',
+          operation: 'upsert',
+          changedAt: Value(changedAt),
+        ),
+        SyncOutboxCompanion.insert(
+          entity: 'tag',
+          recordKey: 'inserted-second',
+          operation: 'upsert',
+          changedAt: Value(changedAt),
+        ),
+      ]);
+    });
+
+    final pending = await store.pendingMutations();
+
+    expect(pending.map((mutation) => mutation.recordKey), [
+      'inserted-first',
+      'inserted-second',
+    ]);
+    expect(pending.first.localSequence, lessThan(pending.last.localSequence));
   });
 
   test('tag names are reused case-insensitively', () async {
@@ -874,11 +916,15 @@ void main() {
           serverUpdatedAt: now,
         ),
       ]);
+      final editBase = (await DriftAssetRepository(
+        db,
+      ).listAreas()).singleWhere((area) => area.id == 'locally-edited-area');
       await DriftAssetRepository(db).saveArea(
         id: 'locally-edited-area',
         name: 'Pending local name',
         kind: AreaKind.indoor,
         sortOrder: 6,
+        expectedUpdatedAt: editBase.updatedAt,
       );
 
       final removed = await store.reconcileAuthoritativeRecordKeys(
@@ -964,10 +1010,6 @@ void main() {
     expect(
       syncSpecByEntity['user_setting']!.localWhere,
       contains("'permission_education_seen'"),
-    );
-    expect(
-      syncSpecByEntity['user_setting']!.localWhere,
-      isNot(contains('permission_education_seen_v2')),
     );
   });
 

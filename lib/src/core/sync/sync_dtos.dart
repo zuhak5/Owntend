@@ -424,6 +424,7 @@ const syncEntitySpecs = <SyncEntitySpec>[
     keyColumns: ['id'],
     localColumns: [
       'id',
+      'current_occurrence_id',
       'asset_id',
       'relative_path',
       'caption',
@@ -452,6 +453,7 @@ const syncEntitySpecs = <SyncEntitySpec>[
       'recurrence_unit',
       'priority',
       'next_due_date',
+      'current_occurrence_id',
       'reminder_days_before',
       'is_enabled',
       'created_at',
@@ -465,6 +467,7 @@ const syncEntitySpecs = <SyncEntitySpec>[
       'recurrence_unit',
       'priority',
       'next_due_date',
+      'current_occurrence_id',
       'reminder_days_before',
       'is_enabled',
       'archived_at',
@@ -506,9 +509,18 @@ const syncEntitySpecs = <SyncEntitySpec>[
     localTable: 'maintenance_records',
     remoteTable: 'maintenance_records',
     keyColumns: ['id'],
-    localColumns: ['id', 'plan_id', 'due_date', 'completed_at', 'notes'],
+    localColumns: [
+      'id',
+      'plan_id',
+      'occurrence_id',
+      'due_date',
+      'completed_at',
+      'accepted_at',
+      'time_zone_id',
+      'notes',
+    ],
     updatableLocalColumns: {},
-    dateColumns: {'due_date', 'completed_at'},
+    dateColumns: {'due_date', 'completed_at', 'accepted_at'},
     modifiedExpression: 'completed_at',
   ),
   SyncEntitySpec(
@@ -585,6 +597,7 @@ class LocalSyncMutation {
     required this.operation,
     required this.changedAt,
     required this.attempts,
+    this.localSequence = 0,
     this.generation = 1,
     this.payloadJson,
     this.userId,
@@ -600,6 +613,7 @@ class LocalSyncMutation {
   final String operation;
   final DateTime changedAt;
   final int attempts;
+  final int localSequence;
   final int generation;
   final String? payloadJson;
   final String? userId;

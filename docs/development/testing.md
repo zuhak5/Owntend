@@ -80,7 +80,7 @@ Functions require formatting, locked type-checking, unit/request-validation test
 
 ### Disposable backend endpoint integration
 
-`npm run test:backend-integration` provisions an isolated, disposable local Supabase stack on shifted ports inside a temporary workspace, replays the complete migration chain, runs schema lint and all pgTAP files (including exact sync UPDATE ACL and maintenance-completion response matrices), serves every configured Edge Function over real HTTP, runs `supabase/tests/integration/*.test.ts` against the actual `/functions/v1/...` gateway, and tears everything down in every outcome. The application/backend lane separately drives two authenticated clients through real Auth, RLS, PostgREST, and Storage. It covers unprepared/expired upload denial, live-object delete denial, concurrent stage count/byte quotas, duplicate copy/move idempotency, simultaneous move/type point conservation with a deadlock timeout, validated history-restore replay/conflict, protected-column/history CRUD denial, full-record asset/plan PATCH allowlisting, server metadata advancement, stale revisions, versioned completion parsing and initial-hydration reconciliation, and cross-user UPDATE/history isolation. Both lanes keep credentials in memory and target loopback only.
+`npm run test:backend-integration` provisions an isolated, disposable local Supabase stack on shifted ports inside a temporary workspace, applies the single initial migration, runs schema lint and all pgTAP files (including exact sync UPDATE ACL and maintenance-completion response matrices), serves every configured Edge Function over real HTTP, runs `supabase/tests/integration/*.test.ts` against the actual `/functions/v1/...` gateway, and tears everything down in every outcome. The application/backend lane separately drives two authenticated clients through real Auth, RLS, PostgREST, and Storage. It covers unprepared/expired upload denial, live-object delete denial, concurrent stage count/byte quotas, duplicate copy/move idempotency, simultaneous move/type point conservation with a deadlock timeout, validated history-restore replay/conflict, protected-column/history CRUD denial, full-record asset/plan PATCH allowlisting, server metadata advancement, stale revisions, strict occurrence-completion parsing and initial-hydration reconciliation, and cross-user UPDATE/history isolation. Both lanes keep credentials in memory and target loopback only.
 
 ### Browser deletion and Google/Android contract tests
 
@@ -212,6 +212,30 @@ creation returns the structured shortage state and leaves no target row behind,
 while zero-balance asset creation succeeds with a zero charge and no negative
 ledger entry. Widget coverage proves the task-shortage dialog remains visible
 with inline recovery status when rewarded ads are unavailable.
+
+Occurrence completion, guarded Undo, durable reminder reconciliation, and
+strict client/server parsing:
+
+```powershell
+flutter test --no-pub --concurrency=1 --timeout 3m `
+  test/recurring_completion_precision_test.dart `
+  test/notification_completion_ack_test.dart `
+  test/reminder_schedule_reconciler_test.dart `
+  test/sync_coordinator_test.dart `
+  test/supabase_sync_gateway_contract_test.dart `
+  test/widgets/tasks_editors_test.dart
+
+supabase test db --local `
+  supabase/tests/database/0011_complete_maintenance_task.test.sql `
+  supabase/tests/database/0035_maintenance_completion_contract.test.sql
+```
+
+These contracts cover immediate successor completion, operation replay,
+file-backed restart and independent-connection contention, stable outbox order,
+canonical concurrent winners, no stale-projection retry, exact response shape,
+guarded Undo, serialized schedule repair, platform-ID verification, and durable
+snooze intent. The complete pgTAP and disposable backend lanes remain required
+because focused files do not prove the blank baseline or Edge/Storage boundary.
 
 Input-boundary and authoritative error-taxonomy coverage:
 

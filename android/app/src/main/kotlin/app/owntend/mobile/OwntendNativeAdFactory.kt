@@ -41,7 +41,7 @@ class OwntendNativeAdFactory(
         val cornerRadiusDp =
             ((customOptions?.get("cornerRadiusDp") as? Number)?.toFloat() ?: 16f).coerceIn(0f, 28f)
 
-        // Validate palette from custom options (schemaVersion 1 or 2), fallback to XML theme resources.
+        // Validate the current palette contract, falling back to XML theme resources.
         val palette =
             NativeAdPalette.fromOptions(customOptions)
                 ?: NativeAdPalette.fromResources(context)
@@ -155,7 +155,7 @@ class OwntendNativeAdFactory(
 
             fun fromOptions(options: Map<String, Any>?): NativeAdPalette? {
                 val schemaVersion = (options?.get("schemaVersion") as? Number)?.toInt() ?: 0
-                if (schemaVersion != 1 && schemaVersion != 2) {
+                if (schemaVersion != 2) {
                     return null
                 }
 

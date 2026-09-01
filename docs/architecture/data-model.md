@@ -16,15 +16,18 @@ Ownership must remain tied to the authenticated account in cloud storage. Local 
 
 ## Maintenance
 
-- Maintenance plans define title, recurrence, due state, and asset association.
-- Maintenance history records completion events.
+- Maintenance plans define title, recurrence, due state, asset association, and
+  the stable identity of the occurrence currently eligible for completion.
+- Maintenance history records the completed occurrence, due/completion time,
+  acceptance time, and IANA time-zone identity. The plan/occurrence pair is
+  unique locally and in Postgres.
 - Optional plan metadata includes task type, location label, estimated duration,
   required materials, reminder guidance, and sort order.
 - Attachments and media can accompany relevant records.
 - Reminder snapshots represent the last scheduling decision used to reconcile local notifications.
 - Recommendation, timeline, health/readiness, warranty-alert, and streak models derive product insight from domain state.
 
-Completion identifiers and recurrence calculations must remain idempotent across offline retries and multiple devices.
+Completion identifiers and recurrence calculations must remain idempotent across offline retries and multiple devices. Local completion compare-and-sets the current occurrence; cloud acceptance locks the canonical plan and computes the successor occurrence and due date on the server.
 
 ## User and application state
 
@@ -39,7 +42,7 @@ Sensitive session data belongs in secure storage rather than ordinary settings r
 
 ## Search derived state
 
-The production-v1 Drift baseline includes durable local generation metadata for the FTS5 search cache. The singleton `search_index_state` row stores:
+The current Drift baseline includes durable local generation metadata for the FTS5 search cache. The singleton `search_index_state` row stores:
 
 - `source_generation`: the generation of committed searchable authoritative data; and
 - `indexed_generation`: the generation represented by the current `search_index` snapshot.
@@ -52,13 +55,15 @@ SQLite triggers increment `source_generation` after INSERT, UPDATE, or DELETE on
 
 The local schema includes operational records such as:
 
-- Outbox entries describing durable local mutation intent.
+- Outbox entries describing durable local mutation intent, ordered by a
+  database-assigned monotonic `local_sequence` rather than wall-clock time.
 - Pull cursors used for incremental cloud reads.
 - Remote shadows and revisions used for conflict detection and reconciliation.
 - Hydration and synchronization runtime state.
 - Account binding and cleanup state.
 - Media upload/deletion cleanup work.
-- Reminder reconciliation state.
+- Reminder desired-state snapshots and reconciliation state, including durable
+  snooze intent.
 
 These tables are part of the synchronization protocol, not disposable caches. Deleting or resetting them can lose local intent or attach data to the wrong account.
 
@@ -80,6 +85,8 @@ Private Postgres technical tables also preserve authority and replay evidence:
 - `owntend_monetization_private.maintenance_plan_entitlements` stores the monotonic zero/one paid entitlement and its provenance for each plan.
 - `owntend_monetization_private.plan_economy_operations` stores idempotent task-move and asset-type-change charge results.
 - `owntend_private.maintenance_history_restore_operations` stores exact restore success/conflict outcomes.
+- `maintenance_reward_eligibilities` binds a short-lived, single-use rewarded-
+  interstitial eligibility token to the accepted completion and account.
 - `media_staging_objects.attempt` and `media_cleanup_queue` coordinate server-issued upload attempts and service-only deletion.
 
 They are outside exposed schemas, have no authenticated table policies or privileges, use RLS as defense in depth, and cascade with `auth.users`/owned plans. They contain technical identifiers, timestamps, hashes, counts, cost/provenance state, and bounded conflict codes; they do not store wallet credentials or copy client-authored task bodies as economic provenance.
@@ -102,14 +109,16 @@ For every new or changed field:
 2. Decide whether the field synchronizes.
 3. Define the cloud column, RPC, RLS, revision, and baseline behavior if applicable.
 4. Define null/default semantics and database invariants.
-5. Preserve the current Supabase forward remediation chain until a separately approved reset/squash; after launch, always add forward migration coverage.
+5. While the lifecycle checkbox remains pre-launch, update the one clean
+   Supabase baseline directly and prove it from a blank local database. After
+   launch, never rewrite shipped migrations; add forward migration coverage.
 6. Update serialization and generated code.
 7. Update outbox/pull/shadow handling.
 8. Update backup inclusion and compatibility.
 9. Update deletion and privacy inventories.
 10. Add focused repository, backend, synchronization, and UI tests.
 
-The current Drift schema version is `1`. It directly contains the canonical domain, FTS generation/invalidation, sync/outbox/shadow/checkpoint, notification-reconciliation, and durable local-media-cleanup structures. There is no unpublished upgrade ladder, Category table, duplicate device-notification table, or compatibility field in the production-v1 baseline.
+The current Drift schema version is `1`. It directly contains the canonical domain, FTS generation/invalidation, sync/outbox/shadow/checkpoint, notification-reconciliation, and durable local-media-cleanup structures. There is no unpublished upgrade ladder, Category table, duplicate device-notification table, or compatibility field in the current baseline.
 
 All static schema objects — tables, CHECK constraints, indexes, the FTS cache, and every sync/search trigger — are installed by one canonical creation path when a fresh database is created. `beforeOpen` performs only connection pragmas, baseline verification (a database that does not match the canonical v1 object inventory fails closed with an explicit error instead of being silently repaired), runtime lease recovery, and deliberate default seeding.
 
@@ -128,16 +137,22 @@ Structural invariants enforced by the schema itself include:
 - Conflict resolution and notification-reconciliation reason domains.
 - Retry-ready composite indexes for outbox dequeue, sync/local media cleanup, and reminder reconciliation; query plans are asserted by test.
 
+Repository mutations that originate in editors compare the row's expected
+`updated_at`/revision state before writing plans, areas, rooms, and assets. A
+stale editor returns a typed conflict instead of overwriting a newer edit. The
+asset-photo invariant is also transactional: deleting the primary photo and
+choosing its deterministic replacement commit together.
+
 ### Upgrade story and timestamp convention (WP-008, F-008)
 
-The v1 baseline is the launch contract. `beforeOpen` deliberately rejects any
+The current schema-1 baseline is the launch contract. `beforeOpen` deliberately rejects any
 database that does not match the canonical object inventory
 (`StateError` naming the missing objects plus "clear app storage" guidance);
 the startup bootstrap surfaces this as a localized, unrecoverable-database
 screen (`OwntendStartupFailure(databaseUnrecoverable: true)`).
 
 - **Through launch:** no `onUpgrade` ladder exists. Any schema change is made
-  directly in the v1 baseline (`schemaVersion` stays `1`) because zero devices
+  directly in the schema-1 baseline (`schemaVersion` stays `1`) because zero devices
   carry an older file. `test/database_baseline_rejection_test.dart` pins the
   rejection contract.
 - **First post-launch schema change (trigger):** bump `currentSchemaVersion`,

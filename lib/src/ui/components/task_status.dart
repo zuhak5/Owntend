@@ -522,10 +522,11 @@ class _TaskCardState extends State<TaskCard>
     }
     setState(() => _completing = true);
     final reduceMotion = HkMotion.reduceMotionOf(context);
+    Future<void>? completionAnimation;
     if (reduceMotion) {
       _completionController.value = 1;
     } else {
-      unawaited(_completionController.forward(from: 0));
+      completionAnimation = _completionController.forward(from: 0);
     }
     var success = false;
     try {
@@ -536,8 +537,13 @@ class _TaskCardState extends State<TaskCard>
     if (!mounted) {
       return;
     }
-    if (!success || widget.task.status != TaskStatus.completed) {
+    if (!success) {
       await _completionController.reverse();
+    } else {
+      await completionAnimation;
+      if (mounted) {
+        _completionController.value = 0;
+      }
     }
     if (mounted) {
       setState(() => _completing = false);

@@ -34,7 +34,17 @@ Sensitive session material is stored through platform secure storage where suppo
 
 Supabase provides authentication, Postgres storage, private media Storage, Realtime invalidation, RPCs, Edge Functions, contract-1 server change-feed ordering (`server_change_feed`, `fetch_user_change_feed`, `get_user_change_feed_watermark`), explicit-user service-only parity validation, media staging and cleanup ledgers (`media_staging_objects`, `media_cleanup_queue`, `prepare_asset_photo_upload`, `finalize_asset_photo_upload`), and the transactional primary-photo RPC (`set_primary_asset_photo`). Client media uploads generate local SHA-256 digests, create a durable owner-scoped staging operation before upload, use only the server-returned attempt path, and then finalize. At most 20 fresh stages and 100 MiB of expected staged bytes are reserved per account. Authenticated clients cannot upload without a matching fresh stage or directly delete Storage objects; deletions are handled by metadata RPC plus the protected cleanup worker. Realtime events serve strictly as non-authoritative invalidation hints. Row Level Security and ownership checks isolate user data, media staging objects, cleanup records, and change log entries (`user_id = auth.uid()`). Direct client modifications to feed entries are prohibited; changes are logged automatically through database triggers. Feed parity is protected service/CI evidence rather than a client healing or capability-discovery API.
 
-Supabase also stores private technical authority rows for maintenance-plan entitlement provenance, idempotent task-move/asset-type-change charges, and maintenance-history restore outcomes. These rows contain account/plan/operation identifiers, request hashes, zero/one paid cost, bounded origin or conflict codes, counts, and timestamps. They are not exposed to authenticated table access and are removed by account/plan deletion cascades. Backup-history restore treats the archive as untrusted and records exact merge success or a durable conflict; it does not establish that imported historical content is authentic.
+Supabase also stores technical authority rows for maintenance-plan entitlement
+provenance, idempotent task-move/asset-type-change charges,
+maintenance-history restore outcomes, and short-lived maintenance reward
+eligibility. These rows contain account/plan/completion/operation identifiers,
+request hashes, occurrence identity, local reward day/time zone, expiry and
+single-use state, zero/one paid cost, bounded origin or conflict codes, counts,
+and timestamps. Private ledgers are not exposed to authenticated table access;
+eligibility is accessible only through its protected claim workflow. All are
+removed by account/plan deletion cascades as applicable. Backup-history restore
+treats the archive as untrusted and records exact merge success or a durable
+conflict; it does not establish that imported historical content is authentic.
 
 - The protected media-cleanup worker persists only bounded technical error codes for failed object deletions; raw storage messages, object paths, and request payloads are never recorded. Operator observability for this worker consists of counts and codes only.
 ### Google Sign-In
@@ -77,7 +87,7 @@ Owntend sends a manually selected or privacy-reduced approximate weather coordin
 
 ## Notifications and background work
 
-Owntend schedules local maintenance notifications using inexact scheduling, boot restoration, wake locks, foreground data-sync service capability, and Workmanager. Notification preferences, Android notification permission, channel state, and effective reminder capability are separate. The local database can also retain bounded notification-reconciliation scope, reason, attempt, and retry/error metadata until the scheduler successfully refreshes and acknowledges the request. Notification content can reveal maintenance information on the device lock screen; users should configure operating-system notification privacy according to their needs.
+Owntend schedules local maintenance notifications using inexact scheduling, boot restoration, wake locks, foreground data-sync service capability, and Workmanager. Notification preferences, Android notification permission, channel state, and effective reminder capability are separate. The local database can also retain bounded reminder desired state, snooze intent, notification-reconciliation scope, reason, attempt, and retry/error metadata until serialized platform verification succeeds and acknowledges the request. Notification content can reveal maintenance information on the device lock screen; users should configure operating-system notification privacy according to their needs.
 
 Ordinary sign-out invokes the central account-safety barrier to quiesce synchronization/realtime work and cancel account-scoped WorkManager jobs before provider sign-out. Ordinary sign-out is non-destructive: it does not clear local domain data, notification inbox rows, reminder snapshots, or the local account binding merely because the session ends. Destructive local cleanup belongs to the separate account-deletion/recovery path after its identity and cloud-receipt requirements are satisfied. WorkManager callbacks fail closed unless a session is active, the bound account exactly matches it, and synchronization is enabled before any domain read, streak mutation, inbox write, or weather request.
 

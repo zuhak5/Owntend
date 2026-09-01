@@ -6,22 +6,11 @@ class DriftMaintenanceRepository
     this.db, {
     this._recurrenceEngine = const OwntendRecurrenceEngine(),
     DateTime Function()? now,
-    Duration Function()? actionElapsed,
-  }) : _now = now ?? DateTime.now,
-       _actionElapsedOverride = actionElapsed;
+  }) : _now = now ?? DateTime.now;
 
   final AppDatabase db;
   final RecurrenceEngine _recurrenceEngine;
   final DateTime Function() _now;
-  final Duration Function()? _actionElapsedOverride;
-  final Stopwatch _completionActionClock = Stopwatch()..start();
-  static const _completionDuplicateWindow = Duration(seconds: 4);
-  final Map<String, Duration> _lastCompletionActionAt = {};
-  final Map<String, LocalMaintenanceCompletionResult> _lastCompletionResult =
-      {};
-
-  Duration get _actionElapsed =>
-      _actionElapsedOverride?.call() ?? _completionActionClock.elapsed;
 
   @override
   Stream<List<domain.TaskItem>> watchTasks() {
@@ -181,6 +170,8 @@ class DriftMaintenanceRepository
     required DateTime nextDueDate,
     int reminderDaysBefore = 0,
     domain.TaskMetadata? metadata,
+    String? expectedOccurrenceId,
+    DateTime? expectedUpdatedAt,
   }) async {
     final cleanAssetId = assetId.trim();
     final cleanTitle = title.trim();
@@ -211,6 +202,7 @@ class DriftMaintenanceRepository
             .insert(
               MaintenancePlansCompanion.insert(
                 id: planId,
+                currentOccurrenceId: Value(_uuid.v7()),
                 assetId: cleanAssetId,
                 title: cleanTitle,
                 instructions: Value(_blankToNull(instructions)),
@@ -227,29 +219,56 @@ class DriftMaintenanceRepository
           await _savePlanMetadata(planId, metadata, now);
         }
       } else {
-        await (db.update(
-          db.maintenancePlans,
-        )..where((plan) => plan.id.equals(planId))).write(
-          MaintenancePlansCompanion(
-            assetId: Value(cleanAssetId),
-            title: Value(cleanTitle),
-            instructions: Value(_blankToNull(instructions)),
-            recurrenceInterval: Value(recurrence.interval),
-            recurrenceUnit: Value(recurrence.unit.name),
-            priority: Value(priority.name),
-            nextDueDate: Value(nextDueDate),
-            reminderDaysBefore: Value(reminderDaysBefore),
-            updatedAt: Value(now),
-          ),
-        );
+        final cleanExpectedOccurrenceId = expectedOccurrenceId?.trim();
+        if (cleanExpectedOccurrenceId == null ||
+            cleanExpectedOccurrenceId.isEmpty ||
+            expectedUpdatedAt == null) {
+          throw const MaintenancePlanValidationException(
+            'Editing an existing task requires its current revision.',
+            code: 'missing_edit_precondition',
+          );
+        }
+        final candidateChangedAt = canonicalSyncSecond(now);
+        final changedAt = candidateChangedAt.isAfter(existingPlan.updatedAt)
+            ? candidateChangedAt
+            : existingPlan.updatedAt.add(const Duration(seconds: 1));
+        final changed =
+            await (db.update(db.maintenancePlans)..where(
+                  (plan) =>
+                      plan.id.equals(planId) &
+                      plan.currentOccurrenceId.equals(
+                        cleanExpectedOccurrenceId,
+                      ) &
+                      plan.updatedAt.equals(expectedUpdatedAt),
+                ))
+                .write(
+                  MaintenancePlansCompanion(
+                    assetId: Value(cleanAssetId),
+                    title: Value(cleanTitle),
+                    instructions: Value(_blankToNull(instructions)),
+                    recurrenceInterval: Value(recurrence.interval),
+                    recurrenceUnit: Value(recurrence.unit.name),
+                    priority: Value(priority.name),
+                    nextDueDate: Value(nextDueDate),
+                    reminderDaysBefore: Value(reminderDaysBefore),
+                    updatedAt: Value(changedAt),
+                  ),
+                );
+        if (changed != 1) {
+          throw const MaintenancePlanValidationException(
+            'This task changed while it was being edited.',
+            code: 'stale_plan_edit',
+          );
+        }
         if (metadata != null) {
-          await _savePlanMetadata(planId, metadata, now);
+          await _savePlanMetadata(planId, metadata, changedAt);
         } else {
           await (db.delete(
             db.maintenancePlanMetadata,
           )..where((row) => row.planId.equals(planId))).go();
         }
       }
+      await _enqueueScheduleReconciliation(planId, now);
     });
     return planId;
   }
@@ -300,22 +319,6 @@ class DriftMaintenanceRepository
     }
   }
 
-  @override
-  Future<bool> completePlan(
-    String planId, {
-    DateTime? completedAt,
-    String? notes,
-    DateTime? expectedNextDueDate,
-  }) async {
-    final result = await completePlanResult(
-      planId,
-      completedAt: completedAt,
-      notes: notes,
-      expectedNextDueDate: expectedNextDueDate,
-    );
-    return result.isApplied && !result.duplicateIgnored;
-  }
-
   DateTime canonicalSyncSecond(DateTime value) {
     final utc = value.toUtc();
     final micros =
@@ -328,9 +331,11 @@ class DriftMaintenanceRepository
   @override
   Future<LocalMaintenanceCompletionResult> completePlanResult(
     String planId, {
+    required String expectedOccurrenceId,
+    String? operationId,
+    String timeZoneId = 'UTC',
     DateTime? completedAt,
     String? notes,
-    DateTime? expectedNextDueDate,
   }) {
     return db.transaction(() async {
       final plan = await (db.select(
@@ -346,36 +351,44 @@ class DriftMaintenanceRepository
           status: LocalMaintenanceCompletionStatus.planInactive,
         );
       }
-      final actionAt = _now();
-      final actionElapsed = _actionElapsed;
-      final lastActionAt = _lastCompletionActionAt[planId];
-      final lastResult = _lastCompletionResult[planId];
-      if (lastActionAt != null && lastResult != null) {
-        final sinceLastAction = actionElapsed - lastActionAt;
-        if (!sinceLastAction.isNegative &&
-            sinceLastAction < _completionDuplicateWindow) {
+      final cleanExpectedOccurrenceId = expectedOccurrenceId.trim();
+      if (cleanExpectedOccurrenceId.isEmpty) {
+        return const LocalMaintenanceCompletionResult(
+          status: LocalMaintenanceCompletionStatus.failed,
+          errorCode: 'invalid_occurrence_id',
+        );
+      }
+      final canonicalPlanNextDue = canonicalSyncSecond(plan.nextDueDate);
+      if (plan.currentOccurrenceId != cleanExpectedOccurrenceId) {
+        final existingRecord =
+            await (db.select(db.maintenanceRecords)
+                  ..where(
+                    (row) =>
+                        row.planId.equals(planId) &
+                        row.occurrenceId.equals(cleanExpectedOccurrenceId),
+                  )
+                  ..limit(1))
+                .getSingleOrNull();
+        if (existingRecord == null) {
           return LocalMaintenanceCompletionResult(
-            status: lastResult.status,
-            operationId: lastResult.operationId,
-            previousDueDate: lastResult.previousDueDate,
-            nextDueDate: lastResult.nextDueDate,
-            duplicateIgnored: true,
+            status: LocalMaintenanceCompletionStatus.staleOccurrence,
+            nextOccurrenceId: plan.currentOccurrenceId,
+            nextDueDate: canonicalPlanNextDue,
           );
         }
-      }
-
-      final canonicalExpectedNextDue = expectedNextDueDate != null
-          ? canonicalSyncSecond(expectedNextDueDate)
-          : null;
-      final canonicalPlanNextDue = canonicalSyncSecond(plan.nextDueDate);
-
-      if (canonicalExpectedNextDue != null &&
-          !canonicalPlanNextDue.isAtSameMomentAs(canonicalExpectedNextDue)) {
-        return const LocalMaintenanceCompletionResult(
-          status: LocalMaintenanceCompletionStatus.occurrenceChanged,
+        return LocalMaintenanceCompletionResult(
+          status: operationId != null && existingRecord.id == operationId
+              ? LocalMaintenanceCompletionStatus.alreadyAppliedByThisOperation
+              : LocalMaintenanceCompletionStatus.completedElsewhere,
+          operationId: existingRecord.id,
+          completedOccurrenceId: existingRecord.occurrenceId,
+          nextOccurrenceId: plan.currentOccurrenceId,
+          previousDueDate: canonicalSyncSecond(existingRecord.dueDate),
+          nextDueDate: canonicalPlanNextDue,
         );
       }
 
+      final actionAt = _now();
       final completionInstant = completedAt ?? actionAt;
       final completed = canonicalSyncSecond(completionInstant);
       final previousDueDate = canonicalPlanNextDue;
@@ -389,15 +402,22 @@ class DriftMaintenanceRepository
           ),
         ),
       );
-      final completionId = _uuid.v7();
+      final completionId = operationId?.trim().isNotEmpty == true
+          ? operationId!.trim()
+          : _uuid.v7();
+      final nextOccurrenceId = 'next:$completionId';
       final completionNotes = _blankToNull(notes);
       final planUpdatedAt = canonicalSyncSecond(actionAt);
 
-      // Identify unresolved predecessor for same plan for CT-003 causal ordering
       final pendingCompletions =
           await (db.select(db.syncOutbox)
-                ..where((row) => row.entity.equals('maintenance_completion'))
-                ..orderBy([(row) => OrderingTerm.desc(row.createdAt)]))
+                ..where(
+                  (row) =>
+                      row.entity.equals('maintenance_completion') &
+                      row.attempts.isBiggerOrEqualValue(0) &
+                      row.state.isNotIn(const ['conflict', 'failedVisible']),
+                )
+                ..orderBy([(row) => OrderingTerm.desc(row.localSequence)]))
               .get();
       String? predecessorId;
       for (final comp in pendingCompletions) {
@@ -405,9 +425,7 @@ class DriftMaintenanceRepository
         if (payloadJson == null) continue;
         try {
           final decoded = jsonDecode(payloadJson) as Map<String, dynamic>;
-          final compPlanId =
-              decoded['plan_id'] as String? ??
-              (decoded['plan'] as Map<String, dynamic>?)?['id'] as String?;
+          final compPlanId = decoded['plan_id'] as String?;
           if (compPlanId == planId) {
             predecessorId = comp.recordKey;
             break;
@@ -437,26 +455,39 @@ class DriftMaintenanceRepository
         const SyncRuntimeCompanion(suppressOutbox: Value(true)),
       );
       try {
+        final changed =
+            await (db.update(db.maintenancePlans)..where(
+                  (row) =>
+                      row.id.equals(planId) &
+                      row.currentOccurrenceId.equals(cleanExpectedOccurrenceId),
+                ))
+                .write(
+                  MaintenancePlansCompanion(
+                    currentOccurrenceId: Value(nextOccurrenceId),
+                    nextDueDate: Value(nextDue),
+                    updatedAt: Value(planUpdatedAt),
+                  ),
+                );
+        if (changed != 1) {
+          return const LocalMaintenanceCompletionResult(
+            status: LocalMaintenanceCompletionStatus.staleOccurrence,
+          );
+        }
         await db
             .into(db.maintenanceRecords)
             .insert(
               MaintenanceRecordsCompanion.insert(
                 id: completionId,
                 planId: planId,
+                occurrenceId: Value(cleanExpectedOccurrenceId),
                 dueDate: previousDueDate,
                 completedAt: Value(completed),
+                timeZoneId: Value(
+                  timeZoneId.trim().isEmpty ? 'UTC' : timeZoneId.trim(),
+                ),
                 notes: Value(completionNotes),
               ),
             );
-
-        await (db.update(
-          db.maintenancePlans,
-        )..where((row) => row.id.equals(planId))).write(
-          MaintenancePlansCompanion(
-            nextDueDate: Value(nextDue),
-            updatedAt: Value(planUpdatedAt),
-          ),
-        );
       } finally {
         await (db.update(db.syncRuntime)..where((row) => row.id.equals(1)))
             .write(const SyncRuntimeCompanion(suppressOutbox: Value(false)));
@@ -464,66 +495,32 @@ class DriftMaintenanceRepository
 
       await _markPlanInboxRead(planId);
 
-      // CT-004 & CT-005: Upsert durable notification reconciliation request
       await db
           .into(db.notificationReconciliationRequests)
           .insertOnConflictUpdate(
             NotificationReconciliationRequestsCompanion.insert(
               scopeKey: 'plan:$planId',
               planId: Value(planId),
-              reason: 'local_completion',
+              reason: 'schedule_inputs_changed',
               createdAt: Value(planUpdatedAt),
               updatedAt: Value(planUpdatedAt),
             ),
           );
 
-      // Payload v2 with depends_on_operation_id for CT-003 causal ordering
       final payload = jsonEncode({
-        'version': 2,
+        'contract_version': 1,
         'operation_id': completionId,
-        'idempotency_key': completionId,
         'plan_id': planId,
+        'occurrence_id': cleanExpectedOccurrenceId,
         'depends_on_operation_id': predecessorId,
         'expected_plan_revision': planShadow?.remoteRevision,
-        'expected_next_due_date': previousDueDate.toUtc().toIso8601String(),
-        'preimage': {
-          'plan': {
-            'id': plan.id,
-            'asset_id': plan.assetId,
-            'title': plan.title,
-            'instructions': plan.instructions,
-            'recurrence_interval': plan.recurrenceInterval,
-            'recurrence_unit': plan.recurrenceUnit,
-            'priority': plan.priority,
-            'next_due_date': previousDueDate.toUtc().toIso8601String(),
-            'reminder_days_before': plan.reminderDaysBefore,
-            'is_enabled': plan.isEnabled,
-            'created_at': plan.createdAt.toUtc().toIso8601String(),
-            'updated_at': plan.updatedAt.toUtc().toIso8601String(),
-            'archived_at': plan.archivedAt?.toUtc().toIso8601String(),
-          },
-        },
-        'plan': {
-          'id': plan.id,
-          'asset_id': plan.assetId,
-          'title': plan.title,
-          'instructions': plan.instructions,
-          'recurrence_interval': plan.recurrenceInterval,
-          'recurrence_unit': plan.recurrenceUnit,
-          'priority': plan.priority,
-          'next_due_date': nextDue.toUtc().toIso8601String(),
-          'reminder_days_before': plan.reminderDaysBefore,
-          'is_enabled': plan.isEnabled,
-          'created_at': plan.createdAt.toUtc().toIso8601String(),
-          'updated_at': planUpdatedAt.toUtc().toIso8601String(),
-          'archived_at': plan.archivedAt?.toUtc().toIso8601String(),
-        },
-        'record': {
-          'id': completionId,
-          'plan_id': planId,
-          'due_date': previousDueDate.toUtc().toIso8601String(),
-          'completed_at': completed.toUtc().toIso8601String(),
-          'notes': completionNotes,
+        'completed_at': completed.toUtc().toIso8601String(),
+        'time_zone_id': timeZoneId.trim().isEmpty ? 'UTC' : timeZoneId.trim(),
+        'notes': completionNotes,
+        'local_preimage': {
+          'current_occurrence_id': cleanExpectedOccurrenceId,
+          'next_due_date': previousDueDate.toUtc().toIso8601String(),
+          'updated_at': plan.updatedAt.toUtc().toIso8601String(),
         },
       });
 
@@ -539,13 +536,13 @@ class DriftMaintenanceRepository
       );
 
       final result = LocalMaintenanceCompletionResult(
-        status: LocalMaintenanceCompletionStatus.applied,
+        status: LocalMaintenanceCompletionStatus.appliedPendingSync,
         operationId: completionId,
+        completedOccurrenceId: cleanExpectedOccurrenceId,
+        nextOccurrenceId: nextOccurrenceId,
         previousDueDate: previousDueDate,
         nextDueDate: nextDue,
       );
-      _lastCompletionActionAt[planId] = actionElapsed;
-      _lastCompletionResult[planId] = result;
       return result;
     });
   }
@@ -554,6 +551,8 @@ class DriftMaintenanceRepository
   Future<void> undoCompletion({
     required String planId,
     required String completionId,
+    required String completedOccurrenceId,
+    required String expectedCurrentOccurrenceId,
     required DateTime previousDueDate,
     required DateTime expectedCurrentNextDueDate,
   }) async {
@@ -591,6 +590,8 @@ class DriftMaintenanceRepository
               .getSingleOrNull();
       final shouldRewind =
           latest?.id == completionId &&
+          target.occurrenceId == completedOccurrenceId &&
+          plan.currentOccurrenceId == expectedCurrentOccurrenceId &&
           canonicalSyncSecond(plan.nextDueDate)
               .isAtSameMomentAs(canonicalExpectedCurrent);
 
@@ -613,6 +614,7 @@ class DriftMaintenanceRepository
           db.maintenancePlans,
         )..where((row) => row.id.equals(planId))).write(
           MaintenancePlansCompanion(
+            currentOccurrenceId: Value(completedOccurrenceId),
             nextDueDate: Value(canonicalPreviousDue),
             updatedAt: Value(now),
           ),
@@ -623,13 +625,12 @@ class DriftMaintenanceRepository
         db.syncAccount,
       )..where((row) => row.id.equals(1))).getSingleOrNull();
       final payload = jsonEncode({
-        'version': 1,
+        'contract_version': 1,
         'operation_id': 'undo:$completionId',
         'plan_id': planId,
         'completion_id': completionId,
-        'completion_completed_at': canonicalSyncSecond(target.completedAt)
-            .toUtc()
-            .toIso8601String(),
+        'completed_occurrence_id': completedOccurrenceId,
+        'expected_current_occurrence_id': expectedCurrentOccurrenceId,
         'previous_due_date': canonicalPreviousDue.toUtc().toIso8601String(),
         'expected_current_next_due_date': canonicalExpectedCurrent
             .toUtc()
@@ -654,16 +655,12 @@ class DriftMaintenanceRepository
             NotificationReconciliationRequestsCompanion.insert(
               scopeKey: 'plan:$planId',
               planId: Value(planId),
-              reason: 'undo_completion',
+              reason: 'schedule_inputs_changed',
               createdAt: Value(now),
               updatedAt: Value(now),
             ),
           );
     });
-    if (_lastCompletionResult[planId]?.operationId == completionId) {
-      _lastCompletionActionAt.remove(planId);
-      _lastCompletionResult.remove(planId);
-    }
   }
 
   @override
@@ -679,6 +676,7 @@ class DriftMaintenanceRepository
         ),
       );
       await _markPlanInboxRead(planId);
+      await _enqueueScheduleReconciliation(planId, now);
     });
   }
 
@@ -721,6 +719,7 @@ class DriftMaintenanceRepository
           updatedAt: Value(now),
         ),
       );
+      await _enqueueScheduleReconciliation(planId, now);
     });
   }
 
@@ -747,12 +746,14 @@ class DriftMaintenanceRepository
       if (!enabled) {
         await _markPlanInboxRead(planId);
       }
+      await _enqueueScheduleReconciliation(planId, now);
     });
   }
 
   @override
   Future<void> skipPlanOccurrence(
     String planId, {
+    required String expectedOccurrenceId,
     DateTime? skippedAt,
     String? reason,
   }) async {
@@ -766,6 +767,12 @@ class DriftMaintenanceRepository
               ))
               .getSingleOrNull();
       if (plan == null) return;
+      if (plan.currentOccurrenceId != expectedOccurrenceId) {
+        throw const MaintenancePlanValidationException(
+          'This task occurrence changed before it could be skipped.',
+          code: 'stale_occurrence',
+        );
+      }
       final nextDue = _recurrenceEngine.nextDueDate(
         plan.nextDueDate,
         domain.RecurrenceRule(
@@ -773,14 +780,26 @@ class DriftMaintenanceRepository
           unit: _recurrenceUnit(plan.recurrenceUnit),
         ),
       );
-      await (db.update(
-        db.maintenancePlans,
-      )..where((row) => row.id.equals(planId))).write(
-        MaintenancePlansCompanion(
-          nextDueDate: Value(nextDue),
-          updatedAt: Value(_now()),
-        ),
-      );
+      final now = _now();
+      final changed =
+          await (db.update(db.maintenancePlans)..where(
+                (row) =>
+                    row.id.equals(planId) &
+                    row.currentOccurrenceId.equals(expectedOccurrenceId),
+              ))
+              .write(
+                MaintenancePlansCompanion(
+                  currentOccurrenceId: Value(_uuid.v7()),
+                  nextDueDate: Value(nextDue),
+                  updatedAt: Value(now),
+                ),
+              );
+      if (changed != 1) {
+        throw const MaintenancePlanValidationException(
+          'This task occurrence changed before it could be skipped.',
+          code: 'stale_occurrence',
+        );
+      }
       await _markPlanInboxRead(planId);
       final normalizedReason = _blankToNull(reason);
       await _recordTaskSystemNote(
@@ -789,11 +808,11 @@ class DriftMaintenanceRepository
         body: normalizedReason == null
             ? '${plan.title} was skipped for this occurrence.'
             : '${plan.title} was skipped: $normalizedReason',
-        dedupeKey:
-            'skip:$planId:${(skippedAt ?? _now()).millisecondsSinceEpoch}',
+        dedupeKey: 'skip:$planId:$expectedOccurrenceId',
         messageCode: domain.NotificationMessageCode.taskSkipped,
         messageArgs: {'task': plan.title, 'reason': ?normalizedReason},
       );
+      await _enqueueScheduleReconciliation(planId, now);
     });
   }
 
@@ -801,6 +820,7 @@ class DriftMaintenanceRepository
   Future<void> postponePlan(
     String planId,
     DateTime nextDueDate, {
+    required String expectedOccurrenceId,
     String? reason,
   }) async {
     await db.transaction(() async {
@@ -813,6 +833,12 @@ class DriftMaintenanceRepository
               ))
               .getSingleOrNull();
       if (plan == null) return;
+      if (plan.currentOccurrenceId != expectedOccurrenceId) {
+        throw const MaintenancePlanValidationException(
+          'This task occurrence changed before it could be postponed.',
+          code: 'stale_occurrence',
+        );
+      }
       final now = _now();
       if (!nextDueDate.isAfter(now) || !nextDueDate.isAfter(plan.nextDueDate)) {
         throw const MaintenancePlanValidationException(
@@ -820,14 +846,24 @@ class DriftMaintenanceRepository
           code: 'invalid_postpone',
         );
       }
-      await (db.update(
-        db.maintenancePlans,
-      )..where((row) => row.id.equals(planId))).write(
-        MaintenancePlansCompanion(
-          nextDueDate: Value(nextDueDate),
-          updatedAt: Value(now),
-        ),
-      );
+      final changed =
+          await (db.update(db.maintenancePlans)..where(
+                (row) =>
+                    row.id.equals(planId) &
+                    row.currentOccurrenceId.equals(expectedOccurrenceId),
+              ))
+              .write(
+                MaintenancePlansCompanion(
+                  nextDueDate: Value(nextDueDate),
+                  updatedAt: Value(now),
+                ),
+              );
+      if (changed != 1) {
+        throw const MaintenancePlanValidationException(
+          'This task occurrence changed before it could be postponed.',
+          code: 'stale_occurrence',
+        );
+      }
       await _markPlanInboxRead(planId);
       final normalizedReason = _blankToNull(reason);
       await _recordTaskSystemNote(
@@ -845,6 +881,7 @@ class DriftMaintenanceRepository
           'reason': ?normalizedReason,
         },
       );
+      await _enqueueScheduleReconciliation(planId, now);
     });
   }
 
@@ -912,6 +949,23 @@ class DriftMaintenanceRepository
     await (db.update(db.inboxNotifications)
           ..where((row) => row.planId.equals(planId) & row.readAt.isNull()))
         .write(InboxNotificationsCompanion(readAt: Value(DateTime.now())));
+  }
+
+  Future<void> _enqueueScheduleReconciliation(
+    String planId,
+    DateTime changedAt,
+  ) {
+    return db
+        .into(db.notificationReconciliationRequests)
+        .insertOnConflictUpdate(
+          NotificationReconciliationRequestsCompanion.insert(
+            scopeKey: 'plan:$planId',
+            planId: Value(planId),
+            reason: 'schedule_inputs_changed',
+            createdAt: Value(changedAt),
+            updatedAt: Value(changedAt),
+          ),
+        );
   }
 
   Future<void> _reopenPlanInbox(String planId, DateTime now) async {

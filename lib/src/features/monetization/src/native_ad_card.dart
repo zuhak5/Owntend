@@ -187,28 +187,14 @@ class _HkNativeAdCardState extends ConsumerState<HkNativeAdCard> {
     late final AdLease<NativeAd> lease;
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final nativeCapabilities = ref.read(nativeCapabilitiesProvider);
-    final capabilities = await nativeCapabilities.getInfo();
-    if (!mounted) return;
-    final supportsV2 =
-        capabilities.supports('nativeAds', minVersion: 2) ||
-        capabilities.shellVersion >= 2;
-
-    final customOptions = supportsV2
-        ? <String, Object>{
-            'schemaVersion': 2,
-            'layoutVariant': widget.variant.name,
-            'cornerRadiusDp': 16.0,
-            'isDark': isDark,
-            'placement': widget.placement,
-            ...palette,
-          }
-        : <String, Object>{
-            'schemaVersion': 1,
-            'isDark': isDark,
-            'placement': widget.placement,
-            ...palette,
-          };
+    final customOptions = <String, Object>{
+      'schemaVersion': 2,
+      'layoutVariant': widget.variant.name,
+      'cornerRadiusDp': 16.0,
+      'isDark': isDark,
+      'placement': widget.placement,
+      ...palette,
+    };
 
     request = NativeAd(
       adUnitId: ads.units.native(widget.placement),

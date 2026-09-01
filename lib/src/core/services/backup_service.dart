@@ -1592,7 +1592,7 @@ class _ValidatedBackup {
 class BackupAutoKeyStore {
   BackupAutoKeyStore._();
 
-  static const _storageKey = 'owntend.backup-auto-key.v1';
+  static const _storageKey = 'owntend.backup-auto-key';
 
   static const FlutterSecureStorage _storage = FlutterSecureStorage(
     aOptions: owntendAndroidSecureStorageOptions,

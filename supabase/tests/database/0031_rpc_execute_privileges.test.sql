@@ -73,9 +73,9 @@ select extensions.ok(
 );
 
 select extensions.ok(
-  has_function_privilege('authenticated', 'public.create_reward_claim_request(text,text)', 'execute')
-    and has_function_privilege('service_role', 'public.create_reward_claim_request(text,text)', 'execute')
-    and not has_function_privilege('anon', 'public.create_reward_claim_request(text,text)', 'execute'),
+  has_function_privilege('authenticated', 'public.create_reward_claim_request(text,text,uuid)', 'execute')
+    and has_function_privilege('service_role', 'public.create_reward_claim_request(text,text,uuid)', 'execute')
+    and not has_function_privilege('anon', 'public.create_reward_claim_request(text,text,uuid)', 'execute'),
   'create_reward_claim_request serves authenticated and service_role only'
 );
 

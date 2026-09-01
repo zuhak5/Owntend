@@ -177,6 +177,7 @@ void main() {
                 MaintenanceRecord(
                   id: 'record_feed',
                   planId: 'plan_feed',
+                  occurrenceId: 'occurrence-feed',
                   dueDate: DateTime(2026, 6, 18, 9),
                   completedAt: DateTime(2026, 6, 18, 9, 30),
                 ),

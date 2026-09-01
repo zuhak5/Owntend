@@ -130,6 +130,7 @@ class _FakeMonetizationRepository implements MonetizationRepository {
   Future<RewardClaimRequest> createRewardClaim(
     RewardAdType type, {
     String? timeZone,
+    String? eligibilityToken,
   }) => throw UnimplementedError();
 }
 

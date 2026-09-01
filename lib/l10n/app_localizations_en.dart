@@ -3528,26 +3528,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'Ad Inspector could not be opened right now.';
 
   @override
-  String get todayCareComplete => 'Today’s care is complete';
-
-  @override
-  String get optionalDailyRewardDescription =>
-      'Watch a short video to earn 2 bonus points.';
-
-  @override
-  String get earnTwoPoints => 'Earn 2 points';
-
-  @override
-  String get rewardWatchedVerifyingTwo => 'Verifying your reward…';
-
-  @override
-  String get noRewardAvailable => 'No reward is available right now.';
-
-  @override
-  String get dailyRewardAlreadyClaimed =>
-      'Today’s completion reward was already claimed or is unavailable.';
-
-  @override
   String get pointsWallet => 'Points wallet';
 
   @override

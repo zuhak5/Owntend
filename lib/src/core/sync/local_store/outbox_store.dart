@@ -405,7 +405,7 @@ WHERE (next_attempt_at IS NULL OR next_attempt_at <= ?)
             (row.nextAttemptAt.isNull() |
                 row.nextAttemptAt.isSmallerOrEqualValue(now)),
       )
-      ..orderBy([(row) => OrderingTerm.asc(row.changedAt)])
+      ..orderBy([(row) => OrderingTerm.asc(row.localSequence)])
       ..limit(limit);
     final rows = await dueQuery.get();
 
@@ -443,7 +443,13 @@ WHERE (next_attempt_at IS NULL OR next_attempt_at <= ?)
       )..where((row) => row.recordKey.isIn(dependsOnIds))).get();
       blockedDependencyKeys = {
         for (final row in referenced)
-          if (row.state != 'conflict') row.recordKey,
+          if (row.attempts >= 0 &&
+              const {
+                'pending',
+                'inFlight',
+                'conflictRecovery',
+              }.contains(row.state))
+            row.recordKey,
       };
     }
 
@@ -455,6 +461,7 @@ WHERE (next_attempt_at IS NULL OR next_attempt_at <= ?)
           operation: row.operation,
           changedAt: row.changedAt,
           attempts: row.attempts,
+          localSequence: row.localSequence,
           generation: row.generation,
           payloadJson: row.payloadJson,
           userId: row.userId,
@@ -519,7 +526,10 @@ WHERE (next_attempt_at IS NULL OR next_attempt_at <= ?)
       final changedComparison = a.changedAt.compareTo(b.changedAt);
       if (changedComparison != 0) return changedComparison;
 
-      if (a.entity == b.entity) return 0;
+      final sequenceComparison = a.localSequence.compareTo(b.localSequence);
+      if (sequenceComparison != 0) return sequenceComparison;
+
+      if (a.entity == b.entity) return a.recordKey.compareTo(b.recordKey);
       if (a.entity == 'maintenance_completion') return -1;
       if (b.entity == 'maintenance_completion') return 1;
       return a.entity.compareTo(b.entity);
@@ -737,10 +747,15 @@ WHERE entity = 'profile'
                   'id': record.id,
                   'operation_id': record.id,
                   'plan_id': plan.id,
+                  'occurrence_id': record.occurrenceId,
                   'due_date': _restoreSyncSecond(record.dueDate)
                       .toIso8601String(),
                   'completed_at': _restoreSyncSecond(record.completedAt)
                       .toIso8601String(),
+                  'accepted_at': _restoreSyncSecond(
+                    record.acceptedAt ?? record.completedAt,
+                  ).toIso8601String(),
+                  'time_zone_id': record.timeZoneId,
                   'notes': record.notes,
                   'created_at': _restoreSyncSecond(record.completedAt)
                       .toIso8601String(),

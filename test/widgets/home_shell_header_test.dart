@@ -1028,7 +1028,8 @@ void main() {
       tester,
     ) async {
       final settings = FakeSettingsRepository(onboardingCompletedValue: true);
-      final task = makeTaskItem(DateTime(2026, 8, 30));
+      final today = DateUtils.dateOnly(DateTime.now());
+      final task = makeTaskItem(today);
       final assets = makeThings(DateTime(2026));
       final rooms = makeRooms(DateTime(2026));
       final snapshot = ValueNotifier<InitialHomeSnapshot?>(
@@ -1041,7 +1042,7 @@ void main() {
           backupState: const BackupState(),
           unreadNotifications: 0,
           syncStatus: const SyncStatus(phase: SyncPhase.ready),
-          loadedAt: DateTime(2026, 8, 30),
+          loadedAt: today,
         ),
       );
       addTearDown(settings.close);

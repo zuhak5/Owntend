@@ -4,11 +4,15 @@ create extension if not exists pgtap with schema extensions;
 set local role postgres;
 set search_path = public, extensions, pg_catalog;
 
-select extensions.plan(82);
+select extensions.plan(85);
 
 select extensions.has_table('public', 'point_wallets', 'point wallet table exists');
 select extensions.has_table('public', 'point_transactions', 'point ledger table exists');
 select extensions.has_table('public', 'reward_claim_requests', 'reward claim table exists');
+select extensions.has_table(
+  'public', 'maintenance_reward_eligibilities',
+  'canonical completion reward eligibility table exists'
+);
 select extensions.hasnt_column(
   'public',
   'maintenance_plan_metadata',
@@ -164,7 +168,7 @@ select extensions.has_function(
   'atomic task creation RPC exists'
 );
 select extensions.has_function(
-  'public', 'create_reward_claim_request', array['text', 'text'],
+  'public', 'create_reward_claim_request', array['text', 'text', 'uuid'],
   'reward claim request RPC exists'
 );
 select extensions.ok(
@@ -490,7 +494,7 @@ select extensions.lives_ok(
 );
 
 insert into monetization_test_claim (payload)
-select public.create_reward_claim_request('rewarded_ad', 'Asia/Baghdad');
+select public.create_reward_claim_request('rewarded_ad', 'Asia/Baghdad', null);
 select extensions.is(
   (select (payload->>'reward_amount')::integer from monetization_test_claim),
   1,
@@ -545,7 +549,7 @@ select extensions.is(
 set local role authenticated;
 select set_config('request.jwt.claim.role', 'authenticated', true);
 select extensions.throws_ok(
-  $$select public.create_reward_claim_request('rewarded_ad', 'Asia/Baghdad')$$,
+  $$select public.create_reward_claim_request('rewarded_ad', 'Asia/Baghdad', null)$$,
   'P0001',
   'REWARD_COOLDOWN',
   'a regular reward is limited only by the configured cooldown'
@@ -558,7 +562,7 @@ where user_id = '44444444-4444-4444-4444-444444444444';
 set local role authenticated;
 select set_config('request.jwt.claim.role', 'authenticated', true);
 insert into monetization_test_claim_regular_two (payload)
-select public.create_reward_claim_request('rewarded_ad', 'Asia/Baghdad');
+select public.create_reward_claim_request('rewarded_ad', 'Asia/Baghdad', null);
 select extensions.is(
   (
     select (payload->>'reward_amount')::integer
@@ -575,7 +579,7 @@ where user_id = '44444444-4444-4444-4444-444444444444';
 set local role authenticated;
 select set_config('request.jwt.claim.role', 'authenticated', true);
 select extensions.lives_ok(
-  $$select public.create_reward_claim_request('rewarded_ad', 'Asia/Baghdad')$$,
+  $$select public.create_reward_claim_request('rewarded_ad', 'Asia/Baghdad', null)$$,
   'a delayed SSV callback does not block a later claim after cooldown'
 );
 select extensions.is(
@@ -591,9 +595,65 @@ set created_at = now() - interval '46 seconds'
 where user_id = '44444444-4444-4444-4444-444444444444';
 set local role authenticated;
 select set_config('request.jwt.claim.role', 'authenticated', true);
+select extensions.throws_ok(
+  $$select public.create_reward_claim_request(
+      'rewarded_interstitial', 'Asia/Baghdad', null
+    )$$,
+  'P0001',
+  'REWARD_ELIGIBILITY_REQUIRED',
+  'a two-point reward cannot be created without canonical completion eligibility'
+);
+
+set local role postgres;
+insert into public.maintenance_records (
+  user_id, id, plan_id, occurrence_id, due_date, completed_at, accepted_at,
+  time_zone_id, operation_id
+) values (
+  '44444444-4444-4444-4444-444444444444',
+  'daily-eligible-completion',
+  'points-general-task',
+  'daily-eligible-occurrence',
+  now() - interval '1 hour',
+  now() - interval '1 minute',
+  now() - interval '1 minute',
+  'Asia/Baghdad',
+  'daily-eligible-completion'
+);
+insert into public.maintenance_reward_eligibilities (
+  token, user_id, completion_id, reward_day, time_zone_id, expires_at
+) values (
+  '44444444-4444-4444-8444-444444444440',
+  '44444444-4444-4444-4444-444444444444',
+  'daily-eligible-completion',
+  (clock_timestamp() at time zone 'Asia/Baghdad')::date,
+  'Asia/Baghdad',
+  clock_timestamp() + interval '30 minutes'
+);
+set local role authenticated;
+select set_config('request.jwt.claim.role', 'authenticated', true);
+select set_config(
+  'request.jwt.claim.sub',
+  '55555555-5555-5555-5555-555555555555',
+  true
+);
+select extensions.throws_ok(
+  $$select public.create_reward_claim_request(
+      'rewarded_interstitial', 'Asia/Baghdad',
+      '44444444-4444-4444-8444-444444444440'
+    )$$,
+  'P0001',
+  'REWARD_NOT_ELIGIBLE',
+  'another account cannot consume a completion eligibility token'
+);
+select set_config(
+  'request.jwt.claim.sub',
+  '44444444-4444-4444-4444-444444444444',
+  true
+);
 insert into monetization_test_claim_daily (payload)
 select public.create_reward_claim_request(
-  'rewarded_interstitial', 'Asia/Baghdad'
+  'rewarded_interstitial', 'Asia/Baghdad',
+  '44444444-4444-4444-8444-444444444440'
 );
 select extensions.is(
   (select (payload->>'reward_amount')::integer from monetization_test_claim_daily),
@@ -633,11 +693,12 @@ set local role authenticated;
 select set_config('request.jwt.claim.role', 'authenticated', true);
 select extensions.throws_ok(
   $$select public.create_reward_claim_request(
-      'rewarded_interstitial', 'Asia/Baghdad'
+      'rewarded_interstitial', 'Asia/Baghdad',
+      '44444444-4444-4444-8444-444444444440'
     )$$,
   'P0001',
-  'REWARD_ALREADY_CLAIMED',
-  'the completion reward is limited to once per local calendar day'
+  'REWARD_ELIGIBILITY_USED',
+  'a consumed completion eligibility cannot create another reward claim'
 );
 
 select set_config(
@@ -852,7 +913,7 @@ where user_id = '44444444-4444-4444-4444-444444444444';
 set local role authenticated;
 select set_config('request.jwt.claim.role', 'authenticated', true);
 select extensions.throws_ok(
-  $$select public.create_reward_claim_request('rewarded_ad', 'Asia/Baghdad')$$,
+  $$select public.create_reward_claim_request('rewarded_ad', 'Asia/Baghdad', null)$$,
   'P0001',
   'REWARDS_DISABLED',
   'the rewarded-ad kill switch rejects new claims server-side'

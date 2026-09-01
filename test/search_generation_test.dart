@@ -93,18 +93,26 @@ void main() {
 
       await search.rebuildIndex();
 
+      final areaEditBase = (await assets.listAreas()).singleWhere(
+        (area) => area.id == 'area_search',
+      );
       await assets.saveArea(
         id: 'area_search',
         name: 'North Wing',
         kind: AreaKind.indoor,
+        expectedUpdatedAt: areaEditBase.updatedAt,
       );
       expect(await _hasResult(search, 'North', 'room', roomId), isTrue);
 
+      final roomEditBase = (await assets.listRooms()).singleWhere(
+        (room) => room.id == roomId,
+      );
       await assets.saveRoom(
         id: roomId,
         areaId: 'area_search',
         name: 'Utility Room',
         notes: 'Copper Closet',
+        expectedUpdatedAt: roomEditBase.updatedAt,
       );
       expect(await _hasResult(search, 'Copper', 'room', roomId), isTrue);
 
@@ -204,7 +212,7 @@ void main() {
         isTrue,
       );
 
-      await assets.archiveAsset(assetId);
+      await assets.trashAsset(assetId);
       expect(
         await _hasResult(search, 'ArchiveTarget', 'asset', assetId),
         isFalse,

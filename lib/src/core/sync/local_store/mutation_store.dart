@@ -109,28 +109,6 @@ mixin _LocalSyncMutationStore on _LocalSyncStoreBase {
     return row?.state == SyncMutationState.failedVisible.name;
   }
 
-  Future<void> markMaintenanceConflictRecovery(
-    LocalSyncMutation mutation, {
-    required String payloadJson,
-    required String errorCode,
-    required String message,
-  }) async {
-    await (db.update(db.syncOutbox)..where(
-          (row) =>
-              row.entity.equals(mutation.entity) &
-              row.recordKey.equals(mutation.recordKey),
-        ))
-        .write(
-          SyncOutboxCompanion(
-            payloadJson: Value(payloadJson),
-            state: const Value('conflictRecovery'),
-            nextAttemptAt: const Value(null),
-            lastErrorCode: Value(errorCode),
-            lastError: Value(message),
-          ),
-        );
-  }
-
   Future<void> markMaintenanceCompletionFailedVisible(
     LocalSyncMutation mutation, {
     required String errorCode,
@@ -597,13 +575,15 @@ mixin _LocalSyncMutationStore on _LocalSyncStoreBase {
     if (payload == null) return;
     final planValues = _maintenanceCompletionPlanPreimage(payload);
     if (planValues == null) return;
-    final planId = planValues['id']?.toString();
+    final planId = payload['plan_id']?.toString();
     if (planId == null || planId.isEmpty) return;
 
     final current = await (db.select(
       db.maintenancePlans,
     )..where((row) => row.id.equals(planId))).getSingleOrNull();
-    if (current == null || current.updatedAt.isAfter(mutation.changedAt)) {
+    if (current == null ||
+        current.currentOccurrenceId != 'next:${mutation.operationId}' ||
+        current.updatedAt.isAfter(mutation.changedAt)) {
       return;
     }
 
@@ -611,47 +591,15 @@ mixin _LocalSyncMutationStore on _LocalSyncStoreBase {
       db.maintenancePlans,
     )..where((row) => row.id.equals(planId))).write(
       MaintenancePlansCompanion(
-        assetId: Value(_stringValue(planValues, 'asset_id', current.assetId)),
-        title: Value(_stringValue(planValues, 'title', current.title)),
-        instructions: Value(
-          _nullableStringValue(
-            planValues,
-            'instructions',
-            current.instructions,
-          ),
+        currentOccurrenceId: Value(
+          planValues['current_occurrence_id']?.toString() ??
+              current.currentOccurrenceId,
         ),
-        recurrenceInterval: Value(
-          _intValue(
-            planValues,
-            'recurrence_interval',
-            current.recurrenceInterval,
-          ),
-        ),
-        recurrenceUnit: Value(
-          _stringValue(planValues, 'recurrence_unit', current.recurrenceUnit),
-        ),
-        priority: Value(_stringValue(planValues, 'priority', current.priority)),
         nextDueDate: Value(
           _dateValue(planValues, 'next_due_date', current.nextDueDate),
         ),
-        reminderDaysBefore: Value(
-          _intValue(
-            planValues,
-            'reminder_days_before',
-            current.reminderDaysBefore,
-          ),
-        ),
-        isEnabled: Value(
-          _boolValue(planValues, 'is_enabled', current.isEnabled),
-        ),
-        createdAt: Value(
-          _dateValue(planValues, 'created_at', current.createdAt),
-        ),
         updatedAt: Value(
           _dateValue(planValues, 'updated_at', current.updatedAt),
-        ),
-        archivedAt: Value(
-          _nullableDateValue(planValues, 'archived_at', current.archivedAt),
         ),
       ),
     );
@@ -818,6 +766,7 @@ mixin _LocalSyncMutationStore on _LocalSyncStoreBase {
               operation: row.operation,
               changedAt: row.changedAt,
               attempts: row.attempts,
+              localSequence: row.localSequence,
               generation: row.generation,
               payloadJson: row.payloadJson,
               userId: row.userId,

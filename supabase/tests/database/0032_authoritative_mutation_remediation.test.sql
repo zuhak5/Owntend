@@ -355,24 +355,16 @@ select extensions.is(
 select extensions.is(
   public.complete_maintenance_task(
     jsonb_build_object(
-      'version',1,'operation_id','unauthorized-completion',
-      'expected_next_due_date','2026-10-01T00:00:00Z',
-      'plan',jsonb_build_object(
-        'id','unauthorized-plan','asset_id','general-a','title','No debit',
-        'recurrence_interval',1,'recurrence_unit','months','priority','medium',
-        'next_due_date','2026-11-01T00:00:00Z','reminder_days_before',0,
-        'is_enabled',true,'created_at','2026-09-01T00:00:00Z',
-        'updated_at','2026-10-01T01:00:00Z','archived_at',null
-      ),
-      'record',jsonb_build_object(
-        'id','unauthorized-record','plan_id','unauthorized-plan',
-        'due_date','2026-10-01T00:00:00Z',
-        'completed_at','2026-10-01T01:00:00Z'
-      )
+      'contract_version',1,
+      'operation_id','unauthorized-completion',
+      'plan_id','unauthorized-plan',
+      'occurrence_id','unauthorized-occurrence',
+      'completed_at',clock_timestamp(),
+      'time_zone_id','UTC'
     ), 'authority-device'
   )->>'conflict_reason',
-  'task_creation_not_authorized',
-  'missing-plan completion requires exact task authorization'
+  'plan_unavailable',
+  'missing-plan completion never materializes a client-authored plan'
 );
 select extensions.is(
   (select count(*)::integer from public.maintenance_plans
@@ -381,7 +373,7 @@ select extensions.is(
 );
 select extensions.is(
   (select count(*)::integer from public.maintenance_records
-   where id = 'unauthorized-record'), 0,
+   where id = 'unauthorized-completion'), 0,
   'unauthorized completion creates no history'
 );
 select extensions.throws_ok(
@@ -409,8 +401,10 @@ select jsonb_build_object(
   ),
   'records',jsonb_build_array(jsonb_build_object(
     'id','restored-record','operation_id','restored-operation',
-    'plan_id',p.id,'due_date','2026-09-01T00:00:00Z',
-    'completed_at','2026-09-01T01:00:00Z','notes',null,
+    'plan_id',p.id,'occurrence_id','restored-occurrence',
+    'due_date','2026-09-01T00:00:00Z',
+    'completed_at','2026-09-01T01:00:00Z',
+    'accepted_at','2026-09-01T01:00:00Z','time_zone_id','UTC','notes',null,
     'created_at','2026-09-01T01:00:00Z','revision',1
   ))
 )

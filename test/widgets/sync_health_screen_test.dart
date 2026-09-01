@@ -74,13 +74,13 @@ void main() {
     tester,
   ) async {
     await store.setEnabled(enabled: true, boundUserId: 'user-1');
-    await database
-        .into(database.syncOutbox)
-        .insertOnConflictUpdate(
-          SyncOutboxCompanion.insert(
-            entity: 'user_setting',
-            recordKey: 'theme',
-            operation: 'upsert',
+    await (database.update(database.syncOutbox)..where(
+          (row) =>
+              row.entity.equals('user_setting') & row.recordKey.equals('theme'),
+        ))
+        .write(
+          SyncOutboxCompanion(
+            operation: const Value('upsert'),
             changedAt: Value(DateTime.now().toUtc()),
             state: const Value('conflict'),
           ),

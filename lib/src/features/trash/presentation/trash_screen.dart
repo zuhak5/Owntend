@@ -154,7 +154,7 @@ class TrashScreen extends ConsumerWidget {
     );
     if (!confirmed) return;
     await ref.read(assetRepositoryProvider).emptyTrash();
-    await refreshNotificationSchedules(ref);
+    await wakeNotificationReconciliation(ref);
     if (!context.mounted) return;
     await _afterTrashMutation(context, ref, context.l10n.trashEmptied);
   }
@@ -165,7 +165,7 @@ class TrashScreen extends ConsumerWidget {
     Area area,
   ) async {
     await ref.read(assetRepositoryProvider).restoreArea(area.id);
-    await refreshNotificationSchedules(ref);
+    await wakeNotificationReconciliation(ref);
     if (!context.mounted) return;
     await _afterTrashMutation(
       context,
@@ -180,7 +180,7 @@ class TrashScreen extends ConsumerWidget {
     Room room,
   ) async {
     await ref.read(assetRepositoryProvider).restoreRoom(room.id);
-    await refreshNotificationSchedules(ref);
+    await wakeNotificationReconciliation(ref);
     if (!context.mounted) return;
     await _afterTrashMutation(
       context,
@@ -195,7 +195,7 @@ class TrashScreen extends ConsumerWidget {
     Asset asset,
   ) async {
     await ref.read(assetRepositoryProvider).restoreAsset(asset.id);
-    await refreshNotificationSchedules(ref);
+    await wakeNotificationReconciliation(ref);
     if (!context.mounted) return;
     await _afterTrashMutation(
       context,
@@ -210,7 +210,7 @@ class TrashScreen extends ConsumerWidget {
     TaskItem task,
   ) async {
     await ref.read(maintenanceRepositoryProvider).restorePlan(task.plan.id);
-    await refreshNotificationSchedules(ref);
+    await wakeNotificationReconciliation(ref);
     if (!context.mounted) return;
     await _afterTrashMutation(
       context,
@@ -231,7 +231,7 @@ class TrashScreen extends ConsumerWidget {
     );
     if (!confirmed) return;
     await ref.read(assetRepositoryProvider).deleteArea(area.id);
-    await refreshNotificationSchedules(ref);
+    await wakeNotificationReconciliation(ref);
     if (!context.mounted) return;
     await _afterTrashMutation(
       context,
@@ -252,7 +252,7 @@ class TrashScreen extends ConsumerWidget {
     );
     if (!confirmed) return;
     await ref.read(assetRepositoryProvider).deleteRoom(room.id);
-    await refreshNotificationSchedules(ref);
+    await wakeNotificationReconciliation(ref);
     if (!context.mounted) return;
     await _afterTrashMutation(
       context,
@@ -273,7 +273,7 @@ class TrashScreen extends ConsumerWidget {
     );
     if (!confirmed) return;
     await ref.read(assetRepositoryProvider).deleteAsset(asset.id);
-    await refreshNotificationSchedules(ref);
+    await wakeNotificationReconciliation(ref);
     if (!context.mounted) return;
     await _afterTrashMutation(
       context,
@@ -294,7 +294,7 @@ class TrashScreen extends ConsumerWidget {
     );
     if (!confirmed) return;
     await ref.read(maintenanceRepositoryProvider).deletePlan(task.plan.id);
-    await refreshNotificationSchedules(ref);
+    await wakeNotificationReconciliation(ref);
     if (!context.mounted) return;
     await _afterTrashMutation(
       context,

@@ -12,7 +12,12 @@ Supabase provides Owntend's authenticated cloud layer:
 - Private `user-media` Storage.
 - Edge Functions for account deletion, deletion-status recovery, and AdMob server-side verification.
 
-The committed local configuration is `supabase/config.toml`. SQL files under `supabase/migrations/` currently form an ordered forward remediation chain. Do not rewrite or delete them on the deployed-preservation path. A one-file pre-launch baseline may be produced only after hosted validation and separately approved destructive reset/squash. Database tests are under `supabase/tests/database/`.
+The committed local configuration is `supabase/config.toml`. The migration
+directory contains one clean pre-launch baseline,
+[`20260821124930_initial_schema.sql`](../../supabase/migrations/20260821124930_initial_schema.sql).
+Database tests are under `supabase/tests/database/`. Local validation must use
+explicit local targets; a linked hosted project is never reset, pushed, or
+deployed without separate authorization for that exact operation and target.
 
 ## Local environment
 
@@ -61,8 +66,7 @@ Generic synchronization also uses column-level UPDATE privileges. Every one of
 the 17 synchronized tables has table-wide authenticated UPDATE revoked, and
 only these columns are granted; the executable sources of truth are
 [`SyncEntitySpec.updatableLocalColumns`](../../lib/src/core/sync/sync_dtos.dart)
-and the latest file under
-[`supabase/migrations/`](../../supabase/migrations/):
+and the [single initial migration](../../supabase/migrations/20260821124930_initial_schema.sql):
 
 | Entity | Authenticated generic UPDATE columns |
 | --- | --- |
@@ -115,15 +119,25 @@ asset-type mutation are not granted, and maintenance history is read-only
 through table access. Completion, undo, economy changes, and validated restore
 use dedicated invariant-preserving RPCs.
 
-`complete_maintenance_task` exposes response contract 1. All non-exception
-branches return one fixed envelope containing version, status, retryability,
-bounded conflict reason, canonical revision/result fields, and nullable plan
-and record rows. A private security-invoker helper builds the envelope and is
+`complete_maintenance_task` accepts one exact occurrence-intent request and
+exposes response contract 1. All non-exception branches return one fixed
+ten-field envelope containing version, status, retryability, bounded conflict
+reason, canonical revision/result fields, nullable reward eligibility token,
+and nullable plan and record rows. The server locks the canonical plan and
+computes recurrence; it does not accept a client next-due projection. A private
+security-invoker helper builds the envelope and is
 not executable by Data API roles. The authenticated public wrapper and private
 implementation retain their existing ownership and entitlement boundaries;
 the response version adds validation, not authority. The strict Flutter parser
 accepts only the documented status/reason/row combinations and treats any
 other shape as `maintenance_completion_rpc_contract_mismatch`.
+
+`maintenance_records` are unique by owner/plan/occurrence and retain the client
+completion time, server acceptance time, and IANA time zone. A canonical final
+due occurrence may create a 30-minute eligibility row bound to its account and
+completion. `create_reward_claim_request` requires and consumes that token for
+`rewarded_interstitial`; losing, rejected, expired, cross-account, and replayed
+tokens fail closed. Generic `rewarded_ad` earning remains a separate flow.
 
 ### Asset detail contract
 

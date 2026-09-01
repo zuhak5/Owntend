@@ -211,6 +211,7 @@ class SupabaseMonetizationRepository extends MonetizationRepository {
   Future<RewardClaimRequest> createRewardClaim(
     RewardAdType type, {
     String? timeZone,
+    String? eligibilityToken,
   }) async {
     final data = await client.rpc<Map<String, dynamic>>(
       'create_reward_claim_request',
@@ -220,6 +221,7 @@ class SupabaseMonetizationRepository extends MonetizationRepository {
           RewardAdType.rewardedInterstitial => 'rewarded_interstitial',
         },
         'p_time_zone': timeZone,
+        'p_eligibility_token': eligibilityToken,
       },
     );
     return RewardClaimRequest.fromJson(data);

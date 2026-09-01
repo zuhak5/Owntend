@@ -50,9 +50,8 @@ $content = $content.Replace("`r`n", "`n").Replace("`r", "`n")
     (New-Object System.Text.UTF8Encoding($false))
 )
 
-# Legacy base releases were created from a transient CI configuration. Keep the
-# same effective Flutter asset manifest while those releases remain patchable.
-# A future base release should commit shorebird.yaml and its pubspec asset entry.
+# Release and patch builds include the generated configuration as an exact
+# Flutter asset so the base and all patch candidates have the same manifest.
 if ($EnsurePubspecAsset) {
     $pubspec = Get-Content -LiteralPath $pubspecPath -Raw
     if ($pubspec -notmatch '(?m)^\s{4}-\s+shorebird\.yaml\s*$') {

@@ -198,52 +198,8 @@ Map<String, dynamic>? _decodeMaintenancePayload(String payloadJson) {
 Map<String, dynamic>? _maintenanceCompletionPlanPreimage(
   Map<String, dynamic> payload,
 ) {
-  final rawPreimage = payload['preimage'];
-  if (rawPreimage is Map) {
-    final rawPlan = rawPreimage['plan'];
-    if (rawPlan is Map) {
-      return Map<String, dynamic>.from(rawPlan);
-    }
-  }
-
-  final rawPlan = payload['plan'];
-  final expectedDueDate = payload['expected_next_due_date'];
-  if (rawPlan is! Map || expectedDueDate == null) return null;
-  return {
-    ...Map<String, dynamic>.from(rawPlan),
-    'next_due_date': expectedDueDate,
-  };
-}
-
-String _stringValue(Map<String, dynamic> values, String key, String fallback) {
-  final value = values[key];
-  return value == null ? fallback : value.toString();
-}
-
-String? _nullableStringValue(
-  Map<String, dynamic> values,
-  String key,
-  String? fallback,
-) {
-  if (!values.containsKey(key)) return fallback;
-  final value = values[key];
-  return value?.toString();
-}
-
-int _intValue(Map<String, dynamic> values, String key, int fallback) {
-  final value = values[key];
-  if (value is int) return value;
-  if (value is num) return value.toInt();
-  if (value is String) return int.tryParse(value) ?? fallback;
-  return fallback;
-}
-
-bool _boolValue(Map<String, dynamic> values, String key, bool fallback) {
-  final value = values[key];
-  if (value is bool) return value;
-  if (value is num) return value != 0;
-  if (value is String) return value.toLowerCase() == 'true';
-  return fallback;
+  final rawPreimage = payload['local_preimage'];
+  return rawPreimage is Map ? Map<String, dynamic>.from(rawPreimage) : null;
 }
 
 DateTime _dateValue(

@@ -55,6 +55,7 @@ int assetListFingerprint(Iterable<Asset> assets) =>
 
 int taskFingerprint(TaskItem task) => Object.hashAll([
   task.plan.id,
+  task.plan.currentOccurrenceId,
   task.plan.assetId,
   task.plan.title,
   task.plan.instructions,
@@ -74,13 +75,16 @@ int taskFingerprint(TaskItem task) => Object.hashAll([
 int taskListFingerprint(Iterable<TaskItem> tasks) =>
     Object.hashAll(tasks.map(taskFingerprint));
 
-int maintenanceRecordFingerprint(MaintenanceRecord record) => Object.hash(
+int maintenanceRecordFingerprint(MaintenanceRecord record) => Object.hashAll([
   record.id,
   record.planId,
+  record.occurrenceId,
   record.dueDate,
   record.completedAt,
+  record.acceptedAt,
+  record.timeZoneId,
   record.notes,
-);
+]);
 
 int maintenanceRecordListFingerprint(Iterable<MaintenanceRecord> records) =>
     Object.hashAll(records.map(maintenanceRecordFingerprint));

@@ -72,7 +72,7 @@ class SidecarRegistryStore {
   SidecarRegistryStore({FlutterSecureStorage? storage})
     : _storage = storage ?? const FlutterSecureStorage();
 
-  static const key = 'owntend_sidecar_registry_v1';
+  static const key = 'owntend_sidecar_registry';
   static final sidecarPattern = RegExp(
     r'^(photos|profile|cloud_media)\.(restore|previous)-([a-zA-Z0-9_-]+)$',
   );

@@ -9,7 +9,7 @@ String _text(int length, String value) =>
     List<String>.filled(length, value).join();
 
 void main() {
-  group('AppDatabase production v1 schema', () {
+  group('AppDatabase current schema-1 baseline', () {
     late File dbFile;
     late AppDatabase db;
 
@@ -179,8 +179,8 @@ void main() {
       );
       await db.customStatement(
         "INSERT INTO maintenance_plans("
-        "id, asset_id, title, recurrence_interval, recurrence_unit, priority, next_due_date"
-        ") VALUES ('plan-a', 'asset-a', 'Replace filter', 1, 'months', 'medium', 1)",
+        "id, asset_id, current_occurrence_id, title, recurrence_interval, recurrence_unit, priority, next_due_date"
+        ") VALUES ('plan-a', 'asset-a', 'occurrence-a', 'Replace filter', 1, 'months', 'medium', 1)",
       );
       await db.customStatement(
         "INSERT INTO notification_inbox("
@@ -259,8 +259,8 @@ void main() {
       );
       await db.customStatement(
         "INSERT INTO maintenance_plans("
-        "id, asset_id, title, recurrence_interval, recurrence_unit, priority, next_due_date"
-        ") VALUES ('plan-a', 'asset-a', 'Water', 1, 'days', 'medium', 1)",
+        "id, asset_id, current_occurrence_id, title, recurrence_interval, recurrence_unit, priority, next_due_date"
+        ") VALUES ('plan-a', 'asset-a', 'occurrence-a', 'Water', 1, 'days', 'medium', 1)",
       );
       await db.customStatement(
         "INSERT INTO maintenance_plan_metadata("
@@ -327,7 +327,6 @@ void main() {
           }),
         );
         expect(keys, isNot(contains('notifications_enabled')));
-        expect(keys, isNot(contains('permission_education_seen_v2')));
 
         final account = await LocalSyncStore(db).account();
         expect(account.id, 1);
@@ -442,38 +441,42 @@ void main() {
       );
     });
 
-    test('enforces conflict resolution and reconciliation reason domains', () async {
-      await db.customStatement(
-        "INSERT INTO sync_conflicts(id, account_id, entity, record_key) "
-        "VALUES ('c1', 'user-a', 'asset', 'a1')",
-      );
-      await expectLater(
-        db.customStatement(
-          "UPDATE sync_conflicts SET resolution_status = 'winner' "
-          "WHERE id = 'c1'",
-        ),
-        throwsA(anything),
-      );
+    test(
+      'enforces conflict resolution and reconciliation reason domains',
+      () async {
+        await db.customStatement(
+          "INSERT INTO sync_conflicts(id, account_id, entity, record_key) "
+          "VALUES ('c1', 'user-a', 'asset', 'a1')",
+        );
+        await expectLater(
+          db.customStatement(
+            "UPDATE sync_conflicts SET resolution_status = 'winner' "
+            "WHERE id = 'c1'",
+          ),
+          throwsA(anything),
+        );
 
-      await db.customStatement(
-        "INSERT INTO notification_reconciliation_requests(scope_key, reason) "
-        "VALUES ('scope-1', 'local_completion')",
-      );
-      await expectLater(
-        db.customStatement(
-          "UPDATE notification_reconciliation_requests SET reason = 'because' "
-          "WHERE scope_key = 'scope-1'",
-        ),
-        throwsA(anything),
-      );
-      await expectLater(
-        db.customStatement(
-          "UPDATE notification_reconciliation_requests SET attempts = -2 "
-          "WHERE scope_key = 'scope-1'",
-        ),
-        throwsA(anything),
-      );
-    });
+        await db.customStatement(
+          "INSERT INTO notification_reconciliation_requests(scope_key, reason) "
+          "VALUES ('scope-1', 'schedule_inputs_changed')",
+        );
+        await expectLater(
+          db.customStatement(
+            "UPDATE notification_reconciliation_requests "
+            "SET reason = '${_text(81, 'r')}' "
+            "WHERE scope_key = 'scope-1'",
+          ),
+          throwsA(anything),
+        );
+        await expectLater(
+          db.customStatement(
+            "UPDATE notification_reconciliation_requests SET attempts = -2 "
+            "WHERE scope_key = 'scope-1'",
+          ),
+          throwsA(anything),
+        );
+      },
+    );
 
     test('enforces cleanup retry attempt domains', () async {
       await expectLater(

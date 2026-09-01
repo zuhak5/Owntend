@@ -1,7 +1,7 @@
 part of '../monetization.dart';
 
 const _nativeFactoryId = 'owntendNative';
-const _firstSessionStorageKey = 'monetization_has_completed_session_v1';
+const _firstSessionStorageKey = 'monetization_has_completed_session';
 
 enum RewardAdType { rewardedAd, rewardedInterstitial }
 

@@ -77,24 +77,7 @@ Future<bool> moveTaskToTrashWithUndo(
     }
     return false;
   }
-  try {
-    await cancelPlanReminderSchedules(ref, [task.plan.id]);
-    await refreshNotificationSchedules(ref);
-  } on Object catch (error) {
-    if (context.mounted) {
-      hk_ui.showToast(
-        context,
-        content: Text(
-          failureMessage(
-            context,
-            error,
-            fallback: AppFailureCode.notificationSetup,
-          ),
-        ),
-        severity: hk_ui.HkToastSeverity.error,
-      );
-    }
-  }
+  await wakeNotificationReconciliation(ref);
   if (!context.mounted) {
     return true;
   }
@@ -104,7 +87,7 @@ Future<bool> moveTaskToTrashWithUndo(
     onUndo: () async {
       try {
         await ref.read(maintenanceRepositoryProvider).restorePlan(task.plan.id);
-        await refreshNotificationSchedules(ref);
+        await wakeNotificationReconciliation(ref);
         if (context.mounted) {
           hk_ui.showToast(context, content: Text(context.l10n.taskRestored));
         }

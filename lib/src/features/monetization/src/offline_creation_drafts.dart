@@ -57,7 +57,7 @@ class OfflineCreationDraftStore {
     }
   }
 
-  String _storageKey(String key) => 'owntend_creation_draft_v1_$key';
+  String _storageKey(String key) => 'owntend_creation_draft_$key';
 }
 
 final offlineCreationDraftStoreProvider = Provider<OfflineCreationDraftStore>(

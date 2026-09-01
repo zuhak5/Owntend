@@ -12,6 +12,9 @@ import 'package:owntend/src/core/domain/contracts.dart';
 import 'package:owntend/src/core/domain/models.dart';
 import 'package:owntend/src/core/services/backup/backup_container.dart';
 import 'package:owntend/src/core/services/backup_service.dart';
+
+import 'support/maintenance_test_extensions.dart';
+
 import 'package:owntend/src/core/services/restore_journal.dart';
 import 'package:owntend/src/core/sync/local_sync_store.dart';
 import 'package:path/path.dart' as p;
@@ -707,10 +710,9 @@ Future<void> _seedRealisticData(AppDatabase db, Directory root) async {
     nextDueDate: DateTime(2026, 6, 18),
     reminderDaysBefore: 7,
   );
-  await maintenance.completePlan(
+  await maintenance.completeCurrentOccurrence(
     planId,
     completedAt: DateTime(2026, 6, 18, 9),
-    expectedNextDueDate: DateTime(2026, 6, 18),
     notes: 'No sediment.',
   );
   await settings.setThemePreference(ThemePreference.dark);

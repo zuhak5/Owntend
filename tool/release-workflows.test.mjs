@@ -172,15 +172,12 @@ test('Shorebird patch rail rejects unsafe diffs and publishes production directl
   assert.match(patchScript, /Expected exactly one newly published patch/);
   assert.match(patchScript, /shorebird-patch-\$Flavor-\$mode\.json/);
   assert.match(patchScript, /published-directly-to-stable/);
-  assert.doesNotMatch(patchScript, /allow-native-diffs|--confirm/);
-  assert.equal((patchScript.match(/--allow-asset-diffs/g) ?? []).length, 1);
-  assert.match(patchScript, /\$Flavor -eq 'prod'/);
-  assert.match(patchScript, /\$ReleaseVersion -eq '1\.0\.0\+4'/);
-  assert.match(patchScript, /\$ReleaseBaseSha -eq 'a2740314447514e03063a15cd0726de632171d2d'/);
-  assert.match(patchScript, /\$shorebirdConfigHash -eq 'e020e0f579713e5c4849924db9ecd7b6495de68cc3a87b8f7aa71b9cd38bd88c'/);
-  assert.match(patchScript, /if \(\$legacyConfigAssetDiffAllowed\)[\s\S]*\$arguments \+= '--allow-asset-diffs'/);
-  assert.match(patchScript, /asset_diff_bypass = \[bool\]\$legacyConfigAssetDiffAllowed/);
-  assert.match(patchScript, /legacy-generated-shorebird-yaml-only/);
+  assert.doesNotMatch(
+    patchScript,
+    /allow-native-diffs|allow-asset-diffs|--confirm|legacyConfigAssetDiffAllowed/,
+  );
+  assert.match(patchScript, /asset_diff_bypass = \$false/);
+  assert.match(patchScript, /asset_diff_bypass_reason = \$null/);
 });
 
 test('Sentry publication validates complete symbol evidence before mutation', async () => {

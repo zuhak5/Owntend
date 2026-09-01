@@ -515,9 +515,21 @@ void main() {
     const assetId = 'completion-contract-asset';
     const planId = 'completion-contract-plan';
     const recordId = 'completion-contract-record';
-    const dueDate = '2026-11-01T00:00:00.000Z';
-    const nextDueDate = '2026-12-01T00:00:00.000Z';
-    const completedAt = '2026-11-01T01:00:00.000Z';
+    final now = DateTime.now().toUtc();
+    var completedInstant = DateTime.utc(now.year, now.month, 15, 1);
+    if (completedInstant.isAfter(now)) {
+      completedInstant = DateTime.utc(now.year, now.month - 1, 15, 1);
+    }
+    final dueDate = completedInstant
+        .subtract(const Duration(days: 1))
+        .toIso8601String();
+    final completedAt = completedInstant.toIso8601String();
+    final nextDueDate = DateTime.utc(
+      completedInstant.year,
+      completedInstant.month + 1,
+      completedInstant.day,
+      completedInstant.hour,
+    ).toIso8601String();
 
     await userADevice1.from('areas').insert({
       'user_id': userAId,
@@ -578,23 +590,14 @@ void main() {
           .single(),
     );
     final operation = <String, dynamic>{
-      'version': 1,
-      'operation_id': 'completion-contract-operation',
+      'contract_version': 1,
+      'operation_id': recordId,
+      'plan_id': planId,
+      'occurrence_id': planBefore['current_occurrence_id'],
       'expected_plan_revision': planBefore['revision'],
-      'expected_next_due_date': dueDate,
-      'plan': {
-        ...planBefore,
-        'next_due_date': nextDueDate,
-        'updated_at': completedAt,
-      },
-      'record': {
-        'id': recordId,
-        'plan_id': planId,
-        'due_date': dueDate,
-        'completed_at': completedAt,
-        'notes': null,
-        'created_at': completedAt,
-      },
+      'completed_at': completedAt,
+      'time_zone_id': 'UTC',
+      'notes': null,
     };
     final gateway = SupabaseSyncGateway(userADevice1);
     final applied = await gateway.completeMaintenance(
@@ -621,13 +624,12 @@ void main() {
       payloadJson: jsonEncode({
         ...operation,
         'operation_id': 'completion-contract-cross-user',
-        'record': {...operation['record'] as Map, 'id': 'cross-user-record'},
       }),
       userId: userBId,
       deviceId: 'cross-user-device',
     );
     expect(crossUser.status, MaintenanceCompletionStatus.invalid);
-    expect(crossUser.conflictReason, 'task_creation_not_authorized');
+    expect(crossUser.conflictReason, 'plan_unavailable');
 
     const stalePlanId = 'completion-contract-stale-plan';
     await userADevice1.rpc<void>(
@@ -672,31 +674,22 @@ void main() {
     );
     final stale = await gateway.completeMaintenance(
       payloadJson: jsonEncode({
-        'version': 1,
-        'operation_id': 'completion-contract-stale-operation',
+        'contract_version': 1,
+        'operation_id': 'completion-contract-stale-record',
+        'plan_id': stalePlanId,
+        'occurrence_id': staleBefore['current_occurrence_id'],
         'expected_plan_revision': staleBefore['revision'],
-        'expected_next_due_date': dueDate,
-        'plan': {
-          ...staleCanonical,
-          'next_due_date': nextDueDate,
-          'updated_at': completedAt,
-        },
-        'record': {
-          'id': 'completion-contract-stale-record',
-          'plan_id': stalePlanId,
-          'due_date': dueDate,
-          'completed_at': completedAt,
-          'notes': null,
-          'created_at': completedAt,
-        },
+        'completed_at': completedAt,
+        'time_zone_id': 'UTC',
+        'notes': null,
       }),
       userId: userAId,
       deviceId: 'completion-contract-device',
     );
-    expect(stale.status, MaintenanceCompletionStatus.conflict);
-    expect(stale.retryable, isTrue);
-    expect(stale.conflictReason, 'stale_plan_revision');
-    expect(stale.currentPlanRevision, staleCanonical['revision']);
+    expect(stale.status, MaintenanceCompletionStatus.applied);
+    expect(stale.retryable, isFalse);
+    expect(stale.plan?.values['title'], 'Revision advanced');
+    expect(stale.currentPlanRevision, staleCanonical['revision'] + 1);
 
     final hydrationDatabase = AppDatabase(executor: NativeDatabase.memory());
     final hydrationStore = LocalSyncStore(hydrationDatabase);
@@ -713,23 +706,14 @@ void main() {
             operation: 'execute',
             payloadJson: Value(
               jsonEncode({
-                'version': 1,
-                'operation_id': 'completion-contract-hydration-operation',
-                'expected_plan_revision': staleBefore['revision'],
-                'expected_next_due_date': dueDate,
-                'plan': {
-                  ...staleCanonical,
-                  'next_due_date': nextDueDate,
-                  'updated_at': completedAt,
-                },
-                'record': {
-                  'id': hydrationRecordId,
-                  'plan_id': stalePlanId,
-                  'due_date': dueDate,
-                  'completed_at': completedAt,
-                  'notes': null,
-                  'created_at': completedAt,
-                },
+                'contract_version': 1,
+                'operation_id': hydrationRecordId,
+                'plan_id': stalePlanId,
+                'occurrence_id': 'next:completion-contract-stale-record',
+                'expected_plan_revision': stale.currentPlanRevision,
+                'completed_at': nextDueDate,
+                'time_zone_id': 'UTC',
+                'notes': null,
               }),
             ),
             changedAt: Value(DateTime.parse(completedAt)),
@@ -1411,8 +1395,11 @@ void main() {
             'id': 'restore-api-record',
             'operation_id': 'restore-api-record',
             'plan_id': 'restore-api-plan',
+            'occurrence_id': 'restore-api-occurrence',
             'due_date': '2026-11-01T00:00:00Z',
             'completed_at': '2026-11-02T00:00:00Z',
+            'accepted_at': '2026-11-02T00:00:00Z',
+            'time_zone_id': 'UTC',
             'notes': 'exact backup note',
             'created_at': '2026-11-02T00:00:00Z',
             'revision': 1,

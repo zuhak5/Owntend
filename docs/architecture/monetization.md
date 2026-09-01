@@ -22,14 +22,14 @@ server, network, or user-content-bearing exception text.
 
 Owntend uses Google Mobile Ads for native, interstitial, rewarded, and rewarded-interstitial presentation, while Supabase remains authoritative for points, charged creation, reward claims, and reward settlement. Ads can become unavailable without making core asset or maintenance data inconsistent.
 
-This document describes the production-v1 baseline. The executable sources are:
+This document describes the current pre-launch contract. The executable sources are:
 
 - [`monetization.dart`](../../lib/src/features/monetization/monetization.dart) for consent, lifecycle integration, format orchestration, placement policy, and reward preflight.
 - [`ad_runtime.dart`](../../lib/src/features/monetization/ad_runtime.dart), [`ad_retry_policy.dart`](../../lib/src/features/monetization/ad_retry_policy.dart), and [`ad_cache.dart`](../../lib/src/features/monetization/ad_cache.dart) for eligibility generations, retry budgets, freshness, and ownership leases.
 - [`OwntendNativeAdFactory.kt`](../../android/app/src/main/kotlin/app/owntend/mobile/OwntendNativeAdFactory.kt) and [`owntend_native_ad.xml`](../../android/app/src/main/res/layout/owntend_native_ad.xml) for Android native-ad presentation.
 - [`proguard-rules.pro`](../../android/app/proguard-rules.pro) for Google Mobile Ads and native ad factory release retention.
 - [`app-ads.txt`](../../download-site/app-ads.txt) for developer root-domain publisher authorization.
-- The ordered [`supabase/migrations`](../../supabase/migrations/) chain for backend authority, entitlement provenance, immutable operation identity, and mutation grants.
+- The single [`20260821124930_initial_schema.sql`](../../supabase/migrations/20260821124930_initial_schema.sql) baseline for backend authority, entitlement provenance, immutable operation identity, and mutation grants.
 - [`admob-ssv-handler`](../../supabase/functions/admob-ssv-handler/index.ts) for signed callback validation.
 
 The operational disclosure worksheet is [`google-play-data-safety-evidence.md`](../operations/google-play-data-safety-evidence.md). It separates repository facts from Play Console, AdMob, hosted-service, and device evidence.
@@ -113,13 +113,19 @@ Dormancy means that no automatic retry timer remains for that cycle. The attempt
 
 An interstitial acquires the shared fullscreen gate before taking a fresh cached ad. If no fresh ad exists, the gate is released, a load is requested, and the call returns without showing anything. Only a confirmed show updates the completion policy's session state.
 
-A rewarded flow is stricter:
-
-After the final due-today task is completed, the optional daily reward decision is presented as a compact, content-sized bottom sheet. It uses user-facing video/reward wording, keeps both actions close to the explanation, stacks them when width or text scaling requires it, preserves bottom safe-area/keyboard reachability, and removes the sheet transition when reduced motion is requested. After the device reward callback, the client reports only that the reward is being verified; it does not present the points as credited or mutate the wallet.
+A rewarded flow is stricter. Maintenance completion never creates a reward
+opportunity from a pre-submit task count or another device's winning record.
+The retired daily-completion reward sheet has no current presentation path.
+When the backend accepts the canonical final due occurrence for the account's
+local reward day, it may return a 30-minute, account- and completion-bound,
+single-use eligibility token. A `rewarded_interstitial` claim must present that
+token; conflicts and rejected completions return none. The ordinary
+user-initiated earn-points flow uses `rewarded_ad` and does not pretend to be a
+maintenance-qualified reward.
 
 1. Confirm the selected format is eligible and already has a fresh cached ad.
 2. Acquire the shared fullscreen gate.
-3. Resolve the reward time zone and call the authenticated `create_reward_claim_request` RPC.
+3. Resolve the reward time zone and call the authenticated `create_reward_claim_request` RPC, including the canonical completion eligibility token when the selected format is `rewarded_interstitial`.
 4. Recheck disposal, runtime generation, format eligibility, and cache freshness after the network preflight.
 5. Attach the returned Supabase user UUID as SSV `userId` and the opaque claim UUID as `customData`, then show the ad.
 6. Treat the device reward callback only as “shown, awaiting server verification.” It never credits points.
@@ -128,11 +134,11 @@ After the final due-today task is completed, the optional daily reward decision 
 
 Pending claims expire after the database-defined interval and remain visible for recovery while still valid. An ad dismissal, SDK reward callback, or client event is never settlement authority. Service-role credentials remain in the Edge Function environment and are not distributed in Flutter configuration.
 
-## Native-ad bridge contract 1
+## Native-ad bridge contract 2
 
 Flutter owns native-ad lifetime, eligibility, placement, event callbacks, and app-theme selection. Android owns the actual `NativeAdView`, registered provider assets, AdChoices surface, and app-owned chrome.
 
-For bridge contract 1, Flutter emits an entire `#RRGGBB` palette in one request:
+For bridge contract 2, Flutter emits an entire `#RRGGBB` palette in one request:
 
 | Surface | Keys |
 | --- | --- |
@@ -158,7 +164,7 @@ ordinary content cards in both light and dark themes.
 
 Standalone task creation costs one point for a non-safety asset while points are enabled and emergency-free mode is off. Safety tasks, points-disabled operation, and emergency-free operation cost zero. Asset creation is free, but `create_asset` accepts only an absent or empty `initial_plans`; client-authored task bundles are rejected as `UNTRUSTED_INITIAL_PLANS`.
 
-Every cloud plan has a private `maintenance_plan_entitlements` row. `paid_cost` is monotonic, ranges from zero to one, and records one of `task_creation`, `asset_copy`, `completion_recovery`, or `legacy_unverified`. Existing unsupported rows are preserved as zero-cost `legacy_unverified`; they are neither deleted nor retroactively charged. The next chargeable move or asset-type change collects only the shortfall. Reducing cost never refunds points, and a zero-cost transition while points are disabled or emergency-free does not inflate entitlement.
+Every cloud plan has a private `maintenance_plan_entitlements` row. `paid_cost` is monotonic, ranges from zero to one, and records exactly `task_creation` or `asset_copy`. Because the application is pre-launch, no legacy entitlement origin or backfill exists. A missing entitlement is an authorization failure, not a cue to manufacture state. The next chargeable move or asset-type change collects only the shortfall. Reducing cost never refunds points, and a zero-cost transition while points are disabled or emergency-free does not inflate entitlement.
 
 `create_task_with_point_debit` creates the plan, entitlement, operation, wallet debit, and ledger entry atomically. A missing-plan maintenance completion may recover only from an exact same-user `creation_point_operations` task authorization for that plan ID; no session marker or configuration GUC grants insertion authority. An unauthorized recovery returns terminal `task_creation_not_authorized` and commits no plan, history, entitlement, wallet, ledger, or feed row.
 
@@ -172,7 +178,7 @@ When the server cannot confirm a charged operation, the client must not present 
 
 Ambiguous operations (`outcomeUnknown` or interrupted `submitting`) are considered during authenticated startup before the cached-ready shortcut and again before a new charged task can mint another operation ID. `ChargedOperationResolver` calls `get_charged_operation_status(p_operation_id, p_request_hash)` with both immutable values; the public status RPC has no operation-ID-only default. The contract-1 result returns the exact committed result only when both values match, returns `not_found` for an unknown operation in the authenticated account, and raises `OPERATION_ID_REUSED` for a known operation with a different hash. A `not_found` operation is resubmitted using the exact retained payload and operation ID; no replacement UUID is minted. Account scope is rechecked before applying remote recovery results. The canonical server result is reconciled into local state before the journal becomes terminal. Upon reaching terminal states (`reconciled` or `permanentRejected`), user-entered payloads are purged (`purgeTerminalPayloads`) to prevent unbounded content retention.
 
-Copy, task-move, and asset-type mutations require an active authenticated server session. Offline attempts remain explicit secure drafts and do not mutate authoritative local domain state as though the server accepted them. A retained legacy charged operation containing a non-empty `initial_plans` payload without an owned source ID becomes a visible `untrusted_legacy_bundle` rejection; provenance is never inferred from task text.
+Copy, task-move, and asset-type mutations require an active authenticated server session. Offline attempts remain explicit secure drafts and do not mutate authoritative local domain state as though the server accepted them. Provenance is never inferred from task text.
 
 ## Privacy and diagnostics boundaries
 

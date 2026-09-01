@@ -15,6 +15,7 @@ void main() {
       final task = TaskItem(
         plan: MaintenancePlan(
           id: 'task-cleaning',
+          currentOccurrenceId: 'occurrence-task-cleaning',
           assetId: 'asset-vacuum',
           title: 'تنظيف الفلتر',
           recurrence: const RecurrenceRule(

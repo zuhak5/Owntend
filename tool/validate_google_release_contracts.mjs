@@ -140,7 +140,9 @@ assertContract(
   'SSV reward amounts must remain 1 and 2.',
 );
 assertContract(
-  /p_reward_type = 'rewarded_ad' then 1 else 2/.test(authoritativePointsMigration),
+  /p_reward_type\s*=\s*'rewarded_ad'\s+then\s+1\s+else\s+2/i.test(
+    authoritativePointsMigration,
+  ),
   'Database reward amounts must remain 1 and 2.',
 );
 const adUnitsStart = monetization.indexOf('class OwntendAdUnits');

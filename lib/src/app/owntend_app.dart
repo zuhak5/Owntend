@@ -28,7 +28,6 @@ import '../features/monetization/monetization.dart';
 export '../features/monetization/presentation/monetization_presentation.dart';
 export '../ui/widgets/room_dialogs.dart';
 export '../features/rooms/presentation/rooms_presentation.dart';
-export '../features/monetization/presentation/daily_completion_reward_sheet.dart';
 export '../features/maintenance/presentation/complete_task_dialog.dart';
 export '../features/maintenance/presentation/task_actions.dart';
 export '../features/maintenance/presentation/maintenance_dialogs.dart';

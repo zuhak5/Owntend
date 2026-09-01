@@ -175,7 +175,7 @@ gh workflow run "Shorebird Android Release" --ref main -f flavor=staging -f oper
 
 Review the uploaded config-free evidence, exact CLI/toolchain manifest, AAB hash, symbol files, and logs. A validation run does not publish a Shorebird release and cannot derive public VersionDeck artifacts.
 
-## Release, patch, preview, promotion, and rollback
+## Release, patch, preview, and rollback
 
 ### Create the first Shorebird-enabled development APK
 
@@ -203,13 +203,13 @@ The release workflow does not upload to Play or mutate Sentry. A successful prod
 
 Owntend production patches publish **directly to track `stable`**. Because there is no intermediate staging promotion step, all safety validation must pass **before publication**.
 
-1. Record the release's exact source SHA and release version, for example `1.0.0+4`.
-2. Create branch `release/1.0.0+4` from that release SHA. Commit only patch-eligible Flutter changes plus neutral tests/docs. Do not change assets, native code, dependencies, toolchain, or release configuration.
+1. Record the release's exact source SHA and release version, for example `1.0.0+1`.
+2. Create branch `release/1.0.0+1` from that release SHA. Commit only patch-eligible Flutter changes plus neutral tests/docs. Do not change assets, native code, dependencies, toolchain, or release configuration.
 3. Push the branch. For a production patch, ensure `Validate Google, Backend, and Database` has passed on the exact candidate SHA. A pending hosted migration still requires its separately authorized deployment and compatibility verification; the patch workflow never mutates Supabase.
 4. Dispatch a validation run (`operation=validate`):
 
    ```bash
-   gh workflow run "Shorebird Android Patch" --ref "release/1.0.0+4" -f flavor=prod -f operation=validate -f release_version="1.0.0+4" -f release_base_sha="BASE_SHA" -f candidate_sha="CANDIDATE_SHA"
+   gh workflow run "Shorebird Android Patch" --ref "release/1.0.0+1" -f flavor=prod -f operation=validate -f release_version="1.0.0+1" -f release_base_sha="BASE_SHA" -f candidate_sha="CANDIDATE_SHA"
    ```
 
 5. Review the static eligibility JSON and Shorebird dry-run. After explicit operator authorization and `SHOREBIRD_PRODUCTION_PATCHES_ENABLED=true`, rerun with `operation=publish`. The branch-restricted `production` environment supplies scoped credentials without a separate deployment review. Publication is accepted only from the exact tip of `release/<release_version>`, and the wrapper publishes directly to track `stable`; it never uses `--allow-native-diffs` or `--confirm`. The evidence artifact preserves both the dry-run record and the published patch number with `mode: published-directly-to-stable`.
@@ -256,7 +256,7 @@ The runtime keeps the existing release identity `app.owntend.mobile@x.y.z+N` and
 Sentry monitors release health tagged by `shorebird_patch_number` (`base` or patch integer):
 - **Alert Rule 1 (Patch Crash-Rate Spike)**: Triggers when the crash-free session rate for any `shorebird_patch_number` drops below 99.0% over a 15-minute evaluation window.
 - **Alert Rule 2 (Patch New Issue Spike)**: Triggers when >= 5 new unhandled events with tag `shorebird_patch_number` occur within 1 hour of patch deployment.
-- **Rollback Procedure**: When an alert fires on a newly promoted patch, operators immediately disable/rollback the patch in the Shorebird Console to return all clients safely to the previous stable patch.
+- **Rollback Procedure**: When an alert fires on a newly published patch, operators immediately disable/rollback the patch in the Shorebird Console to return all clients safely to the previous stable patch.
 
 VersionDeck verifies the unified Shorebird release workflow provenance. Its universal and ABI APKs come from the same canonical AAB. `Verify Production APK Artifact Set` ignores validation/non-production runs, then independently checks a published production artifact set. A successful verified production artifact automatically triggers VersionDeck publication; fail-closed manifest and artifact checks remain mandatory.
 

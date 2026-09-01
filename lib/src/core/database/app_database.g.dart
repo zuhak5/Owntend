@@ -4759,6 +4759,18 @@ class $MaintenancePlansTable extends MaintenancePlans
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _currentOccurrenceIdMeta =
+      const VerificationMeta('currentOccurrenceId');
+  @override
+  late final GeneratedColumn<String> currentOccurrenceId =
+      GeneratedColumn<String>(
+        'current_occurrence_id',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+        clientDefault: () => const Uuid().v7(),
+      );
   static const VerificationMeta _assetIdMeta = const VerificationMeta(
     'assetId',
   );
@@ -4919,6 +4931,7 @@ class $MaintenancePlansTable extends MaintenancePlans
   @override
   List<GeneratedColumn> get $columns => [
     id,
+    currentOccurrenceId,
     assetId,
     title,
     instructions,
@@ -4948,6 +4961,15 @@ class $MaintenancePlansTable extends MaintenancePlans
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
     } else if (isInserting) {
       context.missing(_idMeta);
+    }
+    if (data.containsKey('current_occurrence_id')) {
+      context.handle(
+        _currentOccurrenceIdMeta,
+        currentOccurrenceId.isAcceptableOrUnknown(
+          data['current_occurrence_id']!,
+          _currentOccurrenceIdMeta,
+        ),
+      );
     }
     if (data.containsKey('asset_id')) {
       context.handle(
@@ -5061,6 +5083,10 @@ class $MaintenancePlansTable extends MaintenancePlans
         DriftSqlType.string,
         data['${effectivePrefix}id'],
       )!,
+      currentOccurrenceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}current_occurrence_id'],
+      )!,
       assetId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}asset_id'],
@@ -5121,6 +5147,7 @@ class $MaintenancePlansTable extends MaintenancePlans
 class MaintenancePlanRow extends DataClass
     implements Insertable<MaintenancePlanRow> {
   final String id;
+  final String currentOccurrenceId;
   final String assetId;
   final String title;
   final String? instructions;
@@ -5135,6 +5162,7 @@ class MaintenancePlanRow extends DataClass
   final DateTime? archivedAt;
   const MaintenancePlanRow({
     required this.id,
+    required this.currentOccurrenceId,
     required this.assetId,
     required this.title,
     this.instructions,
@@ -5152,6 +5180,7 @@ class MaintenancePlanRow extends DataClass
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<String>(id);
+    map['current_occurrence_id'] = Variable<String>(currentOccurrenceId);
     map['asset_id'] = Variable<String>(assetId);
     map['title'] = Variable<String>(title);
     if (!nullToAbsent || instructions != null) {
@@ -5174,6 +5203,7 @@ class MaintenancePlanRow extends DataClass
   MaintenancePlansCompanion toCompanion(bool nullToAbsent) {
     return MaintenancePlansCompanion(
       id: Value(id),
+      currentOccurrenceId: Value(currentOccurrenceId),
       assetId: Value(assetId),
       title: Value(title),
       instructions: instructions == null && nullToAbsent
@@ -5200,6 +5230,9 @@ class MaintenancePlanRow extends DataClass
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return MaintenancePlanRow(
       id: serializer.fromJson<String>(json['id']),
+      currentOccurrenceId: serializer.fromJson<String>(
+        json['currentOccurrenceId'],
+      ),
       assetId: serializer.fromJson<String>(json['assetId']),
       title: serializer.fromJson<String>(json['title']),
       instructions: serializer.fromJson<String?>(json['instructions']),
@@ -5219,6 +5252,7 @@ class MaintenancePlanRow extends DataClass
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<String>(id),
+      'currentOccurrenceId': serializer.toJson<String>(currentOccurrenceId),
       'assetId': serializer.toJson<String>(assetId),
       'title': serializer.toJson<String>(title),
       'instructions': serializer.toJson<String?>(instructions),
@@ -5236,6 +5270,7 @@ class MaintenancePlanRow extends DataClass
 
   MaintenancePlanRow copyWith({
     String? id,
+    String? currentOccurrenceId,
     String? assetId,
     String? title,
     Value<String?> instructions = const Value.absent(),
@@ -5250,6 +5285,7 @@ class MaintenancePlanRow extends DataClass
     Value<DateTime?> archivedAt = const Value.absent(),
   }) => MaintenancePlanRow(
     id: id ?? this.id,
+    currentOccurrenceId: currentOccurrenceId ?? this.currentOccurrenceId,
     assetId: assetId ?? this.assetId,
     title: title ?? this.title,
     instructions: instructions.present ? instructions.value : this.instructions,
@@ -5266,6 +5302,9 @@ class MaintenancePlanRow extends DataClass
   MaintenancePlanRow copyWithCompanion(MaintenancePlansCompanion data) {
     return MaintenancePlanRow(
       id: data.id.present ? data.id.value : this.id,
+      currentOccurrenceId: data.currentOccurrenceId.present
+          ? data.currentOccurrenceId.value
+          : this.currentOccurrenceId,
       assetId: data.assetId.present ? data.assetId.value : this.assetId,
       title: data.title.present ? data.title.value : this.title,
       instructions: data.instructions.present
@@ -5297,6 +5336,7 @@ class MaintenancePlanRow extends DataClass
   String toString() {
     return (StringBuffer('MaintenancePlanRow(')
           ..write('id: $id, ')
+          ..write('currentOccurrenceId: $currentOccurrenceId, ')
           ..write('assetId: $assetId, ')
           ..write('title: $title, ')
           ..write('instructions: $instructions, ')
@@ -5316,6 +5356,7 @@ class MaintenancePlanRow extends DataClass
   @override
   int get hashCode => Object.hash(
     id,
+    currentOccurrenceId,
     assetId,
     title,
     instructions,
@@ -5334,6 +5375,7 @@ class MaintenancePlanRow extends DataClass
       identical(this, other) ||
       (other is MaintenancePlanRow &&
           other.id == this.id &&
+          other.currentOccurrenceId == this.currentOccurrenceId &&
           other.assetId == this.assetId &&
           other.title == this.title &&
           other.instructions == this.instructions &&
@@ -5350,6 +5392,7 @@ class MaintenancePlanRow extends DataClass
 
 class MaintenancePlansCompanion extends UpdateCompanion<MaintenancePlanRow> {
   final Value<String> id;
+  final Value<String> currentOccurrenceId;
   final Value<String> assetId;
   final Value<String> title;
   final Value<String?> instructions;
@@ -5365,6 +5408,7 @@ class MaintenancePlansCompanion extends UpdateCompanion<MaintenancePlanRow> {
   final Value<int> rowid;
   const MaintenancePlansCompanion({
     this.id = const Value.absent(),
+    this.currentOccurrenceId = const Value.absent(),
     this.assetId = const Value.absent(),
     this.title = const Value.absent(),
     this.instructions = const Value.absent(),
@@ -5381,6 +5425,7 @@ class MaintenancePlansCompanion extends UpdateCompanion<MaintenancePlanRow> {
   });
   MaintenancePlansCompanion.insert({
     required String id,
+    this.currentOccurrenceId = const Value.absent(),
     required String assetId,
     required String title,
     this.instructions = const Value.absent(),
@@ -5403,6 +5448,7 @@ class MaintenancePlansCompanion extends UpdateCompanion<MaintenancePlanRow> {
        nextDueDate = Value(nextDueDate);
   static Insertable<MaintenancePlanRow> custom({
     Expression<String>? id,
+    Expression<String>? currentOccurrenceId,
     Expression<String>? assetId,
     Expression<String>? title,
     Expression<String>? instructions,
@@ -5419,6 +5465,8 @@ class MaintenancePlansCompanion extends UpdateCompanion<MaintenancePlanRow> {
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (currentOccurrenceId != null)
+        'current_occurrence_id': currentOccurrenceId,
       if (assetId != null) 'asset_id': assetId,
       if (title != null) 'title': title,
       if (instructions != null) 'instructions': instructions,
@@ -5438,6 +5486,7 @@ class MaintenancePlansCompanion extends UpdateCompanion<MaintenancePlanRow> {
 
   MaintenancePlansCompanion copyWith({
     Value<String>? id,
+    Value<String>? currentOccurrenceId,
     Value<String>? assetId,
     Value<String>? title,
     Value<String?>? instructions,
@@ -5454,6 +5503,7 @@ class MaintenancePlansCompanion extends UpdateCompanion<MaintenancePlanRow> {
   }) {
     return MaintenancePlansCompanion(
       id: id ?? this.id,
+      currentOccurrenceId: currentOccurrenceId ?? this.currentOccurrenceId,
       assetId: assetId ?? this.assetId,
       title: title ?? this.title,
       instructions: instructions ?? this.instructions,
@@ -5475,6 +5525,11 @@ class MaintenancePlansCompanion extends UpdateCompanion<MaintenancePlanRow> {
     final map = <String, Expression>{};
     if (id.present) {
       map['id'] = Variable<String>(id.value);
+    }
+    if (currentOccurrenceId.present) {
+      map['current_occurrence_id'] = Variable<String>(
+        currentOccurrenceId.value,
+      );
     }
     if (assetId.present) {
       map['asset_id'] = Variable<String>(assetId.value);
@@ -5522,6 +5577,7 @@ class MaintenancePlansCompanion extends UpdateCompanion<MaintenancePlanRow> {
   String toString() {
     return (StringBuffer('MaintenancePlansCompanion(')
           ..write('id: $id, ')
+          ..write('currentOccurrenceId: $currentOccurrenceId, ')
           ..write('assetId: $assetId, ')
           ..write('title: $title, ')
           ..write('instructions: $instructions, ')
@@ -6208,6 +6264,18 @@ class $MaintenanceRecordsTable extends MaintenanceRecords
       'REFERENCES maintenance_plans (id) ON DELETE CASCADE',
     ),
   );
+  static const VerificationMeta _occurrenceIdMeta = const VerificationMeta(
+    'occurrenceId',
+  );
+  @override
+  late final GeneratedColumn<String> occurrenceId = GeneratedColumn<String>(
+    'occurrence_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    clientDefault: () => const Uuid().v7(),
+  );
   static const VerificationMeta _dueDateMeta = const VerificationMeta(
     'dueDate',
   );
@@ -6231,6 +6299,29 @@ class $MaintenanceRecordsTable extends MaintenanceRecords
     requiredDuringInsert: false,
     defaultValue: currentDateAndTime,
   );
+  static const VerificationMeta _acceptedAtMeta = const VerificationMeta(
+    'acceptedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> acceptedAt = GeneratedColumn<DateTime>(
+    'accepted_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _timeZoneIdMeta = const VerificationMeta(
+    'timeZoneId',
+  );
+  @override
+  late final GeneratedColumn<String> timeZoneId = GeneratedColumn<String>(
+    'time_zone_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    clientDefault: () => 'UTC',
+  );
   static const VerificationMeta _notesMeta = const VerificationMeta('notes');
   @override
   late final GeneratedColumn<String> notes = GeneratedColumn<String>(
@@ -6245,8 +6336,11 @@ class $MaintenanceRecordsTable extends MaintenanceRecords
   List<GeneratedColumn> get $columns => [
     id,
     planId,
+    occurrenceId,
     dueDate,
     completedAt,
+    acceptedAt,
+    timeZoneId,
     notes,
   ];
   @override
@@ -6274,6 +6368,15 @@ class $MaintenanceRecordsTable extends MaintenanceRecords
     } else if (isInserting) {
       context.missing(_planIdMeta);
     }
+    if (data.containsKey('occurrence_id')) {
+      context.handle(
+        _occurrenceIdMeta,
+        occurrenceId.isAcceptableOrUnknown(
+          data['occurrence_id']!,
+          _occurrenceIdMeta,
+        ),
+      );
+    }
     if (data.containsKey('due_date')) {
       context.handle(
         _dueDateMeta,
@@ -6291,6 +6394,21 @@ class $MaintenanceRecordsTable extends MaintenanceRecords
         ),
       );
     }
+    if (data.containsKey('accepted_at')) {
+      context.handle(
+        _acceptedAtMeta,
+        acceptedAt.isAcceptableOrUnknown(data['accepted_at']!, _acceptedAtMeta),
+      );
+    }
+    if (data.containsKey('time_zone_id')) {
+      context.handle(
+        _timeZoneIdMeta,
+        timeZoneId.isAcceptableOrUnknown(
+          data['time_zone_id']!,
+          _timeZoneIdMeta,
+        ),
+      );
+    }
     if (data.containsKey('notes')) {
       context.handle(
         _notesMeta,
@@ -6303,6 +6421,10 @@ class $MaintenanceRecordsTable extends MaintenanceRecords
   @override
   Set<GeneratedColumn> get $primaryKey => {id};
   @override
+  List<Set<GeneratedColumn>> get uniqueKeys => [
+    {planId, occurrenceId},
+  ];
+  @override
   MaintenanceRecordRow map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
     return MaintenanceRecordRow(
@@ -6314,6 +6436,10 @@ class $MaintenanceRecordsTable extends MaintenanceRecords
         DriftSqlType.string,
         data['${effectivePrefix}plan_id'],
       )!,
+      occurrenceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}occurrence_id'],
+      )!,
       dueDate: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}due_date'],
@@ -6321,6 +6447,14 @@ class $MaintenanceRecordsTable extends MaintenanceRecords
       completedAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}completed_at'],
+      )!,
+      acceptedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}accepted_at'],
+      ),
+      timeZoneId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}time_zone_id'],
       )!,
       notes: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
@@ -6339,14 +6473,20 @@ class MaintenanceRecordRow extends DataClass
     implements Insertable<MaintenanceRecordRow> {
   final String id;
   final String planId;
+  final String occurrenceId;
   final DateTime dueDate;
   final DateTime completedAt;
+  final DateTime? acceptedAt;
+  final String timeZoneId;
   final String? notes;
   const MaintenanceRecordRow({
     required this.id,
     required this.planId,
+    required this.occurrenceId,
     required this.dueDate,
     required this.completedAt,
+    this.acceptedAt,
+    required this.timeZoneId,
     this.notes,
   });
   @override
@@ -6354,8 +6494,13 @@ class MaintenanceRecordRow extends DataClass
     final map = <String, Expression>{};
     map['id'] = Variable<String>(id);
     map['plan_id'] = Variable<String>(planId);
+    map['occurrence_id'] = Variable<String>(occurrenceId);
     map['due_date'] = Variable<DateTime>(dueDate);
     map['completed_at'] = Variable<DateTime>(completedAt);
+    if (!nullToAbsent || acceptedAt != null) {
+      map['accepted_at'] = Variable<DateTime>(acceptedAt);
+    }
+    map['time_zone_id'] = Variable<String>(timeZoneId);
     if (!nullToAbsent || notes != null) {
       map['notes'] = Variable<String>(notes);
     }
@@ -6366,8 +6511,13 @@ class MaintenanceRecordRow extends DataClass
     return MaintenanceRecordsCompanion(
       id: Value(id),
       planId: Value(planId),
+      occurrenceId: Value(occurrenceId),
       dueDate: Value(dueDate),
       completedAt: Value(completedAt),
+      acceptedAt: acceptedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(acceptedAt),
+      timeZoneId: Value(timeZoneId),
       notes: notes == null && nullToAbsent
           ? const Value.absent()
           : Value(notes),
@@ -6382,8 +6532,11 @@ class MaintenanceRecordRow extends DataClass
     return MaintenanceRecordRow(
       id: serializer.fromJson<String>(json['id']),
       planId: serializer.fromJson<String>(json['planId']),
+      occurrenceId: serializer.fromJson<String>(json['occurrenceId']),
       dueDate: serializer.fromJson<DateTime>(json['dueDate']),
       completedAt: serializer.fromJson<DateTime>(json['completedAt']),
+      acceptedAt: serializer.fromJson<DateTime?>(json['acceptedAt']),
+      timeZoneId: serializer.fromJson<String>(json['timeZoneId']),
       notes: serializer.fromJson<String?>(json['notes']),
     );
   }
@@ -6393,8 +6546,11 @@ class MaintenanceRecordRow extends DataClass
     return <String, dynamic>{
       'id': serializer.toJson<String>(id),
       'planId': serializer.toJson<String>(planId),
+      'occurrenceId': serializer.toJson<String>(occurrenceId),
       'dueDate': serializer.toJson<DateTime>(dueDate),
       'completedAt': serializer.toJson<DateTime>(completedAt),
+      'acceptedAt': serializer.toJson<DateTime?>(acceptedAt),
+      'timeZoneId': serializer.toJson<String>(timeZoneId),
       'notes': serializer.toJson<String?>(notes),
     };
   }
@@ -6402,24 +6558,39 @@ class MaintenanceRecordRow extends DataClass
   MaintenanceRecordRow copyWith({
     String? id,
     String? planId,
+    String? occurrenceId,
     DateTime? dueDate,
     DateTime? completedAt,
+    Value<DateTime?> acceptedAt = const Value.absent(),
+    String? timeZoneId,
     Value<String?> notes = const Value.absent(),
   }) => MaintenanceRecordRow(
     id: id ?? this.id,
     planId: planId ?? this.planId,
+    occurrenceId: occurrenceId ?? this.occurrenceId,
     dueDate: dueDate ?? this.dueDate,
     completedAt: completedAt ?? this.completedAt,
+    acceptedAt: acceptedAt.present ? acceptedAt.value : this.acceptedAt,
+    timeZoneId: timeZoneId ?? this.timeZoneId,
     notes: notes.present ? notes.value : this.notes,
   );
   MaintenanceRecordRow copyWithCompanion(MaintenanceRecordsCompanion data) {
     return MaintenanceRecordRow(
       id: data.id.present ? data.id.value : this.id,
       planId: data.planId.present ? data.planId.value : this.planId,
+      occurrenceId: data.occurrenceId.present
+          ? data.occurrenceId.value
+          : this.occurrenceId,
       dueDate: data.dueDate.present ? data.dueDate.value : this.dueDate,
       completedAt: data.completedAt.present
           ? data.completedAt.value
           : this.completedAt,
+      acceptedAt: data.acceptedAt.present
+          ? data.acceptedAt.value
+          : this.acceptedAt,
+      timeZoneId: data.timeZoneId.present
+          ? data.timeZoneId.value
+          : this.timeZoneId,
       notes: data.notes.present ? data.notes.value : this.notes,
     );
   }
@@ -6429,23 +6600,38 @@ class MaintenanceRecordRow extends DataClass
     return (StringBuffer('MaintenanceRecordRow(')
           ..write('id: $id, ')
           ..write('planId: $planId, ')
+          ..write('occurrenceId: $occurrenceId, ')
           ..write('dueDate: $dueDate, ')
           ..write('completedAt: $completedAt, ')
+          ..write('acceptedAt: $acceptedAt, ')
+          ..write('timeZoneId: $timeZoneId, ')
           ..write('notes: $notes')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(id, planId, dueDate, completedAt, notes);
+  int get hashCode => Object.hash(
+    id,
+    planId,
+    occurrenceId,
+    dueDate,
+    completedAt,
+    acceptedAt,
+    timeZoneId,
+    notes,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is MaintenanceRecordRow &&
           other.id == this.id &&
           other.planId == this.planId &&
+          other.occurrenceId == this.occurrenceId &&
           other.dueDate == this.dueDate &&
           other.completedAt == this.completedAt &&
+          other.acceptedAt == this.acceptedAt &&
+          other.timeZoneId == this.timeZoneId &&
           other.notes == this.notes);
 }
 
@@ -6453,23 +6639,32 @@ class MaintenanceRecordsCompanion
     extends UpdateCompanion<MaintenanceRecordRow> {
   final Value<String> id;
   final Value<String> planId;
+  final Value<String> occurrenceId;
   final Value<DateTime> dueDate;
   final Value<DateTime> completedAt;
+  final Value<DateTime?> acceptedAt;
+  final Value<String> timeZoneId;
   final Value<String?> notes;
   final Value<int> rowid;
   const MaintenanceRecordsCompanion({
     this.id = const Value.absent(),
     this.planId = const Value.absent(),
+    this.occurrenceId = const Value.absent(),
     this.dueDate = const Value.absent(),
     this.completedAt = const Value.absent(),
+    this.acceptedAt = const Value.absent(),
+    this.timeZoneId = const Value.absent(),
     this.notes = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   MaintenanceRecordsCompanion.insert({
     required String id,
     required String planId,
+    this.occurrenceId = const Value.absent(),
     required DateTime dueDate,
     this.completedAt = const Value.absent(),
+    this.acceptedAt = const Value.absent(),
+    this.timeZoneId = const Value.absent(),
     this.notes = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
@@ -6478,16 +6673,22 @@ class MaintenanceRecordsCompanion
   static Insertable<MaintenanceRecordRow> custom({
     Expression<String>? id,
     Expression<String>? planId,
+    Expression<String>? occurrenceId,
     Expression<DateTime>? dueDate,
     Expression<DateTime>? completedAt,
+    Expression<DateTime>? acceptedAt,
+    Expression<String>? timeZoneId,
     Expression<String>? notes,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
       if (planId != null) 'plan_id': planId,
+      if (occurrenceId != null) 'occurrence_id': occurrenceId,
       if (dueDate != null) 'due_date': dueDate,
       if (completedAt != null) 'completed_at': completedAt,
+      if (acceptedAt != null) 'accepted_at': acceptedAt,
+      if (timeZoneId != null) 'time_zone_id': timeZoneId,
       if (notes != null) 'notes': notes,
       if (rowid != null) 'rowid': rowid,
     });
@@ -6496,16 +6697,22 @@ class MaintenanceRecordsCompanion
   MaintenanceRecordsCompanion copyWith({
     Value<String>? id,
     Value<String>? planId,
+    Value<String>? occurrenceId,
     Value<DateTime>? dueDate,
     Value<DateTime>? completedAt,
+    Value<DateTime?>? acceptedAt,
+    Value<String>? timeZoneId,
     Value<String?>? notes,
     Value<int>? rowid,
   }) {
     return MaintenanceRecordsCompanion(
       id: id ?? this.id,
       planId: planId ?? this.planId,
+      occurrenceId: occurrenceId ?? this.occurrenceId,
       dueDate: dueDate ?? this.dueDate,
       completedAt: completedAt ?? this.completedAt,
+      acceptedAt: acceptedAt ?? this.acceptedAt,
+      timeZoneId: timeZoneId ?? this.timeZoneId,
       notes: notes ?? this.notes,
       rowid: rowid ?? this.rowid,
     );
@@ -6520,11 +6727,20 @@ class MaintenanceRecordsCompanion
     if (planId.present) {
       map['plan_id'] = Variable<String>(planId.value);
     }
+    if (occurrenceId.present) {
+      map['occurrence_id'] = Variable<String>(occurrenceId.value);
+    }
     if (dueDate.present) {
       map['due_date'] = Variable<DateTime>(dueDate.value);
     }
     if (completedAt.present) {
       map['completed_at'] = Variable<DateTime>(completedAt.value);
+    }
+    if (acceptedAt.present) {
+      map['accepted_at'] = Variable<DateTime>(acceptedAt.value);
+    }
+    if (timeZoneId.present) {
+      map['time_zone_id'] = Variable<String>(timeZoneId.value);
     }
     if (notes.present) {
       map['notes'] = Variable<String>(notes.value);
@@ -6540,8 +6756,11 @@ class MaintenanceRecordsCompanion
     return (StringBuffer('MaintenanceRecordsCompanion(')
           ..write('id: $id, ')
           ..write('planId: $planId, ')
+          ..write('occurrenceId: $occurrenceId, ')
           ..write('dueDate: $dueDate, ')
           ..write('completedAt: $completedAt, ')
+          ..write('acceptedAt: $acceptedAt, ')
+          ..write('timeZoneId: $timeZoneId, ')
           ..write('notes: $notes, ')
           ..write('rowid: $rowid')
           ..write(')'))
@@ -7912,6 +8131,21 @@ class $SyncOutboxTable extends SyncOutbox
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
   $SyncOutboxTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _localSequenceMeta = const VerificationMeta(
+    'localSequence',
+  );
+  @override
+  late final GeneratedColumn<int> localSequence = GeneratedColumn<int>(
+    'local_sequence',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
   static const VerificationMeta _entityMeta = const VerificationMeta('entity');
   @override
   late final GeneratedColumn<String> entity = GeneratedColumn<String>(
@@ -8065,6 +8299,7 @@ class $SyncOutboxTable extends SyncOutbox
   );
   @override
   List<GeneratedColumn> get $columns => [
+    localSequence,
     entity,
     recordKey,
     operation,
@@ -8091,6 +8326,15 @@ class $SyncOutboxTable extends SyncOutbox
   }) {
     final context = VerificationContext();
     final data = instance.toColumns(true);
+    if (data.containsKey('local_sequence')) {
+      context.handle(
+        _localSequenceMeta,
+        localSequence.isAcceptableOrUnknown(
+          data['local_sequence']!,
+          _localSequenceMeta,
+        ),
+      );
+    }
     if (data.containsKey('entity')) {
       context.handle(
         _entityMeta,
@@ -8188,11 +8432,19 @@ class $SyncOutboxTable extends SyncOutbox
   }
 
   @override
-  Set<GeneratedColumn> get $primaryKey => {entity, recordKey};
+  Set<GeneratedColumn> get $primaryKey => {localSequence};
+  @override
+  List<Set<GeneratedColumn>> get uniqueKeys => [
+    {entity, recordKey},
+  ];
   @override
   SyncOutboxData map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
     return SyncOutboxData(
+      localSequence: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}local_sequence'],
+      )!,
       entity: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}entity'],
@@ -8255,6 +8507,7 @@ class $SyncOutboxTable extends SyncOutbox
 }
 
 class SyncOutboxData extends DataClass implements Insertable<SyncOutboxData> {
+  final int localSequence;
   final String entity;
   final String recordKey;
   final String operation;
@@ -8269,6 +8522,7 @@ class SyncOutboxData extends DataClass implements Insertable<SyncOutboxData> {
   final String? lastError;
   final int generation;
   const SyncOutboxData({
+    required this.localSequence,
     required this.entity,
     required this.recordKey,
     required this.operation,
@@ -8286,6 +8540,7 @@ class SyncOutboxData extends DataClass implements Insertable<SyncOutboxData> {
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
+    map['local_sequence'] = Variable<int>(localSequence);
     map['entity'] = Variable<String>(entity);
     map['record_key'] = Variable<String>(recordKey);
     map['operation'] = Variable<String>(operation);
@@ -8316,6 +8571,7 @@ class SyncOutboxData extends DataClass implements Insertable<SyncOutboxData> {
 
   SyncOutboxCompanion toCompanion(bool nullToAbsent) {
     return SyncOutboxCompanion(
+      localSequence: Value(localSequence),
       entity: Value(entity),
       recordKey: Value(recordKey),
       operation: Value(operation),
@@ -8350,6 +8606,7 @@ class SyncOutboxData extends DataClass implements Insertable<SyncOutboxData> {
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return SyncOutboxData(
+      localSequence: serializer.fromJson<int>(json['localSequence']),
       entity: serializer.fromJson<String>(json['entity']),
       recordKey: serializer.fromJson<String>(json['recordKey']),
       operation: serializer.fromJson<String>(json['operation']),
@@ -8369,6 +8626,7 @@ class SyncOutboxData extends DataClass implements Insertable<SyncOutboxData> {
   Map<String, dynamic> toJson({ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
+      'localSequence': serializer.toJson<int>(localSequence),
       'entity': serializer.toJson<String>(entity),
       'recordKey': serializer.toJson<String>(recordKey),
       'operation': serializer.toJson<String>(operation),
@@ -8386,6 +8644,7 @@ class SyncOutboxData extends DataClass implements Insertable<SyncOutboxData> {
   }
 
   SyncOutboxData copyWith({
+    int? localSequence,
     String? entity,
     String? recordKey,
     String? operation,
@@ -8400,6 +8659,7 @@ class SyncOutboxData extends DataClass implements Insertable<SyncOutboxData> {
     Value<String?> lastError = const Value.absent(),
     int? generation,
   }) => SyncOutboxData(
+    localSequence: localSequence ?? this.localSequence,
     entity: entity ?? this.entity,
     recordKey: recordKey ?? this.recordKey,
     operation: operation ?? this.operation,
@@ -8420,6 +8680,9 @@ class SyncOutboxData extends DataClass implements Insertable<SyncOutboxData> {
   );
   SyncOutboxData copyWithCompanion(SyncOutboxCompanion data) {
     return SyncOutboxData(
+      localSequence: data.localSequence.present
+          ? data.localSequence.value
+          : this.localSequence,
       entity: data.entity.present ? data.entity.value : this.entity,
       recordKey: data.recordKey.present ? data.recordKey.value : this.recordKey,
       operation: data.operation.present ? data.operation.value : this.operation,
@@ -8447,6 +8710,7 @@ class SyncOutboxData extends DataClass implements Insertable<SyncOutboxData> {
   @override
   String toString() {
     return (StringBuffer('SyncOutboxData(')
+          ..write('localSequence: $localSequence, ')
           ..write('entity: $entity, ')
           ..write('recordKey: $recordKey, ')
           ..write('operation: $operation, ')
@@ -8466,6 +8730,7 @@ class SyncOutboxData extends DataClass implements Insertable<SyncOutboxData> {
 
   @override
   int get hashCode => Object.hash(
+    localSequence,
     entity,
     recordKey,
     operation,
@@ -8484,6 +8749,7 @@ class SyncOutboxData extends DataClass implements Insertable<SyncOutboxData> {
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is SyncOutboxData &&
+          other.localSequence == this.localSequence &&
           other.entity == this.entity &&
           other.recordKey == this.recordKey &&
           other.operation == this.operation &&
@@ -8500,6 +8766,7 @@ class SyncOutboxData extends DataClass implements Insertable<SyncOutboxData> {
 }
 
 class SyncOutboxCompanion extends UpdateCompanion<SyncOutboxData> {
+  final Value<int> localSequence;
   final Value<String> entity;
   final Value<String> recordKey;
   final Value<String> operation;
@@ -8513,8 +8780,8 @@ class SyncOutboxCompanion extends UpdateCompanion<SyncOutboxData> {
   final Value<String?> lastErrorCode;
   final Value<String?> lastError;
   final Value<int> generation;
-  final Value<int> rowid;
   const SyncOutboxCompanion({
+    this.localSequence = const Value.absent(),
     this.entity = const Value.absent(),
     this.recordKey = const Value.absent(),
     this.operation = const Value.absent(),
@@ -8528,9 +8795,9 @@ class SyncOutboxCompanion extends UpdateCompanion<SyncOutboxData> {
     this.lastErrorCode = const Value.absent(),
     this.lastError = const Value.absent(),
     this.generation = const Value.absent(),
-    this.rowid = const Value.absent(),
   });
   SyncOutboxCompanion.insert({
+    this.localSequence = const Value.absent(),
     required String entity,
     required String recordKey,
     required String operation,
@@ -8544,11 +8811,11 @@ class SyncOutboxCompanion extends UpdateCompanion<SyncOutboxData> {
     this.lastErrorCode = const Value.absent(),
     this.lastError = const Value.absent(),
     this.generation = const Value.absent(),
-    this.rowid = const Value.absent(),
   }) : entity = Value(entity),
        recordKey = Value(recordKey),
        operation = Value(operation);
   static Insertable<SyncOutboxData> custom({
+    Expression<int>? localSequence,
     Expression<String>? entity,
     Expression<String>? recordKey,
     Expression<String>? operation,
@@ -8562,9 +8829,9 @@ class SyncOutboxCompanion extends UpdateCompanion<SyncOutboxData> {
     Expression<String>? lastErrorCode,
     Expression<String>? lastError,
     Expression<int>? generation,
-    Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
+      if (localSequence != null) 'local_sequence': localSequence,
       if (entity != null) 'entity': entity,
       if (recordKey != null) 'record_key': recordKey,
       if (operation != null) 'operation': operation,
@@ -8578,11 +8845,11 @@ class SyncOutboxCompanion extends UpdateCompanion<SyncOutboxData> {
       if (lastErrorCode != null) 'last_error_code': lastErrorCode,
       if (lastError != null) 'last_error': lastError,
       if (generation != null) 'generation': generation,
-      if (rowid != null) 'rowid': rowid,
     });
   }
 
   SyncOutboxCompanion copyWith({
+    Value<int>? localSequence,
     Value<String>? entity,
     Value<String>? recordKey,
     Value<String>? operation,
@@ -8596,9 +8863,9 @@ class SyncOutboxCompanion extends UpdateCompanion<SyncOutboxData> {
     Value<String?>? lastErrorCode,
     Value<String?>? lastError,
     Value<int>? generation,
-    Value<int>? rowid,
   }) {
     return SyncOutboxCompanion(
+      localSequence: localSequence ?? this.localSequence,
       entity: entity ?? this.entity,
       recordKey: recordKey ?? this.recordKey,
       operation: operation ?? this.operation,
@@ -8612,13 +8879,15 @@ class SyncOutboxCompanion extends UpdateCompanion<SyncOutboxData> {
       lastErrorCode: lastErrorCode ?? this.lastErrorCode,
       lastError: lastError ?? this.lastError,
       generation: generation ?? this.generation,
-      rowid: rowid ?? this.rowid,
     );
   }
 
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
+    if (localSequence.present) {
+      map['local_sequence'] = Variable<int>(localSequence.value);
+    }
     if (entity.present) {
       map['entity'] = Variable<String>(entity.value);
     }
@@ -8658,15 +8927,13 @@ class SyncOutboxCompanion extends UpdateCompanion<SyncOutboxData> {
     if (generation.present) {
       map['generation'] = Variable<int>(generation.value);
     }
-    if (rowid.present) {
-      map['rowid'] = Variable<int>(rowid.value);
-    }
     return map;
   }
 
   @override
   String toString() {
     return (StringBuffer('SyncOutboxCompanion(')
+          ..write('localSequence: $localSequence, ')
           ..write('entity: $entity, ')
           ..write('recordKey: $recordKey, ')
           ..write('operation: $operation, ')
@@ -8679,8 +8946,7 @@ class SyncOutboxCompanion extends UpdateCompanion<SyncOutboxData> {
           ..write('nextAttemptAt: $nextAttemptAt, ')
           ..write('lastErrorCode: $lastErrorCode, ')
           ..write('lastError: $lastError, ')
-          ..write('generation: $generation, ')
-          ..write('rowid: $rowid')
+          ..write('generation: $generation')
           ..write(')'))
         .toString();
   }
@@ -12727,10 +12993,8 @@ class $NotificationReconciliationRequestsTable
     'reason',
     aliasedName,
     false,
-    check: () => const CustomExpression<bool>(
-      "reason IN ('local_completion', 'undo_completion', "
-      "'occurrence_completed_elsewhere', 'completion_rejected')",
-    ),
+    check: () =>
+        const CustomExpression<bool>('length(reason) BETWEEN 1 AND 80'),
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
@@ -18896,6 +19160,7 @@ typedef $$AssetPhotosTableProcessedTableManager =
 typedef $$MaintenancePlansTableCreateCompanionBuilder =
     MaintenancePlansCompanion Function({
       required String id,
+      Value<String> currentOccurrenceId,
       required String assetId,
       required String title,
       Value<String?> instructions,
@@ -18913,6 +19178,7 @@ typedef $$MaintenancePlansTableCreateCompanionBuilder =
 typedef $$MaintenancePlansTableUpdateCompanionBuilder =
     MaintenancePlansCompanion Function({
       Value<String> id,
+      Value<String> currentOccurrenceId,
       Value<String> assetId,
       Value<String> title,
       Value<String?> instructions,
@@ -19043,6 +19309,11 @@ class $$MaintenancePlansTableFilterComposer
   });
   ColumnFilters<String> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get currentOccurrenceId => $composableBuilder(
+    column: $table.currentOccurrenceId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -19215,6 +19486,11 @@ class $$MaintenancePlansTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get currentOccurrenceId => $composableBuilder(
+    column: $table.currentOccurrenceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get title => $composableBuilder(
     column: $table.title,
     builder: (column) => ColumnOrderings(column),
@@ -19305,6 +19581,11 @@ class $$MaintenancePlansTableAnnotationComposer
   });
   GeneratedColumn<String> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get currentOccurrenceId => $composableBuilder(
+    column: $table.currentOccurrenceId,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<String> get title =>
       $composableBuilder(column: $table.title, builder: (column) => column);
@@ -19490,6 +19771,7 @@ class $$MaintenancePlansTableTableManager
           updateCompanionCallback:
               ({
                 Value<String> id = const Value.absent(),
+                Value<String> currentOccurrenceId = const Value.absent(),
                 Value<String> assetId = const Value.absent(),
                 Value<String> title = const Value.absent(),
                 Value<String?> instructions = const Value.absent(),
@@ -19505,6 +19787,7 @@ class $$MaintenancePlansTableTableManager
                 Value<int> rowid = const Value.absent(),
               }) => MaintenancePlansCompanion(
                 id: id,
+                currentOccurrenceId: currentOccurrenceId,
                 assetId: assetId,
                 title: title,
                 instructions: instructions,
@@ -19522,6 +19805,7 @@ class $$MaintenancePlansTableTableManager
           createCompanionCallback:
               ({
                 required String id,
+                Value<String> currentOccurrenceId = const Value.absent(),
                 required String assetId,
                 required String title,
                 Value<String?> instructions = const Value.absent(),
@@ -19537,6 +19821,7 @@ class $$MaintenancePlansTableTableManager
                 Value<int> rowid = const Value.absent(),
               }) => MaintenancePlansCompanion.insert(
                 id: id,
+                currentOccurrenceId: currentOccurrenceId,
                 assetId: assetId,
                 title: title,
                 instructions: instructions,
@@ -20124,8 +20409,11 @@ typedef $$MaintenanceRecordsTableCreateCompanionBuilder =
     MaintenanceRecordsCompanion Function({
       required String id,
       required String planId,
+      Value<String> occurrenceId,
       required DateTime dueDate,
       Value<DateTime> completedAt,
+      Value<DateTime?> acceptedAt,
+      Value<String> timeZoneId,
       Value<String?> notes,
       Value<int> rowid,
     });
@@ -20133,8 +20421,11 @@ typedef $$MaintenanceRecordsTableUpdateCompanionBuilder =
     MaintenanceRecordsCompanion Function({
       Value<String> id,
       Value<String> planId,
+      Value<String> occurrenceId,
       Value<DateTime> dueDate,
       Value<DateTime> completedAt,
+      Value<DateTime?> acceptedAt,
+      Value<String> timeZoneId,
       Value<String?> notes,
       Value<int> rowid,
     });
@@ -20185,6 +20476,11 @@ class $$MaintenanceRecordsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get occurrenceId => $composableBuilder(
+    column: $table.occurrenceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<DateTime> get dueDate => $composableBuilder(
     column: $table.dueDate,
     builder: (column) => ColumnFilters(column),
@@ -20192,6 +20488,16 @@ class $$MaintenanceRecordsTableFilterComposer
 
   ColumnFilters<DateTime> get completedAt => $composableBuilder(
     column: $table.completedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get acceptedAt => $composableBuilder(
+    column: $table.acceptedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get timeZoneId => $composableBuilder(
+    column: $table.timeZoneId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -20238,6 +20544,11 @@ class $$MaintenanceRecordsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get occurrenceId => $composableBuilder(
+    column: $table.occurrenceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get dueDate => $composableBuilder(
     column: $table.dueDate,
     builder: (column) => ColumnOrderings(column),
@@ -20245,6 +20556,16 @@ class $$MaintenanceRecordsTableOrderingComposer
 
   ColumnOrderings<DateTime> get completedAt => $composableBuilder(
     column: $table.completedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get acceptedAt => $composableBuilder(
+    column: $table.acceptedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get timeZoneId => $composableBuilder(
+    column: $table.timeZoneId,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -20289,11 +20610,26 @@ class $$MaintenanceRecordsTableAnnotationComposer
   GeneratedColumn<String> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
 
+  GeneratedColumn<String> get occurrenceId => $composableBuilder(
+    column: $table.occurrenceId,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<DateTime> get dueDate =>
       $composableBuilder(column: $table.dueDate, builder: (column) => column);
 
   GeneratedColumn<DateTime> get completedAt => $composableBuilder(
     column: $table.completedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get acceptedAt => $composableBuilder(
+    column: $table.acceptedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get timeZoneId => $composableBuilder(
+    column: $table.timeZoneId,
     builder: (column) => column,
   );
 
@@ -20359,15 +20695,21 @@ class $$MaintenanceRecordsTableTableManager
               ({
                 Value<String> id = const Value.absent(),
                 Value<String> planId = const Value.absent(),
+                Value<String> occurrenceId = const Value.absent(),
                 Value<DateTime> dueDate = const Value.absent(),
                 Value<DateTime> completedAt = const Value.absent(),
+                Value<DateTime?> acceptedAt = const Value.absent(),
+                Value<String> timeZoneId = const Value.absent(),
                 Value<String?> notes = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => MaintenanceRecordsCompanion(
                 id: id,
                 planId: planId,
+                occurrenceId: occurrenceId,
                 dueDate: dueDate,
                 completedAt: completedAt,
+                acceptedAt: acceptedAt,
+                timeZoneId: timeZoneId,
                 notes: notes,
                 rowid: rowid,
               ),
@@ -20375,15 +20717,21 @@ class $$MaintenanceRecordsTableTableManager
               ({
                 required String id,
                 required String planId,
+                Value<String> occurrenceId = const Value.absent(),
                 required DateTime dueDate,
                 Value<DateTime> completedAt = const Value.absent(),
+                Value<DateTime?> acceptedAt = const Value.absent(),
+                Value<String> timeZoneId = const Value.absent(),
                 Value<String?> notes = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => MaintenanceRecordsCompanion.insert(
                 id: id,
                 planId: planId,
+                occurrenceId: occurrenceId,
                 dueDate: dueDate,
                 completedAt: completedAt,
+                acceptedAt: acceptedAt,
+                timeZoneId: timeZoneId,
                 notes: notes,
                 rowid: rowid,
               ),
@@ -21275,6 +21623,7 @@ typedef $$StreaksTableProcessedTableManager =
       PrefetchHooks Function()
     >;
 typedef $$SyncOutboxTableCreateCompanionBuilder = SyncOutboxCompanion Function({
+  Value<int> localSequence,
   required String entity,
   required String recordKey,
   required String operation,
@@ -21288,9 +21637,9 @@ typedef $$SyncOutboxTableCreateCompanionBuilder = SyncOutboxCompanion Function({
   Value<String?> lastErrorCode,
   Value<String?> lastError,
   Value<int> generation,
-  Value<int> rowid,
 });
 typedef $$SyncOutboxTableUpdateCompanionBuilder = SyncOutboxCompanion Function({
+  Value<int> localSequence,
   Value<String> entity,
   Value<String> recordKey,
   Value<String> operation,
@@ -21304,7 +21653,6 @@ typedef $$SyncOutboxTableUpdateCompanionBuilder = SyncOutboxCompanion Function({
   Value<String?> lastErrorCode,
   Value<String?> lastError,
   Value<int> generation,
-  Value<int> rowid,
 });
 
 class $$SyncOutboxTableFilterComposer
@@ -21316,6 +21664,11 @@ class $$SyncOutboxTableFilterComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
+  ColumnFilters<int> get localSequence => $composableBuilder(
+    column: $table.localSequence,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<String> get entity => $composableBuilder(
     column: $table.entity,
     builder: (column) => ColumnFilters(column),
@@ -21391,6 +21744,11 @@ class $$SyncOutboxTableOrderingComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
+  ColumnOrderings<int> get localSequence => $composableBuilder(
+    column: $table.localSequence,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get entity => $composableBuilder(
     column: $table.entity,
     builder: (column) => ColumnOrderings(column),
@@ -21466,6 +21824,11 @@ class $$SyncOutboxTableAnnotationComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
+  GeneratedColumn<int> get localSequence => $composableBuilder(
+    column: $table.localSequence,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get entity =>
       $composableBuilder(column: $table.entity, builder: (column) => column);
 
@@ -21545,6 +21908,7 @@ class $$SyncOutboxTableTableManager
               $$SyncOutboxTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback:
               ({
+                Value<int> localSequence = const Value.absent(),
                 Value<String> entity = const Value.absent(),
                 Value<String> recordKey = const Value.absent(),
                 Value<String> operation = const Value.absent(),
@@ -21558,8 +21922,8 @@ class $$SyncOutboxTableTableManager
                 Value<String?> lastErrorCode = const Value.absent(),
                 Value<String?> lastError = const Value.absent(),
                 Value<int> generation = const Value.absent(),
-                Value<int> rowid = const Value.absent(),
               }) => SyncOutboxCompanion(
+                localSequence: localSequence,
                 entity: entity,
                 recordKey: recordKey,
                 operation: operation,
@@ -21573,10 +21937,10 @@ class $$SyncOutboxTableTableManager
                 lastErrorCode: lastErrorCode,
                 lastError: lastError,
                 generation: generation,
-                rowid: rowid,
               ),
           createCompanionCallback:
               ({
+                Value<int> localSequence = const Value.absent(),
                 required String entity,
                 required String recordKey,
                 required String operation,
@@ -21590,8 +21954,8 @@ class $$SyncOutboxTableTableManager
                 Value<String?> lastErrorCode = const Value.absent(),
                 Value<String?> lastError = const Value.absent(),
                 Value<int> generation = const Value.absent(),
-                Value<int> rowid = const Value.absent(),
               }) => SyncOutboxCompanion.insert(
+                localSequence: localSequence,
                 entity: entity,
                 recordKey: recordKey,
                 operation: operation,
@@ -21605,7 +21969,6 @@ class $$SyncOutboxTableTableManager
                 lastErrorCode: lastErrorCode,
                 lastError: lastError,
                 generation: generation,
-                rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))

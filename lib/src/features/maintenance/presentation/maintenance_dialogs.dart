@@ -670,10 +670,12 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
             nextDueDate: _dueDate,
             reminderDaysBefore: reminderDaysBefore,
             metadata: metadata,
+            expectedOccurrenceId: widget.task?.plan.currentOccurrenceId,
+            expectedUpdatedAt: widget.task?.plan.updatedAt,
           );
       await ref.read(offlineCreationDraftStoreProvider).clear(_offlineDraftKey);
 
-      await refreshNotificationSchedules(ref);
+      await wakeNotificationReconciliation(ref);
       if (mounted) {
         if (widget.task == null) {
           showTaskActionFeedback(context, TaskActionFeedbackType.created);

@@ -110,8 +110,7 @@ fail locally before an HTTP request.
 The client allowlist and authenticated Postgres column-level UPDATE grants are
 one invariant enforced at two layers. The executable client matrix is in
 [`sync_dtos.dart`](../../lib/src/core/sync/sync_dtos.dart), and the database
-matrix is installed by the latest migration under
-[`supabase/migrations/`](../../supabase/migrations/) and compared exhaustively
+matrix is installed by the [single initial migration](../../supabase/migrations/20260821124930_initial_schema.sql) and compared exhaustively
 by pgTAP. Table-wide authenticated UPDATE and direct client authority over
 server revision/timestamp columns are prohibited even when owner RLS would
 otherwise allow the row.
@@ -198,7 +197,7 @@ The database includes a server-assigned, monotonic, owner-scoped change feed (`s
 - The `fetch_user_change_feed(p_since_seq, p_limit, p_expected_generation)` RPC exposes the feed to authenticated clients as a `SECURITY INVOKER` function under owner-scoped RLS. It captures an owner-scoped high-water sequence and generation at scan start and pages only changes `change_seq <= high_water_seq` in strict monotonic order.
 - Bounded retention is real: the service-only `owntend_private.compact_user_change_feed()` job removes rows below the retained boundary (age plus per-owner row cap) while holding the owner state row lock, and — only when it actually removed rows — atomically advances the durable `owner_feed_state.feed_generation` together with `retained_min_seq`. No-op runs never advance the generation. Concurrent feed writes serialize on the same row lock, so a generation or high-water range can never be observed half-applied.
 - `fetch_user_change_feed` returns contract version, `feed_generation`, `next_seq`, `has_more`, `high_water_seq`, and `resnapshot_required = true` when the requested cursor predates the retained range or was built for a different generation. Because compaction advances the durable generation, every pre-compaction cursor deterministically rehydrates instead of silently missing deleted history.
-- There is no rollout flag, capability table, fallback pull protocol, or authenticated parity function in production v1. A service-role-only parity function remains available to protected validation.
+- There is no rollout flag, capability table, fallback pull protocol, or authenticated parity function in the current contract. A service-role-only parity function remains available to protected validation.
 
 Maintenance plan columns use the same canonical names in Flutter/Drift and
 Postgres (`instructions`, `recurrence_interval`, and `recurrence_unit`). The
@@ -211,14 +210,35 @@ during RPC creation or ordinary synchronization.
 
 ## Maintenance completion
 
-Maintenance completion affects history, recurrence, due state, reminders, statistics, and potentially multiple devices. Completion operations require stable idempotency keys. Maintenance completion timestamps (`completedAt`, `expectedNextDueDate`, `previousDueDate`, `nextDueDate`) MUST be canonicalized to whole-second UTC precision (`date_trunc('second', ...)` in SQL, `canonicalSyncSecond` in Dart) across Drift SQLite, outbox JSON payloads, and Supabase Postgres to eliminate sub-second precision mismatch rejections. If the server rejects or resolves a duplicate, local reminder and recurrence state must reconcile to the accepted cloud result rather than advance permanently from an unaccepted local assumption.
+Maintenance completion affects history, recurrence, due state, reminders,
+statistics, rewards, and potentially multiple devices. Each plan exposes one
+stable `current_occurrence_id`; each history row stores the completed
+`occurrence_id`, `accepted_at`, and `time_zone_id`, with one row allowed per
+plan/occurrence. Completion operation IDs remain stable across retry.
+
+The local transaction compare-and-sets the expected occurrence, advances to a
+deterministic successor occurrence, writes history, acknowledges the inbox,
+persists reminder reconciliation, and appends one intent-only outbox command.
+Outbox `local_sequence` is database assigned, and a later completion names its
+exact predecessor so same-plan operations cannot reorder after restart.
+
+The cloud does not accept a client recurrence projection. It locks the
+canonical plan, verifies the occurrence, computes the next due date from the
+canonical recurrence and supplied IANA time zone, records server acceptance,
+and returns the canonical plan and record. Timestamps are canonicalized to
+whole-second UTC precision (`date_trunc('second', ...)` in SQL and
+`canonicalSyncSecond` in Dart). Rejected or duplicate local state is reconciled
+to that canonical result.
 
 Cloud `maintenance_records` are pull-only for generic synchronization. Authenticated table INSERT, UPDATE, and DELETE are revoked, and both single-row and batch gateway paths fail closed if asked to mutate them. Before pushing, a retained generic history row duplicated by a structurally valid completion/undo intent is removed; any other retained generic history mutation becomes a durable, user-visible `server_authority_required` failure. Restore-origin rows are replaced by validated per-plan merge batches. Ordinary completions and undo use their dedicated RPCs. A missing-plan completion is accepted only when the same account already has an exact task-creation authorization for that plan ID; otherwise it returns terminal `task_creation_not_authorized` without partial state.
 
-`complete_maintenance_task` returns completion contract version 1. Every
-non-exception result has the same nine fields: `contract_version`, `status`,
+`complete_maintenance_task` accepts exactly the current intent fields and
+returns completion contract version 1. Missing, extra, or retired request
+fields are invalid. Every non-exception result has the same ten fields:
+`contract_version`, `status`,
 `retryable`, `conflict_reason`, `current_plan_revision`,
-`resulting_record_id`, `resulting_next_due_date`, `plan`, and `record`. The
+`resulting_record_id`, `resulting_next_due_date`,
+`reward_eligibility_token`, `plan`, and `record`. The
 client rejects unknown versions, statuses, reason codes, types, ownership,
 plan/record relationships, requested identities, timestamps, and impossible
 field combinations as the non-retryable
@@ -229,16 +249,22 @@ A completion push has two successful run-level dispositions. `applied`
 acknowledges or reconciles the mutation. `terminalHandled` keeps a rejected
 business mutation as failed-visible and allows hydration and later independent
 mutations to continue. Applied, already-applied, and
-occurrence-completed-elsewhere results require canonical rows. A stale plan
-revision receives exactly one retry using the returned canonical revision;
-another well-formed conflict is reconciled or quarantined without failing the
-run. Invalid payload outcomes are quarantined with their bounded server reason.
+occurrence-completed-elsewhere results require canonical rows. A stale
+occurrence or concurrent winner is reconciled from those rows; the client does
+not retry a stale plan projection. Another well-formed conflict is reconciled
+or quarantined without failing the run. Invalid payload outcomes are
+quarantined with their bounded server reason.
 Only transport failures and run-wide authentication, account-scope,
 permission, or schema failures abort the run. The run coordinator rethrows the
 canonical typed failure with the original stack trace so observability sees the
 classification without losing the originating frames.
 
-Signed-in backup restore converts maintenance history into deterministic per-plan `maintenance_history_restore` execute operations of at most 100 records. `restore_maintenance_history` requires an existing owned plan, expected revision, and exact material plan snapshot. It inserts only missing rows; an exact existing row counts as replay success; a differing record ID or operation ID makes the whole batch a durable `history_record_conflict`. A plan difference is a durable `plan_snapshot_conflict`. The RPC never creates plans, overwrites schedules, or deletes unrelated cloud history. An imported archive remains untrusted: this proves ownership, structure, and exact replay, not historical authenticity.
+Signed-in backup restore converts maintenance history into deterministic per-plan `maintenance_history_restore` execute operations of at most 100 records. Each restored record includes its occurrence, acceptance instant, and validated IANA time zone. `restore_maintenance_history` requires an existing owned plan, expected revision, and exact material plan snapshot. It inserts only missing rows; an exact existing row counts as replay success; a differing record ID, operation ID, or plan/occurrence identity makes the whole batch a durable `history_record_conflict`. A plan difference is a durable `plan_snapshot_conflict`. The RPC never creates plans, overwrites schedules, or deletes unrelated cloud history. An imported archive remains untrusted: this proves ownership, structure, and exact replay, not historical authenticity.
+
+Undo is a separate guarded command. It names the exact completion occurrence,
+the expected successor occurrence, and both due dates. The server deletes and
+rewinds only when that completion is still the latest state; replay is
+idempotent, while a later completion or edit prevents an unsafe rewind.
 
 Asset and plan generic updates are positive allowlists, not full-row payloads
 with protected fields removed afterward. Asset type and plan parent asset are

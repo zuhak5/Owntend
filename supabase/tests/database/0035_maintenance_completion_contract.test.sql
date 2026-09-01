@@ -44,7 +44,7 @@ select extensions.results_eq(
       values
         ('applied'::text, false, null::text),
         ('already_applied', false, null),
-        ('conflict', true, 'stale_plan_revision'),
+        ('conflict', false, 'stale_occurrence'),
         ('invalid', false, 'invalid_payload_version')
     )
     select status, array_agg(key order by key)::text[]
@@ -59,7 +59,7 @@ select extensions.results_eq(
     select status, array[
       'conflict_reason', 'contract_version', 'current_plan_revision',
       'plan', 'record', 'resulting_next_due_date', 'resulting_record_id',
-      'retryable', 'status'
+      'retryable', 'reward_eligibility_token', 'status'
     ]::text[]
     from (values
       ('already_applied'::text), ('applied'), ('conflict'), ('invalid')
@@ -84,8 +84,8 @@ select extensions.ok(
     with response as (
       select owntend_private.maintenance_completion_result(
         'conflict',
-        true,
-        'stale_plan_revision',
+        false,
+        'stale_occurrence',
         7,
         '00000000-0000-0000-0000-000000000352',
         '2026-08-29T00:00:00Z'::timestamptz,
@@ -117,8 +117,8 @@ select extensions.is(
     ) as fields
     where fields.value = 'null'::jsonb
   ),
-  5,
-  'invalid responses retain all five nullable canonical fields'
+  6,
+  'invalid responses retain all six nullable canonical fields'
 );
 
 select extensions.ok(
@@ -151,7 +151,7 @@ select extensions.results_eq(
     values (array[
       'conflict_reason', 'contract_version', 'current_plan_revision',
       'plan', 'record', 'resulting_next_due_date', 'resulting_record_id',
-      'retryable', 'status'
+      'retryable', 'reward_eligibility_token', 'status'
     ]::text[])
   $$,
   'the authenticated public RPC returns the fixed envelope for invalid input'

@@ -503,6 +503,7 @@ abstract class MonetizationRepository {
   Future<RewardClaimRequest> createRewardClaim(
     RewardAdType type, {
     String? timeZone,
+    String? eligibilityToken,
   }) => Future.error(UnsupportedError('Reward claims are unavailable.'));
 
   Future<void> recordEvent(

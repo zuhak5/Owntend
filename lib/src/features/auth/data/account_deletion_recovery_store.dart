@@ -107,7 +107,7 @@ class SecureAccountDeletionRecoveryStore
             aOptions: owntendAndroidSecureStorageOptions,
           );
 
-  static const _storageKey = 'owntend.account-deletion-recovery.v1';
+  static const _storageKey = 'owntend.account-deletion-recovery';
 
   final FlutterSecureStorage _storage;
 

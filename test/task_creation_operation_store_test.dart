@@ -38,9 +38,11 @@ void main() {
       (await store.listOperationsForAccount('account-b')).single.operationId,
       'operation-b',
     );
-    verify(() => storage.delete(key: 'task_creation_op_v1_operation-a'))
+    verify(() => storage.delete(key: 'task_creation_operation_operation-a'))
         .called(1);
-    verifyNever(() => storage.delete(key: 'task_creation_op_v1_operation-b'));
+    verifyNever(
+      () => storage.delete(key: 'task_creation_operation_operation-b'),
+    );
   });
 }
 

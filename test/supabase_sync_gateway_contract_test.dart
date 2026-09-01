@@ -175,8 +175,13 @@ void main() {
   group('maintenance completion response contract', () {
     const userId = 'owner-1';
     final operation = <String, dynamic>{
-      'plan': <String, dynamic>{'id': 'plan-1'},
-      'record': <String, dynamic>{'id': 'record-1'},
+      'contract_version': 1,
+      'operation_id': 'record-1',
+      'plan_id': 'plan-1',
+      'occurrence_id': 'occurrence-1',
+      'completed_at': '2026-08-28T04:48:00.000Z',
+      'time_zone_id': 'UTC',
+      'notes': null,
     };
 
     test('accepts a fixed applied envelope with canonical records', () {
@@ -186,6 +191,7 @@ void main() {
           currentPlanRevision: 2,
           resultingRecordId: 'record-1',
           resultingNextDueDate: '2026-10-01T00:00:00.000Z',
+          rewardEligibilityToken: '123e4567-e89b-42d3-a456-426614174000',
           plan: _remotePlan(userId),
           record: _remoteRecord(userId),
         ),
@@ -197,13 +203,17 @@ void main() {
       expect(result.plan?.recordKey, 'plan-1');
       expect(result.record?.recordKey, 'record-1');
       expect(result.currentPlanRevision, 2);
+      expect(
+        result.rewardEligibilityToken,
+        '123e4567-e89b-42d3-a456-426614174000',
+      );
     });
 
     test('accepts terminal invalid and canonical conflict envelopes', () {
       final invalid = parseMaintenanceCompletionResult(
         _completionEnvelope(
           status: 'invalid',
-          conflictReason: 'task_creation_not_authorized',
+          conflictReason: 'plan_unavailable',
         ),
         operation: operation,
         userId: userId,
@@ -325,6 +335,7 @@ Map<String, dynamic> _completionEnvelope({
   int? currentPlanRevision,
   String? resultingRecordId,
   String? resultingNextDueDate,
+  String? rewardEligibilityToken,
   Map<String, dynamic>? plan,
   Map<String, dynamic>? record,
 }) => <String, dynamic>{
@@ -335,6 +346,7 @@ Map<String, dynamic> _completionEnvelope({
   'current_plan_revision': currentPlanRevision,
   'resulting_record_id': resultingRecordId,
   'resulting_next_due_date': resultingNextDueDate,
+  'reward_eligibility_token': rewardEligibilityToken,
   'plan': plan,
   'record': record,
 };
@@ -351,5 +363,8 @@ Map<String, dynamic> _remoteRecord(String userId) => <String, dynamic>{
   'user_id': userId,
   'id': 'record-1',
   'plan_id': 'plan-1',
+  'occurrence_id': 'occurrence-1',
+  'accepted_at': '2026-08-28T04:48:00.000Z',
+  'time_zone_id': 'UTC',
   'created_at': '2026-08-28T04:48:00.000Z',
 };

@@ -1439,6 +1439,7 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
             petDetails: petDetails,
             plantDetails: plantDetails,
             safetyDetails: safetyDetails,
+            expectedUpdatedAt: widget.asset?.updatedAt,
           );
       await ref.read(offlineCreationDraftStoreProvider).clear(_offlineDraftKey);
       if (mounted) {

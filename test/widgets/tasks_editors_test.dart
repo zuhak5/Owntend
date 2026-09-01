@@ -573,7 +573,7 @@ void main() {
       expect(maintenance.enabledChanges, [
         (planId: 'plan_disable', enabled: false),
       ]);
-      expect(scheduler.cancelled, ['plan_disable']);
+      expect(scheduler.cancelled, isEmpty);
       expect(scheduler.refreshCount, 1);
       expect(find.text('Task disabled.'), findsOneWidget);
     });

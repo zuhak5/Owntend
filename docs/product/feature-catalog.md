@@ -31,7 +31,13 @@ Category is not a second item classifier, search entity, persistence field, back
 - Task metadata without task-to-task dependency links; that retired feature is
   removed from editors, details, drafts, local/cloud schemas, and sync payloads.
 
-Maintenance completion is a synchronized, idempotent operation. UI changes must not bypass repository and synchronization semantics.
+Maintenance completion is a synchronized, occurrence-identified operation. The
+displayed occurrence is compare-and-set locally and can succeed optimistically
+offline; the server locks the canonical plan, computes recurrence, and returns
+the winning plan/history state. Duplicate taps, replay, and a second device
+cannot create two records for one occurrence. Undo is guarded so it cannot
+rewind a later completion or edit. UI changes must not bypass repository and
+synchronization semantics.
 
 Transient feedback has one protected queue. Passive messages and errors wait behind an active Undo opportunity, compatible operations batch only under an exact non-null key, Trash never batches with maintenance completion, and accessible-navigation mode keeps actionable Undo available until action or dismissal. Floating feedback follows the active Scaffold's real navigation, footer, keyboard, and floating-action obstruction instead of route-specific offsets. See [`transient-feedback.md`](../development/transient-feedback.md).
 
@@ -69,17 +75,22 @@ The public page is not an anonymous deletion endpoint. It accepts success only w
 - Local notification permission education.
 - A capability-setup surface that distinguishes application preferences from Android permission/special-access state, service availability, scheduler truth, and effective feature state.
 - Manual weather-area selection without requesting device location; the real OS location state remains unchanged.
-- Optional exact-alarm scheduling when exact timing is selected and available, with inexact allow-while-idle scheduling as the reminder fallback.
+- Battery-conscious inexact reminder scheduling with durable desired-state
+  reconciliation.
 - Boot and application-update restoration.
 - Foreground data-sync capability and Workmanager for bounded background work.
 - Time-zone-aware reminders.
 - A shared local presentation clock refreshes date-dependent Home, room, maintenance, and calendar state at minute boundaries and immediately after application resume so midnight and time-zone changes do not require unrelated data mutations.
 
-The first-dashboard education flow considers weather-area and notification setup; it does not pressure users for exact-alarm access. Exact timing is surfaced from settings or reminder/task scheduling context. Denied or unavailable access must leave useful manual-weather, in-app inbox, and inexact-reminder paths where their prerequisites are met.
+The first-dashboard education flow considers weather-area and notification
+setup. Denied or unavailable notification access must leave useful
+manual-weather and in-app inbox paths. Reminder reconciliation is serialized,
+checks pending platform identifiers, and retains failed/snoozed intent for a
+later startup, foreground, or background retry.
 
 ## Backup and restore
 
-- Production-v1 authenticated `.owntend-backup` containers (Argon2id + AES-256-GCM; no plaintext reader) with one format contract.
+- Current authenticated `.owntend-backup` containers (Argon2id + AES-256-GCM; no plaintext reader) with one format contract.
 - Manifest and cryptographic hash validation.
 - Media inclusion and staging.
 - Retention of automatic backups.
@@ -98,6 +109,9 @@ The restore picker exposes only the `.owntend-backup` extension; a generic `.zip
 - Server-authoritative points wallet.
 - Task-only point debiting (1 point per new standalone maintenance task; asset/item creation is completely free).
 - Server-side verification and replay-resistant reward claims.
+- Maintenance-qualified rewarded-interstitial claims require a short-lived,
+  account-bound, single-use token from a canonically accepted completion; the
+  client does not infer eligibility from its local due-task count.
 - Explicit unfinished drafts when charged creation cannot be completed offline.
 - A collapsible native-ad placement on every routed application content screen,
   including task detail, Inbox, permission setup, and all Tools destinations.
@@ -117,7 +131,7 @@ Repository tests cover the application eligibility, ownership, native schema, an
 
 Sentry provides technical error and performance diagnostics when enabled. The intended policy excludes user content and direct identifiers and disables screenshots, session replay, view hierarchy, and raw HTTP payload capture.
 
-Shorebird-enabled Android releases can receive signed Dart-only patches after a new base release is registered. Patches cannot change native code, packaged assets, dependencies, or toolchain inputs; production patches are published to staging, verified on a device, and promoted as an exact numbered patch through a protected workflow. The updater checks in the background at startup and normally applies a downloaded patch on the next launch.
+Shorebird-enabled Android releases can receive signed Dart-only patches after a new base release is registered. Patches cannot change native code, packaged assets, dependencies, or toolchain inputs. A separately authorized production patch is published directly to `stable` only after exact-source validation, Shorebird dry-run evidence, and required device review; there is no repository promotion path or unpublished-base bypass. The updater checks in the background at startup and normally applies a downloaded patch on the next launch.
 
 ## Distribution
 

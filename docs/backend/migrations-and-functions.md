@@ -13,7 +13,12 @@ postures.
 
 The repository lifecycle checkbox in `AGENTS.md` decides whether Supabase history is a disposable baseline or production history.
 
-While Owntend remains pre-launch, the eventual goal is a clean baseline. The current security remediation intentionally uses an ordered forward chain first so a previously deployed pre-launch project can be repaired without rewriting applied history. Those migration files are immutable on the preservation path. They may be folded into the initial migration only after hosted validation and a separately approved destructive `reset-prelaunch-database` operation.
+While Owntend remains pre-launch, the repository contains one clean baseline:
+[`20260821124930_initial_schema.sql`](../../supabase/migrations/20260821124930_initial_schema.sql).
+Unpublished patch history and compatibility backfills are not retained. Every
+local database test starts blank and applies that baseline. Rebuilding a linked
+hosted project is a separate destructive operation that still requires explicit
+authorization for the exact target.
 
 After launch, migration history becomes append-only production history. At that point, change behavior only through new forward migrations and preserve compatibility with deployed clients and live data.
 
@@ -31,15 +36,17 @@ Each migration should be:
 ### Pre-launch / zero-user
 
 1. Inspect the complete baseline and the final executable schema contract.
-2. Apply and validate the current forward chain without editing applied files.
-3. Consolidate only after explicit reset approval and normalized forward-chain-versus-squashed schema/ACL comparison.
-4. Add or update RLS, RPC, constraint, denial, and authorization tests.
-5. Start Supabase from an empty local database.
-6. Run schema lint and the full pgTAP suite.
-7. Inspect the final migration diff and documentation.
-8. Merge only after canonical CI is green.
-9. Rebuild the authorized hosted pre-launch project from exact current `main` through the protected reset workflow.
-10. Re-run hosted migration, ACL, Advisor, feed-parity, and integration checks before allowing a release to depend on the hosted baseline.
+2. Modify the single baseline directly; do not add a patch migration for an
+   unpublished schema.
+3. Add or update RLS, RPC, constraint, denial, and authorization tests.
+4. Start Supabase from an empty local database.
+5. Run schema lint, the full pgTAP suite, and the disposable backend integration lane.
+6. Inspect the final migration diff and documentation.
+7. Merge only after canonical CI is green.
+8. Rebuild an explicitly authorized hosted pre-launch project from exact current
+   `main` through the protected reset workflow.
+9. Re-run hosted migration, ACL, Advisor, feed-parity, and integration checks
+   before allowing a release to depend on the hosted baseline.
 
 ### After launch
 
@@ -104,16 +111,15 @@ is recovered through the idempotent operation journal. The journal stores only
 bounded technical codes. [`0036_input_validation_contract.test.sql`](../../supabase/tests/database/0036_input_validation_contract.test.sql)
 asserts maximum/max-plus-one, zero/negative, and stable RPC rejection behavior.
 
-## Generic sync UPDATE ACL rollout
+## Generic sync UPDATE ACL contract
 
-The client serializer, column privileges, pgTAP matrix, and real PostgREST
-integration tests land together. Validate the corrected client against the
-current local schema first, apply the new forward migration locally, and rerun
-the complete backend gate from a blank disposable stack. Before the protected
-hosted migration workflow is approved, ensure the corrected build is the only
-shared pre-launch test client. After the workflow applies the migration, smoke
-test asset, plan, room, detail, setting, and inbox edits and inspect sanitized
-PATCH `403`/`42501` counts. Any occurrence blocks release.
+The client serializer, baseline column privileges, pgTAP matrix, and real
+PostgREST integration tests land together. Validate them from a blank local
+stack and rerun the disposable backend gate. Before a protected hosted reset is
+approved, ensure the corrected build is the only shared pre-launch test client.
+After the separately authorized workflow rebuilds the target, smoke test asset,
+plan, room, detail, setting, and inbox edits and inspect sanitized PATCH
+`403`/`42501` counts. Any occurrence blocks release.
 
 The project remains pre-launch, so an affected disposable test installation is
 reset after the corrected build is available. A fixture that must be preserved
@@ -125,20 +131,22 @@ environment evidence rather than local proof.
 
 ## Maintenance-completion response contract
 
-The forward migration after the sync UPDATE ACL migration versions
-`complete_maintenance_task` at contract 1. A private security-invoker response
-helper constructs one fixed JSON envelope for every non-exception branch. Its
+The single initial baseline defines `complete_maintenance_task` at contract 1.
+It accepts one exact occurrence-intent request, locks the canonical plan, and
+computes recurrence server-side. A private security-invoker response helper
+constructs one fixed ten-field JSON envelope for every non-exception branch,
+including the nullable maintenance reward eligibility token. Its
 execution is revoked from `PUBLIC`, `anon`, and `authenticated`; only the
 private implementation can use it. The public RPC remains a security-invoker
 wrapper, while authentication, ownership, entitlement, idempotency, and
 transactional recurrence checks remain in the narrowly authorized private
 implementation with an empty `search_path`.
 
-Deploy this backend contract before its strict client. The earlier client
-ignores the additional `contract_version` field, while the corrected client
-fails closed if the server does not return version 1. pgTAP verifies the exact
-envelope keys and types for every status, helper privileges, public wrapper
-behavior, owner isolation, and the absence of ad-hoc JSON result construction.
+There is no missing/older request-shape ladder in the pre-launch baseline. The
+client fails closed if the server does not return the exact version-1 envelope.
+pgTAP verifies the request key set, envelope keys and types for every status,
+helper privileges, public wrapper behavior, owner isolation, single-use reward
+eligibility, and the absence of ad-hoc JSON result construction.
 
 ## Edge Function inventory
 
@@ -182,7 +190,13 @@ The protected `Audit Supabase Advisors` workflow queries both security and perfo
 - `INFO` findings are retained in the report as non-blocking evidence. In particular, an unused-index observation on a freshly reset zero-traffic database is not sufficient evidence that an index is unnecessary.
 - Management API errors fail closed.
 
-The public RPC surface keeps no elevated authority at the exposed layer: `20260826030000_public_rpcs_security_invoker.sql` converts the nine server-authoritative application RPCs into SECURITY INVOKER delegation wrappers, while their SECURITY DEFINER implementations remain in the unexposed `owntend_media_private` / `owntend_monetization_private` schemas serving `authenticated` and `service_role` callers. This clears splinter lints 0028/0029 by construction instead of by exception. Media-cleanup worker RPCs stay service-role-only per `20260826010000_harden_security_definer_execute_privileges.sql`. pgTAP `0023_api_security.test.sql` and `0031_rpc_execute_privileges.test.sql` pin that matrix.
+The public RPC surface keeps no elevated authority at the exposed layer. The
+single baseline defines the application RPCs as `SECURITY INVOKER` delegation
+wrappers, while their `SECURITY DEFINER` implementations remain in unexposed
+private schemas serving only their intended callers. Media-cleanup worker RPCs
+remain service-role-only. pgTAP `0023_api_security.test.sql` and
+`0031_rpc_execute_privileges.test.sql` pin that matrix and clear splinter lints
+0028/0029 by construction instead of by exception.
 
 Database-side pgTAP coverage independently locks the exposed RPC security mode, effective ACL boundary, RLS init-plan form, and required foreign-key indexes so the hosted Advisor check is not the only line of defense.
 
@@ -202,7 +216,7 @@ are deployed to a hosted project.
 
 `npm run test:backend-integration` is the canonical database/Edge gate. It builds an
 isolated disposable workspace (unique project id, shifted ports, CLI link state
-never copied), starts a blank local stack that applies the complete ordered chain
+never copied), starts a blank local stack that applies the single initial
 migration, lints the schema, runs the full pgTAP suite against the blank
 baseline, serves every configured Edge Function over real HTTP with a run-scoped
 worker capability, executes `supabase/tests/integration/*.test.ts` through the
@@ -210,19 +224,19 @@ actual `/functions/v1/...` gateway, and tears everything down in every outcome.
 Credentials stay in memory; nothing is printed. The lane refuses to target any
 developer-started stack and can never reach a hosted project.
 
-## Current pre-launch migration chain
+## Current pre-launch baseline
 
-The repository currently contains the initial schema, three earlier security/function corrections, and seven remediation migrations in timestamp order. The remediation boundaries are:
+The migration directory contains exactly one initial schema. It installs the
+final tables, constraints, indexes, RLS policies, grants, Storage bucket,
+scheduled maintenance jobs, private implementation schemas, and public RPC
+wrappers. It also defines occurrence-based maintenance completion and guarded
+undo, account-bound reward eligibility, mandatory plan entitlement provenance,
+media staging, history restore, and exact generic-sync update privileges.
 
-1. authoritative entitlements, completion authorization, copy/move/type-change/history-restore RPCs;
-2. media staging quotas/retry and stage-bound Storage policy;
-3. explicit-user service parity RPC; and
-4. final mutation grants and rejection of client-authored initial plans; and
-5. explicit fail-closed Data API policies for the three private operational ledgers, clearing Advisor lint 0008 without granting API access; and
-6. exact generic-sync column UPDATE privileges aligned with the client PATCH allowlists, with server metadata and RPC-authoritative fields excluded; and
-7. the fixed, versioned maintenance-completion response contract and private envelope helper.
-
-The fourth remediation migration is a compatibility boundary: deploy the compatible Flutter build and convert retained journals/outbox work before applying it to an already-deployed environment. The fifth is an access-neutral security-visibility correction and can follow it directly. The sixth must be paired with the explicit-PATCH client and deployed through the protected order above. The seventh is deployed backend-first before the strict completion client. Fresh local environments replay the full chain. Documentation must describe this real chain until an operator explicitly approves the destructive pre-launch squash/reset. If approval is withheld, the forward chain remains canonical permanently.
+Blank-baseline lint, 35 pgTAP files, and the disposable HTTP/Storage/Dart
+integration lane are the local proof. They do not prove that any linked hosted
+project has been reset or deployed; that remains a separately authorized
+protected operation.
 
 The protected migration workflow also runs `npm run validate:supabase-parity` after a hosted operation. Before any database mutation, the pinned Supabase CLI uses the existing protected migration management token to require exactly one current default `sb_secret_...` project key. The key is resolved again only inside the parity step, masked immediately, and never persisted as a workflow output, artifact, repository secret, or application configuration. The validator enumerates Auth user IDs only in memory through the server-only Admin API, invokes `validate_change_feed_parity(p_user_id)` for each account, and uploads a sanitized report containing aggregate counts and account ordinals only. Zero Auth accounts is an explicit success; an Auth account without its required profile fails validation rather than disappearing from the evidence set.
 

@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/data/repositories.dart';
@@ -8,7 +7,6 @@ enum TaskCompletionPhase {
   idle,
   collectingNotes,
   committingLocal,
-  reconcilingReminder,
   completed,
   failed,
 }
@@ -26,72 +24,77 @@ class TaskCompletionState {
 
   bool get isInProgress =>
       phase == TaskCompletionPhase.collectingNotes ||
-      phase == TaskCompletionPhase.committingLocal ||
-      phase == TaskCompletionPhase.reconcilingReminder;
+      phase == TaskCompletionPhase.committingLocal;
 }
 
-final taskCompletionControllerProvider =
-    Provider.family<TaskCompletionController, String>((ref, planId) {
-      return TaskCompletionController(
+final taskCompletionControllerProvider = Provider.autoDispose
+    .family<TaskCompletionController, String>((ref, planId) {
+      final controller = TaskCompletionController(
         planId: planId,
         maintenanceRepo: ref.watch(maintenanceRepositoryProvider),
       );
+      return controller;
     });
 
-class TaskCompletionController extends ValueNotifier<TaskCompletionState> {
+class TaskCompletionController {
   TaskCompletionController({
     required this.planId,
     required this.maintenanceRepo,
-  }) : super(const TaskCompletionState());
+  });
 
   final String planId;
   final MaintenanceRepository maintenanceRepo;
+  TaskCompletionState _state = const TaskCompletionState();
+
+  TaskCompletionState get state => _state;
 
   bool tryBeginNotesCollection() {
-    if (value.isInProgress) return false;
-    value = const TaskCompletionState(
+    if (_state.isInProgress) return false;
+    _state = const TaskCompletionState(
       phase: TaskCompletionPhase.collectingNotes,
     );
     return true;
   }
 
   void cancelNotesCollection() {
-    if (value.phase == TaskCompletionPhase.collectingNotes) {
-      value = const TaskCompletionState(phase: TaskCompletionPhase.idle);
+    if (_state.phase == TaskCompletionPhase.collectingNotes) {
+      _state = const TaskCompletionState(phase: TaskCompletionPhase.idle);
     }
   }
 
   Future<LocalMaintenanceCompletionResult> complete({
+    required String expectedOccurrenceId,
+    String timeZoneId = 'UTC',
     DateTime? completedAt,
     String? notes,
-    DateTime? expectedNextDueDate,
   }) async {
-    if (value.phase == TaskCompletionPhase.committingLocal ||
-        value.phase == TaskCompletionPhase.reconcilingReminder) {
-      return value.result ??
+    if (_state.phase == TaskCompletionPhase.committingLocal) {
+      return _state.result ??
           const LocalMaintenanceCompletionResult(
-            status: LocalMaintenanceCompletionStatus.occurrenceChanged,
+            status: LocalMaintenanceCompletionStatus.failed,
+            errorCode: 'completion_in_progress',
           );
     }
-    value = const TaskCompletionState(
+    _state = const TaskCompletionState(
       phase: TaskCompletionPhase.committingLocal,
     );
 
     try {
       final result = await maintenanceRepo.completePlanResult(
         planId,
+        expectedOccurrenceId: expectedOccurrenceId,
+        timeZoneId: timeZoneId,
         completedAt: completedAt,
         notes: notes,
-        expectedNextDueDate: expectedNextDueDate,
       );
 
       if (result.isApplied) {
-        value = TaskCompletionState(
+        _state = TaskCompletionState(
           phase: TaskCompletionPhase.completed,
           result: result,
         );
       } else {
-        value = TaskCompletionState(
+        _state = TaskCompletionState(
           phase: TaskCompletionPhase.failed,
           result: result,
         );
@@ -99,9 +102,10 @@ class TaskCompletionController extends ValueNotifier<TaskCompletionState> {
       return result;
     } catch (e) {
       final failResult = LocalMaintenanceCompletionResult(
-        status: LocalMaintenanceCompletionStatus.occurrenceChanged,
+        status: LocalMaintenanceCompletionStatus.failed,
+        errorCode: e.runtimeType.toString(),
       );
-      value = TaskCompletionState(
+      _state = TaskCompletionState(
         phase: TaskCompletionPhase.failed,
         result: failResult,
         error: e,

@@ -85,6 +85,7 @@ class _FakeWalletRepository extends MonetizationRepository {
   Future<RewardClaimRequest> createRewardClaim(
     RewardAdType type, {
     String? timeZone,
+    String? eligibilityToken,
   }) => throw UnimplementedError();
 
   @override

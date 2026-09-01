@@ -11,7 +11,7 @@ class TaskCreationOperationStore {
 
   final FlutterSecureStorage? _storage;
   final Map<String, String> _inMemoryFallback = {};
-  static const _keyPrefix = 'task_creation_op_v1_';
+  static const _keyPrefix = 'task_creation_operation_';
 
   String _storageKey(String operationId) => '$_keyPrefix$operationId';
 

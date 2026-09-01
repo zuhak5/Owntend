@@ -271,6 +271,7 @@ class OwntendNotificationScheduler
   bool _initialized = false;
   Future<void>? _refreshInFlight;
   bool _refreshRequestedWhileInFlight = false;
+  Future<void> _scheduleMutationTail = Future<void>.value();
 
   static const _dueChannelId = NotificationChannelRegistry.dueChannelId;
   static const _overdueChannelId = NotificationChannelRegistry.overdueChannelId;
@@ -398,7 +399,7 @@ class OwntendNotificationScheduler
       _refreshRequestedWhileInFlight = true;
       return active;
     }
-    final refresh = _runRefreshLoop();
+    final refresh = _serializeScheduleMutation(_runRefreshLoop);
     _refreshInFlight = refresh;
     return refresh.whenComplete(() {
       if (identical(_refreshInFlight, refresh)) {
@@ -414,8 +415,28 @@ class OwntendNotificationScheduler
     } while (_refreshRequestedWhileInFlight);
   }
 
+  Future<T> _serializeScheduleMutation<T>(Future<T> Function() action) async {
+    final predecessor = _scheduleMutationTail;
+    final release = Completer<void>();
+    _scheduleMutationTail = release.future;
+    try {
+      try {
+        await predecessor;
+      } on Object {
+        // A failed predecessor must release the schedule owner for repair.
+      }
+      return await action();
+    } finally {
+      release.complete();
+    }
+  }
+
   @override
-  Future<void> clearAllScheduledReminders() async {
+  Future<void> clearAllScheduledReminders() {
+    return _serializeScheduleMutation(_clearAllScheduledRemindersNow);
+  }
+
+  Future<void> _clearAllScheduledRemindersNow() async {
     if (!_initialized) {
       await initialize();
     }
@@ -432,7 +453,18 @@ class OwntendNotificationScheduler
     }
     await _configureTimezone();
     final preferences = await _preferences();
-    final current = await _scheduleStore.readAll();
+    final storedCurrent = await _scheduleStore.readAll();
+    final pendingIds = {
+      for (final request in await _plugin.pendingNotificationRequests())
+        request.id,
+    };
+    final nowUtc = DateTime.now().toUtc();
+    final current = [
+      for (final entry in storedCurrent)
+        if (!entry.scheduledAt.isAfter(nowUtc) ||
+            pendingIds.contains(entry.notificationId))
+          entry,
+    ];
     if (!preferences.enabled) {
       await _applyScheduleDiff(current: current, desired: const []);
       await _cancelSnoozes();
@@ -442,7 +474,7 @@ class OwntendNotificationScheduler
     final now = DateTime.now();
     final tasksById = {for (final task in tasks) task.plan.id: task};
     final activeSnoozes = <String, ReminderScheduleEntry>{};
-    for (final entry in current) {
+    for (final entry in storedCurrent) {
       if (!entry.identity.startsWith('snooze:')) continue;
       final planId = entry.identity.substring('snooze:'.length);
       final task = tasksById[planId];
@@ -474,7 +506,14 @@ class OwntendNotificationScheduler
       }
       final activeSnooze = activeSnoozes[task.plan.id];
       if (activeSnooze != null) {
-        desired.add(_DesiredReminder(activeSnooze, () async {}));
+        desired.add(
+          _desiredSnoozeReminder(
+            task,
+            scheduledFor: activeSnooze.scheduledAt,
+            preferences: preferences,
+            scheduleMode: scheduleMode,
+          ),
+        );
         scheduledCount++;
         continue;
       }
@@ -520,7 +559,11 @@ class OwntendNotificationScheduler
   }
 
   @override
-  Future<void> snoozePlan(String planId, Duration duration) async {
+  Future<void> snoozePlan(String planId, Duration duration) {
+    return _serializeScheduleMutation(() => _snoozePlanNow(planId, duration));
+  }
+
+  Future<void> _snoozePlanNow(String planId, Duration duration) async {
     if (!_initialized) {
       await initialize();
     }
@@ -540,52 +583,42 @@ class OwntendNotificationScheduler
     );
     final scheduleMode = await _taskScheduleMode(preferences);
     final snoozeId = _stableNotificationId('snooze:$planId', _snoozeIdBase);
-    await _scheduleTaskReminder(
+    final desired = _desiredSnoozeReminder(
       task,
       scheduledFor: scheduledFor,
       preferences: preferences,
       scheduleMode: scheduleMode,
-      snoozed: true,
     );
+    assert(desired.snapshot.notificationId == snoozeId);
+    await _scheduleStore.stageSnooze(desired.snapshot);
+    await _refreshSchedulesNow();
+  }
+
+  @override
+  Future<void> cancelPlanReminders(String planId) {
+    return _serializeScheduleMutation(() => _cancelPlanRemindersNow(planId));
+  }
+
+  Future<void> _cancelPlanRemindersNow(String planId) async {
+    if (!_initialized) {
+      await initialize();
+    }
     try {
       await _plugin.cancel(
         id: _stableNotificationId('task:$planId', _maintenanceIdBase),
       );
-    } on Object {
-      await _plugin.cancel(id: snoozeId);
-      rethrow;
+      await _plugin.cancel(
+        id: _stableNotificationId('snooze:$planId', _snoozeIdBase),
+      );
+    } finally {
+      final current = await _scheduleStore.readAll();
+      await _scheduleStore.replaceAll([
+        for (final entry in current)
+          if (entry.identity != 'task:$planId' &&
+              entry.identity != 'snooze:$planId')
+            entry,
+      ]);
     }
-    final current = await _scheduleStore.readAll();
-    final snapshot = _scheduleSnapshot(
-      identity: 'snooze:$planId',
-      notificationId: snoozeId,
-      planRevision: task.plan.updatedAt.toUtc().toIso8601String(),
-      scheduledFor: scheduledFor,
-      scheduleMode: scheduleMode,
-      contentVersion:
-          '${task.plan.title}|${task.plan.priority.name}|snoozed|'
-          '${preferences.privacyMode}',
-    );
-    await _scheduleStore.replaceAll([
-      for (final entry in current)
-        if (entry.identity != 'task:$planId' &&
-            entry.identity != 'snooze:$planId')
-          entry,
-      snapshot,
-    ]);
-  }
-
-  @override
-  Future<void> cancelPlanReminders(String planId) async {
-    if (!_initialized) {
-      await initialize();
-    }
-    await _plugin.cancel(
-      id: _stableNotificationId('task:$planId', _maintenanceIdBase),
-    );
-    await _plugin.cancel(
-      id: _stableNotificationId('snooze:$planId', _snoozeIdBase),
-    );
   }
 
   AndroidNotificationChannel _dueChannel(AppLocalizations l10n) =>
@@ -812,6 +845,38 @@ class OwntendNotificationScheduler
         scheduledFor: scheduledFor,
         preferences: preferences,
         scheduleMode: scheduleMode,
+      ),
+    );
+  }
+
+  _DesiredReminder _desiredSnoozeReminder(
+    TaskItem task, {
+    required DateTime scheduledFor,
+    required NotificationPreferences preferences,
+    required AndroidScheduleMode scheduleMode,
+  }) {
+    final notificationId = _stableNotificationId(
+      'snooze:${task.plan.id}',
+      _snoozeIdBase,
+    );
+    final snapshot = _scheduleSnapshot(
+      identity: 'snooze:${task.plan.id}',
+      notificationId: notificationId,
+      planRevision: task.plan.updatedAt.toUtc().toIso8601String(),
+      scheduledFor: scheduledFor,
+      scheduleMode: scheduleMode,
+      contentVersion:
+          '${task.plan.title}|${task.plan.priority.name}|snoozed|'
+          '${preferences.privacyMode}',
+    );
+    return _DesiredReminder(
+      snapshot,
+      () => _scheduleTaskReminder(
+        task,
+        scheduledFor: scheduledFor,
+        preferences: preferences,
+        scheduleMode: scheduleMode,
+        snoozed: true,
       ),
     );
   }

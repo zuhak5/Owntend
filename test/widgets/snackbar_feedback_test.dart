@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:owntend/main.dart';
 import 'package:owntend/l10n/app_localizations.dart';
+import 'package:owntend/src/core/services/native_capabilities.dart';
 import 'package:owntend/src/core/services/feedback_messenger.dart';
 import 'package:owntend/src/ui/feedback/feedback_coordinator.dart';
 import 'package:owntend/src/ui/components.dart' as hk_ui;
@@ -197,6 +198,8 @@ void main() {
       final task = makeTaskItem(DateTime(2026, 6, 28));
       final maintenance = FakeMaintenanceRepository(initialTasks: [task]);
       final scheduler = FakeNotificationScheduler();
+      bool? completionResult;
+      Object? completionError;
 
       await tester.pumpWidget(
         ProviderScope(
@@ -204,6 +207,9 @@ void main() {
             maintenanceRepositoryProvider.overrideWithValue(maintenance),
             streakServiceProvider.overrideWithValue(streak),
             notificationSchedulerProvider.overrideWithValue(scheduler),
+            nativeCapabilitiesProvider.overrideWithValue(
+              _FixedNativeCapabilities(),
+            ),
           ],
           child: MaterialApp(
             scaffoldMessengerKey: hkRootScaffoldMessengerKey,
@@ -211,7 +217,17 @@ void main() {
             home: Scaffold(
               body: Consumer(
                 builder: (context, ref, child) => ElevatedButton(
-                  onPressed: () => completeTaskWithFeedback(context, ref, task),
+                  onPressed: () async {
+                    try {
+                      completionResult = await completeTaskWithFeedback(
+                        context,
+                        ref,
+                        task,
+                      );
+                    } catch (error) {
+                      completionError = error;
+                    }
+                  },
                   child: const Text('Complete'),
                 ),
               ),
@@ -221,23 +237,29 @@ void main() {
       );
 
       await tester.tap(find.text('Complete'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 451));
-      await tester.pumpAndSettle();
+      for (var attempt = 0; attempt < 20; attempt++) {
+        await tester.pump(const Duration(milliseconds: 100));
+        if (find.text('Task completed.').evaluate().isNotEmpty) {
+          break;
+        }
+      }
 
+      expect(completionError, isNull);
+      expect(completionResult, isTrue);
       expect(find.text('Task completed.'), findsOneWidget);
       expect(find.text('Undo'), findsOneWidget);
       expect(
         tester.widget<SnackBar>(find.byType(SnackBar)).duration,
         const Duration(seconds: 5),
       );
-      expect(scheduler.refreshCount, 0);
+      expect(scheduler.refreshCount, 1);
       expect(scheduler.cancelled, isEmpty);
 
+      await tester.pump(const Duration(milliseconds: 300));
       await tester.tap(find.text('Undo'));
       await tester.pumpAndSettle();
       expect(maintenance.undoCount, 1);
-      expect(scheduler.refreshCount, 1);
+      expect(scheduler.refreshCount, 2);
       expect(find.text('Completion undone.'), findsOneWidget);
       await tester.pump(const Duration(seconds: 3));
       await tester.pumpAndSettle();
@@ -285,4 +307,9 @@ void main() {
       expect(find.text('Task completed.'), findsNothing);
     });
   });
+}
+
+class _FixedNativeCapabilities extends NativeCapabilities {
+  @override
+  Future<String?> getTimeZoneId() async => 'UTC';
 }

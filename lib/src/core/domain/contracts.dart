@@ -18,8 +18,8 @@ abstract interface class AssetRepository {
     required String name,
     required AreaKind kind,
     int? sortOrder,
+    DateTime? expectedUpdatedAt,
   });
-  Future<void> archiveArea(String id);
   Future<void> deleteArea(String id);
   Stream<List<Area>> watchArchivedAreas();
   Future<List<Area>> listArchivedAreas();
@@ -34,8 +34,8 @@ abstract interface class AssetRepository {
     RoomType roomType = RoomType.other,
     String? notes,
     int? sortOrder,
+    DateTime? expectedUpdatedAt,
   });
-  Future<void> archiveRoom(String id);
   Future<void> deleteRoom(String id);
   Stream<List<Room>> watchArchivedRooms();
   Future<List<Room>> listArchivedRooms();
@@ -58,6 +58,7 @@ abstract interface class AssetRepository {
     PetDetails? petDetails,
     PlantDetails? plantDetails,
     SafetyDetails? safetyDetails,
+    DateTime? expectedUpdatedAt,
   });
   Future<void> moveAsset({required String assetId, required String roomId});
   Future<String> copyAsset({
@@ -68,7 +69,6 @@ abstract interface class AssetRepository {
     String? newAssetId,
     Map<String, String> taskIdBySource,
   });
-  Future<void> archiveAsset(String id);
   Future<void> deleteAsset(String id);
   Stream<List<Asset>> watchArchivedAssets();
   Future<List<Asset>> listArchivedAssets();
@@ -90,28 +90,39 @@ abstract interface class AssetRepository {
 }
 
 enum LocalMaintenanceCompletionStatus {
-  applied,
+  appliedPendingSync,
+  alreadyAppliedByThisOperation,
+  completedElsewhere,
   planUnavailable,
   planInactive,
-  occurrenceChanged,
+  staleOccurrence,
+  failed,
 }
 
 class LocalMaintenanceCompletionResult {
   const LocalMaintenanceCompletionResult({
     required this.status,
     this.operationId,
+    this.completedOccurrenceId,
+    this.nextOccurrenceId,
     this.previousDueDate,
     this.nextDueDate,
-    this.duplicateIgnored = false,
+    this.errorCode,
   });
 
   final LocalMaintenanceCompletionStatus status;
   final String? operationId;
+  final String? completedOccurrenceId;
+  final String? nextOccurrenceId;
   final DateTime? previousDueDate;
   final DateTime? nextDueDate;
-  final bool duplicateIgnored;
+  final String? errorCode;
 
-  bool get isApplied => status == LocalMaintenanceCompletionStatus.applied;
+  bool get isApplied => switch (status) {
+    LocalMaintenanceCompletionStatus.appliedPendingSync ||
+    LocalMaintenanceCompletionStatus.alreadyAppliedByThisOperation => true,
+    _ => false,
+  };
 }
 
 abstract interface class MaintenanceRepository {
@@ -137,22 +148,22 @@ abstract interface class MaintenanceRepository {
     required DateTime nextDueDate,
     int reminderDaysBefore,
     TaskMetadata? metadata,
-  });
-  Future<bool> completePlan(
-    String planId, {
-    DateTime? completedAt,
-    String? notes,
-    DateTime? expectedNextDueDate,
+    String? expectedOccurrenceId,
+    DateTime? expectedUpdatedAt,
   });
   Future<LocalMaintenanceCompletionResult> completePlanResult(
     String planId, {
+    required String expectedOccurrenceId,
+    String? operationId,
+    String timeZoneId = 'UTC',
     DateTime? completedAt,
     String? notes,
-    DateTime? expectedNextDueDate,
   });
   Future<void> undoCompletion({
     required String planId,
     required String completionId,
+    required String completedOccurrenceId,
+    required String expectedCurrentOccurrenceId,
     required DateTime previousDueDate,
     required DateTime expectedCurrentNextDueDate,
   });
@@ -161,12 +172,14 @@ abstract interface class MaintenanceRepository {
   Future<void> setTaskEnabled(String planId, bool enabled);
   Future<void> skipPlanOccurrence(
     String planId, {
+    required String expectedOccurrenceId,
     DateTime? skippedAt,
     String? reason,
   });
   Future<void> postponePlan(
     String planId,
     DateTime nextDueDate, {
+    required String expectedOccurrenceId,
     String? reason,
   });
   Future<void> deletePlan(String planId);

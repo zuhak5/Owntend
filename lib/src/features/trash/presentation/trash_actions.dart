@@ -17,16 +17,11 @@ Future<bool> deleteThingWithConfirmation(
   if (!confirmed || !context.mounted) {
     return false;
   }
-  final planIds = await planIdsForAssets(ref, [asset.id]);
-  if (!context.mounted) {
-    return false;
-  }
   await ref.read(assetRepositoryProvider).trashAsset(asset.id);
   if (!context.mounted) {
     return false;
   }
-  await cancelPlanReminderSchedules(ref, planIds);
-  await refreshNotificationSchedules(ref);
+  await wakeNotificationReconciliation(ref);
   if (!context.mounted) {
     return false;
   }
@@ -37,7 +32,7 @@ Future<bool> deleteThingWithConfirmation(
     onUndo: () async {
       try {
         await ref.read(assetRepositoryProvider).restoreAsset(asset.id);
-        await refreshNotificationSchedules(ref);
+        await wakeNotificationReconciliation(ref);
         if (context.mounted) {
           hk_ui.showToast(
             context,
@@ -74,19 +69,11 @@ Future<bool> deleteRoomWithConfirmation(
   if (!confirmed || !context.mounted) {
     return false;
   }
-  final assets = await ref
-      .read(assetRepositoryProvider)
-      .listAssets(roomId: room.id);
-  final planIds = await planIdsForAssets(ref, assets.map((asset) => asset.id));
-  if (!context.mounted) {
-    return false;
-  }
   await ref.read(assetRepositoryProvider).trashRoom(room.id);
   if (!context.mounted) {
     return false;
   }
-  await cancelPlanReminderSchedules(ref, planIds);
-  await refreshNotificationSchedules(ref);
+  await wakeNotificationReconciliation(ref);
   if (!context.mounted) {
     return false;
   }
@@ -97,7 +84,7 @@ Future<bool> deleteRoomWithConfirmation(
     onUndo: () async {
       try {
         await ref.read(assetRepositoryProvider).restoreRoom(room.id);
-        await refreshNotificationSchedules(ref);
+        await wakeNotificationReconciliation(ref);
         if (context.mounted) {
           hk_ui.showToast(
             context,
@@ -134,26 +121,11 @@ Future<bool> deleteAreaWithConfirmation(
   if (!confirmed || !context.mounted) {
     return false;
   }
-  final rooms = await ref
-      .read(assetRepositoryProvider)
-      .listRooms(areaId: area.id);
-  final assetIds = <String>[];
-  for (final room in rooms) {
-    final assets = await ref
-        .read(assetRepositoryProvider)
-        .listAssets(roomId: room.id);
-    assetIds.addAll(assets.map((asset) => asset.id));
-  }
-  final planIds = await planIdsForAssets(ref, assetIds);
-  if (!context.mounted) {
-    return false;
-  }
   await ref.read(assetRepositoryProvider).trashArea(area.id);
   if (!context.mounted) {
     return false;
   }
-  await cancelPlanReminderSchedules(ref, planIds);
-  await refreshNotificationSchedules(ref);
+  await wakeNotificationReconciliation(ref);
   if (!context.mounted) {
     return false;
   }
@@ -164,7 +136,7 @@ Future<bool> deleteAreaWithConfirmation(
     onUndo: () async {
       try {
         await ref.read(assetRepositoryProvider).restoreArea(area.id);
-        await refreshNotificationSchedules(ref);
+        await wakeNotificationReconciliation(ref);
         if (context.mounted) {
           hk_ui.showToast(
             context,

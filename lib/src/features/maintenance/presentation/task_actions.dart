@@ -5,7 +5,7 @@ import 'dart:math' as math;
 
 import '../../../ui/components.dart' as hk_ui;
 import '../../../ui/presentation_support.dart';
-import '../../monetization/presentation/monetization_presentation.dart';
+import '../../../core/services/native_capabilities.dart';
 import 'complete_task_dialog.dart';
 
 enum _SnoozePreset { thirtyMinutes, oneHour, threeHours, tomorrow, custom }
@@ -122,9 +122,12 @@ Future<bool> skipTaskWithConfirmation(
   try {
     await ref
         .read(maintenanceRepositoryProvider)
-        .skipPlanOccurrence(task.plan.id, reason: reason);
-    await cancelPlanReminderSchedules(ref, [task.plan.id]);
-    await refreshNotificationSchedules(ref);
+        .skipPlanOccurrence(
+          task.plan.id,
+          expectedOccurrenceId: task.plan.currentOccurrenceId,
+          reason: reason,
+        );
+    unawaited(wakeNotificationReconciliation(ref));
     if (!context.mounted) {
       return true;
     }
@@ -196,9 +199,13 @@ Future<bool> postponeTaskWithDialog(
   try {
     await ref
         .read(maintenanceRepositoryProvider)
-        .postponePlan(task.plan.id, nextDueDate, reason: reason);
-    await cancelPlanReminderSchedules(ref, [task.plan.id]);
-    await refreshNotificationSchedules(ref);
+        .postponePlan(
+          task.plan.id,
+          nextDueDate,
+          expectedOccurrenceId: task.plan.currentOccurrenceId,
+          reason: reason,
+        );
+    unawaited(wakeNotificationReconciliation(ref));
     if (!context.mounted) {
       return true;
     }
@@ -330,29 +337,19 @@ Future<Duration?> _durationForSnoozePreset(
   }
 }
 
-Future<void> refreshNotificationSchedules(WidgetRef ref) async {
+Future<void> wakeNotificationReconciliation(WidgetRef ref) async {
   try {
+    final session = ref.read(authRepositoryProvider)?.currentSession;
+    final consumer = ref.read(notificationReconciliationConsumerProvider);
+    if (session != null && consumer != null) {
+      await consumer.drainForAccount(session.userId);
+      return;
+    }
+    // Local-only state still receives an immediate best-effort projection.
+    // The durable request remains for the guarded consumer to acknowledge.
     await ref.read(notificationSchedulerProvider).refreshSchedules();
   } catch (_) {
-    // Reminder refresh should not block the primary task action.
-  }
-}
-
-Future<void> cancelPlanReminderSchedules(
-  WidgetRef ref,
-  Iterable<String> planIds,
-) async {
-  final uniqueIds = planIds.toSet();
-  if (uniqueIds.isEmpty) {
-    return;
-  }
-  try {
-    final scheduler = ref.read(notificationSchedulerProvider);
-    for (final planId in uniqueIds) {
-      await scheduler.cancelPlanReminders(planId);
-    }
-  } catch (_) {
-    // Stale OS notifications are undesirable, but should not block data changes.
+    // The repository transaction already persisted reconciliation intent.
   }
 }
 
@@ -389,32 +386,9 @@ Future<bool> setTaskEnabledWithFeedback(
     return false;
   }
 
-  Object? reminderError;
-  try {
-    final scheduler = ref.read(notificationSchedulerProvider);
-    if (!enabled) {
-      await scheduler.cancelPlanReminders(task.plan.id);
-    }
-    await scheduler.refreshSchedules();
-  } catch (error) {
-    reminderError = error;
-  }
+  await wakeNotificationReconciliation(ref);
 
   if (!context.mounted) {
-    return true;
-  }
-  if (reminderError != null) {
-    hk_ui.showToast(
-      context,
-      content: Text(
-        failureMessage(
-          context,
-          reminderError,
-          fallback: AppFailureCode.notificationSetup,
-        ),
-      ),
-      severity: hk_ui.HkToastSeverity.error,
-    );
     return true;
   }
   hk_ui.showToast(
@@ -738,19 +712,6 @@ class _TaskActionBurstPainter extends CustomPainter {
   }
 }
 
-Future<List<String>> planIdsForAssets(
-  WidgetRef ref,
-  Iterable<String> assetIds,
-) async {
-  final maintenance = ref.read(maintenanceRepositoryProvider);
-  final planIds = <String>{};
-  for (final assetId in assetIds.toSet()) {
-    final tasks = await maintenance.listTasksForAsset(assetId);
-    planIds.addAll(tasks.map((task) => task.plan.id));
-  }
-  return planIds.toList();
-}
-
 Future<bool> completeTaskWithFeedback(
   BuildContext context,
   WidgetRef ref,
@@ -765,33 +726,28 @@ Future<bool> completeTaskWithFeedback(
       return false;
     }
   }
-
-  final dueTodayBefore = getTaskBuckets(
-    ref.read(tasksProvider).value ?? const <TaskItem>[],
-    DateTime.now(),
-  ).today;
-  final completesFinalDueToday =
-      dueTodayBefore.length == 1 &&
-      dueTodayBefore.single.plan.id == task.plan.id;
   String? notes;
-  if (collectNotes) {
-    notes = await showEditorModal<String>(
-      context,
-      builder: (context) => CompleteTaskDialog(task: task),
-    );
-    if (notes == null) {
-      controllerNotifier.cancelNotesCollection();
-      return false;
+  try {
+    if (collectNotes) {
+      notes = await showEditorModal<String>(
+        context,
+        builder: (context) => CompleteTaskDialog(task: task),
+      );
+      if (notes == null || !context.mounted) {
+        return false;
+      }
     }
-    if (!context.mounted) {
-      return false;
-    }
+  } finally {
+    controllerNotifier.cancelNotesCollection();
   }
   final previousDueDate = task.plan.nextDueDate;
+  final timeZoneId =
+      await ref.read(nativeCapabilitiesProvider).getTimeZoneId() ?? 'UTC';
   final result = await controllerNotifier.complete(
+    expectedOccurrenceId: task.plan.currentOccurrenceId,
+    timeZoneId: timeZoneId,
     completedAt: DateTime.now(),
     notes: notes,
-    expectedNextDueDate: previousDueDate,
   );
 
   if (!context.mounted) {
@@ -805,6 +761,9 @@ Future<bool> completeTaskWithFeedback(
     );
     return false;
   }
+
+  unawaited(wakeNotificationReconciliation(ref));
+
   try {
     await ref.read(streakServiceProvider).refresh(DateTime.now());
   } catch (_) {}
@@ -815,12 +774,6 @@ Future<bool> completeTaskWithFeedback(
   if (!prefersReducedMotion(context)) {
     await Future<void>.delayed(const Duration(milliseconds: 450));
   }
-  if (result.duplicateIgnored) {
-    return true;
-  }
-  if (result.duplicateIgnored) {
-    return true;
-  }
   if (!context.mounted) {
     return true;
   }
@@ -830,8 +783,13 @@ Future<bool> completeTaskWithFeedback(
     onUndo: () async {
       try {
         final completionId = result.operationId;
+        final completedOccurrenceId = result.completedOccurrenceId;
+        final nextOccurrenceId = result.nextOccurrenceId;
         final completedNextDue = result.nextDueDate;
-        if (completionId == null || completedNextDue == null) {
+        if (completionId == null ||
+            completedOccurrenceId == null ||
+            nextOccurrenceId == null ||
+            completedNextDue == null) {
           throw StateError(
             'Completion acknowledgement is missing undo identity.',
           );
@@ -841,12 +799,14 @@ Future<bool> completeTaskWithFeedback(
             .undoCompletion(
               planId: task.plan.id,
               completionId: completionId,
+              completedOccurrenceId: completedOccurrenceId,
+              expectedCurrentOccurrenceId: nextOccurrenceId,
               previousDueDate: result.previousDueDate ?? previousDueDate,
               expectedCurrentNextDueDate: completedNextDue,
             );
         try {
           await ref.read(streakServiceProvider).refresh(DateTime.now());
-          await refreshNotificationSchedules(ref);
+          await wakeNotificationReconciliation(ref);
         } catch (_) {}
         if (context.mounted) {
           hk_ui.showToast(
@@ -867,11 +827,7 @@ Future<bool> completeTaskWithFeedback(
       }
     },
   );
-  if (completesFinalDueToday) {
-    try {
-      await offerDailyCompletionReward(context, ref);
-    } catch (_) {}
-  } else if (context.mounted) {
+  if (context.mounted) {
     final config =
         ref.read(monetizationConfigProvider).value ??
         const MonetizationConfig.failClosed();

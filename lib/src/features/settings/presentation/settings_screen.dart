@@ -1011,7 +1011,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     }
     await ref.read(settingsRepositoryProvider).setHomeLocation(location);
     await ref.read(weatherRepositoryProvider).refreshWeather();
-    await refreshNotificationSchedules(ref);
+    await wakeNotificationReconciliation(ref);
     await ref
         .read(permissionEducationControllerProvider.notifier)
         .refreshCapabilities();
@@ -1043,7 +1043,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
         return;
       }
       await ref.read(weatherRepositoryProvider).refreshWeather();
-      await refreshNotificationSchedules(ref);
+      await wakeNotificationReconciliation(ref);
       if (!context.mounted) {
         return;
       }
@@ -1131,9 +1131,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
             desired: preferences,
           );
       ref.invalidate(notificationPreferencesProvider);
-      final scheduler = ref.read(notificationSchedulerProvider);
-      await scheduler.initialize();
-      await scheduler.refreshSchedules();
+      await wakeNotificationReconciliation(ref);
       ref.invalidate(notificationPermissionStateProvider);
       await ref
           .read(permissionEducationControllerProvider.notifier)

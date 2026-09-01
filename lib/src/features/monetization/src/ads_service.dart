@@ -253,6 +253,7 @@ class OwntendAdsService {
     RewardAdType type, {
     required String? timeZone,
     required String entryPoint,
+    String? eligibilityToken,
   }) async {
     final format = type == RewardAdType.rewardedAd
         ? AdFormat.rewarded
@@ -271,6 +272,7 @@ class OwntendAdsService {
       claim = await repository!.createRewardClaim(
         type,
         timeZone: resolvedTimeZone,
+        eligibilityToken: eligibilityToken,
       );
     } on Object {
       fullScreenLease.release();

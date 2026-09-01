@@ -3,11 +3,11 @@
 Production release mutation remains contained. This runbook defines evidence and handoff; it does not authorize a Shorebird publish, Play upload, Sentry mutation, GitHub Release, VersionDeck publication, hosted backend mutation, or rollout.
 
 Pre-launch schema posture: while the `AGENTS.md` lifecycle checkbox is
-unchecked, Drift stays at immutable v1 (reject-on-mismatch) and Supabase uses
-the ordered forward chain documented in
-[`migrations-and-functions.md`](../backend/migrations-and-functions.md). Do not
-claim a single baseline until the separately approved destructive reset and
-squash has completed. At launch authorization, execute
+unchecked, Drift uses the current schema-1 baseline (reject-on-mismatch) and
+Supabase uses the single initial migration documented in
+[`migrations-and-functions.md`](../backend/migrations-and-functions.md). Local
+blank-reset evidence does not claim that any linked hosted project was rebuilt.
+At launch authorization, execute
 [`docs/plans/launch-containment-checklist.md`](../plans/launch-containment-checklist.md).
 ## Canonical release rail
 

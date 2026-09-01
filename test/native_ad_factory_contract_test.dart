@@ -16,31 +16,24 @@ const _paletteKeys = <String>[
 ];
 
 void main() {
-  test(
-    'Flutter and Android share the schema-1 and schema-2 palette contract',
-    () {
-      final flutter = File(
-        'lib/src/features/monetization/src/native_ad_card.dart',
-      ).readAsStringSync();
-      final kotlin = File(
-        'android/app/src/main/kotlin/app/owntend/mobile/'
-        'OwntendNativeAdFactory.kt',
-      ).readAsStringSync();
+  test('Flutter and Android share one current palette contract', () {
+    final flutter = File(
+      'lib/src/features/monetization/src/native_ad_card.dart',
+    ).readAsStringSync();
+    final kotlin = File(
+      'android/app/src/main/kotlin/app/owntend/mobile/'
+      'OwntendNativeAdFactory.kt',
+    ).readAsStringSync();
 
-      expect(flutter, contains("'schemaVersion': 1"));
-      expect(flutter, contains("'schemaVersion': 2"));
-      expect(kotlin, contains('schemaVersion != 1 && schemaVersion != 2'));
-      for (final key in _paletteKeys) {
-        expect(flutter, contains("'$key'"), reason: 'Flutter must emit $key.');
-        expect(
-          kotlin,
-          contains('"$key"'),
-          reason: 'Android must consume $key.',
-        );
-      }
-      expect(kotlin, isNot(contains('customOptions?.get("textColor")')));
-    },
-  );
+    expect(flutter, contains("'schemaVersion': 2"));
+    expect(kotlin, contains('schemaVersion != 2'));
+    expect(flutter, isNot(contains("'schemaVersion': 1")));
+    for (final key in _paletteKeys) {
+      expect(flutter, contains("'$key'"), reason: 'Flutter must emit $key.');
+      expect(kotlin, contains('"$key"'), reason: 'Android must consume $key.');
+    }
+    expect(kotlin, isNot(contains('customOptions?.get("textColor")')));
+  });
 
   test('factory supports layoutVariant templates and XML resources', () {
     final kotlin = File(

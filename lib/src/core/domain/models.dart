@@ -486,6 +486,7 @@ class TaskMetadata {
 class MaintenancePlan {
   const MaintenancePlan({
     required this.id,
+    required this.currentOccurrenceId,
     required this.assetId,
     required this.title,
     required this.recurrence,
@@ -501,6 +502,7 @@ class MaintenancePlan {
   });
 
   final String id;
+  final String currentOccurrenceId;
   final String assetId;
   final String title;
   final String? instructions;
@@ -519,15 +521,21 @@ class MaintenanceRecord {
   const MaintenanceRecord({
     required this.id,
     required this.planId,
+    required this.occurrenceId,
     required this.completedAt,
     required this.dueDate,
+    this.acceptedAt,
+    this.timeZoneId = 'UTC',
     this.notes,
   });
 
   final String id;
   final String planId;
+  final String occurrenceId;
   final DateTime dueDate;
   final DateTime completedAt;
+  final DateTime? acceptedAt;
+  final String timeZoneId;
   final String? notes;
 }
 
