@@ -285,9 +285,10 @@ extension _SyncPushCoordinator on SyncCoordinator {
           final spec = syncSpecByEntity[mutation.entity];
           if (shadow == null &&
               spec != null &&
-              // Asset creation is server-authoritative and must go through
-              // the idempotent aggregate RPC one operation at a time.
+              // Asset and task creation are server-authoritative and must go
+              // through their idempotent aggregate RPC one operation at a time.
               spec.entity != 'asset' &&
+              spec.entity != 'maintenance_plan' &&
               spec.entity != 'asset_photo' &&
               spec.entity != 'profile') {
             final batchMutations = <LocalSyncMutation>[];
@@ -742,11 +743,20 @@ extension _SyncPushCoordinator on SyncCoordinator {
       mutation.entity,
       mutation.recordKey,
     );
+    Map<String, dynamic>? bundledPayload;
+    if (shadow == null) {
+      if (mutation.entity == 'asset') {
+        bundledPayload = await _localStore.readAssetDetails(local.recordKey);
+      } else if (mutation.entity == 'maintenance_plan') {
+        bundledPayload = await _localStore.readPlanMetadata(local.recordKey);
+      }
+    }
     var result = await _remoteGateway.write(
       record: local,
       userId: userId,
       deviceId: deviceId,
       expectedRevision: shadow?.remoteRevision,
+      bundledPayload: bundledPayload,
     );
     await _ensureActiveAccountScope(scope);
     if (!result.conflict) {

@@ -341,12 +341,14 @@ Future<void> wakeNotificationReconciliation(WidgetRef ref) async {
   try {
     final session = ref.read(authRepositoryProvider)?.currentSession;
     final consumer = ref.read(notificationReconciliationConsumerProvider);
-    if (session != null && consumer != null) {
-      await consumer.drainForAccount(session.userId);
+    if (consumer != null) {
+      if (session != null) {
+        await consumer.drainForAccount(session.userId);
+      } else {
+        await consumer.drainLocal();
+      }
       return;
     }
-    // Local-only state still receives an immediate best-effort projection.
-    // The durable request remains for the guarded consumer to acknowledge.
     await ref.read(notificationSchedulerProvider).refreshSchedules();
   } catch (_) {
     // The repository transaction already persisted reconciliation intent.
@@ -766,7 +768,9 @@ Future<bool> completeTaskWithFeedback(
 
   try {
     await ref.read(streakServiceProvider).refresh(DateTime.now());
-  } catch (_) {}
+  } catch (error) {
+    AppLogger.warning('streak_refresh_failed', error: error);
+  }
   if (!context.mounted) {
     return true;
   }
@@ -807,7 +811,9 @@ Future<bool> completeTaskWithFeedback(
         try {
           await ref.read(streakServiceProvider).refresh(DateTime.now());
           await wakeNotificationReconciliation(ref);
-        } catch (_) {}
+        } catch (error) {
+          AppLogger.warning('streak_undo_refresh_failed', error: error);
+        }
         if (context.mounted) {
           hk_ui.showToast(
             context,

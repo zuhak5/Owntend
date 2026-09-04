@@ -1318,42 +1318,7 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
       );
       final isCreating = widget.asset == null;
       final assetId = widget.asset?.id ?? (_creationAssetId ??= _uuid.v7());
-      if (isCreating) {
-        final online = await ref
-            .read(syncConnectivityInstanceProvider)
-            .isOnline();
-        if (!online) {
-          await _saveOfflineDraft();
-          if (mounted) {
-            hk_ui.showToast(
-              context,
-              content: Text(context.l10n.offlineItemDraftMessage),
-            );
-          }
-          return;
-        }
-        final monetization = ref.read(monetizationRepositoryProvider);
-        if (monetization == null || monetization.currentUserId == null) {
-          throw StateError('Cloud points service is unavailable.');
-        }
-        await ref
-            .read(assetCreationControllerProvider)
-            .createChargedAsset(
-              assetId: assetId,
-              assetPayload: {
-                'id': assetId,
-                'name': _nameController.text.trim(),
-                'asset_type': _assetType.name,
-                'room_id': roomId,
-                'placement': _placementController.text.trim(),
-                'notes': _notesController.text.trim(),
-                'purchase_date': _purchaseDate?.toUtc().toIso8601String(),
-              },
-              detailsPayload: _pointAssetDetailsPayload(),
-              accountScope: monetization.currentUserId!,
-              operationIdOverride: _creationOperationId ??= _uuid.v7(),
-            );
-      } else if (widget.asset!.assetType != _assetType) {
+      if (!isCreating && widget.asset!.assetType != _assetType) {
         final monetization = ref.read(monetizationRepositoryProvider);
         if (monetization == null || monetization.currentUserId == null) {
           throw StateError('Cloud points service is unavailable.');

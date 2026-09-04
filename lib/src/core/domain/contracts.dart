@@ -25,6 +25,12 @@ abstract interface class AssetRepository {
   Future<List<Area>> listArchivedAreas();
   Future<void> trashArea(String id);
   Future<void> restoreArea(String id);
+  Future<void> swapAreaSortOrders({
+    required String firstAreaId,
+    required DateTime firstExpectedUpdatedAt,
+    required String secondAreaId,
+    required DateTime secondExpectedUpdatedAt,
+  });
   Stream<List<Room>> watchRooms({String? areaId});
   Future<List<Room>> listRooms({String? areaId});
   Future<String> saveRoom({
@@ -41,6 +47,12 @@ abstract interface class AssetRepository {
   Future<List<Room>> listArchivedRooms();
   Future<void> trashRoom(String id);
   Future<void> restoreRoom(String id);
+  Future<void> swapRoomSortOrders({
+    required String firstRoomId,
+    required DateTime firstExpectedUpdatedAt,
+    required String secondRoomId,
+    required DateTime secondExpectedUpdatedAt,
+  });
   Stream<List<Asset>> watchAssets({String? roomId});
   Future<List<Asset>> listAssets({String? roomId});
   Stream<Asset?> watchAsset(String id);

@@ -522,8 +522,12 @@ class _ThingDetailScreenState extends ConsumerState<ThingDetailScreen> {
                               final photo = photos[index];
                               return _ThingPhotoTile(
                                 photo: photo,
-                                onPrimary: () =>
-                                    _setPrimaryPhoto(ref, asset, photo),
+                                onPrimary: () => _setPrimaryPhoto(
+                                  context,
+                                  ref,
+                                  asset,
+                                  photo,
+                                ),
                                 onDelete: () =>
                                     _deletePhoto(context, ref, asset, photo),
                               );
@@ -552,11 +556,24 @@ class _ThingDetailScreenState extends ConsumerState<ThingDetailScreen> {
   }
 
   Future<void> _setPrimaryPhoto(
+    BuildContext context,
     WidgetRef ref,
     Asset asset,
     AssetPhoto photo,
   ) async {
-    await ref.read(assetRepositoryProvider).setPrimaryPhoto(asset.id, photo.id);
+    try {
+      await ref
+          .read(assetRepositoryProvider)
+          .setPrimaryPhoto(asset.id, photo.id);
+    } catch (e) {
+      if (context.mounted) {
+        hk_ui.showToast(
+          context,
+          content: Text(failureMessage(context, e)),
+          severity: hk_ui.HkToastSeverity.error,
+        );
+      }
+    }
   }
 
   Future<void> _deletePhoto(
@@ -573,9 +590,16 @@ class _ThingDetailScreenState extends ConsumerState<ThingDetailScreen> {
     if (!confirmed) {
       return;
     }
-    await ref.read(assetRepositoryProvider).deletePhoto(photo.id);
-    if (!context.mounted) {
-      return;
+    try {
+      await ref.read(assetRepositoryProvider).deletePhoto(photo.id);
+    } catch (e) {
+      if (context.mounted) {
+        hk_ui.showToast(
+          context,
+          content: Text(failureMessage(context, e)),
+          severity: hk_ui.HkToastSeverity.error,
+        );
+      }
     }
   }
 }

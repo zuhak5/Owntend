@@ -82,6 +82,14 @@ Owntend has one account-scoped sync engine:
    Generic sync enable cannot resume it; explicit restore resume atomically binds
    the authenticated identity and creates the complete restore outbox intent
    before hydration may advance the account to active.
+12. Initial creation of `asset` and `maintenance_plan` records routes through their
+   respective aggregate RPCs (`create_asset` and `create_task_with_point_debit`)
+   bundling associated child detail (`device_details`, `pet_details`, `plant_details`,
+   `safety_details`) and metadata (`maintenance_plan_metadata`) payloads atomically.
+13. Binding an authenticated account identity clears stale remote cursors, shadows,
+   and unassigned outbox mutations, and enrolls existing non-pristine local domain
+   records for upload via `enqueueInitialSnapshot`, guaranteeing cloud-first
+   pull hydration for pristine devices without push chatter.
 
 The mobile/backend response carries integer contract `1`. A different contract
 is an incompatible failure; there is no capability table, rollout flag, second
@@ -92,11 +100,17 @@ incremental pull, or mid-page fallback.
 - Editors for plans, areas, rooms, and assets use compare-and-set updates so a
   stale form cannot silently overwrite a newer local value. Removing a primary
   asset photo and selecting its replacement is one database transaction.
+- Reordering areas and rooms uses atomic sort order swapping (`swapAreaSortOrders`,
+  `swapRoomSortOrders`) inside a single database transaction with compare-and-set
+  revision checks on both items.
 - Reminder snapshots are durable desired state. Schedule reconciliation is
   serialized, verifies the platform's pending identifiers before accepting a
   no-op, and removes only the exact reconciliation request version covered by a
-  successful refresh. Snooze intent is persisted before scheduling so restart
-  can replay it.
+  successful refresh. Both authenticated (`drainForAccount`) and local-only
+  (`drainLocal`) drain paths flush pending durable requests upon schedule refresh.
+- Snooze intent is persisted before scheduling so restart can replay it. Failed
+  photo file deletions enqueue into `local_media_cleanup` so no orphan files
+  remain unreferenced on disk.
 
 ## Failure model
 

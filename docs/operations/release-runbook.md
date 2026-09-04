@@ -7,8 +7,7 @@ unchecked, Drift uses the current schema-1 baseline (reject-on-mismatch) and
 Supabase uses the single initial migration documented in
 [`migrations-and-functions.md`](../backend/migrations-and-functions.md). Local
 blank-reset evidence does not claim that any linked hosted project was rebuilt.
-At launch authorization, execute
-[`docs/plans/launch-containment-checklist.md`](../plans/launch-containment-checklist.md).
+At launch authorization, execute the production containment and launch verification steps.
 ## Canonical release rail
 
 [`Shorebird Android Release`](../../.github/workflows/shorebird-release-android.yml) replaces the old independent APK and Play builds. It accepts an exact source SHA, flavor, and `validate`/`publish` operation. `validate` is the default and runs `shorebird release android --dry-run`. Production publication additionally requires:

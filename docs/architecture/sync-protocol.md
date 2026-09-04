@@ -58,7 +58,7 @@ On sign-in or account transition, the coordinator must:
 2. Compare it with the locally bound identity.
 3. Prevent pending work from a previous account being pushed under the new account.
 4. Require the canonical merge decision when a non-pristine, unbound local working set and existing cloud data could collide.
-5. Clear stale sync cursors, shadows, leases, and cleanup work before binding a previously unbound installation.
+5. Clear stale sync cursors, shadows, leases, and cleanup work before binding a previously unbound installation. Non-pristine local working sets enroll domain entities for upload via `enqueueInitialSnapshot`.
 6. Initialize or hydrate only the correctly bound account state.
 
 Never silently reassign local records between accounts.
@@ -106,6 +106,18 @@ the local allowlist is evaluated, and an allowlisted nullable value remains in
 the PATCH map when its value is explicitly `null`. Deletes serialize no row
 payload. An empty update contract means generic UPDATE is prohibited and must
 fail locally before an HTTP request.
+
+Newly created `asset` and `maintenance_plan` rows bypass generic batch creation
+and route through dedicated aggregate RPCs:
+- **`create_asset`**: When pushing a newly created asset (`shadow == null`), the
+  push worker bundles associated child details (`device_details`, `pet_details`,
+  `plant_details`, or `safety_details`) read from local SQLite into the aggregate
+  `create_asset` RPC.
+- **`create_task_with_point_debit`**: When pushing a newly created task (`shadow == null`),
+  the push worker bundles associated `maintenance_plan_metadata` read from local
+  SQLite into the aggregate `create_task_with_point_debit` RPC. This satisfies
+  the server-authoritative task creation guard and RLS policies while ensuring
+  metadata is committed atomically with the task plan.
 
 The client allowlist and authenticated Postgres column-level UPDATE grants are
 one invariant enforced at two layers. The executable client matrix is in

@@ -80,6 +80,7 @@ class _PhotoDeleteResponseLossGateway implements SupabaseSyncGateway {
     required String userId,
     required String deviceId,
     required int? expectedRevision,
+    Map<String, dynamic>? bundledPayload,
   }) async {
     if (record.spec.entity != 'asset_photo' || !record.isDeleted) {
       return RemoteWriteResult.applied(record);

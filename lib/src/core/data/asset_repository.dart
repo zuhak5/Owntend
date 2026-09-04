@@ -445,6 +445,68 @@ class DriftAssetRepository implements AssetRepository {
   }
 
   @override
+  Future<void> swapAreaSortOrders({
+    required String firstAreaId,
+    required DateTime firstExpectedUpdatedAt,
+    required String secondAreaId,
+    required DateTime secondExpectedUpdatedAt,
+  }) async {
+    final now = DateTime.now();
+    await db.transaction(() async {
+      final first = await (db.select(
+        db.areas,
+      )..where((a) => a.id.equals(firstAreaId))).getSingleOrNull();
+      final second = await (db.select(
+        db.areas,
+      )..where((a) => a.id.equals(secondAreaId))).getSingleOrNull();
+      if (first == null || second == null) {
+        throw StateError('One or both areas could not be found.');
+      }
+      if (!first.updatedAt.isAtSameMomentAs(firstExpectedUpdatedAt) ||
+          !second.updatedAt.isAtSameMomentAs(secondExpectedUpdatedAt)) {
+        throw StateError('The areas changed while being reordered.');
+      }
+      final firstChangedAt = _nextUpdatedAt(first.updatedAt, now);
+      final secondCandidate = _nextUpdatedAt(second.updatedAt, now);
+      final secondChangedAt = secondCandidate == firstChangedAt
+          ? firstChangedAt.add(const Duration(seconds: 1))
+          : secondCandidate;
+
+      final changedFirst =
+          await (db.update(db.areas)..where(
+                (a) =>
+                    a.id.equals(firstAreaId) &
+                    a.updatedAt.equals(firstExpectedUpdatedAt),
+              ))
+              .write(
+                AreasCompanion(
+                  sortOrder: Value(second.sortOrder),
+                  updatedAt: Value(firstChangedAt),
+                ),
+              );
+      if (changedFirst != 1) {
+        throw StateError('Failed to update sort order for first area.');
+      }
+
+      final changedSecond =
+          await (db.update(db.areas)..where(
+                (a) =>
+                    a.id.equals(secondAreaId) &
+                    a.updatedAt.equals(secondExpectedUpdatedAt),
+              ))
+              .write(
+                AreasCompanion(
+                  sortOrder: Value(first.sortOrder),
+                  updatedAt: Value(secondChangedAt),
+                ),
+              );
+      if (changedSecond != 1) {
+        throw StateError('Failed to update sort order for second area.');
+      }
+    });
+  }
+
+  @override
   Stream<List<domain.Room>> watchRooms({String? areaId}) {
     final query = db.select(db.rooms)
       ..where(
@@ -664,6 +726,68 @@ class DriftAssetRepository implements AssetRepository {
               ),
             );
         await _enqueueFullScheduleReconciliation(db, changedAt: now);
+      }
+    });
+  }
+
+  @override
+  Future<void> swapRoomSortOrders({
+    required String firstRoomId,
+    required DateTime firstExpectedUpdatedAt,
+    required String secondRoomId,
+    required DateTime secondExpectedUpdatedAt,
+  }) async {
+    final now = DateTime.now();
+    await db.transaction(() async {
+      final first = await (db.select(
+        db.rooms,
+      )..where((r) => r.id.equals(firstRoomId))).getSingleOrNull();
+      final second = await (db.select(
+        db.rooms,
+      )..where((r) => r.id.equals(secondRoomId))).getSingleOrNull();
+      if (first == null || second == null) {
+        throw StateError('One or both rooms could not be found.');
+      }
+      if (!first.updatedAt.isAtSameMomentAs(firstExpectedUpdatedAt) ||
+          !second.updatedAt.isAtSameMomentAs(secondExpectedUpdatedAt)) {
+        throw StateError('The rooms changed while being reordered.');
+      }
+      final firstChangedAt = _nextUpdatedAt(first.updatedAt, now);
+      final secondCandidate = _nextUpdatedAt(second.updatedAt, now);
+      final secondChangedAt = secondCandidate == firstChangedAt
+          ? firstChangedAt.add(const Duration(seconds: 1))
+          : secondCandidate;
+
+      final changedFirst =
+          await (db.update(db.rooms)..where(
+                (r) =>
+                    r.id.equals(firstRoomId) &
+                    r.updatedAt.equals(firstExpectedUpdatedAt),
+              ))
+              .write(
+                RoomsCompanion(
+                  sortOrder: Value(second.sortOrder),
+                  updatedAt: Value(firstChangedAt),
+                ),
+              );
+      if (changedFirst != 1) {
+        throw StateError('Failed to update sort order for first room.');
+      }
+
+      final changedSecond =
+          await (db.update(db.rooms)..where(
+                (r) =>
+                    r.id.equals(secondRoomId) &
+                    r.updatedAt.equals(secondExpectedUpdatedAt),
+              ))
+              .write(
+                RoomsCompanion(
+                  sortOrder: Value(first.sortOrder),
+                  updatedAt: Value(secondChangedAt),
+                ),
+              );
+      if (changedSecond != 1) {
+        throw StateError('Failed to update sort order for second room.');
       }
     });
   }
@@ -1366,7 +1490,15 @@ class DriftAssetRepository implements AssetRepository {
         await file.delete();
       }
     } catch (_) {
-      // Database cleanup is authoritative; stale photo files should not block it.
+      try {
+        await db
+            .into(db.localMediaCleanup)
+            .insertOnConflictUpdate(
+              LocalMediaCleanupCompanion.insert(relativePath: row.relativePath),
+            );
+      } catch (_) {
+        // Database cleanup is authoritative; secondary cleanup logging failure is ignored.
+      }
     }
   }
 

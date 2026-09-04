@@ -590,89 +590,91 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
           }
           return;
         }
-      } else if (widget.task!.plan.assetId != assetId) {
-        final monetization = ref.read(monetizationRepositoryProvider);
-        if (monetization == null || monetization.currentUserId == null) {
-          throw StateError('Cloud points service is unavailable.');
-        }
-        final online = await ref
-            .read(syncConnectivityInstanceProvider)
-            .isOnline();
-        if (!mounted) return;
-        if (!online) {
-          await _saveOfflineDraft();
-          if (mounted) {
-            hk_ui.showToast(
-              context,
-              content: Text(context.l10n.offlineTaskDraftMessage),
+      } else {
+        if (widget.task!.plan.assetId != assetId) {
+          final monetization = ref.read(monetizationRepositoryProvider);
+          if (monetization == null || monetization.currentUserId == null) {
+            throw StateError('Cloud points service is unavailable.');
+          }
+          final online = await ref
+              .read(syncConnectivityInstanceProvider)
+              .isOnline();
+          if (!mounted) return;
+          if (!online) {
+            await _saveOfflineDraft();
+            if (mounted) {
+              hk_ui.showToast(
+                context,
+                content: Text(context.l10n.offlineTaskDraftMessage),
+              );
+            }
+            return;
+          }
+          final quote = await monetization.quoteMaintenancePlanMove(
+            planId: planId,
+            targetAssetId: assetId,
+          );
+          if (!mounted) return;
+          if (quote.charge > 0) {
+            final confirmed = await showDialog<bool>(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: Text(context.l10n.confirmTaskMoveChargeTitle),
+                content: Text(
+                  context.l10n.confirmTaskMoveChargeBody(quote.charge),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(false),
+                    child: Text(context.l10n.cancel),
+                  ),
+                  FilledButton(
+                    onPressed: () => Navigator.of(context).pop(true),
+                    child: Text(context.l10n.confirmPointChargeAction),
+                  ),
+                ],
+              ),
+            );
+            if (confirmed != true) return;
+          }
+          final result = await ref
+              .read(taskCreationControllerProvider)
+              .movePlanWithPointDelta(
+                operation: {
+                  'operation_id': _uuid.v7(),
+                  'plan_id': planId,
+                  'target_asset_id': assetId,
+                  'expected_plan_revision': quote.revision,
+                  'max_charge': quote.charge,
+                },
+                accountScope: monetization.currentUserId!,
+              );
+          if (!mounted) return;
+          if (!result.applied) {
+            throw StateError(
+              result.status == 'charge_changed'
+                  ? context.l10n.authoritativeChargeChanged
+                  : result.conflictReason ?? result.status,
             );
           }
-          return;
         }
-        final quote = await monetization.quoteMaintenancePlanMove(
-          planId: planId,
-          targetAssetId: assetId,
-        );
-        if (!mounted) return;
-        if (quote.charge > 0) {
-          final confirmed = await showDialog<bool>(
-            context: context,
-            builder: (context) => AlertDialog(
-              title: Text(context.l10n.confirmTaskMoveChargeTitle),
-              content: Text(
-                context.l10n.confirmTaskMoveChargeBody(quote.charge),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(false),
-                  child: Text(context.l10n.cancel),
-                ),
-                FilledButton(
-                  onPressed: () => Navigator.of(context).pop(true),
-                  child: Text(context.l10n.confirmPointChargeAction),
-                ),
-              ],
-            ),
-          );
-          if (confirmed != true) return;
-        }
-        final result = await ref
-            .read(taskCreationControllerProvider)
-            .movePlanWithPointDelta(
-              operation: {
-                'operation_id': _uuid.v7(),
-                'plan_id': planId,
-                'target_asset_id': assetId,
-                'expected_plan_revision': quote.revision,
-                'max_charge': quote.charge,
-              },
-              accountScope: monetization.currentUserId!,
-            );
-        if (!mounted) return;
-        if (!result.applied) {
-          throw StateError(
-            result.status == 'charge_changed'
-                ? context.l10n.authoritativeChargeChanged
-                : result.conflictReason ?? result.status,
-          );
-        }
-      }
 
-      await ref
-          .read(maintenanceRepositoryProvider)
-          .savePlan(
-            id: planId,
-            assetId: assetId,
-            title: _titleController.text,
-            instructions: _instructionsController.text,
-            recurrence: RecurrenceRule(interval: interval, unit: _unit),
-            priority: _priority,
-            nextDueDate: _dueDate,
-            reminderDaysBefore: reminderDaysBefore,
-            metadata: metadata,
-            expectedOccurrenceId: widget.task?.plan.currentOccurrenceId,
-            expectedUpdatedAt: widget.task?.plan.updatedAt,
-          );
+        await ref
+            .read(maintenanceRepositoryProvider)
+            .savePlan(
+              id: planId,
+              assetId: assetId,
+              title: _titleController.text,
+              instructions: _instructionsController.text,
+              recurrence: RecurrenceRule(interval: interval, unit: _unit),
+              priority: _priority,
+              nextDueDate: _dueDate,
+              reminderDaysBefore: reminderDaysBefore,
+              metadata: metadata,
+              expectedOccurrenceId: widget.task?.plan.currentOccurrenceId,
+              expectedUpdatedAt: widget.task?.plan.updatedAt,
+            );
+      }
       await ref.read(offlineCreationDraftStoreProvider).clear(_offlineDraftKey);
 
       await wakeNotificationReconciliation(ref);

@@ -971,6 +971,50 @@ WHERE entity = 'profile'
     }
     return true;
   }
+
+  Future<Map<String, dynamic>?> readAssetDetails(String assetId) async {
+    final assetRow = await db
+        .customSelect(
+          'SELECT asset_type FROM assets WHERE id = ? LIMIT 1',
+          variables: [Variable<String>(assetId)],
+        )
+        .getSingleOrNull();
+    final assetType = assetRow?.read<String?>('asset_type');
+    if (assetType == null || assetType == 'general') {
+      return const <String, dynamic>{};
+    }
+    final table = switch (assetType) {
+      'device' => 'device_details',
+      'pet' => 'pet_details',
+      'plant' => 'plant_details',
+      'safety' => 'safety_details',
+      _ => null,
+    };
+    if (table == null) return const <String, dynamic>{};
+    final spec = syncSpecByEntity['${assetType}_detail'];
+    if (spec == null) return const <String, dynamic>{};
+    final row = await db
+        .customSelect(
+          'SELECT ${spec.localColumns.join(', ')} FROM $table WHERE asset_id = ? LIMIT 1',
+          variables: [Variable<String>(assetId)],
+        )
+        .getSingleOrNull();
+    if (row == null) return const <String, dynamic>{};
+    return _toRemoteCompatible(spec, row.data);
+  }
+
+  Future<Map<String, dynamic>?> readPlanMetadata(String planId) async {
+    final spec = syncSpecByEntity['maintenance_plan_metadata'];
+    if (spec == null) return const <String, dynamic>{};
+    final row = await db
+        .customSelect(
+          'SELECT ${spec.localColumns.join(', ')} FROM maintenance_plan_metadata WHERE plan_id = ? LIMIT 1',
+          variables: [Variable<String>(planId)],
+        )
+        .getSingleOrNull();
+    if (row == null) return const <String, dynamic>{};
+    return _toRemoteCompatible(spec, row.data);
+  }
 }
 
 DateTime _restoreSyncSecond(DateTime value) {

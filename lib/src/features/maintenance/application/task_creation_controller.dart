@@ -6,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../core/data/repositories.dart';
+import '../../../core/domain/contracts.dart';
 import '../../../core/domain/input_validation.dart';
 import '../../../core/domain/models.dart';
 import '../../../core/providers/app_providers.dart';
@@ -322,6 +324,20 @@ class TaskCreationController extends ValueNotifier<TaskCreationState> {
             planJson: result.plan,
             metadataJson: result.metadata,
           );
+        } else {
+          await ref
+              .read(maintenanceRepositoryProvider)
+              .savePlan(
+                id: planId,
+                assetId: assetId,
+                title: title,
+                instructions: instructions,
+                recurrence: recurrence,
+                priority: priority,
+                nextDueDate: nextDueDate,
+                reminderDaysBefore: reminderDaysBefore,
+                metadata: metadata,
+              );
         }
 
         final reconciledOp = operation.copyWith(
@@ -336,10 +352,37 @@ class TaskCreationController extends ValueNotifier<TaskCreationState> {
           returnedBalance: result.balance,
         );
       } else {
+        await ref
+            .read(maintenanceRepositoryProvider)
+            .savePlan(
+              id: planId,
+              assetId: assetId,
+              title: title,
+              instructions: instructions,
+              recurrence: recurrence,
+              priority: priority,
+              nextDueDate: nextDueDate,
+              reminderDaysBefore: reminderDaysBefore,
+              metadata: metadata,
+            );
+        final reconciledOp = operation.copyWith(
+          state: TaskCreationOperationState.reconciled,
+          requestPayload: const {},
+        );
+        await operationStore.saveOperation(reconciledOp);
         value = TaskCreationState(isSubmitting: false, completedPlanId: planId);
       }
       return true;
     } on InputValidationException catch (error) {
+      value = value.copyWith(
+        isSubmitting: false,
+        failure: TaskCreationFailure(
+          error.code,
+          code: TaskCreationFailureCode.invalidPayload,
+        ),
+      );
+      return false;
+    } on MaintenancePlanValidationException catch (error) {
       value = value.copyWith(
         isSubmitting: false,
         failure: TaskCreationFailure(

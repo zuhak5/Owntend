@@ -599,6 +599,7 @@ class _StatefulGateway implements SupabaseSyncGateway {
     required String userId,
     required String deviceId,
     required int? expectedRevision,
+    Map<String, dynamic>? bundledPayload,
   }) async {
     writeCalls[record.spec.entity] = (writeCalls[record.spec.entity] ?? 0) + 1;
     final index = _records.indexWhere(

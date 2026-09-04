@@ -269,6 +269,42 @@ class NotificationReconciliationConsumer {
     return NotificationReconciliationDrainResult.refreshed;
   }
 
+  Future<NotificationReconciliationDrainResult> drainLocal() async {
+    final now = _now();
+    final requests =
+        await (database.select(database.notificationReconciliationRequests)
+              ..where(
+                (row) =>
+                    row.nextAttemptAt.isNull() |
+                    row.nextAttemptAt.isSmallerOrEqualValue(now),
+              )
+              ..orderBy([(row) => OrderingTerm.asc(row.updatedAt)]))
+            .get();
+    if (requests.isEmpty) {
+      return NotificationReconciliationDrainResult.noWork;
+    }
+
+    try {
+      await scheduler.refreshSchedules();
+    } on Object catch (error) {
+      await _recordFailure(requests, error, now);
+      rethrow;
+    }
+
+    await database.transaction(() async {
+      for (final request in requests) {
+        await (database.delete(database.notificationReconciliationRequests)
+              ..where(
+                (row) =>
+                    row.scopeKey.equals(request.scopeKey) &
+                    row.updatedAt.equals(request.updatedAt),
+              ))
+            .go();
+      }
+    });
+    return NotificationReconciliationDrainResult.refreshed;
+  }
+
   Future<void> _recordFailure(
     List<NotificationReconciliationRequestRow> requests,
     Object error,

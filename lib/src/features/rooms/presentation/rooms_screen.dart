@@ -347,20 +347,22 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen> {
     }
     final target = areas[targetIndex];
     final repo = ref.read(assetRepositoryProvider);
-    await repo.saveArea(
-      id: area.id,
-      name: area.name,
-      kind: area.kind,
-      sortOrder: target.sortOrder,
-      expectedUpdatedAt: area.updatedAt,
-    );
-    await repo.saveArea(
-      id: target.id,
-      name: target.name,
-      kind: target.kind,
-      sortOrder: area.sortOrder,
-      expectedUpdatedAt: target.updatedAt,
-    );
+    try {
+      await repo.swapAreaSortOrders(
+        firstAreaId: area.id,
+        firstExpectedUpdatedAt: area.updatedAt,
+        secondAreaId: target.id,
+        secondExpectedUpdatedAt: target.updatedAt,
+      );
+    } catch (e) {
+      if (mounted) {
+        hk_ui.showToast(
+          context,
+          content: Text(failureMessage(context, e)),
+          severity: hk_ui.HkToastSeverity.error,
+        );
+      }
+    }
   }
 
   Future<void> _moveRoom(List<Room> rooms, Room room, int direction) async {
@@ -371,24 +373,22 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen> {
     }
     final target = rooms[targetIndex];
     final repo = ref.read(assetRepositoryProvider);
-    await repo.saveRoom(
-      id: room.id,
-      areaId: room.areaId,
-      name: room.name,
-      roomType: room.roomType,
-      notes: room.notes,
-      sortOrder: target.sortOrder,
-      expectedUpdatedAt: room.updatedAt,
-    );
-    await repo.saveRoom(
-      id: target.id,
-      areaId: target.areaId,
-      name: target.name,
-      roomType: target.roomType,
-      notes: target.notes,
-      sortOrder: room.sortOrder,
-      expectedUpdatedAt: target.updatedAt,
-    );
+    try {
+      await repo.swapRoomSortOrders(
+        firstRoomId: room.id,
+        firstExpectedUpdatedAt: room.updatedAt,
+        secondRoomId: target.id,
+        secondExpectedUpdatedAt: target.updatedAt,
+      );
+    } catch (e) {
+      if (mounted) {
+        hk_ui.showToast(
+          context,
+          content: Text(failureMessage(context, e)),
+          severity: hk_ui.HkToastSeverity.error,
+        );
+      }
+    }
   }
 }
 

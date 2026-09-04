@@ -60,14 +60,6 @@ This directory is the canonical entry point for product, architecture, developme
 - [`adr/0002-versiondeck-release-verification.md`](adr/0002-versiondeck-release-verification.md)
 - [`adr/ADR-SHOREBIRD-CODE-PUSH.md`](adr/ADR-SHOREBIRD-CODE-PUSH.md)
 
-## Plans
-
-- [`plans/`](plans/): working planning documents for pre-launch hardening, including the implementation plan and its report.
-
-## Audits
-
-- [`audits/complete-task-and-versioning-audit-2026-08-31.md`](audits/complete-task-and-versioning-audit-2026-08-31.md): evidence-backed Complete Task race, sync, reminder, recurrence, and pre-launch versioning audit and remediation plan.
-
 ## Agent workflows
 
 - [`agent-skills/README.md`](agent-skills/README.md): proposed skill catalog and installation model.

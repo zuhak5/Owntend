@@ -407,6 +407,7 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
     required String userId,
     required String deviceId,
     required int? expectedRevision,
+    Map<String, dynamic>? bundledPayload,
   }) async {
     try {
       if (record.spec.entity == 'maintenance_record') {
@@ -492,7 +493,24 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
       if (record.spec.entity == 'asset' &&
           !record.isDeleted &&
           expectedRevision == null) {
-        return await _createAssetThroughAggregateRpc(record, userId);
+        return await _createAssetThroughAggregateRpc(
+          record,
+          userId,
+          details: bundledPayload,
+        );
+      }
+
+      // MON-002: maintenance plan creation is points-authoritative and denied
+      // direct INSERT by RLS without an existing entitlement. A queued
+      // creation routes through the atomic RPC.
+      if (record.spec.entity == 'maintenance_plan' &&
+          !record.isDeleted &&
+          expectedRevision == null) {
+        return await _createTaskThroughAggregateRpc(
+          record,
+          userId,
+          metadata: bundledPayload,
+        );
       }
 
       if (record.isDeleted) {
@@ -958,8 +976,9 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
   /// duplicating rows.
   Future<RemoteWriteResult> _createAssetThroughAggregateRpc(
     SyncRecord record,
-    String userId,
-  ) async {
+    String userId, {
+    Map<String, dynamic>? details,
+  }) async {
     final assetValues = <String, dynamic>{};
     for (final entry in record.values.entries) {
       final remoteKey = record.spec.remoteColumnFor(entry.key);
@@ -969,10 +988,17 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
       }
       assetValues[remoteKey] = entry.value;
     }
+    final detailPayload = <String, dynamic>{};
+    if (details != null && details.isNotEmpty) {
+      for (final entry in details.entries) {
+        if (entry.key == 'asset_id' || entry.key == 'user_id') continue;
+        detailPayload[entry.key] = entry.value;
+      }
+    }
     final unsignedPayload = <String, dynamic>{
       'operation_id': record.recordKey,
       'asset': assetValues,
-      'details': <String, dynamic>{},
+      'details': detailPayload,
       'initial_plans': <Map<String, dynamic>>[],
     };
     final requestHash = sha256
@@ -1006,6 +1032,77 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
         kind: SupabaseFailureKind.incompatibleSchema,
         message:
             'The cloud did not confirm asset creation with its canonical row.',
+      );
+    }
+    return RemoteWriteResult.applied(canonical);
+  }
+
+  /// Creates a maintenance plan through the server-authoritative idempotent
+  /// RPC. The operation id is the canonical plan identifier, so retries and
+  /// response-loss replays converge on the same ledger entry and wallet debit.
+  Future<RemoteWriteResult> _createTaskThroughAggregateRpc(
+    SyncRecord record,
+    String userId, {
+    Map<String, dynamic>? metadata,
+  }) async {
+    final planValues = <String, dynamic>{};
+    for (final entry in record.values.entries) {
+      final remoteKey = record.spec.remoteColumnFor(entry.key);
+      if (entry.value == null &&
+          const {'id', 'asset_id', 'title'}.contains(remoteKey)) {
+        continue;
+      }
+      planValues[remoteKey] = entry.value;
+    }
+    final metadataPayload = <String, dynamic>{};
+    if (metadata != null && metadata.isNotEmpty) {
+      for (final entry in metadata.entries) {
+        if (entry.key == 'plan_id' || entry.key == 'user_id') continue;
+        metadataPayload[entry.key] = entry.value;
+      }
+    }
+    final unsignedPayload = <String, dynamic>{
+      'operation_id': record.recordKey,
+      'plan': planValues,
+      'metadata': metadataPayload,
+    };
+    final requestHash = sha256
+        .convert(utf8.encode(jsonEncode(unsignedPayload)))
+        .toString();
+    final data = await _withDataTimeout(
+      () => _client.rpc<Map<String, dynamic>>(
+        'create_task_with_point_debit',
+        params: {
+          'p_operation': {...unsignedPayload, 'request_hash': requestHash},
+        },
+      ),
+    );
+    if (data['status'] == 'insufficient_points') {
+      throw const SupabaseFailure(
+        kind: SupabaseFailureKind.conflict,
+        message: 'Insufficient points to synchronize new maintenance task.',
+        retryable: false,
+      );
+    }
+    final remotePlan = data['plan'];
+    if (remotePlan is Map) {
+      final canonical = SyncRecord.fromRemote(
+        record.spec,
+        Map<String, dynamic>.from(remotePlan),
+      );
+      return RemoteWriteResult.applied(canonical);
+    }
+    final canonical = await fetch(
+      spec: record.spec,
+      userId: userId,
+      deviceId: '',
+      recordKey: record.recordKey,
+    );
+    if (canonical == null) {
+      throw const SupabaseFailure(
+        kind: SupabaseFailureKind.incompatibleSchema,
+        message:
+            'The cloud did not confirm task creation with its canonical row.',
       );
     }
     return RemoteWriteResult.applied(canonical);

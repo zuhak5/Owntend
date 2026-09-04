@@ -6,9 +6,29 @@ The current application version is defined only in `pubspec.yaml`. Released vers
 
 ## Unreleased
 
-- Fixed cloud hydration and task-edit synchronization after the occurrence-based
-  completion rebuild by keeping occurrence identity off asset-photo selects and
-  out of generic maintenance-plan PATCH payloads.
+- Advanced the application build number to 3 (`1.0.1+3`).
+- Preserved offline domain creations (areas, rooms, assets, tasks, details) across
+  sign-in identity binding by ensuring clean initial snapshot enrollment via
+  `enqueueInitialSnapshot` while avoiding push chatter for pristine bootstrap installations.
+- Unified push synchronization for newly created tasks (`maintenance_plan`) to
+  route through `create_task_with_point_debit` RPC bundled with its
+  `maintenance_plan_metadata`, resolving offline task push rejections (RLS 42501).
+- Bundled asset detail rows (`device_details`, `pet_details`, `plant_details`,
+  `safety_details`) into the atomic `create_asset` RPC in the sync push pipeline,
+  preventing dropped asset sub-details during initial cloud sync.
+- Fixed double-write task creation crash by removing redundant `savePlan` invocation
+  on new task creation, and added fallback plan persistence to Drift when the
+  task creation controller runs in local-only mode or without a local sync store.
+- Restored offline free asset creation by routing new items directly through
+  `AssetRepository.saveAsset` without requiring active cloud points services.
+- Added atomic sort order swapping (`swapAreaSortOrders`, `swapRoomSortOrders`) in
+  `AssetRepository` within a single database transaction with compare-and-set
+  revision checks on both records, preventing duplicate sort orders during reordering.
+- Added local-only drain support (`NotificationReconciliationConsumer.drainLocal`)
+  to flush pending reminder reconciliation requests for unauthenticated sessions.
+- Enqueued failed photo file deletions into `db.localMediaCleanup` for background
+  cleanup sweeps, and added user-facing error feedback toasts for photo primary
+  selection and deletion in item details.
 - Rebuilt task completion as an occurrence-identified, compare-and-set command:
   local history, provisional recurrence, inbox acknowledgement, reminder intent,
   and stable-sequence outbox work commit atomically; the server locks the
