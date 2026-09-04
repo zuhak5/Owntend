@@ -56,6 +56,15 @@ class _FakeWalletRepository extends MonetizationRepository {
   }
 
   @override
+  Future<PointWallet?> getWallet(String userId) async {
+    final delayed = _nextInitial;
+    if (delayed != null) {
+      return await delayed.future;
+    }
+    return canonical;
+  }
+
+  @override
   Stream<MonetizationConfig> watchConfig() =>
       Stream.value(const MonetizationConfig.failClosed());
 

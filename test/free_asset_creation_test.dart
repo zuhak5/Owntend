@@ -30,6 +30,13 @@ class _ZeroPointsMonetizationRepository implements MonetizationRepository {
   );
 
   @override
+  Future<PointWallet?> getWallet(String userId) async => PointWallet(
+    balance: 0,
+    timeZone: 'UTC',
+    updatedAt: DateTime.utc(2026, 8, 14),
+  );
+
+  @override
   Stream<MonetizationConfig> watchConfig() =>
       Stream.value(const MonetizationConfig.failClosed());
 

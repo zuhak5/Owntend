@@ -454,6 +454,8 @@ abstract class MonetizationRepository {
 
   Stream<PointWallet?> watchWallet(String userId) => Stream.value(null);
 
+  Future<PointWallet?> getWallet(String userId) async => null;
+
   Stream<MonetizationConfig> watchConfig() =>
       Stream.value(const MonetizationConfig.failClosed());
 

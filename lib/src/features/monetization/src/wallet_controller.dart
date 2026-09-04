@@ -106,7 +106,7 @@ class PointWalletController extends Notifier<AsyncValue<PointWallet?>> {
     final generation = _scopeGeneration;
     final mutationGeneration = _mutationGeneration;
     try {
-      final wallet = await repository.watchWallet(userId).first;
+      final wallet = await repository.getWallet(userId);
       if (!_scopeIsCurrent(repository, userId, generation)) return;
       if (mutationGeneration != _mutationGeneration) return;
       final pendingBalance = _pendingAuthoritativeBalance;

@@ -6,6 +6,16 @@ The current application version is defined only in `pubspec.yaml`. Released vers
 
 ## Unreleased
 
+- Preserved offline task maintenance completions across Google account sign-in identity binding, selectively purging only un-authenticated entity mutations while retargeting completion operations to the bound account (`[SYNC-11]`, `[BUG-01]`).
+- Aligned maintenance outbox authority checks with the JSON payload schema by matching `operation_id` to `row.recordKey`, preventing generic mutation deduplication collisions during history sync (`[SYNC-12]`, `[BUG-02]`).
+- Guarded account deletion against transport loss and session invalidation race conditions by wrapping administrative deletion completion in retries and routing invalidated active sessions to durable deletion recovery (`[AUTH-06]`, `[BUG-03]`).
+- Replaced non-reentrant boolean drop flag in `SentryLoggerBridge` with a sequential asynchronous FIFO queue, ensuring diagnostic breadcrumbs and error events are never dropped during concurrent logging (`[OBS-03]`, `[BUG-04]`).
+- Allowed local unauthenticated background maintenance refresh in `notificationBackgroundAccountMatches` to maintain local alarm reconciliation when no user account is bound (`[NOTIF-04]`, `[BUG-05]`).
+- Replaced streaming Realtime subscription in `PointWalletController.refresh()` and verification polling with discrete REST queries (`getWallet`), eliminating WebSocket reconnection storms and excessive Supabase Realtime usage (`[MON-03]`, `[BUG-06]`).
+- Guarded PostgREST snapshot filtering against empty key columns in `SupabaseSyncGateway`, preventing invalid `.or()` queries on singleton entities such as user profiles (`[SYNC-13]`, `[BUG-07]`).
+- Made reminder schedule diff reconciliation resilient to individual platform alarm scheduling failures, capturing all successfully registered alarms into `_scheduleStore` and preserving durable snooze intent (`[NOTIF-05]`, `[BUG-08]`).
+- Removed unconditional table recreation (`m.createAll()`) from Drift database schema upgrades, preserving existing user tables and indices during migrations (`[DB-02]`, `[BUG-09]`).
+- Added explicit purge of sync metadata tables (`offline_mutation_queue`, `sync_shadows`, `sync_cursors`, `sync_conflicts`, `sync_media_cleanup`) during backup archive restoration, preventing cross-device metadata pollution (`[BACKUP-01]`, `[BUG-10]`).
 - Fixed offline-first media hydration by making `AssetPhotosTable.relativePath` nullable, allowing remote metadata insertion during initial cloud pull before photo bytes are downloaded (`[SYNC-01]`, `[SYNC-04]`).
 - Hardened SQLite outbox trigger to unconditionally reset mutation state to `pending` on modification, recovering failed or in-flight mutations from stuck states (`[SYNC-08]`).
 - Defined explicit database migration upgrade path via Drift `MigrationStrategy.onUpgrade` (`[DB-01]`).

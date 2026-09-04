@@ -247,7 +247,10 @@ class SupabaseAuthRepository implements AuthRepository {
           },
         );
       } on Object catch (error) {
-        if (createdOperation && _isSafePreDestructiveFailure(error)) {
+        final functionCode = _functionErrorCode(error);
+        if (createdOperation &&
+            functionCode != 'invalid_session' &&
+            _isSafePreDestructiveFailure(error)) {
           rethrow;
         }
         await _resolveAmbiguousDeletion(operation, sourceError: error);
@@ -262,7 +265,9 @@ class SupabaseAuthRepository implements AuthRepository {
       final functionErrorCode = _functionErrorCode(error);
       final safeCancellation =
           !requestStarted ||
-          (createdOperation && _isSafePreDestructiveFailure(error));
+          (createdOperation &&
+              functionErrorCode != 'invalid_session' &&
+              _isSafePreDestructiveFailure(error));
       if (safeCancellation && operation != null) {
         await _accountDeletionRecoveryStore.clear();
       }

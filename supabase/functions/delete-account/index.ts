@@ -226,7 +226,16 @@ export async function handleDeleteAccount(
     await services.deleteUser(userId);
 
     phase = "complete_operation";
-    await services.completeOperation(operationId, userId, subjectBinding);
+    let completed = false;
+    for (let attempt = 1; attempt <= 3 && !completed; attempt++) {
+      try {
+        await services.completeOperation(operationId, userId, subjectBinding);
+        completed = true;
+      } catch (err) {
+        if (attempt === 3) throw err;
+        await new Promise((r) => setTimeout(r, 500 * attempt));
+      }
+    }
 
     return respond(200, deletionReceipt(userId));
   } catch (error) {

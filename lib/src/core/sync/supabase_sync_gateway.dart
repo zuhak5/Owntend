@@ -290,8 +290,13 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
       if (spec.scope == SyncScope.deviceScoped) {
         query = query.eq('device_id', deviceId);
       }
-      if (afterRecordKey != null && afterRecordKey.isNotEmpty) {
-        query = query.or(_keyOnlyFilter(spec, afterRecordKey));
+      if (spec.keyColumns.isNotEmpty &&
+          afterRecordKey != null &&
+          afterRecordKey.isNotEmpty) {
+        final filter = _keyOnlyFilter(spec, afterRecordKey);
+        if (filter.isNotEmpty) {
+          query = query.or(filter);
+        }
       }
       final firstOrderColumn = spec.keyColumns.isEmpty
           ? 'user_id'
@@ -392,7 +397,13 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
     return keys;
   }
 
-  String _keyOnlyFilter(SyncEntitySpec spec, String afterRecordKey) {
+  @visibleForTesting
+  static String computeKeyOnlyFilter(
+    SyncEntitySpec spec,
+    String afterRecordKey,
+  ) => _keyOnlyFilter(spec, afterRecordKey);
+
+  static String _keyOnlyFilter(SyncEntitySpec spec, String afterRecordKey) {
     final values = afterRecordKey.split('|');
     final branches = <String>[];
     for (

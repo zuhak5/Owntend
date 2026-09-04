@@ -18,6 +18,16 @@ class SupabaseMonetizationRepository extends MonetizationRepository {
   }
 
   @override
+  Future<PointWallet?> getWallet(String userId) async {
+    final row = await client
+        .from('point_wallets')
+        .select()
+        .eq('user_id', userId)
+        .maybeSingle();
+    return row == null ? null : PointWallet.fromJson(row);
+  }
+
+  @override
   Stream<MonetizationConfig> watchConfig() {
     return client
         .from('monetization_config')

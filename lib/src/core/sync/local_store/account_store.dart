@@ -314,7 +314,29 @@ ORDER BY created_at DESC, id DESC
       if (current.boundUserId == null) {
         await db.delete(db.syncCursors).go();
         await db.delete(db.syncShadows).go();
-        await db.delete(db.syncOutbox).go();
+        // Delete ordinary entity mutations that will be snapshotted afresh:
+        await (db.delete(db.syncOutbox)..where(
+              (row) => row.entity.isNotIn([
+                'maintenance_completion',
+                'maintenance_undo',
+              ]),
+            ))
+            .go();
+        // Retarget existing offline maintenance completions to the newly bound user:
+        await (db.update(db.syncOutbox)..where(
+              (row) => row.entity.isIn([
+                'maintenance_completion',
+                'maintenance_undo',
+              ]),
+            ))
+            .write(
+              SyncOutboxCompanion(
+                userId: Value(userId),
+                attempts: const Value(0),
+                nextAttemptAt: const Value(null),
+                lastError: const Value(null),
+              ),
+            );
         await db.delete(db.syncMediaCleanup).go();
         await (db.update(
           db.syncRuntime,

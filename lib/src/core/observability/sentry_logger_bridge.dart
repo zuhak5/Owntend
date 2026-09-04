@@ -32,7 +32,8 @@ class SentryLoggerBridge {
   final DateTime Function() _clock;
   final Duration deduplicationWindow;
   final Map<String, DateTime> _recentCaptures = {};
-  bool _reporting = false;
+  bool _inSentryCallback = false;
+  Future<void> _drain = Future<void>.value();
 
   static SentryLoggerBridge? _installed;
   static AppDiagnosticEventSink? _installedSink;
@@ -58,11 +59,20 @@ class SentryLoggerBridge {
     _installedSink = null;
   }
 
-  Future<void> handle(AppDiagnosticEvent event) async {
-    if (_reporting) return;
-    _reporting = true;
+  Future<void> handle(AppDiagnosticEvent event) {
+    if (_inSentryCallback) return Future<void>.value();
+    return _drain = _drain.then((_) => _processEvent(event), onError: (_) {});
+  }
+
+  Future<void> _processEvent(AppDiagnosticEvent event) async {
     try {
-      await _addBreadcrumb(_breadcrumbFor(event));
+      _inSentryCallback = true;
+      try {
+        await _addBreadcrumb(_breadcrumbFor(event));
+      } finally {
+        _inSentryCallback = false;
+      }
+
       final error = event.error;
       if (event.level != 'ERROR' || error == null) return;
 
@@ -82,18 +92,22 @@ class SentryLoggerBridge {
       _recentCaptures.removeWhere(
         (_, capturedAt) => now.difference(capturedAt) >= deduplicationWindow,
       );
-      await _captureException(
-        error,
-        event.stackTrace,
-        fingerprint,
-        event.event,
-        failureClass,
-        _safeFields(event.fields),
-      );
+
+      _inSentryCallback = true;
+      try {
+        await _captureException(
+          error,
+          event.stackTrace,
+          fingerprint,
+          event.event,
+          failureClass,
+          _safeFields(event.fields),
+        );
+      } finally {
+        _inSentryCallback = false;
+      }
     } on Object {
       // Sentry failures are intentionally isolated from application logging.
-    } finally {
-      _reporting = false;
     }
   }
 

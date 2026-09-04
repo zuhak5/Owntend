@@ -31,6 +31,9 @@ class _FakeMonetizationRepository implements MonetizationRepository {
   Stream<PointWallet?> watchWallet(String userId) => Stream.value(null);
 
   @override
+  Future<PointWallet?> getWallet(String userId) async => null;
+
+  @override
   Stream<MonetizationConfig> watchConfig() =>
       Stream.value(const MonetizationConfig.failClosed());
 

@@ -45,6 +45,11 @@ bool notificationBackgroundAccountMatches({
 }) {
   final sessionId = sessionUserId?.trim();
   final localId = boundUserId?.trim();
+  // Local/unauthenticated mode: background local maintenance refresh is allowed
+  if ((sessionId == null || sessionId.isEmpty) &&
+      (localId == null || localId.isEmpty)) {
+    return true;
+  }
   return sessionId != null &&
       sessionId.isNotEmpty &&
       localId == sessionId &&
@@ -342,7 +347,7 @@ class OwntendNotificationScheduler
       return;
     }
 
-    final expectedUserId = session!.user.id;
+    final expectedUserId = session?.user.id;
     final workManager = wm.Workmanager();
     await workManager.initialize(owntendWorkManagerCallback);
 
@@ -908,13 +913,41 @@ class OwntendNotificationScheduler
     final desiredByIdentity = {
       for (final reminder in desired) reminder.snapshot.identity: reminder,
     };
+    final applied = {for (final entry in diff.unchanged) entry.identity: entry};
+    final storedCurrent = await _scheduleStore.readAll();
+    for (final entry in storedCurrent) {
+      if (entry.identity.startsWith('snooze:')) {
+        applied[entry.identity] = entry;
+      }
+    }
     for (final removed in diff.removed) {
-      await _plugin.cancel(id: removed.notificationId);
+      try {
+        await _plugin.cancel(id: removed.notificationId);
+        applied.remove(removed.identity);
+      } catch (e) {
+        AppLogger.warning(
+          'reminder_cancel_failed',
+          fields: {'id': removed.notificationId},
+        );
+      }
     }
+    Object? firstScheduleError;
     for (final entry in [...diff.added, ...diff.changed]) {
-      await desiredByIdentity[entry.identity]!.schedule();
+      try {
+        final reminder = desiredByIdentity[entry.identity];
+        if (reminder != null) {
+          await reminder.schedule();
+          applied[entry.identity] = reminder.snapshot;
+        }
+      } catch (e) {
+        firstScheduleError ??= e;
+        AppLogger.warning(
+          'reminder_schedule_failed',
+          fields: {'identity': entry.identity},
+        );
+      }
     }
-    await _scheduleStore.replaceAll(desiredSnapshots);
+    await _scheduleStore.replaceAll(applied.values.toList());
     AppLogger.info(
       'reminder_reconciliation_completed',
       fields: {
@@ -925,6 +958,9 @@ class OwntendNotificationScheduler
         'unchanged': diff.unchanged.length,
       },
     );
+    if (firstScheduleError != null) {
+      throw firstScheduleError;
+    }
   }
 
   Future<void> _scheduleTaskReminder(

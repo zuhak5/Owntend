@@ -907,7 +907,8 @@ class AppDatabase extends _$AppDatabase {
       await _createSyncTriggers();
     },
     onUpgrade: (m, from, to) async {
-      await m.createAll();
+      // Tables are managed incrementally across schema versions.
+      // Do not invoke m.createAll() as tables already exist from baseline.
       await _createIndexes();
       await _createSearchIndex();
       await _createSearchIndexGenerationInfrastructure();

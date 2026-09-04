@@ -1244,6 +1244,18 @@ class OwntendBackupService
           );
         }
         await db.customStatement('DELETE FROM search_index');
+        // Purge synchronization state: restored database must establish a clean
+        // synchronization baseline without stale outbox mutations or shadows.
+        const syncMetadataTables = [
+          'offline_mutation_queue',
+          'sync_shadows',
+          'sync_cursors',
+          'sync_conflicts',
+          'sync_media_cleanup',
+        ];
+        for (final table in syncMetadataTables) {
+          await db.customStatement('DELETE FROM ${_quoteIdentifier(table)}');
+        }
         // Commit proof: written inside the same SQLite transaction as the
         // imported rows. Recovery reads this marker instead of trusting the
         // journal phase, so a crash after begin but before commit rolls back

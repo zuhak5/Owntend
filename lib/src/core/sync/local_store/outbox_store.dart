@@ -347,11 +347,14 @@ WHERE (next_attempt_at IS NULL OR next_attempt_at <= ?)
           if (decoded is! Map) continue;
           if (row.entity == 'maintenance_completion') {
             final record = decoded['record'];
-            if (record is Map && record['id'] == row.recordKey) {
+            final recordId = record is Map ? record['id'] : null;
+            final operationId = decoded['operation_id'];
+            if (recordId == row.recordKey || operationId == row.recordKey) {
               authoritativeRecordKeys.add(row.recordKey);
             }
           } else if (row.entity == 'maintenance_undo' &&
-              decoded['completion_id'] == row.recordKey) {
+              (decoded['completion_id'] == row.recordKey ||
+                  decoded['operation_id'] == row.recordKey)) {
             authoritativeRecordKeys.add(row.recordKey);
           }
         } on Object {
