@@ -65,10 +65,10 @@ export function parseVersion(value) {
   return parts.length === 3 && parts.every((part) => Number.isInteger(part) && part >= 0) ? parts : null;
 }
 export function compareVersionBuild(left, right) {
-  if (right.build !== left.build) return right.build - left.build;
   const leftParts = parseVersion(left.version) ?? [0, 0, 0];
   const rightParts = parseVersion(right.version) ?? [0, 0, 0];
   for (let index = 0; index < 3; index += 1) if (rightParts[index] !== leftParts[index]) return rightParts[index] - leftParts[index];
+  if (right.build !== left.build) return right.build - left.build;
   const dateDifference = Date.parse(right.publishedAt) - Date.parse(left.publishedAt);
   return dateDifference || Number(right.id) - Number(left.id);
 }

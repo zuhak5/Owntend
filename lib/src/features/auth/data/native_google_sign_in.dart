@@ -3,10 +3,15 @@ import 'package:google_sign_in/google_sign_in.dart';
 import '../../../core/supabase/supabase_failure.dart';
 
 class GoogleSignInTokens {
-  const GoogleSignInTokens({required this.idToken, required this.accessToken});
+  const GoogleSignInTokens({
+    required this.idToken,
+    required this.accessToken,
+    this.email,
+  });
 
   final String idToken;
   final String accessToken;
+  final String? email;
 }
 
 abstract interface class GoogleSignInGateway {
@@ -87,9 +92,19 @@ class NativeGoogleSignInGateway implements GoogleSignInGateway {
         message: 'Google did not return the ID token required to sign in.',
       );
     }
+    String? email;
+    try {
+      final rawEmail = account.email;
+      if (rawEmail.trim().isNotEmpty) {
+        email = rawEmail.trim();
+      }
+    } catch (_) {
+      email = null;
+    }
     return GoogleSignInTokens(
       idToken: idToken,
       accessToken: authorization.accessToken,
+      email: email,
     );
   }
 

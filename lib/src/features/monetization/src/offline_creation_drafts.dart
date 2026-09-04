@@ -2,7 +2,9 @@ part of '../monetization.dart';
 
 class OfflineCreationDraftStore {
   const OfflineCreationDraftStore([
-    this._storage = const FlutterSecureStorage(),
+    this._storage = const FlutterSecureStorage(
+      aOptions: owntendAndroidSecureStorageOptions,
+    ),
   ]);
 
   final FlutterSecureStorage _storage;

@@ -4008,6 +4008,12 @@ BEGIN
     OR claim_row.reward_amount IS DISTINCT FROM p_reward_amount
     OR p_google_timestamp < claim_row.created_at - INTERVAL '5 minutes'
     OR p_google_timestamp > claim_row.expires_at + INTERVAL '5 minutes'
+    OR (claim_row.reward_type = 'rewarded_interstitial' AND (
+      claim_row.eligibility_token IS NULL OR NOT EXISTS (
+        SELECT 1 FROM public.maintenance_reward_eligibilities
+        WHERE token = claim_row.eligibility_token
+      )
+    ))
   THEN
     RAISE EXCEPTION USING errcode = '22023', message = 'INVALID_REWARD_CLAIM';
   END IF;
@@ -5514,6 +5520,14 @@ CREATE INDEX "reward_claim_requests_user_created_idx" ON "public"."reward_claim_
 
 
 
+CREATE INDEX IF NOT EXISTS "reward_claim_requests_eligibility_token_idx" ON "public"."reward_claim_requests" USING "btree" ("eligibility_token");
+
+
+
+CREATE INDEX IF NOT EXISTS "ad_reward_claims_claim_id_idx" ON "public"."ad_reward_claims" USING "btree" ("claim_id");
+
+
+
 CREATE UNIQUE INDEX "rooms_area_active_name_uidx" ON "public"."rooms" USING "btree" ("user_id", "area_id", "lower"("name")) WHERE ("archived_at" IS NULL);
 
 
@@ -6212,13 +6226,6 @@ CREATE POLICY "point_wallets_select_own" ON "public"."point_wallets" FOR SELECT 
 
 
 ALTER TABLE "public"."profiles" ENABLE ROW LEVEL SECURITY;
-
-
-CREATE POLICY "profiles_delete_own" ON "public"."profiles" FOR DELETE TO "authenticated" USING ((( SELECT "auth"."uid"() AS "uid") = "user_id"));
-
-
-
-CREATE POLICY "profiles_insert_own" ON "public"."profiles" FOR INSERT TO "authenticated" WITH CHECK ((( SELECT "auth"."uid"() AS "uid") = "user_id"));
 
 
 
@@ -7274,7 +7281,7 @@ GRANT ALL ON TABLE "public"."point_wallets" TO "service_role";
 
 
 
-GRANT SELECT,INSERT,DELETE,MAINTAIN ON TABLE "public"."profiles" TO "authenticated";
+GRANT SELECT,MAINTAIN ON TABLE "public"."profiles" TO "authenticated";
 GRANT ALL ON TABLE "public"."profiles" TO "service_role";
 
 

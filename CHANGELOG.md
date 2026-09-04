@@ -6,7 +6,18 @@ The current application version is defined only in `pubspec.yaml`. Released vers
 
 ## Unreleased
 
-- Advanced the application build number to 3 (`1.0.1+3`).
+- Fixed offline-first media hydration by making `AssetPhotosTable.relativePath` nullable, allowing remote metadata insertion during initial cloud pull before photo bytes are downloaded (`[SYNC-01]`, `[SYNC-04]`).
+- Hardened SQLite outbox trigger to unconditionally reset mutation state to `pending` on modification, recovering failed or in-flight mutations from stuck states (`[SYNC-08]`).
+- Defined explicit database migration upgrade path via Drift `MigrationStrategy.onUpgrade` (`[DB-01]`).
+- Hardened backend security by enforcing rewarded-interstitial claim validation in `process_admob_ssv_reward`, restricting verifier key refresh cooldown to 60s, indexing foreign keys on claim requests, revoking direct INSERT/DELETE grants on `profiles`, and allowing production browser origins on account deletion functions (`[BACKEND-01]` through `[BACKEND-07]`).
+- Relaxed change feed sequence progression validation during resnapshots (`[SYNC-02]`), returned feed generation with high water marks (`[SYNC-03]`), prevented update operations from erroneously inserting deleted remote entities (`[SYNC-05]`), enabled idempotent replay detection on unique constraint violations (`[SYNC-06]`), prevented single skipped feed entry failures from blocking subsequent drain repairs (`[SYNC-07]`), marked outbox mutations as in-flight during push (`[SYNC-09]`), and isolated media cache in-flight requests by asset identity (`[SYNC-10]`).
+- Pre-validated Google account identity prior to exchanging tokens during account deletion to prevent session hijacking/clobbering (`[AUTH-01]`), expanded revoked session error matching (`[AUTH-02]`), and routed `deleteAccount()` through `AccountSafetyBarrier` (`[AUTH-03]`).
+- Enforced fail-closed secure storage invariant (`resetOnError: false`) on Android secure storage while handling KeyStore read errors gracefully across persistent secure stores (`[AUTH-04]`, `[AUTH-05]`).
+- Restored in-memory fallback support in `TaskCreationOperationStore` constructor by binding `owntendAndroidSecureStorageOptions` at the `taskCreationOperationStoreProvider` level, and hardened Google sign-in email extraction against unstubbed mocks and edge-case identity descriptors.
+- Prevented listener leaks by storing and closing `ProviderSubscription`s across DashboardScreen, OwntendApp, and HkNativeAdCard (`[STATE-01]`, `[STATE-02]`), and guarded concurrent stream watches in PointWalletController (`[STATE-03]`).
+- Added active polling for AdMob SSV verification to promptly update wallet balances (`[MON-01]`), cleared stuck optimistic balances on refresh failure (`[MON-02]`), removed premature daily digest inbox creation during reminder evaluation (`[NOTIF-03]`), fell back to platform local timezones for notifications (`[NOTIF-01]`), added Android receivers for `TIMEZONE_CHANGED` and `TIME_SET` (`[NOTIF-02]`), added `/sync-health` to Sentry route normalization (`[OBS-01]`), and sanitized ad inspector diagnostic logging (`[OBS-02]`).
+- Advanced the application build number to 10 (`1.0.1+10`) to ensure monotonic `versionCode` progression over `1.0.0+9` for Android update compatibility.
+- Fixed VersionDeck release manifest sorting in `download-site/manifest-schema.js` and `tool/generate_versiondeck_manifest.mjs` to prioritize semantic version (`major.minor.patch`) before build code, ensuring newly published semantic versions are designated as `latestStableReleaseId` and featured prominently on the download website.
 - Preserved offline domain creations (areas, rooms, assets, tasks, details) across
   sign-in identity binding by ensuring clean initial snapshot enrollment via
   `enqueueInitialSnapshot` while avoiding push chatter for pristine bootstrap installations.

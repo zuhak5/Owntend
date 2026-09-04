@@ -1045,9 +1045,9 @@ class DriftAssetRepository implements AssetRepository {
       final docDir = await getApplicationDocumentsDirectory();
       final photos = await listPhotosForAsset(assetId);
       for (final photo in photos) {
-        final file = File(
-          p.joinAll([docDir.path, ...photo.relativePath.split('/')]),
-        );
+        final relativePath = photo.relativePath;
+        if (relativePath == null || relativePath.trim().isEmpty) continue;
+        final file = File(p.joinAll([docDir.path, ...relativePath.split('/')]));
         if (!await file.exists()) {
           continue;
         }
@@ -1243,7 +1243,7 @@ class DriftAssetRepository implements AssetRepository {
               AssetPhotosCompanion.insert(
                 id: photoId,
                 assetId: assetId,
-                relativePath: relativePath,
+                relativePath: Value(relativePath),
                 caption: Value(_blankToNull(caption)),
                 isPrimary: Value(isPrimary),
                 createdAt: Value(createdAt),
@@ -1462,9 +1462,9 @@ class DriftAssetRepository implements AssetRepository {
       final assetIds = <String>{};
       for (final row in photoRows) {
         assetIds.add(row.assetId);
-        final file = File(
-          p.joinAll([docDir.path, ...row.relativePath.split('/')]),
-        );
+        final relativePath = row.relativePath;
+        if (relativePath == null || relativePath.trim().isEmpty) continue;
+        final file = File(p.joinAll([docDir.path, ...relativePath.split('/')]));
         if (await file.exists()) {
           await file.delete();
         }
@@ -1481,11 +1481,11 @@ class DriftAssetRepository implements AssetRepository {
   }
 
   Future<void> _deletePhotoFile(AssetPhotoRow row) async {
+    final relativePath = row.relativePath;
+    if (relativePath == null || relativePath.trim().isEmpty) return;
     try {
       final docDir = await getApplicationDocumentsDirectory();
-      final file = File(
-        p.joinAll([docDir.path, ...row.relativePath.split('/')]),
-      );
+      final file = File(p.joinAll([docDir.path, ...relativePath.split('/')]));
       if (await file.exists()) {
         await file.delete();
       }
@@ -1494,7 +1494,7 @@ class DriftAssetRepository implements AssetRepository {
         await db
             .into(db.localMediaCleanup)
             .insertOnConflictUpdate(
-              LocalMediaCleanupCompanion.insert(relativePath: row.relativePath),
+              LocalMediaCleanupCompanion.insert(relativePath: relativePath),
             );
       } catch (_) {
         // Database cleanup is authoritative; secondary cleanup logging failure is ignored.

@@ -40,7 +40,7 @@ class MediaDownloadCache {
     required String version,
     required String assetId,
   }) {
-    final key = '$objectPath|$version';
+    final key = '$assetId|$objectPath|$version';
     final active = _inFlight[key];
     if (active != null) {
       AppLogger.info(

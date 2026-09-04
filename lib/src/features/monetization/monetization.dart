@@ -15,6 +15,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../l10n/app_localizations_ext.dart';
 import '../../core/config/app_config.dart';
 import '../../core/services/native_capabilities.dart';
+import '../../core/supabase/secure_supabase_storage.dart';
 import '../../core/sync/sync_providers.dart';
 import '../../core/utils/redacting_logger.dart';
 import '../../ui/app_theme.dart';

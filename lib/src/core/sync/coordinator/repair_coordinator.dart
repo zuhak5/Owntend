@@ -34,10 +34,16 @@ extension _SyncRepairCoordinator on SyncCoordinator {
           deviceId: scope.deviceId,
           recordKey: entry.recordKey,
         );
-      } on Object {
-        // Leave the promise; the next cycle retries after connectivity or
-        // server health recovers.
-        return;
+      } on Object catch (error) {
+        AppLogger.warning(
+          'sync_skipped_feed_fetch_failed',
+          fields: {
+            'entity': entry.entity,
+            'record_key': entry.recordKey,
+            'error': error.toString(),
+          },
+        );
+        continue;
       }
       await _ensureActiveAccountScope(scope);
       if (record == null) {

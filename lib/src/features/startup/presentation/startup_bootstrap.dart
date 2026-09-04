@@ -237,9 +237,9 @@ class _DeferredOwntendBootstrapState extends State<DeferredOwntendBootstrap> {
                   await const OfflineCreationDraftStore().clearForAccount(
                     accountId,
                   );
-                  await TaskCreationOperationStore(
-                    storage: const FlutterSecureStorage(),
-                  ).clearOperationsForAccount(accountId);
+                  await TaskCreationOperationStore().clearOperationsForAccount(
+                    accountId,
+                  );
                 },
               );
       if (resumed) AppLogger.info('account_deletion_local_cleanup_resumed');

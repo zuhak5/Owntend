@@ -253,7 +253,8 @@ void main() {
 }
 
 void _stubEmptyCloud(_MockGateway gateway) {
-  when(() => gateway.fetchUserChangeFeedHighWater()).thenAnswer((_) async => 0);
+  when(() => gateway.fetchUserChangeFeedHighWater())
+      .thenAnswer((_) async => const UserChangeFeedWatermark(highWaterSeq: 0));
   when(
     () => gateway.fetchAuthoritativeRecordKeys(
       spec: any(named: 'spec'),

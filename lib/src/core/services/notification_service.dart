@@ -753,20 +753,6 @@ class OwntendNotificationScheduler
     }
     final l10n = await _localizations();
     final body = l10n.notificationDailyDigestBody(overdue, dueToday, upcoming);
-    if (preferences.allowsInbox && (overdue > 0 || dueToday > 0)) {
-      await _notificationInboxRepository?.createNotification(
-        title: l10n.notificationDailyDigestTitle,
-        body: body,
-        kind: 'digest',
-        route: '/maintenance',
-        messageCode: NotificationMessageCode.dailyDigest,
-        messageArgs: {
-          'overdue': overdue,
-          'dueToday': dueToday,
-          'upcoming': upcoming,
-        },
-      );
-    }
     if (!preferences.allowsLocalReminders) {
       return null;
     }
@@ -1082,13 +1068,19 @@ class OwntendNotificationScheduler
     } catch (_) {
       timezone = null;
     }
-    if (timezone == null || timezone.trim().isEmpty) {
-      return;
+    if (timezone != null && timezone.trim().isNotEmpty) {
+      try {
+        tz.setLocalLocation(tz.getLocation(timezone.trim()));
+        return;
+      } catch (_) {
+        // Unknown or custom IANA timezone string; fall back to local.
+      }
     }
     try {
-      tz.setLocalLocation(tz.getLocation(timezone));
+      final localName = DateTime.now().timeZoneName;
+      tz.setLocalLocation(tz.getLocation(localName));
     } catch (_) {
-      // Unknown IANA timezone strings should not break reminder scheduling.
+      // Default local location remains active.
     }
   }
 

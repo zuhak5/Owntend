@@ -120,7 +120,8 @@ class PointWalletController extends Notifier<AsyncValue<PointWallet?>> {
       _acceptCanonical(wallet, clearMutationGate: true);
     } on Object catch (error, stackTrace) {
       if (!_scopeIsCurrent(repository, userId, generation)) return;
-      if (state.value == null && _pendingAuthoritativeBalance == null) {
+      _pendingAuthoritativeBalance = null;
+      if (state.value == null) {
         state = AsyncValue.error(error, stackTrace);
       }
     }
@@ -149,10 +150,29 @@ class PointWalletController extends Notifier<AsyncValue<PointWallet?>> {
     unawaited(refresh());
   }
 
+  void pollForServerVerification({
+    int maxAttempts = 6,
+    Duration interval = const Duration(seconds: 3),
+  }) {
+    var attempts = 0;
+    Timer.periodic(interval, (timer) async {
+      attempts++;
+      if (_disposed || attempts > maxAttempts) {
+        timer.cancel();
+        return;
+      }
+      await refresh();
+    });
+  }
+
   Future<void> _establishWatch(int generation) async {
     final repository = _repository;
     final userId = _userId;
     if (repository == null || userId == null) return;
+    if (!_scopeIsCurrent(repository, userId, generation)) return;
+
+    await _walletSubscription?.cancel();
+    _walletSubscription = null;
     if (!_scopeIsCurrent(repository, userId, generation)) return;
 
     _walletSubscription = repository

@@ -25,13 +25,21 @@ class SecureSupabaseStorage extends LocalStorage {
   Future<void> initialize() async {}
 
   @override
-  Future<String?> accessToken() {
-    return _secureStorage.read(key: _sessionKey);
+  Future<String?> accessToken() async {
+    try {
+      return await _secureStorage.read(key: _sessionKey);
+    } on Object {
+      return null;
+    }
   }
 
   @override
-  Future<bool> hasAccessToken() {
-    return _secureStorage.containsKey(key: _sessionKey);
+  Future<bool> hasAccessToken() async {
+    try {
+      return await _secureStorage.containsKey(key: _sessionKey);
+    } on Object {
+      return false;
+    }
   }
 
   @override

@@ -401,7 +401,7 @@ extension _SyncRunCoordinator on SyncCoordinator {
     if (!firstSync) {
       return _pullChangeFeed(userId, deviceId, scope: scope);
     }
-    final highWaterSeq = await _remoteGateway.fetchUserChangeFeedHighWater();
+    final watermark = await _remoteGateway.fetchUserChangeFeedHighWater();
     final outcome = await _pullAuthoritativeSnapshot(
       userId,
       deviceId,
@@ -412,7 +412,11 @@ extension _SyncRunCoordinator on SyncCoordinator {
     await _ensureActiveAccountScope(scope);
     await _reconcileMissedRemoteDeletes(userId, deviceId, scope: scope);
     await _ensureActiveAccountScope(scope);
-    await _localStore.setFeedCursor(highWaterSeq);
+    await _localStore.setFeedCursor(
+      watermark.highWaterSeq,
+      feedGeneration: watermark.feedGeneration,
+      highWaterSeq: watermark.highWaterSeq,
+    );
     return outcome;
   }
 

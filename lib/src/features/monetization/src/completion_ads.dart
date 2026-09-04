@@ -54,11 +54,18 @@ class CompletionAdCoordinator {
 
   Future<void> initializeSession() async {
     if (!_supportsMobileAds) return;
-    const storage = FlutterSecureStorage();
-    final prior = await storage.read(key: _firstSessionStorageKey);
-    policy.firstEverSession = prior == null;
-    if (prior == null) {
-      await storage.write(key: _firstSessionStorageKey, value: 'true');
+    const storage = FlutterSecureStorage(
+      aOptions: owntendAndroidSecureStorageOptions,
+    );
+    try {
+      final prior = await storage.read(key: _firstSessionStorageKey);
+      policy.firstEverSession = prior == null;
+      if (prior == null) {
+        await storage.write(key: _firstSessionStorageKey, value: 'true');
+      }
+    } on Object catch (error) {
+      AppLogger.warning('completion_ads_session_init_failed', error: error);
+      policy.firstEverSession = false;
     }
   }
 

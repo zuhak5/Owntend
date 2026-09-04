@@ -27,6 +27,16 @@ class RemoteWriteResult {
   final List<String> cleanupObjectPaths;
 }
 
+class UserChangeFeedWatermark {
+  const UserChangeFeedWatermark({
+    required this.highWaterSeq,
+    this.feedGeneration = 1,
+  });
+
+  final int highWaterSeq;
+  final int feedGeneration;
+}
+
 class UserChangeFeedPage {
   const UserChangeFeedPage({
     required this.entries,
@@ -595,6 +605,12 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
               message:
                   'A cloud uniqueness rule rejected this local record. '
                   'Check for duplicate names or multiple primary photos.',
+            );
+          }
+          if (_recordsMatch(record, canonical)) {
+            return RemoteWriteResult.applied(
+              canonical,
+              cleanupObjectPaths: const [],
             );
           }
           return RemoteWriteResult.conflict(canonical);
@@ -1370,9 +1386,11 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
         hasMore is! bool ||
         resnapshotRequired is! bool ||
         highWaterSeq < 0 ||
-        nextSeq < sinceSeq ||
-        nextSeq > highWaterSeq ||
-        hasMore != (nextSeq < highWaterSeq)) {
+        nextSeq < 0 ||
+        (!resnapshotRequired &&
+            (nextSeq < sinceSeq ||
+                nextSeq > highWaterSeq ||
+                hasMore != (nextSeq < highWaterSeq)))) {
       throw syncFeedProtocolFailure();
     }
     final entries = <ChangeFeedEntry>[];
@@ -1395,8 +1413,9 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
       previousSeq = parsed.changeSeq;
       entries.add(parsed);
     }
-    if ((entries.isEmpty && nextSeq != sinceSeq) ||
-        (entries.isNotEmpty && previousSeq != nextSeq)) {
+    if (!resnapshotRequired &&
+        ((entries.isEmpty && nextSeq != sinceSeq) ||
+            (entries.isNotEmpty && previousSeq != nextSeq))) {
       throw syncFeedProtocolFailure();
     }
     return UserChangeFeedPage(
@@ -1409,18 +1428,23 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
     );
   }
 
-  Future<int> fetchUserChangeFeedHighWater() async {
+  Future<UserChangeFeedWatermark> fetchUserChangeFeedHighWater() async {
     final rows = await _withDataTimeout(
       () => _client.rpc<List<dynamic>>('get_user_change_feed_watermark'),
     );
     if (rows.length != 1 || rows.single is! Map) {
       throw syncFeedProtocolFailure();
     }
-    final highWater = (rows.single as Map)['max_change_seq'];
-    if (highWater is! int || highWater < 0) {
+    final map = rows.single as Map;
+    final highWater = map['max_change_seq'];
+    final feedGeneration = map['feed_generation'] as int? ?? 1;
+    if (highWater is! int || highWater < 0 || feedGeneration < 1) {
       throw syncFeedProtocolFailure();
     }
-    return highWater;
+    return UserChangeFeedWatermark(
+      highWaterSeq: highWater,
+      feedGeneration: feedGeneration,
+    );
   }
 
   Future<Map<String, dynamic>> setPrimaryAssetPhoto({
@@ -1439,6 +1463,31 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
     } on Object catch (error) {
       throw SupabaseFailure.from(error);
     }
+  }
+
+  static bool _recordsMatch(SyncRecord a, SyncRecord b) {
+    if (a.spec.entity != b.spec.entity) return false;
+    if (a.isDeleted != b.isDeleted) return false;
+    for (final col in a.spec.localColumns) {
+      if (a.spec.localOnlyColumns.contains(col)) continue;
+      final valA = a.values[col];
+      final valB = b.values[col];
+      if (valA != valB) {
+        if (valA == null && valB == null) continue;
+        if (valA is DateTime && valB is DateTime) {
+          if (valA.toUtc().isAtSameMomentAs(valB.toUtc())) continue;
+        }
+        if (a.spec.jsonColumns.contains(col)) {
+          try {
+            if (jsonEncode(valA) == jsonEncode(valB)) continue;
+          } on Object {
+            // If not encodable, fall through to mismatch
+          }
+        }
+        return false;
+      }
+    }
+    return true;
   }
 }
 

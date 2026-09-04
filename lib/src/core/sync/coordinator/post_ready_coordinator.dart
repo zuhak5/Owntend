@@ -123,12 +123,14 @@ extension _SyncPostReadyCoordinator on SyncCoordinator {
     required String deviceId,
   }) async {
     try {
-      return await _remoteGateway.fetch(
+      final fetched = await _remoteGateway.fetch(
         spec: syncSpecByEntity['asset_photo']!,
         userId: userId,
         deviceId: deviceId,
         recordKey: recordKey,
       );
+      if (fetched == null) return null;
+      return await _materializePostReadyRecord(fetched, userId);
     } on Object catch (error) {
       AppLogger.warning('sync_post_ready_photo_refetch_failed', error: error);
       return null;

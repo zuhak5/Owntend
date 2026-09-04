@@ -45,6 +45,9 @@ class _PointShortageDialogState extends ConsumerState<_PointShortageDialog> {
       _loading = false;
       switch (result) {
         case RewardShowResult.shownAwaitingServerVerification:
+          ref
+              .read(pointWalletControllerProvider.notifier)
+              .pollForServerVerification();
           _verificationPending = true;
           _status = context.l10n.rewardVerificationPending;
           _statusIsError = false;

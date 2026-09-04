@@ -90,6 +90,7 @@ void main() {
     when(() => googleSignIn.initialize(serverClientId: serverClientId))
         .thenAnswer((_) async {});
     when(() => googleSignIn.authenticate()).thenAnswer((_) async => account);
+    when(() => account.email).thenReturn('user@example.com');
     when(() => account.authentication)
         .thenReturn(const GoogleSignInAuthentication(idToken: 'id-token'));
     when(() => account.authorizationClient).thenReturn(authorizationClient);
@@ -115,6 +116,7 @@ void main() {
 
     expect(tokens.idToken, 'id-token');
     expect(tokens.accessToken, 'access-token');
+    expect(tokens.email, 'user@example.com');
     expect(authorizationCalls, ['existing', 'interactive']);
     expect(requestedScopes, [
       ['email', 'profile'],
@@ -131,6 +133,7 @@ void main() {
           .thenAnswer((_) async {});
       when(() => googleSignIn.attemptLightweightAuthentication())
           .thenAnswer((_) => Future.value(account));
+      when(() => account.email).thenReturn('silent@example.com');
       when(() => account.authentication).thenReturn(
         const GoogleSignInAuthentication(idToken: 'silent-id-token'),
       );
@@ -145,6 +148,7 @@ void main() {
 
       expect(tokens?.idToken, 'silent-id-token');
       expect(tokens?.accessToken, 'silent-access-token');
+      expect(tokens?.email, 'silent@example.com');
       verify(() => googleSignIn.attemptLightweightAuthentication()).called(1);
       verifyNever(() => googleSignIn.authenticate());
       verifyNever(() => authorizationClient.authorizeScopes(any()));

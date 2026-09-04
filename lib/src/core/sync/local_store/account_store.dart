@@ -222,7 +222,9 @@ mixin _LocalSyncAccountStore on _LocalSyncStoreBase {
           '''
 SELECT id
 FROM asset_photos
-WHERE relative_path LIKE ?
+WHERE cloud_object_path IS NOT NULL
+  AND cloud_object_path LIKE ?
+  AND (relative_path IS NULL OR relative_path = '')
 ORDER BY created_at DESC, id DESC
 ''',
           variables: [Variable<String>('$userId/%')],

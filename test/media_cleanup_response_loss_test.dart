@@ -39,7 +39,8 @@ class _PhotoDeleteResponseLossGateway implements SupabaseSyncGateway {
   var storageDeleteCalls = 0;
 
   @override
-  Future<int> fetchUserChangeFeedHighWater() async => 0;
+  Future<UserChangeFeedWatermark> fetchUserChangeFeedHighWater() async =>
+      const UserChangeFeedWatermark(highWaterSeq: 0);
 
   @override
   Future<UserChangeFeedPage> fetchUserChangeFeed({
@@ -163,7 +164,7 @@ Future<void> _seedPhoto(AppDatabase db, LocalSyncStore store) async {
           AssetPhotosCompanion.insert(
             id: _photoId,
             assetId: _assetId,
-            relativePath: 'media/$_assetId/$_photoId.jpeg',
+            relativePath: Value('media/$_assetId/$_photoId.jpeg'),
             cloudObjectPath: const Value(_cleanupPath),
           ),
         );

@@ -782,8 +782,13 @@ function createSsvServices(
   return {
     async getVerifierKey(keyId, forceRefresh = false) {
       const now = Date.now();
+      const minRefreshCooldownMs = 60_000;
+      const canForceRefresh = forceRefresh &&
+        (cachedKeys == null ||
+          now - cachedKeys.fetchedAt >= minRefreshCooldownMs);
       if (
-        forceRefresh || cachedKeys == null ||
+        cachedKeys == null ||
+        canForceRefresh ||
         now - cachedKeys.fetchedAt >= keyCacheLifetimeMs
       ) {
         if (keyRefreshInFlight == null) {

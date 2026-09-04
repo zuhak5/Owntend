@@ -78,12 +78,12 @@ function expectedProvenanceWorkflow(repository) {
   return `https://github.com/${repository}/.github/workflows/shorebird-release-android.yml@refs/heads/main`;
 }
 function compareVersionBuild(left, right) {
-  if (right.build !== left.build) return right.build - left.build;
   const leftParts = left.version.split(".").map(Number);
   const rightParts = right.version.split(".").map(Number);
   for (let index = 0; index < 3; index += 1) {
     if (rightParts[index] !== leftParts[index]) return rightParts[index] - leftParts[index];
   }
+  if (right.build !== left.build) return right.build - left.build;
   return parseDate(right.publishedAt) - parseDate(left.publishedAt);
 }
 
@@ -330,7 +330,7 @@ export function validateVersionDeckManifest(manifest, { now = Date.now() } = {})
   for (const [label, target] of supersededTargets) if (!ids.has(target)) errors.push(`${label} superseded target does not exist in the manifest.`);
   for (let index = 1; index < manifest.releases.length; index += 1) {
     if (compareVersionBuild(manifest.releases[index - 1], manifest.releases[index]) > 0) {
-      errors.push("Release list is not sorted by descending build and version."); break;
+      errors.push("Release list is not sorted by descending version and build."); break;
     }
   }
   const stable = manifest.latestStableReleaseId;

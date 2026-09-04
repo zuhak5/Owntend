@@ -121,6 +121,39 @@ void main() {
       expect(delegate.currentSession, isNull);
     },
   );
+
+  test(
+    'successful barrier runs before delegate deleteAccount and forwards scope',
+    () async {
+      final events = <String>[];
+      final delegate = _RecordingAuthRepository(events);
+      final repository = AccountSafetyAuthRepository(
+        delegate,
+        barrier: AccountSafetyBarrier(
+          prepareAccountScope: (userId) async {
+            events.add('prepare:$userId');
+          },
+          cancelBackgroundWork: () async {
+            events.add('cancel-background');
+          },
+          releaseAccountScope: (userId) async {
+            events.add('release:$userId');
+          },
+        ),
+      );
+
+      await repository.deleteAccount();
+
+      expect(delegate.deleteAccountCalls, 1);
+      expect(delegate.currentSession, isNull);
+      expect(events, <String>[
+        'prepare:user-1',
+        'cancel-background',
+        'delegate-delete-account',
+        'release:user-1',
+      ]);
+    },
+  );
 }
 
 class _RecordingAuthRepository implements AuthRepository {
@@ -129,13 +162,18 @@ class _RecordingAuthRepository implements AuthRepository {
   final List<String> events;
   AuthSession? session = const AuthSession(userId: 'user-1');
   int signOutCalls = 0;
+  int deleteAccountCalls = 0;
   bool? lastAllDevices;
 
   @override
   AuthSession? get currentSession => session;
 
   @override
-  Future<void> deleteAccount() async {}
+  Future<void> deleteAccount() async {
+    deleteAccountCalls++;
+    events.add('delegate-delete-account');
+    session = null;
+  }
 
   @override
   Future<void> signInWithGoogle() async {}

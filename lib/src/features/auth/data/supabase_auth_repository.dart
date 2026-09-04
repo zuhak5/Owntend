@@ -171,7 +171,9 @@ class SupabaseAuthRepository implements AuthRepository {
     String? originalUserId;
     AccountDeletionRecoveryOperation? operation;
     try {
-      originalUserId = _client.auth.currentSession?.user.id;
+      final currentUser = _client.auth.currentSession?.user;
+      originalUserId = currentUser?.id;
+      final originalEmail = currentUser?.email;
       if (originalUserId == null) {
         throw const SupabaseFailure(
           kind: SupabaseFailureKind.authentication,
@@ -185,6 +187,18 @@ class SupabaseAuthRepository implements AuthRepository {
       final tokens =
           await _googleSignIn.reauthenticateSilently() ??
           await _googleSignIn.signIn();
+
+      if (tokens.email != null &&
+          originalEmail != null &&
+          tokens.email!.trim().toLowerCase() !=
+              originalEmail.trim().toLowerCase()) {
+        throw const SupabaseFailure(
+          kind: SupabaseFailureKind.permissionDenied,
+          message:
+              'Authenticate with the same Google account before deleting it.',
+        );
+      }
+
       final reauthenticated = await _client.auth.signInWithIdToken(
         provider: OAuthProvider.google,
         idToken: tokens.idToken,
@@ -618,7 +632,11 @@ bool _isRevokedSessionError(Object error) {
   final normalized = '${code ?? ''} $message'.toLowerCase();
   return normalized.contains('session_not_found') ||
       normalized.contains('session from session_id claim') ||
-      normalized.contains('session id claim in jwt does not exist');
+      normalized.contains('session id claim in jwt does not exist') ||
+      normalized.contains('invalid refresh token') ||
+      normalized.contains('refresh_token_not_found') ||
+      normalized.contains('user not found') ||
+      normalized.contains('user_not_found');
 }
 
 bool _isDeletionReceipt(Object? data, String expectedUserId) {

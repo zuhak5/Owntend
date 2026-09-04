@@ -16,6 +16,7 @@ const userIdPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const productionBrowserOrigins = new Set([
   "https://owntend.app",
+  "https://zuhak5.github.io",
 ]);
 const developmentBrowserOrigins = new Set([
   "http://localhost:4173",

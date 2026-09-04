@@ -739,6 +739,8 @@ extension _SyncPushCoordinator on SyncCoordinator {
     SyncRecord local, {
     required _ActiveAccountScope scope,
   }) async {
+    await _localStore.markMutationInFlight(mutation, userId: userId);
+    await _ensureActiveAccountScope(scope);
     final shadow = await _localStore.shadow(
       mutation.entity,
       mutation.recordKey,
@@ -782,6 +784,18 @@ extension _SyncPushCoordinator on SyncCoordinator {
       await _localStore.markMutationSucceeded(mutation, remote);
       return;
     } else if (remote == null) {
+      if (mutation.operation == 'update') {
+        await _ensureActiveAccountScope(scope);
+        await _localStore.markMutationConflicted(
+          mutation,
+          accountId: userId,
+          reason: 'remote_entity_deleted',
+          localPayloadJson: _localSyncConflictPayload(mutation, local),
+          remotePayloadJson: null,
+          remoteRevision: null,
+        );
+        return;
+      }
       result = await _remoteGateway.write(
         record: local,
         userId: userId,

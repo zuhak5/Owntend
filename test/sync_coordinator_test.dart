@@ -177,7 +177,8 @@ class _StatefulGateway implements SupabaseSyncGateway {
   }
 
   @override
-  Future<int> fetchUserChangeFeedHighWater() async => _syncSeq;
+  Future<UserChangeFeedWatermark> fetchUserChangeFeedHighWater() async =>
+      UserChangeFeedWatermark(highWaterSeq: _syncSeq);
 
   @override
   Future<BatchWriteResult> writeNewBatch({
@@ -1802,8 +1803,9 @@ void main() {
     final auth = _FakeAuthRepository(const AuthSession(userId: 'user-1'));
     addTearDown(auth.controller.close);
     final gateway = _MockGateway();
-    when(() => gateway.fetchUserChangeFeedHighWater())
-        .thenAnswer((_) async => 0);
+    when(
+      () => gateway.fetchUserChangeFeedHighWater(),
+    ).thenAnswer((_) async => const UserChangeFeedWatermark(highWaterSeq: 0));
     when(
       () => gateway.fetchUserChangeFeed(
         sinceSeq: any(named: 'sinceSeq'),

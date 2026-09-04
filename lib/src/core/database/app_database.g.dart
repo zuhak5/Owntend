@@ -4299,9 +4299,9 @@ class $AssetPhotosTable extends AssetPhotos
   late final GeneratedColumn<String> relativePath = GeneratedColumn<String>(
     'relative_path',
     aliasedName,
-    false,
+    true,
     type: DriftSqlType.string,
-    requiredDuringInsert: true,
+    requiredDuringInsert: false,
   );
   static const VerificationMeta _cloudObjectPathMeta = const VerificationMeta(
     'cloudObjectPath',
@@ -4396,8 +4396,6 @@ class $AssetPhotosTable extends AssetPhotos
           _relativePathMeta,
         ),
       );
-    } else if (isInserting) {
-      context.missing(_relativePathMeta);
     }
     if (data.containsKey('cloud_object_path')) {
       context.handle(
@@ -4446,7 +4444,7 @@ class $AssetPhotosTable extends AssetPhotos
       relativePath: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}relative_path'],
-      )!,
+      ),
       cloudObjectPath: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}cloud_object_path'],
@@ -4475,7 +4473,7 @@ class $AssetPhotosTable extends AssetPhotos
 class AssetPhotoRow extends DataClass implements Insertable<AssetPhotoRow> {
   final String id;
   final String assetId;
-  final String relativePath;
+  final String? relativePath;
   final String? cloudObjectPath;
   final String? caption;
   final bool isPrimary;
@@ -4483,7 +4481,7 @@ class AssetPhotoRow extends DataClass implements Insertable<AssetPhotoRow> {
   const AssetPhotoRow({
     required this.id,
     required this.assetId,
-    required this.relativePath,
+    this.relativePath,
     this.cloudObjectPath,
     this.caption,
     required this.isPrimary,
@@ -4494,7 +4492,9 @@ class AssetPhotoRow extends DataClass implements Insertable<AssetPhotoRow> {
     final map = <String, Expression>{};
     map['id'] = Variable<String>(id);
     map['asset_id'] = Variable<String>(assetId);
-    map['relative_path'] = Variable<String>(relativePath);
+    if (!nullToAbsent || relativePath != null) {
+      map['relative_path'] = Variable<String>(relativePath);
+    }
     if (!nullToAbsent || cloudObjectPath != null) {
       map['cloud_object_path'] = Variable<String>(cloudObjectPath);
     }
@@ -4510,7 +4510,9 @@ class AssetPhotoRow extends DataClass implements Insertable<AssetPhotoRow> {
     return AssetPhotosCompanion(
       id: Value(id),
       assetId: Value(assetId),
-      relativePath: Value(relativePath),
+      relativePath: relativePath == null && nullToAbsent
+          ? const Value.absent()
+          : Value(relativePath),
       cloudObjectPath: cloudObjectPath == null && nullToAbsent
           ? const Value.absent()
           : Value(cloudObjectPath),
@@ -4530,7 +4532,7 @@ class AssetPhotoRow extends DataClass implements Insertable<AssetPhotoRow> {
     return AssetPhotoRow(
       id: serializer.fromJson<String>(json['id']),
       assetId: serializer.fromJson<String>(json['assetId']),
-      relativePath: serializer.fromJson<String>(json['relativePath']),
+      relativePath: serializer.fromJson<String?>(json['relativePath']),
       cloudObjectPath: serializer.fromJson<String?>(json['cloudObjectPath']),
       caption: serializer.fromJson<String?>(json['caption']),
       isPrimary: serializer.fromJson<bool>(json['isPrimary']),
@@ -4543,7 +4545,7 @@ class AssetPhotoRow extends DataClass implements Insertable<AssetPhotoRow> {
     return <String, dynamic>{
       'id': serializer.toJson<String>(id),
       'assetId': serializer.toJson<String>(assetId),
-      'relativePath': serializer.toJson<String>(relativePath),
+      'relativePath': serializer.toJson<String?>(relativePath),
       'cloudObjectPath': serializer.toJson<String?>(cloudObjectPath),
       'caption': serializer.toJson<String?>(caption),
       'isPrimary': serializer.toJson<bool>(isPrimary),
@@ -4554,7 +4556,7 @@ class AssetPhotoRow extends DataClass implements Insertable<AssetPhotoRow> {
   AssetPhotoRow copyWith({
     String? id,
     String? assetId,
-    String? relativePath,
+    Value<String?> relativePath = const Value.absent(),
     Value<String?> cloudObjectPath = const Value.absent(),
     Value<String?> caption = const Value.absent(),
     bool? isPrimary,
@@ -4562,7 +4564,7 @@ class AssetPhotoRow extends DataClass implements Insertable<AssetPhotoRow> {
   }) => AssetPhotoRow(
     id: id ?? this.id,
     assetId: assetId ?? this.assetId,
-    relativePath: relativePath ?? this.relativePath,
+    relativePath: relativePath.present ? relativePath.value : this.relativePath,
     cloudObjectPath: cloudObjectPath.present
         ? cloudObjectPath.value
         : this.cloudObjectPath,
@@ -4626,7 +4628,7 @@ class AssetPhotoRow extends DataClass implements Insertable<AssetPhotoRow> {
 class AssetPhotosCompanion extends UpdateCompanion<AssetPhotoRow> {
   final Value<String> id;
   final Value<String> assetId;
-  final Value<String> relativePath;
+  final Value<String?> relativePath;
   final Value<String?> cloudObjectPath;
   final Value<String?> caption;
   final Value<bool> isPrimary;
@@ -4645,15 +4647,14 @@ class AssetPhotosCompanion extends UpdateCompanion<AssetPhotoRow> {
   AssetPhotosCompanion.insert({
     required String id,
     required String assetId,
-    required String relativePath,
+    this.relativePath = const Value.absent(),
     this.cloudObjectPath = const Value.absent(),
     this.caption = const Value.absent(),
     this.isPrimary = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
-       assetId = Value(assetId),
-       relativePath = Value(relativePath);
+       assetId = Value(assetId);
   static Insertable<AssetPhotoRow> custom({
     Expression<String>? id,
     Expression<String>? assetId,
@@ -4679,7 +4680,7 @@ class AssetPhotosCompanion extends UpdateCompanion<AssetPhotoRow> {
   AssetPhotosCompanion copyWith({
     Value<String>? id,
     Value<String>? assetId,
-    Value<String>? relativePath,
+    Value<String?>? relativePath,
     Value<String?>? cloudObjectPath,
     Value<String?>? caption,
     Value<bool>? isPrimary,
@@ -18804,7 +18805,7 @@ typedef $$AssetPhotosTableCreateCompanionBuilder =
     AssetPhotosCompanion Function({
       required String id,
       required String assetId,
-      required String relativePath,
+      Value<String?> relativePath,
       Value<String?> cloudObjectPath,
       Value<String?> caption,
       Value<bool> isPrimary,
@@ -18815,7 +18816,7 @@ typedef $$AssetPhotosTableUpdateCompanionBuilder =
     AssetPhotosCompanion Function({
       Value<String> id,
       Value<String> assetId,
-      Value<String> relativePath,
+      Value<String?> relativePath,
       Value<String?> cloudObjectPath,
       Value<String?> caption,
       Value<bool> isPrimary,
@@ -19056,7 +19057,7 @@ class $$AssetPhotosTableTableManager
               ({
                 Value<String> id = const Value.absent(),
                 Value<String> assetId = const Value.absent(),
-                Value<String> relativePath = const Value.absent(),
+                Value<String?> relativePath = const Value.absent(),
                 Value<String?> cloudObjectPath = const Value.absent(),
                 Value<String?> caption = const Value.absent(),
                 Value<bool> isPrimary = const Value.absent(),
@@ -19076,7 +19077,7 @@ class $$AssetPhotosTableTableManager
               ({
                 required String id,
                 required String assetId,
-                required String relativePath,
+                Value<String?> relativePath = const Value.absent(),
                 Value<String?> cloudObjectPath = const Value.absent(),
                 Value<String?> caption = const Value.absent(),
                 Value<bool> isPrimary = const Value.absent(),

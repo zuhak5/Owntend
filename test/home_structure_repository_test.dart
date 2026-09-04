@@ -1020,7 +1020,7 @@ void main() {
             AssetPhotosCompanion.insert(
               id: 'photo_dryer',
               assetId: assetId,
-              relativePath: 'photos/$assetId/photo_dryer.jpg',
+              relativePath: Value('photos/$assetId/photo_dryer.jpg'),
               caption: const Value('Vent'),
             ),
           );
@@ -1049,7 +1049,7 @@ void main() {
               AssetPhotosCompanion.insert(
                 id: 'photo_primary',
                 assetId: assetId,
-                relativePath: 'photos/$assetId/photo_primary.jpg',
+                relativePath: Value('photos/$assetId/photo_primary.jpg'),
                 isPrimary: const Value(true),
               ),
             );
@@ -1059,7 +1059,7 @@ void main() {
               AssetPhotosCompanion.insert(
                 id: 'photo_secondary',
                 assetId: assetId,
-                relativePath: 'photos/$assetId/photo_secondary.jpg',
+                relativePath: Value('photos/$assetId/photo_secondary.jpg'),
                 isPrimary: const Value(false),
               ),
             );

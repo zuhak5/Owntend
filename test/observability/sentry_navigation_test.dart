@@ -16,6 +16,7 @@ void main() {
   test('keeps known routes stable and bounds unknown routes', () {
     expect(normalizeSentryRoute('/account'), '/account');
     expect(normalizeSentryRoute('/'), '/');
+    expect(normalizeSentryRoute('/sync-health'), '/sync-health');
     expect(normalizeSentryRoute('/permissions/setup'), '/permissions/setup');
     expect(
       normalizeSentryRoute('/permissions/setup?flow=initial'),

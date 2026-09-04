@@ -222,7 +222,7 @@ class AssetPhoto {
   const AssetPhoto({
     required this.id,
     required this.assetId,
-    required this.relativePath,
+    this.relativePath,
     required this.createdAt,
     this.isPrimary = false,
     this.caption,
@@ -230,7 +230,7 @@ class AssetPhoto {
 
   final String id;
   final String assetId;
-  final String relativePath;
+  final String? relativePath;
   final bool isPrimary;
   final String? caption;
   final DateTime createdAt;

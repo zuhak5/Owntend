@@ -15,6 +15,7 @@ const maxDeletionBodyBytes = 512;
 const recoveryKeyPattern = /^[A-Za-z0-9_-]{43}$/;
 const productionBrowserOrigins = new Set([
   "https://owntend.app",
+  "https://zuhak5.github.io",
 ]);
 const developmentBrowserOrigins = new Set([
   "http://localhost:4173",

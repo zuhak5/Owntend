@@ -63,5 +63,6 @@ const _knownRoutes = <String>{
   '/search',
   '/settings',
   '/statistics',
+  '/sync-health',
   '/trash',
 };

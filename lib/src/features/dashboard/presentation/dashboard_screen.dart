@@ -16,6 +16,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   late final NativeAdPresentationDepth _nativeAdPresentationDepth;
   bool _forcePermissionEducationHandled = false;
   bool _permissionOverlaySuspendsNativeAds = false;
+  ProviderSubscription<PermissionEducationControllerState>?
+  _permissionEducationSubscription;
 
   @override
   void initState() {
@@ -24,11 +26,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     _nativeAdPresentationDepth = ref.read(
       nativeAdPresentationDepthProvider.notifier,
     );
-    ref.listenManual(permissionEducationControllerProvider, (_, next) {
-      _setPermissionOverlayNativeAdSuspension(
-        next.isVisible && next.activeCapability != null,
-      );
-    });
+    _permissionEducationSubscription = ref.listenManual(
+      permissionEducationControllerProvider,
+      (_, next) {
+        if (!mounted) return;
+        _setPermissionOverlayNativeAdSuspension(
+          next.isVisible && next.activeCapability != null,
+        );
+      },
+    );
     scheduleMicrotask(() {
       if (mounted) {
         ref.read(permissionEducationControllerProvider.notifier).initialize();
@@ -75,6 +81,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
 
   @override
   void dispose() {
+    _permissionEducationSubscription?.close();
+    _permissionEducationSubscription = null;
     _setPermissionOverlayNativeAdSuspension(false, deferProviderUpdate: true);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();

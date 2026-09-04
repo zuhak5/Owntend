@@ -65,6 +65,9 @@ Future<void> _showEarnPointsFlow(
   if (!context.mounted) return;
   switch (result) {
     case RewardShowResult.shownAwaitingServerVerification:
+      ref
+          .read(pointWalletControllerProvider.notifier)
+          .pollForServerVerification();
       hk_ui.showToast(
         context,
         content: Text(context.l10n.adWatchedVerifyingPoint),

@@ -363,13 +363,22 @@ test("manifest validation requires exact verification evidence", async () => {
     error.includes("signerVerified")));
 });
 
-test("compareVersionBuild sorts highest build first", () => {
+test("compareVersionBuild sorts higher semantic version first, then higher build", () => {
   const releases = [
-    { id: 1, version: "2.0.0", build: 2, publishedAt: "2026-01-01T00:00:00Z" },
-    { id: 2, version: "1.0.0", build: 3, publishedAt: "2026-01-01T00:00:00Z" },
+    { id: 1, version: "1.0.0", build: 9, publishedAt: "2026-01-01T00:00:00Z" },
+    { id: 2, version: "1.0.1", build: 1, publishedAt: "2026-01-01T00:00:00Z" },
+    { id: 3, version: "1.0.1", build: 3, publishedAt: "2026-01-01T00:00:00Z" },
+    { id: 4, version: "2.0.0", build: 2, publishedAt: "2026-01-01T00:00:00Z" },
   ];
   releases.sort(compareVersionBuild);
-  assert.equal(releases[0].build, 3);
+  assert.equal(releases[0].version, "2.0.0");
+  assert.equal(releases[0].build, 2);
+  assert.equal(releases[1].version, "1.0.1");
+  assert.equal(releases[1].build, 3);
+  assert.equal(releases[2].version, "1.0.1");
+  assert.equal(releases[2].build, 1);
+  assert.equal(releases[3].version, "1.0.0");
+  assert.equal(releases[3].build, 9);
 });
 
 test("cache policy expires when the manifest lease expires", async () => {

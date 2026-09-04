@@ -163,11 +163,7 @@ class OwntendAdsService {
         if (error != null) {
           AppLogger.warning(
             'ad_inspector_closed',
-            fields: {
-              'code': error.code,
-              'domain': error.domain,
-              'message': error.message,
-            },
+            fields: {'code': error.code, 'domain': error.domain},
           );
         } else {
           AppLogger.info('ad_inspector_closed');

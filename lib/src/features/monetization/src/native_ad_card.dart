@@ -40,14 +40,22 @@ class _HkNativeAdCardState extends ConsumerState<HkNativeAdCard> {
   String? _themeIdentity;
   Timer? _expiryTimer;
   Timer? _retryTimer;
+  ProviderSubscription<OwntendAdsService>? _owntendAdsSubscription;
+  ProviderSubscription<int>? _presentationDepthSubscription;
 
   @override
   void initState() {
     super.initState();
-    ref.listenManual(owntendAdsProvider, (_, next) => _bindAds(next));
-    ref.listenManual(nativeAdPresentationDepthProvider, (_, _) {
-      _scheduleSynchronize();
-    });
+    _owntendAdsSubscription = ref.listenManual(
+      owntendAdsProvider,
+      (_, next) => _bindAds(next),
+    );
+    _presentationDepthSubscription = ref.listenManual(
+      nativeAdPresentationDepthProvider,
+      (_, _) {
+        _scheduleSynchronize();
+      },
+    );
     scheduleMicrotask(() => _bindAds(ref.read(owntendAdsProvider)));
   }
 
@@ -71,6 +79,10 @@ class _HkNativeAdCardState extends ConsumerState<HkNativeAdCard> {
   @override
   void dispose() {
     _requestGeneration++;
+    _owntendAdsSubscription?.close();
+    _owntendAdsSubscription = null;
+    _presentationDepthSubscription?.close();
+    _presentationDepthSubscription = null;
     _adsSubscription?.cancel();
     _expiryTimer?.cancel();
     _retryTimer?.cancel();

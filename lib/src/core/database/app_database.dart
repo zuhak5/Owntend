@@ -327,7 +327,7 @@ class AssetPhotos extends Table {
   TextColumn get id => text()();
   TextColumn get assetId =>
       text().references(Assets, #id, onDelete: KeyAction.cascade)();
-  TextColumn get relativePath => text()();
+  TextColumn get relativePath => text().nullable()();
   TextColumn get cloudObjectPath => text().nullable()();
   TextColumn get caption => text().withLength(max: 500).nullable()();
   BoolColumn get isPrimary => boolean().withDefault(const Constant(false))();
@@ -906,6 +906,13 @@ class AppDatabase extends _$AppDatabase {
       await _createSearchIndexGenerationInfrastructure();
       await _createSyncTriggers();
     },
+    onUpgrade: (m, from, to) async {
+      await m.createAll();
+      await _createIndexes();
+      await _createSearchIndex();
+      await _createSearchIndexGenerationInfrastructure();
+      await _createSyncTriggers();
+    },
     beforeOpen: (details) async {
       await customStatement('PRAGMA busy_timeout = $_sqliteBusyTimeoutMs');
       await customStatement('PRAGMA foreign_keys = ON');
@@ -1227,10 +1234,7 @@ BEGIN
     attempts = 0,
     next_attempt_at = NULL,
     last_error = NULL,
-    state = CASE
-      WHEN offline_mutation_queue.state = 'conflict' THEN 'pending'
-      ELSE offline_mutation_queue.state
-    END,
+    state = 'pending',
     generation = offline_mutation_queue.generation + 1;
 END
 ''');

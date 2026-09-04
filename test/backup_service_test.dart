@@ -88,7 +88,7 @@ void main() {
       await _seedRealisticData(db, root);
       final photo = await db.select(db.assetPhotos).getSingle();
       final originalFile = File(
-        p.joinAll([docs.path, ...photo.relativePath.split('/')]),
+        p.joinAll([docs.path, ...photo.relativePath!.split('/')]),
       );
       final cloudRelativePath = 'cloud_media/${photo.assetId}/${photo.id}.jpg';
       final cloudFile = File(

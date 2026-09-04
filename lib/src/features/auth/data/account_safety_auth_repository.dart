@@ -57,5 +57,36 @@ class AccountSafetyAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<void> deleteAccount() => _delegate.deleteAccount();
+  Future<void> deleteAccount() async {
+    final session = _delegate.currentSession;
+    if (session == null) {
+      await _delegate.deleteAccount();
+      return;
+    }
+
+    final expectedUserId = session.userId;
+    var barrierAttempted = false;
+    try {
+      barrierAttempted = true;
+      await _barrier.prepareForSignOut(expectedUserId);
+      if (_delegate.currentSession?.userId != expectedUserId) {
+        throw StateError(
+          'The authenticated account changed while preparing account deletion.',
+        );
+      }
+      await _delegate.deleteAccount();
+    } finally {
+      if (barrierAttempted) {
+        try {
+          await _barrier.releaseAfterSignOut(expectedUserId);
+        } on Object catch (error, stackTrace) {
+          AppLogger.warning(
+            'auth_delete_account_barrier_release_failed',
+            error: error,
+            stackTrace: stackTrace,
+          );
+        }
+      }
+    }
+  }
 }

@@ -5,6 +5,7 @@ import '../../../core/services/feature_selectors.dart' as feature_selectors;
 import '../../../ui/components.dart' as hk_ui;
 import '../../permissions/domain/permission_capability.dart';
 import '../../monetization/monetization.dart';
+import '../../permissions/application/permission_education_controller.dart';
 import '../../permissions/presentation/permission_education_overlay.dart';
 import '../../permissions/domain/capability_snapshots.dart';
 import '../../auth/domain/auth_repository.dart';

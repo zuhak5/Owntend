@@ -21,7 +21,7 @@ select ok(
    from (
      select table_name, count(policyname)::integer as policy_count
      from unnest(array[
-       'profiles', 'areas', 'rooms',
+       'areas', 'rooms',
        'device_details', 'pet_details', 'plant_details', 'safety_details',
        'tags', 'asset_tags', 'maintenance_plans',
        'maintenance_plan_metadata',
@@ -35,6 +35,8 @@ select ok(
    -- assets intentionally has no INSERT policy: creation is routed through
    -- the server-authoritative aggregate RPC (MON-001).
    and (select count(*)::integer from pg_policies where schemaname = 'public' and tablename = 'assets') = 3
+   -- profiles only permits SELECT and UPDATE; creation is system-triggered and deletion is through delete-account
+   and (select count(*)::integer from pg_policies where schemaname = 'public' and tablename = 'profiles') = 2
    and (select count(*)::integer from pg_policies where schemaname = 'public' and tablename = 'asset_photos') = 1
    and (select count(*)::integer from pg_policies where schemaname = 'public' and tablename = 'maintenance_records') = 1,
   'standard app tables retain intended policies while maintenance history is read-only'

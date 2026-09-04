@@ -16,6 +16,7 @@ import '../../monetization/charged_operation_resolver.dart';
 import '../../monetization/monetization.dart';
 import '../../../core/services/charged_operation_journal/charged_operation_store.dart';
 import '../../../core/services/charged_operation_journal/charged_operation_contracts.dart';
+import '../../../core/supabase/secure_supabase_storage.dart';
 
 class TaskCreationState {
   const TaskCreationState({
@@ -47,7 +48,11 @@ class TaskCreationState {
 
 final taskCreationOperationStoreProvider = Provider<TaskCreationOperationStore>(
   (ref) {
-    return TaskCreationOperationStore(storage: const FlutterSecureStorage());
+    return TaskCreationOperationStore(
+      storage: const FlutterSecureStorage(
+        aOptions: owntendAndroidSecureStorageOptions,
+      ),
+    );
   },
 );
 

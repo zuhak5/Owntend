@@ -95,7 +95,7 @@ The application registers:
 - `MainActivity` as the exported launcher activity.
 - Flutter foreground-task service with `dataSync` type.
 - Scheduled notification receiver.
-- Scheduled notification boot receiver for boot, application replacement, and supported vendor quick-boot actions.
+- Scheduled notification boot receiver for boot, application replacement, time/timezone changes, and supported vendor quick-boot actions.
 
 Android platform backup is disabled through manifest/application backup settings. Owntend's own backup feature is separate.
 

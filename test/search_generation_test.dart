@@ -75,7 +75,7 @@ void main() {
             AssetPhotosCompanion.insert(
               id: 'photo-search',
               assetId: deviceId,
-              relativePath: 'photos/$deviceId/photo-search.jpg',
+              relativePath: Value('photos/$deviceId/photo-search.jpg'),
               caption: const Value('OldCaption'),
             ),
           );

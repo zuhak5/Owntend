@@ -21,6 +21,7 @@ import '../core/sync/local_sync_store.dart';
 import '../core/sync/sync_bootstrap.dart';
 import '../core/sync/sync_contracts.dart';
 import '../core/utils/redacting_logger.dart';
+import '../features/auth/domain/auth_repository.dart';
 export '../features/backup/presentation/backup_screen.dart';
 export '../features/assets/presentation/assets_presentation.dart';
 export '../features/dashboard/presentation/dashboard_presentation.dart';
@@ -256,6 +257,8 @@ class _OwntendAppState extends ConsumerState<OwntendApp>
   late final StartupBootstrapController _startupController;
   late final AutomaticBackupCoordinator _automaticBackupCoordinator;
   String? _automaticBackupReadyUserId;
+  ProviderSubscription<AsyncValue<AuthStateChange>>? _authSubscription;
+  ProviderSubscription<AsyncValue<SyncStatus>>? _syncSubscription;
 
   @override
   void initState() {
@@ -269,10 +272,10 @@ class _OwntendAppState extends ConsumerState<OwntendApp>
     );
     startup.stateListenable.addListener(_handleAutomaticBackupStartupState);
     _handleAutomaticBackupStartupState();
-    ref.listenManual(authStateProvider, (previous, next) {
+    _authSubscription = ref.listenManual(authStateProvider, (previous, next) {
       startup.handleAuthValue(next);
     }, fireImmediately: true);
-    ref.listenManual(syncStatusProvider, (previous, next) {
+    _syncSubscription = ref.listenManual(syncStatusProvider, (previous, next) {
       startup.handleSyncStatusValue(next);
     }, fireImmediately: true);
   }
@@ -318,6 +321,10 @@ class _OwntendAppState extends ConsumerState<OwntendApp>
 
   @override
   void dispose() {
+    _authSubscription?.close();
+    _authSubscription = null;
+    _syncSubscription?.close();
+    _syncSubscription = null;
     _startupController.stateListenable.removeListener(
       _handleAutomaticBackupStartupState,
     );
