@@ -221,7 +221,9 @@ export async function processMediaCleanupBatch(
             const isTerminal = entry.attempts >= 5;
             if (isTerminal) {
               console.warn(
-                `[media_cleanup_terminal_failure] Entry ${entry.id} reached terminal failure for object: ${result.errorCode ?? "storage_error"}`,
+                `[media_cleanup_terminal_failure] Entry ${entry.id} reached terminal failure for object: ${
+                  result.errorCode ?? "storage_error"
+                }`,
               );
             }
             await services.recordFailure(
