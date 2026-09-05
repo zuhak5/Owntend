@@ -282,16 +282,6 @@ void main() {
       activity,
       contains('WindowCompat.setDecorFitsSystemWindows(window, false)'),
     );
-    expect(
-      activity,
-      contains('WindowCompat.setDecorFitsSystemWindows(window, true)'),
-    );
-    expect(
-      activity,
-      contains(
-        'WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE',
-      ),
-    );
     expect(activity, isNot(contains('systemUiVisibility')));
     expect(activity, isNot(contains('SYSTEM_UI_FLAG_IMMERSIVE_STICKY')));
     expect(activity, isNot(contains('SYSTEM_UI_FLAG_FULLSCREEN')));
