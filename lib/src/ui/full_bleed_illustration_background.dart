@@ -165,16 +165,19 @@ class _EdgeFeatherMask extends StatelessWidget {
   Widget build(BuildContext context) {
     Widget masked = child;
     if (leftFade > 0 || rightFade > 0) {
+      final isRtl = Directionality.maybeOf(context) == TextDirection.rtl;
+      final startFade = isRtl ? rightFade : leftFade;
+      final endFade = isRtl ? leftFade : rightFade;
       masked = ShaderMask(
         blendMode: BlendMode.dstIn,
         shaderCallback: (bounds) => LinearGradient(
           colors: [
-            leftFade > 0 ? Colors.transparent : Colors.white,
+            startFade > 0 ? Colors.transparent : Colors.white,
             Colors.white,
             Colors.white,
-            rightFade > 0 ? Colors.transparent : Colors.white,
+            endFade > 0 ? Colors.transparent : Colors.white,
           ],
-          stops: [0, leftFade, 1 - rightFade, 1],
+          stops: [0, startFade, 1 - endFade, 1],
         ).createShader(bounds),
         child: masked,
       );

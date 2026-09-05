@@ -635,6 +635,7 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final areas = ref.watch(areasProvider).value ?? [];
     final rooms = ref.watch(roomsProvider);
     final roomItems = rooms.value ?? [];
@@ -660,6 +661,7 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
           ? context.l10n.createItem
           : context.l10n.saveItem,
       saveEnabled: saveEnabled,
+      isSaving: _saving,
       onCancel: () => Navigator.of(context).pop(),
       onSave: _save,
       child: Column(
@@ -667,19 +669,19 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
         children: [
           hk_ui.PremiumCard(
             padding: const EdgeInsets.all(14),
-            backgroundColor: HkColors.appSurfaceGreen,
+            backgroundColor: scheme.primaryContainer,
             child: Row(
               children: [
                 Icon(
                   iconForAssetType(_assetType),
-                  color: HkColors.appPrimaryDark,
+                  color: scheme.onPrimaryContainer,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     context.l10n.trackItemBody,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: HkColors.appPrimaryDark,
+                      color: scheme.onPrimaryContainer,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -800,12 +802,17 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
           TextField(
             controller: _notesController,
             maxLines: 3,
+            keyboardType: TextInputType.multiline,
+            textInputAction: TextInputAction.newline,
+            textCapitalization: TextCapitalization.sentences,
             inputFormatters: limitInputLength(InputValidationLimits.assetNotes),
             decoration: InputDecoration(labelText: context.l10n.notes),
           ),
           const SizedBox(height: 12),
           TextField(
             controller: _tagsController,
+            keyboardType: TextInputType.text,
+            textInputAction: TextInputAction.next,
             decoration: InputDecoration(
               labelText: context.l10n.tags,
               hintText: context.l10n.commaSeparated,
@@ -838,12 +845,17 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
         TextField(
           controller: _brandController,
           inputFormatters: limitInputLength(InputValidationLimits.deviceBrand),
+          keyboardType: TextInputType.text,
+          textCapitalization: TextCapitalization.words,
+          textInputAction: TextInputAction.next,
           decoration: InputDecoration(labelText: context.l10n.brand),
         ),
         const SizedBox(height: 12),
         TextField(
           controller: _modelController,
           inputFormatters: limitInputLength(InputValidationLimits.deviceModel),
+          keyboardType: TextInputType.text,
+          textInputAction: TextInputAction.next,
           decoration: InputDecoration(labelText: context.l10n.model),
         ),
         const SizedBox(height: 12),
@@ -852,6 +864,8 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
           inputFormatters: limitInputLength(
             InputValidationLimits.deviceSerialNumber,
           ),
+          keyboardType: TextInputType.text,
+          textInputAction: TextInputAction.next,
           decoration: InputDecoration(labelText: context.l10n.serialNumber),
         ),
         const SizedBox(height: 12),
@@ -885,6 +899,8 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
         const SizedBox(height: 12),
         TextField(
           controller: _manualController,
+          keyboardType: TextInputType.url,
+          textInputAction: TextInputAction.next,
           inputFormatters: limitInputLength(
             InputValidationLimits.deviceManualUrl,
           ),
@@ -893,6 +909,7 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
         const SizedBox(height: 12),
         TextField(
           controller: _consumableController,
+          textInputAction: TextInputAction.done,
           inputFormatters: limitInputLength(
             InputValidationLimits.deviceConsumable,
           ),
@@ -995,18 +1012,21 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
           inputFormatters: limitInputLength(
             InputValidationLimits.petMicrochipId,
           ),
+          textInputAction: TextInputAction.next,
           decoration: InputDecoration(labelText: context.l10n.microchipId),
         ),
         const SizedBox(height: 12),
         TextField(
           controller: _vetNameController,
           inputFormatters: limitInputLength(InputValidationLimits.petVetName),
+          textInputAction: TextInputAction.next,
           decoration: InputDecoration(labelText: context.l10n.vetName),
         ),
         const SizedBox(height: 12),
         TextField(
           controller: _vetPhoneController,
           keyboardType: TextInputType.phone,
+          textInputAction: TextInputAction.next,
           inputFormatters: limitInputLength(InputValidationLimits.petVetPhone),
           decoration: InputDecoration(labelText: context.l10n.vetPhone),
         ),
@@ -1057,6 +1077,7 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
         TextField(
           controller: _wateringController,
           keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
           onChanged: (_) => setState(() {}),
           decoration: InputDecoration(
             labelText: context.l10n.wateringInterval,
@@ -1167,6 +1188,8 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
+          scrollable: true,
+          actionsOverflowButtonSpacing: HkSpacing.xs,
           title: Text(context.l10n.changeItemType),
           content: Text(context.l10n.changeItemTypeWarning),
           actions: [
@@ -1346,6 +1369,8 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
           final confirmed = await showDialog<bool>(
             context: context,
             builder: (context) => AlertDialog(
+              scrollable: true,
+              actionsOverflowButtonSpacing: HkSpacing.xs,
               title: Text(context.l10n.confirmAssetTypeChargeTitle),
               content: Text(
                 context.l10n.confirmAssetTypeChargeBody(

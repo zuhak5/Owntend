@@ -57,6 +57,18 @@ class _LocationPickerSheetState extends ConsumerState<LocationPickerSheet> {
                   child: CircularProgressIndicator(),
                 );
               }
+              if (snapshot.hasError) {
+                return hk_ui.PremiumEmptyState(
+                  icon: Symbols.cloud_off_rounded,
+                  title: context.l10n.somethingWentWrongPleaseTryAgain,
+                  body: '',
+                  illustrationTone: hk_ui.HkIllustrationTone.danger,
+                  action: FilledButton(
+                    onPressed: () => _search(_controller.text),
+                    child: Text(context.l10n.retry),
+                  ),
+                );
+              }
               final results = snapshot.data ?? const <HomeLocation>[];
               if (results.isEmpty) {
                 return hk_ui.PremiumEmptyState(
@@ -73,7 +85,10 @@ class _LocationPickerSheetState extends ConsumerState<LocationPickerSheet> {
                       leading: const Icon(Symbols.location_on_rounded),
                       title: Text(location.label),
                       subtitle: Text(
-                        '${location.latitude.toStringAsFixed(2)}, ${location.longitude.toStringAsFixed(2)}',
+                        bidiIsolate(
+                          context,
+                          '${location.latitude.toStringAsFixed(2)}, ${location.longitude.toStringAsFixed(2)}',
+                        ),
                       ),
                       onTap: () => Navigator.of(context).pop(location),
                     ),

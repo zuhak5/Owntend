@@ -358,9 +358,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           ),
           PermissionEducationOverlayWrapper(
             targetLink: _weatherEducationLink,
-            onChooseLocationManually: () => showEditorModal<HomeLocation>(
+            onChooseLocationManually: () => runWithNativeAdsSuspended(
               context,
-              builder: (_) => const LocationPickerSheet(),
+              () => showEditorModal<HomeLocation>(
+                context,
+                builder: (_) => const LocationPickerSheet(),
+              ),
             ),
           ),
         ],
@@ -796,7 +799,7 @@ class _DashboardHeaderActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final componentHeight = isCompact ? 40.0 : 44.0;
+    final componentHeight = 48.0;
     final gap = isCompact ? 6.0 : HkSpacing.xs;
     final search = _DashboardSearchField(
       onPressed: onSearch,
@@ -1037,8 +1040,7 @@ class _NotificationButton extends StatelessWidget {
                       child: Icon(
                         Symbols.notifications_rounded,
                         size: 20,
-                        // Neutral dark icon per spec (icon_neutral: #344054)
-                        color: const Color(0xFF344054),
+                        color: scheme.onSurfaceVariant,
                       ),
                     ),
                     if (unreadCount > 0)
@@ -1053,7 +1055,12 @@ class _NotificationButton extends StatelessWidget {
                             // spec: status_danger #EF4444
                             color: const Color(0xFFEF4444),
                             shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white, width: 1.5),
+                            border: Border.all(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .surfaceContainerLowest,
+                              width: 1.5,
+                            ),
                           ),
                         ),
                       ),
@@ -1190,7 +1197,7 @@ class _HomeSetupProgressCard extends StatelessWidget {
                                 ),
                           ),
                         ),
-                        Icon(
+                        hk_ui.DirectionalIcon(
                           Symbols.arrow_forward_rounded,
                           color: scheme.primary,
                         ),
@@ -1273,7 +1280,7 @@ class _HomeReadinessSummaryCard extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      '$score%',
+                      bidiIsolate(context, '$score%'),
                       style: Theme.of(context).textTheme.labelLarge
                           ?.copyWith(color: color, fontWeight: FontWeight.w900),
                     ),
@@ -1394,36 +1401,43 @@ class _SummaryMetric extends StatelessWidget {
         child: InkWell(
           borderRadius: BorderRadius.circular(HkRadii.md),
           onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: HkSpacing.xs,
-              vertical: HkSpacing.xs,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(icon, size: 15, color: color),
-                    const SizedBox(width: HkSpacing.space4),
-                    Text(
-                      '$value',
-                      style: Theme.of(context).textTheme.titleMedium
-                          ?.copyWith(color: color, fontWeight: FontWeight.w900),
-                    ),
-                  ],
-                ),
-                Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w700,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: HkSpacing.xs,
+                vertical: HkSpacing.xs,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(icon, size: 15, color: color),
+                      const SizedBox(width: HkSpacing.space4),
+                      Text(
+                        '$value',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
+                              color: color,
+                              fontWeight: FontWeight.w900,
+                            ),
+                      ),
+                    ],
                   ),
-                ),
-              ],
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

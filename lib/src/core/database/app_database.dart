@@ -52,7 +52,8 @@ CustomExpression<bool> _boundedLengthCheck(
 @DataClassName('AreaRow')
 class Areas extends Table {
   TextColumn get id => text()();
-  TextColumn get name => text().withLength(min: 1, max: 120)();
+  TextColumn get name =>
+      text().withLength(min: 1, max: InputValidationLimits.areaName)();
   TextColumn get kind => text().check(
     const CustomExpression<bool>(
       "kind IN ('indoor', 'outdoor', 'utility', 'other')",
@@ -72,11 +73,13 @@ class Rooms extends Table {
   TextColumn get id => text()();
   TextColumn get areaId =>
       text().references(Areas, #id, onDelete: KeyAction.cascade)();
-  TextColumn get name => text().withLength(min: 1, max: 120)();
+  TextColumn get name =>
+      text().withLength(min: 1, max: InputValidationLimits.roomName)();
   TextColumn get roomType => text()
       .withLength(min: 1, max: 120)
       .withDefault(const Constant('other'))();
-  TextColumn get notes => text().withLength(max: 4000).nullable()();
+  TextColumn get notes =>
+      text().withLength(max: InputValidationLimits.roomNotes).nullable()();
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();

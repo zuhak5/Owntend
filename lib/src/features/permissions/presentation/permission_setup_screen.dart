@@ -8,6 +8,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/domain/models.dart';
 import '../../../ui/app_theme.dart';
+import '../../../ui/components.dart' as hk_ui;
 import '../application/permission_education_controller.dart';
 import '../domain/capability_snapshots.dart';
 import '../domain/permission_capability.dart';
@@ -74,7 +75,7 @@ class _PermissionSetupScreenState extends ConsumerState<PermissionSetupScreen>
       appBar: AppBar(
         title: Text(context.l10n.permissionSetup),
         leading: IconButton(
-          icon: const Icon(Symbols.arrow_back_rounded),
+          icon: const hk_ui.DirectionalIcon(Symbols.arrow_back_rounded),
           // WP-012 (F-032): custom AppBar leading buttons receive no
           // automatic back tooltip; screen readers need the explicit label.
           tooltip: context.l10n.back,

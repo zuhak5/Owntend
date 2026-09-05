@@ -17,6 +17,7 @@ Future<bool> confirmPermanentDelete(
     () => showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
+        scrollable: true,
         actionsOverflowButtonSpacing: HkSpacing.xs,
         title: Text(title),
         content: Text(message),

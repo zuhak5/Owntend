@@ -81,7 +81,7 @@ class AppPageHeader extends StatelessWidget {
                 child: IconButton(
                   tooltip: context.l10n.back,
                   onPressed: onBack,
-                  icon: const Icon(Symbols.arrow_back_rounded),
+                  icon: const DirectionalIcon(Symbols.arrow_back_rounded),
                 ),
               )
             else
@@ -91,7 +91,13 @@ class AppPageHeader extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Text(title, textAlign: TextAlign.center, style: titleTheme),
+                  Text(
+                    title,
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: titleTheme,
+                  ),
                   if (subtitle != null) ...[
                     const SizedBox(height: 4),
                     Text(
@@ -161,7 +167,7 @@ class StatusChip extends StatelessWidget {
     final color = negative
         ? scheme.error
         : warning
-        ? HkColors.appWarning
+        ? scheme.tertiary
         : positive
         ? scheme.primary
         : scheme.onSurfaceVariant;
@@ -263,7 +269,7 @@ class SettingsRow extends StatelessWidget {
           ...trailingWidgets,
           if (onTap != null) ...[
             const SizedBox(width: 6),
-            Icon(
+            DirectionalIcon(
               Symbols.chevron_right_rounded,
               size: 20,
               color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -275,6 +281,31 @@ class SettingsRow extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(onTap: onTap, child: child),
+    );
+  }
+}
+
+/// An [Icon] that mirrors horizontally when [Directionality] is RTL.
+class DirectionalIcon extends StatelessWidget {
+  const DirectionalIcon(
+    this.icon, {
+    this.size,
+    this.color,
+    this.semanticLabel,
+    super.key,
+  });
+
+  final IconData icon;
+  final double? size;
+  final Color? color;
+  final String? semanticLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final isRtl = Directionality.of(context) == TextDirection.rtl;
+    return Transform.flip(
+      flipX: isRtl,
+      child: Icon(icon, size: size, color: color, semanticLabel: semanticLabel),
     );
   }
 }

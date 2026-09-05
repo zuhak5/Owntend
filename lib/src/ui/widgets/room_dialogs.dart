@@ -40,6 +40,7 @@ class _AreaEditorDialogState extends ConsumerState<AreaEditorDialog> {
           ? context.l10n.createArea
           : context.l10n.saveArea,
       saveEnabled: !_saving && _nameController.text.trim().isNotEmpty,
+      isSaving: _saving,
       onCancel: () => Navigator.of(context).pop(),
       onSave: _save,
       child: Column(
@@ -47,7 +48,10 @@ class _AreaEditorDialogState extends ConsumerState<AreaEditorDialog> {
         children: [
           TextField(
             controller: _nameController,
-            textInputAction: TextInputAction.next,
+            inputFormatters: limitInputLength(InputValidationLimits.areaName),
+            keyboardType: TextInputType.text,
+            textCapitalization: TextCapitalization.words,
+            textInputAction: TextInputAction.done,
             decoration: InputDecoration(labelText: context.l10n.areaName),
           ),
           const SizedBox(height: HkSpacing.sm),
@@ -168,6 +172,8 @@ class _RoomEditorDialogState extends ConsumerState<RoomEditorDialog> {
     final shouldDiscard = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
+        scrollable: true,
+        actionsOverflowButtonSpacing: HkSpacing.xs,
         title: Text(context.l10n.discardChangesTitle),
         content: Text(context.l10n.discardChangesMessage),
         actions: [
@@ -213,6 +219,7 @@ class _RoomEditorDialogState extends ConsumerState<RoomEditorDialog> {
           ? context.l10n.saveZone
           : context.l10n.saveRoom,
       saveEnabled: !_saving && _nameController.text.trim().isNotEmpty,
+      isSaving: _saving,
       onCancel: _handleCancel,
       onSave: _save,
       child: Column(
@@ -220,6 +227,9 @@ class _RoomEditorDialogState extends ConsumerState<RoomEditorDialog> {
         children: [
           TextField(
             controller: _nameController,
+            inputFormatters: limitInputLength(InputValidationLimits.roomName),
+            keyboardType: TextInputType.text,
+            textCapitalization: TextCapitalization.words,
             textInputAction: TextInputAction.next,
             decoration: InputDecoration(
               labelText: isOutdoor
@@ -279,6 +289,10 @@ class _RoomEditorDialogState extends ConsumerState<RoomEditorDialog> {
           TextField(
             controller: _notesController,
             maxLines: 3,
+            keyboardType: TextInputType.multiline,
+            textInputAction: TextInputAction.newline,
+            textCapitalization: TextCapitalization.sentences,
+            inputFormatters: limitInputLength(InputValidationLimits.roomNotes),
             decoration: InputDecoration(labelText: context.l10n.notes),
           ),
         ],

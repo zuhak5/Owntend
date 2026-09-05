@@ -422,6 +422,8 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
                         context.l10n.dueDate(
                           formatShortDate(context, _dueDate),
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ),
@@ -430,7 +432,11 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
                     child: OutlinedButton.icon(
                       onPressed: _pickTime,
                       icon: const Icon(Symbols.schedule_rounded),
-                      label: Text(formatShortTime(context, _dueDate)),
+                      label: Text(
+                        formatShortTime(context, _dueDate),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ),
                 ],
@@ -619,6 +625,8 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
             final confirmed = await showDialog<bool>(
               context: context,
               builder: (context) => AlertDialog(
+                scrollable: true,
+                actionsOverflowButtonSpacing: HkSpacing.xs,
                 title: Text(context.l10n.confirmTaskMoveChargeTitle),
                 content: Text(
                   context.l10n.confirmTaskMoveChargeBody(quote.charge),

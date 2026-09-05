@@ -6,6 +6,9 @@ import 'models.dart';
 ///
 /// These values mirror the authoritative constraints in the Supabase schema.
 abstract final class InputValidationLimits {
+  static const areaName = 120;
+  static const roomName = 120;
+  static const roomNotes = 4000;
   static const assetName = 200;
   static const assetPlacement = 300;
   static const assetNotes = 10000;

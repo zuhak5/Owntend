@@ -341,9 +341,8 @@ class _CalendarMonthCard extends StatelessWidget {
                 onPressed: onPreviousMonth,
                 iconSize: 18,
                 style: IconButton.styleFrom(
-                  minimumSize: const Size(40, 40),
+                  minimumSize: const Size(48, 48),
                   padding: EdgeInsets.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
                 icon: Icon(
                   rtl
@@ -356,9 +355,8 @@ class _CalendarMonthCard extends StatelessWidget {
                 onPressed: onNextMonth,
                 iconSize: 18,
                 style: IconButton.styleFrom(
-                  minimumSize: const Size(40, 40),
+                  minimumSize: const Size(48, 48),
                   padding: EdgeInsets.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
                 icon: Icon(
                   rtl
@@ -497,18 +495,16 @@ class _CalendarDayCell extends StatelessWidget {
                       : FontWeight.w600,
                 ),
               ),
-              SizedBox(
-                height: 11,
-                child: count > 0
-                    ? Text(
-                        '$count',
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: foreground,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      )
-                    : null,
-              ),
+              if (count > 0)
+                Text(
+                  '$count',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: foreground,
+                    fontWeight: FontWeight.w800,
+                  ),
+                )
+              else
+                const SizedBox.shrink(),
             ],
           ),
         ),

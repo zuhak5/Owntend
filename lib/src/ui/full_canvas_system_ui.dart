@@ -21,20 +21,28 @@ class StandardSystemUi extends StatefulWidget {
 
 class _StandardSystemUiState extends State<StandardSystemUi>
     with WidgetsBindingObserver {
-  static const _overlayStyle = SystemUiOverlayStyle(
-    statusBarColor: Colors.transparent,
-    statusBarIconBrightness: Brightness.dark,
-    statusBarBrightness: Brightness.light,
-    systemNavigationBarColor: Color(0xFFF7F9FC),
-    systemNavigationBarDividerColor: Colors.transparent,
-    systemNavigationBarIconBrightness: Brightness.dark,
-  );
+  SystemUiOverlayStyle _computeOverlayStyle(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final scheme = Theme.of(context).colorScheme;
+    return SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+      statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
+      systemNavigationBarColor: isDark
+          ? scheme.surface
+          : const Color(0xFFF7F9FC),
+      systemNavigationBarDividerColor: Colors.transparent,
+      systemNavigationBarIconBrightness: isDark
+          ? Brightness.light
+          : Brightness.dark,
+    );
+  }
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _restoreStandardUi();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _restoreStandardUi());
   }
 
   @override
@@ -51,30 +59,41 @@ class _StandardSystemUiState extends State<StandardSystemUi>
   }
 
   void _restoreStandardUi() {
-    SystemChrome.setSystemUIOverlayStyle(_overlayStyle);
+    if (!mounted) return;
+    SystemChrome.setSystemUIOverlayStyle(_computeOverlayStyle(context));
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   }
 
   @override
-  Widget build(BuildContext context) => widget.child;
+  Widget build(BuildContext context) {
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: _computeOverlayStyle(context),
+      child: widget.child,
+    );
+  }
 }
 
 class _FullCanvasSystemUiState extends State<FullCanvasSystemUi>
     with WidgetsBindingObserver {
-  static const _overlayStyle = SystemUiOverlayStyle(
-    statusBarColor: Colors.transparent,
-    statusBarIconBrightness: Brightness.dark,
-    statusBarBrightness: Brightness.light,
-    systemNavigationBarColor: Colors.transparent,
-    systemNavigationBarDividerColor: Colors.transparent,
-    systemNavigationBarIconBrightness: Brightness.dark,
-  );
+  SystemUiOverlayStyle _computeOverlayStyle(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+      statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarDividerColor: Colors.transparent,
+      systemNavigationBarIconBrightness: isDark
+          ? Brightness.light
+          : Brightness.dark,
+    );
+  }
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _applyFullCanvasUi();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _applyFullCanvasUi());
   }
 
   @override
@@ -97,7 +116,8 @@ class _FullCanvasSystemUiState extends State<FullCanvasSystemUi>
   }
 
   void _applyFullCanvasUi() {
-    SystemChrome.setSystemUIOverlayStyle(_overlayStyle);
+    if (!mounted) return;
+    SystemChrome.setSystemUIOverlayStyle(_computeOverlayStyle(context));
     SystemChrome.setEnabledSystemUIMode(
       SystemUiMode.immersiveSticky,
       overlays: const [],
@@ -105,5 +125,10 @@ class _FullCanvasSystemUiState extends State<FullCanvasSystemUi>
   }
 
   @override
-  Widget build(BuildContext context) => widget.child;
+  Widget build(BuildContext context) {
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: _computeOverlayStyle(context),
+      child: widget.child,
+    );
+  }
 }

@@ -205,7 +205,17 @@ class _ThingDetailScreenState extends ConsumerState<ThingDetailScreen> {
         if (asset == null) {
           return Scaffold(
             appBar: AppBar(title: Text(context.l10n.item)),
-            body: Center(child: Text(context.l10n.itemNotFound)),
+            body: Center(
+              child: hk_ui.PremiumEmptyState(
+                icon: Symbols.inventory_2_rounded,
+                title: context.l10n.itemNotFound,
+                body: '',
+                action: FilledButton(
+                  onPressed: () => Navigator.of(context).maybePop(),
+                  child: Text(context.l10n.back),
+                ),
+              ),
+            ),
           );
         }
         final roomsState = ref.watch(roomsProvider);
@@ -985,9 +995,14 @@ class DetailRow extends StatelessWidget {
             color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
           const SizedBox(width: HkSpacing.xs),
-          SizedBox(
-            width: 92,
-            child: Text(label, style: Theme.of(context).textTheme.labelMedium),
+          ConstrainedBox(
+            constraints: const BoxConstraints(minWidth: 92, maxWidth: 140),
+            child: Text(
+              label,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelMedium,
+            ),
           ),
           Expanded(
             child: contentType == null
@@ -1081,7 +1096,7 @@ class _ThingPhotoTile extends StatelessWidget {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(10, 8, 6, 8),
+            padding: const EdgeInsetsDirectional.fromSTEB(10, 8, 6, 8),
             child: Row(
               children: [
                 Expanded(
@@ -1172,8 +1187,8 @@ class ThingCard extends ConsumerWidget {
       child: Stack(
         children: [
           if (statusColor != null)
-            Positioned(
-              left: -10,
+            PositionedDirectional(
+              start: -10,
               top: -8,
               bottom: -8,
               child: Container(width: 3, color: statusColor),

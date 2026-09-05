@@ -219,7 +219,10 @@ class SectionHeader extends StatelessWidget {
                 children: [
                   Text(actionLabel!),
                   const SizedBox(width: 4),
-                  const Icon(Symbols.arrow_forward_rounded, size: 16),
+                  const DirectionalIcon(
+                    Symbols.arrow_forward_rounded,
+                    size: 16,
+                  ),
                 ],
               ),
             ),
@@ -269,7 +272,7 @@ class CompactActionGroup extends StatelessWidget {
     required this.children,
     this.minButtonWidth = 136,
     this.maxButtonWidth,
-    this.buttonHeight = 46,
+    this.buttonHeight = 48,
     this.spacing = HkSpacing.xs,
     this.runSpacing = HkSpacing.xs,
     this.stackBelowWidth,
@@ -383,11 +386,11 @@ class DashboardMetricTile extends StatelessWidget {
         vertical: HkSpacing.sm,
       ),
       borderColor: alert
-          ? HkColors.tertiaryFixedDim.withValues(alpha: 0.28)
+          ? scheme.tertiary.withValues(alpha: 0.28)
           : scheme.outlineVariant.withValues(alpha: 0.16),
       backgroundColor: alert
           ? Color.alphaBlend(
-              HkColors.errorContainer.withValues(alpha: 0.08),
+              scheme.errorContainer.withValues(alpha: 0.08),
               scheme.surfaceContainerLowest,
             )
           : scheme.surfaceContainerLowest,
@@ -401,7 +404,7 @@ class DashboardMetricTile extends StatelessWidget {
             child: Text(
               value,
               style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                color: alert ? HkColors.tertiary : scheme.onSurface,
+                color: alert ? scheme.tertiary : scheme.onSurface,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -409,7 +412,7 @@ class DashboardMetricTile extends StatelessWidget {
           Text(
             label.toUpperCase(),
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: alert ? HkColors.tertiary : scheme.onSurfaceVariant,
+              color: alert ? scheme.tertiary : scheme.onSurfaceVariant,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -417,7 +420,7 @@ class DashboardMetricTile extends StatelessWidget {
           Text(
             caption,
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: alert ? HkColors.tertiary : color,
+              color: alert ? scheme.tertiary : color,
               fontSize: 9,
               fontWeight: FontWeight.w600,
             ),
@@ -519,18 +522,18 @@ class AchievementCard extends StatelessWidget {
     final compactValue = value.length > 5 || value.contains(' ');
     return PremiumCard(
       padding: const EdgeInsets.all(10),
-      backgroundColor: primary ? HkColors.primaryContainer : null,
+      backgroundColor: primary ? scheme.primaryContainer : null,
       borderColor: primary ? Colors.transparent : null,
       shadows: primary
-          ? HkShadows.ambient(tint: HkColors.primaryContainer)
+          ? HkShadows.ambient(tint: scheme.primaryContainer)
           : null,
       child: SizedBox(
         height: 76,
         child: Stack(
           clipBehavior: Clip.none,
           children: [
-            Positioned(
-              right: -18,
+            PositionedDirectional(
+              end: -18,
               bottom: -30,
               child: Icon(
                 primary
@@ -715,7 +718,7 @@ class PremiumBottomActionBar extends StatelessWidget {
                   Expanded(
                     flex: secondary == null ? 1 : 2,
                     child: SizedBox(
-                      height: 42,
+                      height: 48,
                       child: FilledButton.icon(
                         onPressed: onPressed,
                         icon: Icon(icon, size: 18),

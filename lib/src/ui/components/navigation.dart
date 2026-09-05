@@ -53,7 +53,7 @@ class ToolTile extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: HkSpacing.space4),
-              Icon(
+              DirectionalIcon(
                 Symbols.chevron_right_rounded,
                 color: scheme.outline,
                 size: 18,
@@ -177,9 +177,10 @@ class _BottomNavItem extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(HkRadii.lg),
         onTap: onTap,
-        child: SizedBox(
-          height: 52,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 52),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               AnimatedContainer(
@@ -294,21 +295,22 @@ String _localizedPriorityLabel(BuildContext context, PriorityLevel priority) =>
     };
 
 _TaskColors _taskColors(
+  ColorScheme scheme,
   TaskStatus status,
   PriorityLevel priority, {
   bool disabled = false,
 }) {
   if (disabled) {
-    return const _TaskColors(HkColors.onSurfaceVariant, HkColors.surfaceDim);
+    return _TaskColors(scheme.onSurfaceVariant, scheme.surfaceContainerHighest);
   }
   if (status == TaskStatus.completed) {
-    return const _TaskColors(HkColors.primary, HkColors.primaryFixed);
+    return _TaskColors(scheme.primary, scheme.primaryContainer);
   }
   if (status == TaskStatus.overdue || priority == PriorityLevel.critical) {
-    return const _TaskColors(HkColors.appDanger, HkColors.appDangerSurface);
+    return _TaskColors(scheme.error, scheme.errorContainer);
   }
   if (priority == PriorityLevel.high) {
-    return const _TaskColors(HkColors.appWarning, HkColors.appWarningSurface);
+    return _TaskColors(scheme.tertiary, scheme.tertiaryContainer);
   }
-  return const _TaskColors(HkColors.onSurfaceVariant, HkColors.appSurfaceGreen);
+  return _TaskColors(scheme.onSurfaceVariant, scheme.primaryContainer);
 }

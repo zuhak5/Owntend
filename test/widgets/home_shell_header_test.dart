@@ -679,9 +679,12 @@ void main() {
             // Spec: compact (<360 layout px) → 40 px; standard (≥360) → 44 px.
             // At screen 320 the full layout width is 320, which is <360 → compact.
             // At screen 600 the full layout width is 600 → standard.
-            final expectedH = width == 320.0 ? 40.0 : 44.0;
+            const expectedH = 48.0;
             expect(tester.getSize(points).height, expectedH);
-            expect(tester.getSize(notifications), Size(expectedH, expectedH));
+            expect(
+              tester.getSize(notifications),
+              const Size(expectedH, expectedH),
+            );
             expect(
               tester.getTopLeft(notifications).dx -
                   tester.getBottomRight(points).dx,
@@ -839,7 +842,7 @@ void main() {
         // The old fixed width (82 px) and height (48 px) from HeaderActionSurface
         // no longer apply after the modular refactoring.
         final size = tester.getSize(points);
-        expect(size.height, 44.0);
+        expect(size.height, 48.0);
         expect(size.width, greaterThan(0));
         expect(
           find.descendant(of: points, matching: find.text('Points')),

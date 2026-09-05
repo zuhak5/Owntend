@@ -185,8 +185,8 @@ class _StateIllustrationArtwork extends StatelessWidget {
     final accent = switch (tone) {
       HkIllustrationTone.neutral => scheme.onSurfaceVariant,
       HkIllustrationTone.info => scheme.primary,
-      HkIllustrationTone.success => HkColors.green,
-      HkIllustrationTone.warning => HkColors.appWarning,
+      HkIllustrationTone.success => scheme.primary,
+      HkIllustrationTone.warning => scheme.tertiary,
       HkIllustrationTone.danger => scheme.error,
     };
     final height = compact ? size : size * 0.78;
@@ -198,8 +198,8 @@ class _StateIllustrationArtwork extends StatelessWidget {
         child: Stack(
           alignment: Alignment.center,
           children: [
-            Positioned(
-              left: size * 0.08,
+            PositionedDirectional(
+              start: size * 0.08,
               top: height * 0.18,
               child: Container(
                 width: size * 0.46,
@@ -214,8 +214,8 @@ class _StateIllustrationArtwork extends StatelessWidget {
                 ),
               ),
             ),
-            Positioned(
-              right: size * 0.07,
+            PositionedDirectional(
+              end: size * 0.07,
               top: height * 0.08,
               child: Container(
                 width: size * 0.36,
@@ -249,8 +249,8 @@ class _StateIllustrationArtwork extends StatelessWidget {
                 size: compact ? size * 0.30 : size * 0.28,
               ),
             ),
-            Positioned(
-              right: size * 0.12,
+            PositionedDirectional(
+              end: size * 0.12,
               bottom: height * 0.06,
               child: Container(
                 width: compact ? 8 : 12,

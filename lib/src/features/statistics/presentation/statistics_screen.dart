@@ -13,6 +13,7 @@ import '../../../core/utils/app_failure.dart';
 import '../../../ui/app_theme.dart';
 import '../../../ui/components.dart' as hk_ui;
 import '../../../ui/domain_localization.dart';
+import '../../../ui/presentation_formatters.dart';
 import '../../monetization/monetization.dart';
 
 class StatisticsScreen extends ConsumerWidget {
@@ -209,7 +210,7 @@ class _StatisticMetric extends StatelessWidget {
                       ),
                       const SizedBox(height: HkSpacing.space4),
                       Text(
-                        value,
+                        bidiIsolate(context, value),
                         style: Theme.of(context).textTheme.titleMedium
                             ?.copyWith(
                               color: scheme.onSurface,
@@ -462,13 +463,14 @@ class TaskDistributionChart extends StatelessWidget {
         body: context.l10n.scheduledPlansWillAppearHere,
       );
     }
+    final scheme = Theme.of(context).colorScheme;
     final colors = [
-      Colors.teal,
-      Colors.indigo,
-      Colors.orange,
-      Colors.green,
-      Colors.pink,
-      Colors.blueGrey,
+      scheme.primary,
+      scheme.secondary,
+      scheme.tertiary,
+      scheme.error,
+      scheme.primaryContainer,
+      scheme.surfaceContainerHighest,
     ];
     final entries = data.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
@@ -479,14 +481,6 @@ class TaskDistributionChart extends StatelessWidget {
               '${localizedAssetTypeLabel(context, entry.key)} ${entry.value}',
         )
         .join(', ');
-    final sectionTitleStyle =
-        Theme.of(context).textTheme.labelSmall
-            ?.copyWith(color: Colors.white, fontWeight: FontWeight.w700) ??
-        const TextStyle(
-          fontSize: 11,
-          color: Colors.white,
-          fontWeight: FontWeight.w700,
-        );
 
     return Semantics(
       key: const ValueKey('statistics-distribution-chart-semantics'),
@@ -524,7 +518,15 @@ class TaskDistributionChart extends StatelessWidget {
                             ).format(entries[index].value / total),
                             color: colors[index % colors.length],
                             radius: radius,
-                            titleStyle: sectionTitleStyle,
+                            titleStyle:
+                                (Theme.of(context).textTheme.labelSmall ??
+                                        const TextStyle(fontSize: 11))
+                                    .copyWith(
+                                      color: contrastTextColor(
+                                        colors[index % colors.length],
+                                      ),
+                                      fontWeight: FontWeight.w700,
+                                    ),
                           ),
                       ],
                     ),

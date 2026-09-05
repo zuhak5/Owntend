@@ -201,6 +201,8 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
     return await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
+            scrollable: true,
+            actionsOverflowButtonSpacing: HkSpacing.xs,
             title: Text(title),
             content: Text(body),
             actions: [
@@ -290,11 +292,7 @@ class _NicknameCardState extends State<_NicknameCard> {
                 dimension: 22,
                 child: CircularProgressIndicator(strokeWidth: 2.3),
               )
-            : IconButton(
-                tooltip: context.l10n.editNickname,
-                onPressed: widget.onSaveNickname == null ? null : _edit,
-                icon: const Icon(Symbols.edit_rounded),
-              ),
+            : const Icon(Symbols.edit_rounded),
         onTap: widget.onSaveNickname == null ? null : _edit,
       ),
     );
@@ -304,27 +302,25 @@ class _NicknameCardState extends State<_NicknameCard> {
     if (_saving) {
       return;
     }
-    final result = await showDialog<Object?>(
+    final result = await showDialog<dynamic>(
       context: context,
       builder: (context) =>
-          _NicknameDialog(initialNickname: widget.profile?.nickname ?? ''),
+          _NicknameDialog(initialValue: widget.profile?.nickname),
     );
-    if (!mounted) {
+    if (!mounted || result == null) {
       return;
     }
-    if (result == null || result == _NicknameDialogAction.cancel) {
+    final next = switch (result) {
+      _NicknameDialogAction.clear => null,
+      final String value => value.trim().isEmpty ? null : value.trim(),
+      _ => null,
+    };
+    if (next == widget.profile?.nickname) {
       return;
     }
-    final callback = widget.onSaveNickname;
-    if (callback == null) {
-      return;
-    }
-    final nickname = result == _NicknameDialogAction.clear
-        ? null
-        : (result as String).trim();
     setState(() => _saving = true);
     try {
-      await callback(nickname == null || nickname.isEmpty ? null : nickname);
+      await widget.onSaveNickname!(next);
       if (mounted) {
         hk_ui.showToast(context, content: Text(context.l10n.nicknameUpdated));
       }
@@ -349,9 +345,9 @@ class _NicknameCardState extends State<_NicknameCard> {
 enum _NicknameDialogAction { cancel, clear }
 
 class _NicknameDialog extends StatefulWidget {
-  const _NicknameDialog({required this.initialNickname});
+  const _NicknameDialog({this.initialValue});
 
-  final String initialNickname;
+  final String? initialValue;
 
   @override
   State<_NicknameDialog> createState() => _NicknameDialogState();
@@ -363,7 +359,7 @@ class _NicknameDialogState extends State<_NicknameDialog> {
   @override
   void initState() {
     super.initState();
-    _controller = TextEditingController(text: widget.initialNickname);
+    _controller = TextEditingController(text: widget.initialValue ?? '');
   }
 
   @override
@@ -375,6 +371,7 @@ class _NicknameDialogState extends State<_NicknameDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
+      scrollable: true,
       actionsOverflowButtonSpacing: HkSpacing.xs,
       title: Text(context.l10n.nickname),
       content: TextField(

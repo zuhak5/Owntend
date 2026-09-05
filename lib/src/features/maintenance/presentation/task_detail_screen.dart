@@ -13,7 +13,17 @@ class TaskDetailScreen extends ConsumerWidget {
         if (task == null) {
           return Scaffold(
             appBar: AppBar(title: Text(context.l10n.task)),
-            body: Center(child: Text(context.l10n.taskNotFound)),
+            body: Center(
+              child: hk_ui.PremiumEmptyState(
+                icon: Symbols.task_rounded,
+                title: context.l10n.taskNotFound,
+                body: '',
+                action: FilledButton(
+                  onPressed: () => Navigator.of(context).maybePop(),
+                  child: Text(context.l10n.back),
+                ),
+              ),
+            ),
           );
         }
         final records = ref.watch(taskRecordsProvider(planId));
@@ -277,7 +287,10 @@ class TaskDetailScreen extends ConsumerWidget {
       },
       error: (error, _) => Scaffold(
         appBar: AppBar(title: Text(context.l10n.task)),
-        body: hk_ui.ErrorPanel(message: failureMessage(context, error)),
+        body: hk_ui.ErrorPanel(
+          message: failureMessage(context, error),
+          onRetry: () => ref.invalidate(taskDetailProvider(planId)),
+        ),
       ),
       loading: () =>
           const Scaffold(body: Center(child: CircularProgressIndicator())),
@@ -348,7 +361,7 @@ class _TaskItemActionRow extends StatelessWidget {
           OutlinedButton(
             onPressed: onOpen,
             style: OutlinedButton.styleFrom(
-              visualDensity: VisualDensity.compact,
+              minimumSize: const Size(48, 48),
               padding: const EdgeInsets.symmetric(horizontal: 12),
             ),
             child: Text(context.l10n.openItem),

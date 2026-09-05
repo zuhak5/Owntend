@@ -361,8 +361,12 @@ class OwntendTheme {
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
           backgroundColor: scheme.primary,
           foregroundColor: scheme.onPrimary,
-          disabledBackgroundColor: HkColors.disabled,
-          disabledForegroundColor: HkColors.appTextSecondary,
+          disabledBackgroundColor: isDark
+              ? scheme.surfaceContainerHigh
+              : HkColors.disabled,
+          disabledForegroundColor: isDark
+              ? scheme.onSurfaceVariant.withValues(alpha: 0.38)
+              : HkColors.appTextSecondary,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(HkRadii.full),
           ),
@@ -377,7 +381,9 @@ class OwntendTheme {
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
           backgroundColor: scheme.surfaceContainerLowest,
           foregroundColor: scheme.primary,
-          disabledForegroundColor: HkColors.appTextTertiary,
+          disabledForegroundColor: isDark
+              ? scheme.onSurfaceVariant.withValues(alpha: 0.38)
+              : HkColors.appTextTertiary,
           side: BorderSide(color: scheme.primary),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(HkRadii.full),
@@ -435,10 +441,10 @@ class OwntendTheme {
       ),
       dividerTheme: DividerThemeData(color: scheme.outlineVariant),
       listTileTheme: ListTileThemeData(
-        dense: true,
-        minLeadingWidth: 30,
+        dense: false,
+        minLeadingWidth: 32,
         horizontalTitleGap: 8,
-        minVerticalPadding: 4,
+        minVerticalPadding: 8,
         contentPadding: EdgeInsets.zero,
         iconColor: scheme.onSurfaceVariant,
         titleTextStyle: textTheme.titleSmall,
@@ -472,7 +478,7 @@ class OwntendTheme {
         ),
       ),
       switchTheme: SwitchThemeData(
-        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        materialTapTargetSize: MaterialTapTargetSize.padded,
         thumbColor: WidgetStateProperty.resolveWith(
           (states) => states.contains(WidgetState.selected)
               ? scheme.onPrimary

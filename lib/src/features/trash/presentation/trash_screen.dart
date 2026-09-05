@@ -365,8 +365,8 @@ class _TrashRow extends StatelessWidget {
         leading: Icon(icon),
         title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
         subtitle: Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis),
-        trailing: Wrap(
-          spacing: 2,
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
             IconButton(
               tooltip: context.l10n.restore,

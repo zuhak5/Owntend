@@ -43,12 +43,16 @@ class StatusPill extends StatelessWidget {
             child: contentType == null
                 ? Text(
                     label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.labelMedium
                         ?.copyWith(color: color, fontWeight: FontWeight.w700),
                   )
                 : DynamicText(
                     label,
                     contentType: contentType!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.labelMedium
                         ?.copyWith(color: color, fontWeight: FontWeight.w700),
                   ),
@@ -96,9 +100,9 @@ Color itemDueAccentColor(BuildContext context, ItemDueStatus status) {
 Color _itemDueColor(BuildContext context, ItemDueStatus status) {
   final scheme = Theme.of(context).colorScheme;
   return switch (status) {
-    ItemDueStatus.overdue => HkColors.appDanger,
-    ItemDueStatus.dueToday => HkColors.appWarning,
-    ItemDueStatus.dueSoon => HkColors.appInfo,
+    ItemDueStatus.overdue => scheme.error,
+    ItemDueStatus.dueToday => scheme.tertiary,
+    ItemDueStatus.dueSoon => scheme.primary,
     ItemDueStatus.onTrack => scheme.primary,
     ItemDueStatus.noTasks => scheme.onSurfaceVariant,
   };
@@ -203,6 +207,7 @@ class _TaskCardState extends State<TaskCard>
     final margin = widget.margin;
     final scheme = Theme.of(context).colorScheme;
     final colors = _taskColors(
+      scheme,
       task.status,
       task.plan.priority,
       disabled: disabled,
@@ -352,13 +357,16 @@ class _TaskCardState extends State<TaskCard>
                             ),
                           if (showLocation) ...[
                             const _InlineSeparator(),
-                            DynamicText(
-                              locationText,
-                              contentType: 'task.location',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(color: scheme.onSurfaceVariant),
+                            ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 220),
+                              child: DynamicText(
+                                locationText,
+                                contentType: 'task.location',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(color: scheme.onSurfaceVariant),
+                              ),
                             ),
                           ],
                         ],
@@ -390,10 +398,9 @@ class _TaskCardState extends State<TaskCard>
                             scheme.onPrimary,
                             completionProgress,
                           ),
-                          minimumSize: Size.square(dense ? 36 : 38),
-                          fixedSize: Size.square(dense ? 36 : 38),
+                          minimumSize: const Size.square(48),
                           padding: EdgeInsets.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          tapTargetSize: MaterialTapTargetSize.padded,
                         ),
                         icon: Icon(
                           completionProgress > 0.52
@@ -412,8 +419,8 @@ class _TaskCardState extends State<TaskCard>
                         onArchive != null ||
                         onSetEnabled != null)
                       Container(
-                        width: dense ? 36 : 38,
-                        height: dense ? 36 : 38,
+                        width: 48,
+                        height: 48,
                         decoration: BoxDecoration(
                           color: scheme.surfaceContainerLow,
                           shape: BoxShape.circle,
@@ -487,7 +494,7 @@ class _TaskCardState extends State<TaskCard>
                   ],
                 )
               else if (showChevron)
-                Icon(
+                DirectionalIcon(
                   Symbols.chevron_right_rounded,
                   color: scheme.outlineVariant,
                   size: 20,

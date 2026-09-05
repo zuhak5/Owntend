@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../features/monetization/monetization.dart';
@@ -44,10 +46,18 @@ class _EditorModalHost extends StatelessWidget {
           Positioned(
             left: 0,
             right: 0,
+            top: mediaQuery.padding.top + 16,
             bottom: keyboardInset,
-            child: Center(
+            child: Align(
+              alignment: Alignment.bottomCenter,
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 640),
+                constraints: BoxConstraints(
+                  maxWidth: 640,
+                  maxHeight: math.max(
+                    160.0,
+                    totalHeight - keyboardInset - mediaQuery.padding.top - 32,
+                  ),
+                ),
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTap: () {},

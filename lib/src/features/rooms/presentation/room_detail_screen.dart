@@ -25,6 +25,10 @@ class RoomDetailScreen extends ConsumerWidget {
             icon: Symbols.meeting_room_rounded,
             title: context.l10n.roomNotFound,
             body: '',
+            action: FilledButton(
+              onPressed: () => Navigator.of(context).maybePop(),
+              child: Text(context.l10n.back),
+            ),
           ),
         ),
       );

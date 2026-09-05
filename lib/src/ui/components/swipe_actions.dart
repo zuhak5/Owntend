@@ -296,65 +296,69 @@ class _SwipeDeleteBackground extends StatelessWidget {
                 ),
               ),
             ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                AnimatedScale(
-                  scale: releaseReached ? 1.14 : 1,
-                  duration: const Duration(milliseconds: 140),
-                  curve: Curves.easeOutBack,
-                  child: AnimatedRotation(
-                    turns: releaseReached ? -0.04 : 0,
-                    duration: const Duration(milliseconds: 140),
-                    child: Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: foreground.withValues(alpha: 0.14),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: foreground.withValues(alpha: 0.20),
-                        ),
-                      ),
-                      child: Icon(icon, color: foreground, size: 20),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: HkSpacing.xs),
-                Flexible(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        action.label(context),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.end,
-                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: foreground,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                      AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 120),
-                        child: Text(
-                          instruction,
-                          key: ValueKey(instruction),
+            Align(
+              alignment: AlignmentDirectional.centerEnd,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          action.label(context),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           textAlign: TextAlign.end,
-                          style: Theme.of(context).textTheme.labelSmall
+                          style: Theme.of(context).textTheme.labelLarge
                               ?.copyWith(
-                                color: foreground.withValues(alpha: 0.82),
-                                fontWeight: FontWeight.w700,
+                                color: foreground,
+                                fontWeight: FontWeight.w900,
                               ),
                         ),
-                      ),
-                    ],
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 120),
+                          child: Text(
+                            instruction,
+                            key: ValueKey(instruction),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.end,
+                            style: Theme.of(context).textTheme.labelSmall
+                                ?.copyWith(
+                                  color: foreground.withValues(alpha: 0.82),
+                                  fontWeight: FontWeight.w700,
+                                ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                  const SizedBox(width: HkSpacing.xs),
+                  AnimatedScale(
+                    scale: releaseReached ? 1.14 : 1,
+                    duration: const Duration(milliseconds: 140),
+                    curve: Curves.easeOutBack,
+                    child: AnimatedRotation(
+                      turns: releaseReached ? -0.04 : 0,
+                      duration: const Duration(milliseconds: 140),
+                      child: Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: foreground.withValues(alpha: 0.14),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: foreground.withValues(alpha: 0.20),
+                          ),
+                        ),
+                        child: Icon(icon, color: foreground, size: 20),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),

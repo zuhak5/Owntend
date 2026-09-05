@@ -23,10 +23,7 @@ class $AreasTable extends Areas with TableInfo<$AreasTable, AreaRow> {
     'name',
     aliasedName,
     false,
-    additionalChecks: GeneratedColumn.checkTextLength(
-      minTextLength: 1,
-      maxTextLength: 120,
-    ),
+    additionalChecks: GeneratedColumn.checkTextLength(minTextLength: 1),
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
@@ -491,10 +488,7 @@ class $RoomsTable extends Rooms with TableInfo<$RoomsTable, RoomRow> {
     'name',
     aliasedName,
     false,
-    additionalChecks: GeneratedColumn.checkTextLength(
-      minTextLength: 1,
-      maxTextLength: 120,
-    ),
+    additionalChecks: GeneratedColumn.checkTextLength(minTextLength: 1),
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
@@ -520,7 +514,7 @@ class $RoomsTable extends Rooms with TableInfo<$RoomsTable, RoomRow> {
     'notes',
     aliasedName,
     true,
-    additionalChecks: GeneratedColumn.checkTextLength(maxTextLength: 4000),
+    additionalChecks: GeneratedColumn.checkTextLength(),
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );

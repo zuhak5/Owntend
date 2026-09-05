@@ -50,7 +50,10 @@ Future<void> showPointsWalletSheet(BuildContext context, WidgetRef ref) async {
                           ),
                         ),
                         Text(
-                          '${wallet?.balance ?? 0} / ${config.walletCap}',
+                          bidiIsolate(
+                            context,
+                            '${wallet?.balance ?? 0} / ${config.walletCap}',
+                          ),
                           style: Theme.of(context).textTheme.titleLarge
                               ?.copyWith(fontWeight: FontWeight.w800),
                         ),
@@ -122,6 +125,24 @@ Future<void> showPointsWalletSheet(BuildContext context, WidgetRef ref) async {
                           : FutureBuilder<List<Map<String, dynamic>>>(
                               future: transactions,
                               builder: (context, snapshot) {
+                                if (snapshot.hasError) {
+                                  return Center(
+                                    child: Text(
+                                      context
+                                          .l10n
+                                          .somethingWentWrongPleaseTryAgain,
+                                      textAlign: TextAlign.center,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium
+                                          ?.copyWith(
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .error,
+                                          ),
+                                    ),
+                                  );
+                                }
                                 if (!snapshot.hasData) {
                                   return const Center(
                                     child: CircularProgressIndicator(),

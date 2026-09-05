@@ -41,6 +41,8 @@ class OwntendProcessSplash extends StatefulWidget {
 class _OwntendProcessSplashState extends State<OwntendProcessSplash>
     with WidgetsBindingObserver {
   Locale _deviceLocale = WidgetsBinding.instance.platformDispatcher.locale;
+  Brightness _brightness =
+      WidgetsBinding.instance.platformDispatcher.platformBrightness;
 
   @override
   void initState() {
@@ -58,6 +60,13 @@ class _OwntendProcessSplashState extends State<OwntendProcessSplash>
   }
 
   @override
+  void didChangePlatformBrightness() {
+    final next = WidgetsBinding.instance.platformDispatcher.platformBrightness;
+    if (next == _brightness) return;
+    setState(() => _brightness = next);
+  }
+
+  @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
@@ -66,6 +75,10 @@ class _OwntendProcessSplashState extends State<OwntendProcessSplash>
   @override
   Widget build(BuildContext context) {
     final locale = _supportedSplashLocale(_deviceLocale);
+    final isDark = _brightness == Brightness.dark;
+    final background = isDark
+        ? const Color(0xFF0E1512)
+        : owntendSplashBackground;
     return MediaQuery.fromView(
       view: View.of(context),
       child: Directionality(
@@ -73,12 +86,12 @@ class _OwntendProcessSplashState extends State<OwntendProcessSplash>
         child: Theme(
           data: ThemeData(
             useMaterial3: true,
-            brightness: Brightness.light,
-            scaffoldBackgroundColor: owntendSplashBackground,
+            brightness: _brightness,
+            scaffoldBackgroundColor: background,
             colorScheme: ColorScheme.fromSeed(
               seedColor: const Color(0xFF159A3B),
-              brightness: Brightness.light,
-              surface: owntendSplashBackground,
+              brightness: _brightness,
+              surface: background,
             ),
           ),
           child: OwntendSplashOverlay(
@@ -362,14 +375,18 @@ class _OwntendAnimatedSplashScreenState
       (media.size.height * logoHeightFraction).clamp(minimumLogoSize, 430.0),
     );
     final horizontalPadding = (media.size.width * 0.075).clamp(16.0, 44.0);
+    final isDark = MediaQuery.platformBrightnessOf(context) == Brightness.dark;
+    final splashBg = isDark ? const Color(0xFF0D2118) : owntendSplashBackground;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: const SystemUiOverlayStyle(
+      value: SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
-        statusBarIconBrightness: Brightness.dark,
-        statusBarBrightness: Brightness.light,
-        systemNavigationBarColor: owntendSplashBackground,
-        systemNavigationBarIconBrightness: Brightness.dark,
+        statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+        statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
+        systemNavigationBarColor: splashBg,
+        systemNavigationBarIconBrightness: isDark
+            ? Brightness.light
+            : Brightness.dark,
       ),
       child: AbsorbPointer(
         absorbing: true,
@@ -379,7 +396,7 @@ class _OwntendAnimatedSplashScreenState
           textDirection: _splashTextDirection(widget.locale),
           child: ExcludeSemantics(
             child: Scaffold(
-              backgroundColor: owntendSplashBackground,
+              backgroundColor: splashBg,
               body: SafeArea(
                 child: AnimatedBuilder(
                   animation: Listenable.merge([_intro, _loop]),
@@ -391,6 +408,7 @@ class _OwntendAnimatedSplashScreenState
                           painter: _OwntendSplashBackgroundPainter(
                             loopValue: _loop.value,
                             introValue: _intro.value,
+                            isDark: isDark,
                           ),
                         ),
 
@@ -521,13 +539,13 @@ class _AnimatedSplashIcon extends StatelessWidget {
               ),
             ),
           ),
-          Positioned(
-            right: size * 0.15,
+          PositionedDirectional(
+            end: size * 0.15,
             top: size * 0.20,
             child: _Sparkle(size: size * 0.045),
           ),
-          Positioned(
-            left: size * 0.17,
+          PositionedDirectional(
+            start: size * 0.17,
             bottom: size * 0.24,
             child: _Sparkle(size: size * 0.035),
           ),
@@ -707,10 +725,12 @@ class _OwntendSplashBackgroundPainter extends CustomPainter {
   _OwntendSplashBackgroundPainter({
     required this.loopValue,
     required this.introValue,
+    this.isDark = false,
   });
 
   final double loopValue;
   final double introValue;
+  final bool isDark;
 
   static const Color _green = Color(0xFF159A3B);
   static const Color _yellowGreen = Color(0xFFCFEA79);
@@ -720,11 +740,27 @@ class _OwntendSplashBackgroundPainter extends CustomPainter {
     final rect = Offset.zero & size;
 
     final bg = Paint()
-      ..shader = const LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [owntendSplashBackground, Color(0xFFF4FAF5), Color(0xFFFFFFFF)],
-      ).createShader(rect);
+      ..shader =
+          (isDark
+                  ? const LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Color(0xFF0D2118),
+                        Color(0xFF0F261C),
+                        Color(0xFF0A1912),
+                      ],
+                    )
+                  : const LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        owntendSplashBackground,
+                        Color(0xFFF4FAF5),
+                        Color(0xFFFFFFFF),
+                      ],
+                    ))
+              .createShader(rect);
     canvas.drawRect(rect, bg);
 
     _drawGlow(

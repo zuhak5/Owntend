@@ -1302,6 +1302,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     return await showDialog<bool>(
           context: context,
           builder: (dialogContext) => AlertDialog(
+            scrollable: true,
+            actionsOverflowButtonSpacing: HkSpacing.xs,
             title: Text(title),
             content: Text(message),
             actions: [

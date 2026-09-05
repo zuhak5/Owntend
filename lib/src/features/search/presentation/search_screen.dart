@@ -174,7 +174,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      trailing: const Icon(Symbols.chevron_right_rounded),
+                      trailing: const hk_ui.DirectionalIcon(
+                        Symbols.chevron_right_rounded,
+                      ),
                       onTap: () => _openSearchResult(context, result),
                     ),
                   ),

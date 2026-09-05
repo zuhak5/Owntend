@@ -69,76 +69,73 @@ class _PointShortageDialogState extends ConsumerState<_PointShortageDialog> {
     final scheme = Theme.of(context).colorScheme;
     final balance = ref.watch(pointWalletProvider).value?.balance ?? 0;
     return AlertDialog(
+      scrollable: true,
       actionsOverflowButtonSpacing: HkSpacing.xs,
       icon: Icon(Symbols.stars_rounded, color: scheme.primary, size: 32),
       title: Text(context.l10n.needOnePoint),
       content: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 440),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Center(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: HkSpacing.sm,
-                    vertical: HkSpacing.space6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: scheme.primaryContainer,
-                    borderRadius: BorderRadius.circular(HkRadii.full),
-                  ),
-                  child: Text(
-                    context.l10n.pointsCount(balance),
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: scheme.onPrimaryContainer,
-                      fontWeight: FontWeight.w800,
-                    ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: HkSpacing.sm,
+                  vertical: HkSpacing.space6,
+                ),
+                decoration: BoxDecoration(
+                  color: scheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(HkRadii.full),
+                ),
+                child: Text(
+                  context.l10n.pointsCount(balance),
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: scheme.onPrimaryContainer,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
               ),
+            ),
+            const SizedBox(height: HkSpacing.sm),
+            Text(context.l10n.pointShortageDescription),
+            if (_status case final status?) ...[
               const SizedBox(height: HkSpacing.sm),
-              Text(context.l10n.pointShortageDescription),
-              if (_status case final status?) ...[
-                const SizedBox(height: HkSpacing.sm),
-                Semantics(
-                  liveRegion: true,
-                  child: Container(
-                    key: const ValueKey('point-shortage-status'),
-                    padding: const EdgeInsets.all(HkSpacing.xs),
-                    decoration: BoxDecoration(
-                      color: (_statusIsError ? scheme.error : scheme.primary)
-                          .withValues(alpha: 0.09),
-                      borderRadius: BorderRadius.circular(HkRadii.md),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (_loading)
-                          const SizedBox.square(
-                            dimension: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        else
-                          Icon(
-                            _statusIsError
-                                ? Symbols.info_rounded
-                                : Symbols.verified_rounded,
-                            size: 20,
-                            color: _statusIsError
-                                ? scheme.error
-                                : scheme.primary,
-                          ),
-                        const SizedBox(width: HkSpacing.xs),
-                        Expanded(child: Text(status)),
-                      ],
-                    ),
+              Semantics(
+                liveRegion: true,
+                child: Container(
+                  key: const ValueKey('point-shortage-status'),
+                  padding: const EdgeInsets.all(HkSpacing.xs),
+                  decoration: BoxDecoration(
+                    color: (_statusIsError ? scheme.error : scheme.primary)
+                        .withValues(alpha: 0.09),
+                    borderRadius: BorderRadius.circular(HkRadii.md),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (_loading)
+                        const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      else
+                        Icon(
+                          _statusIsError
+                              ? Symbols.info_rounded
+                              : Symbols.verified_rounded,
+                          size: 20,
+                          color: _statusIsError ? scheme.error : scheme.primary,
+                        ),
+                      const SizedBox(width: HkSpacing.xs),
+                      Expanded(child: Text(status)),
+                    ],
                   ),
                 ),
-              ],
+              ),
             ],
-          ),
+          ],
         ),
       ),
       actions: [
@@ -146,12 +143,19 @@ class _PointShortageDialogState extends ConsumerState<_PointShortageDialog> {
           onPressed: _loading ? null : () => Navigator.of(context).pop(),
           child: Text(context.l10n.keepEditing),
         ),
-        FilledButton.icon(
-          key: const ValueKey('point-shortage-watch-ad'),
-          onPressed: _loading || _verificationPending ? null : _tryReward,
-          icon: const Icon(Symbols.play_circle_rounded),
-          label: Text(context.l10n.earnAPoint),
-        ),
+        if (balance >= 1)
+          FilledButton(
+            key: const ValueKey('point-shortage-continue'),
+            onPressed: _loading ? null : () => Navigator.of(context).pop(),
+            child: Text(context.l10n.continueLabel),
+          )
+        else
+          FilledButton.icon(
+            key: const ValueKey('point-shortage-watch-ad'),
+            onPressed: _loading || _verificationPending ? null : _tryReward,
+            icon: const Icon(Symbols.play_circle_rounded),
+            label: Text(context.l10n.earnAPoint),
+          ),
       ],
     );
   }

@@ -34,7 +34,7 @@ class _WeatherCard extends StatelessWidget {
           end: Alignment.bottomRight,
           colors: [
             scheme.primaryContainer.withValues(alpha: 0.18),
-            HkColors.secondaryFixed.withValues(alpha: 0.78),
+            scheme.secondaryContainer.withValues(alpha: 0.45),
             scheme.surfaceContainerLowest,
           ],
           stops: const [0, 0.58, 1],
@@ -361,14 +361,14 @@ class _WeatherThemeButton extends StatelessWidget {
         button: true,
         label: message,
         child: SizedBox.square(
-          dimension: 44,
+          dimension: 48,
           child: IconButton(
             onPressed: onPressed,
             style: IconButton.styleFrom(
               backgroundColor: scheme.surfaceContainerLowest.withValues(
                 alpha: 0.86,
               ),
-              foregroundColor: daytime ? HkColors.appWarning : scheme.primary,
+              foregroundColor: daytime ? scheme.tertiary : scheme.primary,
               shape: const CircleBorder(),
               side: BorderSide(color: scheme.primary.withValues(alpha: 0.12)),
             ),
@@ -538,8 +538,10 @@ class _WeatherDetailText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isRtl = Directionality.of(context) == TextDirection.rtl;
+    final formattedValue = isRtl ? '\u2066$value\u2069' : value;
     return Text(
-      '$label $value',
+      '$label $formattedValue',
       maxLines: 1,
       softWrap: false,
       overflow: TextOverflow.visible,

@@ -250,13 +250,6 @@ class _InitialCloudHydrationOverlayState
                                         left: 4,
                                         right: 4,
                                         top: 0,
-                                        height: failed
-                                            ? compact
-                                                  ? 58
-                                                  : 72
-                                            : compact
-                                            ? 38
-                                            : 48,
                                         child: _HydrationTitle(
                                           failed: failed,
                                           stageLabel: _stageMessage,
@@ -273,13 +266,6 @@ class _InitialCloudHydrationOverlayState
                                             : compact
                                             ? 34
                                             : 46,
-                                        height: failed
-                                            ? compact
-                                                  ? 64
-                                                  : 78
-                                            : compact
-                                            ? 50
-                                            : 58,
                                         child: _HydrationSubtitle(
                                           failed: failed,
                                           message: failed
@@ -866,7 +852,7 @@ class _HydrationProgress extends StatelessWidget {
                   ),
                   SizedBox(width: (compact ? 7 : 9) * sizeScale),
                   Text(
-                    '$percentage%',
+                    bidiIsolate(context, '$percentage%'),
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       color: HkColors.appPrimary,
                       fontSize: (compact ? 20 : 24) * sizeScale,
@@ -991,6 +977,7 @@ class _HydrationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(radius),
@@ -1013,7 +1000,7 @@ class _HydrationCard extends StatelessWidget {
           filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: HkColors.appSurface.withValues(alpha: 0.88),
+              color: scheme.surface.withValues(alpha: 0.88),
               borderRadius: BorderRadius.circular(radius),
               border: Border.all(
                 color: HkColors.appBorder.withValues(alpha: 0.88),
@@ -1022,9 +1009,9 @@ class _HydrationCard extends StatelessWidget {
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  Colors.white.withValues(alpha: 0.98),
-                  Colors.white.withValues(alpha: 0.92),
-                  HkColors.appSurfaceMuted.withValues(alpha: 0.86),
+                  scheme.surface.withValues(alpha: 0.98),
+                  scheme.surface.withValues(alpha: 0.92),
+                  scheme.surfaceContainerLow.withValues(alpha: 0.86),
                 ],
                 stops: const [0, 0.48, 1],
               ),
@@ -1041,9 +1028,9 @@ class _HydrationCard extends StatelessWidget {
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [
-                          Colors.white.withValues(alpha: 0),
-                          Colors.white.withValues(alpha: 0.24),
-                          Colors.white.withValues(alpha: 0),
+                          scheme.surface.withValues(alpha: 0),
+                          scheme.surface.withValues(alpha: 0.24),
+                          scheme.surface.withValues(alpha: 0),
                         ],
                       ),
                     ),

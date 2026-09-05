@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:owntend/l10n/app_localizations_ext.dart';
 
+import '../../../ui/app_theme.dart';
 import '../../../ui/components.dart' as hk_ui;
 import '../monetization.dart';
 
@@ -38,6 +39,8 @@ Future<void> _showEarnPointsFlow(
   final confirmed = await showDialog<bool>(
     context: context,
     builder: (context) => AlertDialog(
+      scrollable: true,
+      actionsOverflowButtonSpacing: HkSpacing.xs,
       title: Text(context.l10n.earnOnePoint),
       content: Text(context.l10n.earnOnePointDescription),
       actions: [

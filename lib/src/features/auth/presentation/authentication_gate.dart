@@ -94,12 +94,11 @@ class _WelcomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return FullCanvasSystemUi(
       child: Theme(
-        data: OwntendTheme.light().copyWith(
-          splashFactory: Theme.of(context).splashFactory,
-        ),
+        data: Theme.of(context)
+            .copyWith(splashFactory: Theme.of(context).splashFactory),
         child: Builder(
           builder: (context) => Scaffold(
-            backgroundColor: HkColors.appBackground,
+            backgroundColor: Theme.of(context).colorScheme.surface,
             body: Stack(
               children: [
                 KeyedSubtree(
@@ -366,8 +365,8 @@ class _OnboardingHero extends StatelessWidget {
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-                    Positioned(
-                      right: compact ? 44 : 38,
+                    PositionedDirectional(
+                      end: compact ? 44 : 38,
                       top: compact ? -8 : -10,
                       child: const Icon(
                         Icons.auto_awesome_rounded,
@@ -430,154 +429,13 @@ class _OnboardingActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (MediaQuery.sizeOf(context).width.isFinite) {
-      return _ResponsiveOnboardingActions(
-        busy: busy,
-        error: error,
-        onGoogle: onGoogle,
-        compact: compact,
-        featureHeight: featureHeight,
-        privacyHeight: privacyHeight,
-      );
-    }
-    final scheme = Theme.of(context).colorScheme;
-    final benefits = [
-      _Benefit(
-        icon: Icons.devices_rounded,
-        title: context.l10n.anyDevice,
-        subtitle: context.l10n.accessYourTasksAndRoutinesAcrossAllYourDevices,
-      ),
-      _Benefit(
-        icon: Icons.autorenew_rounded,
-        title: context.l10n.smartRoutines,
-        subtitle: context.l10n.buildHabitsAndAutomateRoutinesThatKeepYouMoving,
-      ),
-      _Benefit(
-        icon: Icons.insights_rounded,
-        title: context.l10n.progressInsights,
-        subtitle: context.l10n.trackProgressStreaksAndGoalsToStayMotivated,
-      ),
-    ];
-    return Stack(
-      key: const ValueKey('onboarding-actions'),
-      clipBehavior: Clip.none,
-      children: [
-        Positioned(
-          left: 35,
-          top: 0,
-          width: 570,
-          height: 166,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 15),
-            decoration: BoxDecoration(
-              color: HkColors.appSurface.withValues(alpha: 0.94),
-              borderRadius: BorderRadius.circular(11),
-              border: Border.all(
-                color: HkColors.appBorder.withValues(alpha: 0.90),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: HkColors.appTextPrimary.withValues(alpha: 0.10),
-                  blurRadius: 18,
-                  offset: const Offset(0, 8),
-                ),
-              ],
-            ),
-            child: IntrinsicHeight(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(child: benefits[0]),
-                  _BenefitDivider(color: HkColors.appBorder),
-                  Expanded(child: benefits[1]),
-                  _BenefitDivider(color: HkColors.appBorder),
-                  Expanded(child: benefits[2]),
-                ],
-              ),
-            ),
-          ),
-        ),
-        Positioned(
-          left: 44,
-          top: 187,
-          width: 552,
-          height: 59,
-          child: _GoogleSignInButton(busy: busy, onPressed: onGoogle),
-        ),
-        Positioned(
-          left: 44,
-          top: 271,
-          width: 552,
-          height: 48,
-          child: Container(
-            key: const ValueKey('onboarding-privacy-footer'),
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            decoration: BoxDecoration(
-              color: HkColors.appSurface.withValues(alpha: 0.92),
-              borderRadius: BorderRadius.circular(13),
-              border: Border.all(
-                color: HkColors.appBorder.withValues(alpha: 0.92),
-              ),
-            ),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.shield_rounded,
-                  size: 28,
-                  color: HkColors.appPrimary,
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Text(
-                    context.l10n.yourDataStaysPrivateAndSecure,
-                    maxLines: 1,
-                    style: TextStyle(
-                      color: HkColors.appTextSecondary,
-                      fontSize: 12.3,
-                      height: 1.2,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-                const Icon(
-                  Icons.info_outline_rounded,
-                  color: HkColors.appPrimary,
-                  size: 24,
-                ),
-              ],
-            ),
-          ),
-        ),
-        if (error != null)
-          Positioned(
-            left: 45,
-            top: -50,
-            width: 550,
-            height: 44,
-            child: Semantics(
-              liveRegion: true,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: scheme.errorContainer,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Text(
-                  error!,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: scheme.onErrorContainer,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ),
-          ),
-      ],
+    return _ResponsiveOnboardingActions(
+      busy: busy,
+      error: error,
+      onGoogle: onGoogle,
+      compact: compact,
+      featureHeight: featureHeight,
+      privacyHeight: privacyHeight,
     );
   }
 }
@@ -752,8 +610,6 @@ class _GoogleSignInButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textScale = MediaQuery.textScalerOf(context).scale(10) / 10;
-    final typeCompensation = 1 / math.max(1, textScale * 0.8);
     return SizedBox(
       key: const ValueKey('continue-google-hit-target'),
       width: double.infinity,
@@ -814,9 +670,9 @@ class _GoogleSignInButton extends StatelessWidget {
                 context.l10n.continueWithGoogle,
                 maxLines: 1,
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: const Color(0xFF1F1F1F),
-                  fontSize: 15.5 * typeCompensation,
+                style: const TextStyle(
+                  color: Color(0xFF1F1F1F),
+                  fontSize: 15.5,
                   height: 1,
                   fontWeight: FontWeight.w700,
                 ),

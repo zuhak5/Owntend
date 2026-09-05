@@ -149,3 +149,20 @@ String durationLabel(BuildContext context, Duration duration) {
       ? context.l10n.durationDay(duration.inDays)
       : context.l10n.durationDays(duration.inDays);
 }
+
+/// Wraps formatted numerals, percentages, and coordinates with Unicode
+/// directional isolates (\u2066...\u2069) in RTL mode to prevent sign/digit inversion.
+String bidiIsolate(BuildContext context, String text) {
+  if (Directionality.maybeOf(context) == TextDirection.rtl) {
+    return '\u2066$text\u2069';
+  }
+  return text;
+}
+
+/// Computes high-contrast legible text color (white or dark charcoal)
+/// for dynamic background colors such as chart slices or custom badges.
+Color contrastTextColor(Color background) {
+  return ThemeData.estimateBrightnessForColor(background) == Brightness.dark
+      ? Colors.white
+      : const Color(0xFF10213A);
+}

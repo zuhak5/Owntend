@@ -14,6 +14,7 @@ class EditorSheetFrame extends StatelessWidget {
     required this.onSave,
     required this.child,
     this.saveEnabled = true,
+    this.isSaving = false,
     this.secondarySaveLabel,
     this.onSecondarySave,
     super.key,
@@ -22,6 +23,7 @@ class EditorSheetFrame extends StatelessWidget {
   final String title;
   final String saveLabel;
   final bool saveEnabled;
+  final bool isSaving;
   final VoidCallback onCancel;
   final VoidCallback onSave;
   final String? secondarySaveLabel;
@@ -63,7 +65,7 @@ class EditorSheetFrame extends StatelessWidget {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(
+              padding: const EdgeInsetsDirectional.fromSTEB(
                 HkSpacing.md,
                 HkSpacing.xs,
                 HkSpacing.xs,
@@ -74,6 +76,8 @@ class EditorSheetFrame extends StatelessWidget {
                   Expanded(
                     child: Text(
                       title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.titleLarge
                           ?.copyWith(fontWeight: FontWeight.w900),
                     ),
@@ -116,14 +120,23 @@ class EditorSheetFrame extends StatelessWidget {
                     if (secondarySaveLabel != null &&
                         onSecondarySave != null) ...[
                       OutlinedButton(
-                        onPressed: saveEnabled ? onSecondarySave : null,
+                        onPressed: saveEnabled && !isSaving
+                            ? onSecondarySave
+                            : null,
                         child: Text(secondarySaveLabel!),
                       ),
                       const SizedBox(height: HkSpacing.xs),
                     ],
                     FilledButton(
-                      onPressed: saveEnabled ? onSave : null,
-                      child: Text(saveLabel),
+                      onPressed: saveEnabled && !isSaving ? onSave : null,
+                      child: isSaving
+                          ? const SizedBox.square(
+                              dimension: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.2,
+                              ),
+                            )
+                          : Text(saveLabel),
                     ),
                   ],
                 ),

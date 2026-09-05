@@ -271,7 +271,7 @@ class _NotificationSummaryCard extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final dot = String.fromCharCode(0x2022);
     return hk_ui.PremiumCard(
-      padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
+      padding: const EdgeInsetsDirectional.fromSTEB(16, 14, 14, 14),
       borderRadius: 26,
       backgroundColor: Color.alphaBlend(
         scheme.primary.withValues(alpha: 0.035),
@@ -615,8 +615,11 @@ class _NotificationFilterButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final showBadge = badgeCount != null && badgeCount! > 0;
-    final foreground = selected ? scheme.onPrimary : HkColors.appPrimaryDark;
+    final foreground = selected
+        ? scheme.onPrimary
+        : (isDark ? scheme.onSurface : HkColors.appPrimaryDark);
     final semanticLabel = showBadge
         ? context.l10n.filterUnreadCount(label, badgeCount!)
         : label;
@@ -890,43 +893,48 @@ class NotificationCard extends StatelessWidget {
                           minWidth: 176,
                           maxWidth: 220,
                         ),
-                        child: SizedBox(
-                          key: const ValueKey('inbox-complete-action'),
-                          height: 48,
+                        child: Semantics(
+                          button: true,
+                          label: context.l10n.completeAction,
                           child: Material(
+                            key: const ValueKey('inbox-complete-action'),
                             color: Colors.transparent,
                             child: InkWell(
+                              borderRadius: BorderRadius.circular(12),
                               onTap: onComplete,
-                              borderRadius: BorderRadius.circular(14),
-                              child: Center(
-                                child: Container(
-                                  height: 40,
-                                  alignment: Alignment.center,
-                                  decoration: BoxDecoration(
-                                    color: scheme.secondaryContainer,
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        Symbols.check_rounded,
-                                        size: 17,
-                                        color: scheme.onSecondaryContainer,
-                                      ),
-                                      const SizedBox(width: 7),
-                                      Text(
-                                        context.l10n.completeAction,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .labelLarge
-                                            ?.copyWith(
-                                              color:
-                                                  scheme.onSecondaryContainer,
-                                              fontWeight: FontWeight.w800,
-                                            ),
-                                      ),
-                                    ],
+                              child: SizedBox(
+                                height: 48,
+                                child: Center(
+                                  child: Container(
+                                    height: 40,
+                                    alignment: Alignment.center,
+                                    decoration: BoxDecoration(
+                                      color: scheme.secondaryContainer,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Icon(
+                                          Symbols.check_rounded,
+                                          size: 17,
+                                          color: scheme.onSecondaryContainer,
+                                        ),
+                                        const SizedBox(width: 7),
+                                        Text(
+                                          context.l10n.completeAction,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .labelLarge
+                                              ?.copyWith(
+                                                color:
+                                                    scheme.onSecondaryContainer,
+                                                fontWeight: FontWeight.w800,
+                                              ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ),
                               ),

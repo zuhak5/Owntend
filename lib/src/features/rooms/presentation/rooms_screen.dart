@@ -10,6 +10,19 @@ class RoomsScreen extends ConsumerStatefulWidget {
 class _RoomsScreenState extends ConsumerState<RoomsScreen> {
   String? _selectedAreaId;
   String _roomQuery = '';
+  late final TextEditingController _searchController;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -174,8 +187,19 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen> {
                     if (visibleRooms.length > 6) ...[
                       const SizedBox(height: HkSpacing.sm),
                       TextField(
+                        controller: _searchController,
                         decoration: InputDecoration(
                           prefixIcon: const Icon(Symbols.search_rounded),
+                          suffixIcon: _roomQuery.isNotEmpty
+                              ? IconButton(
+                                  tooltip: context.l10n.clear,
+                                  icon: const Icon(Symbols.close_rounded),
+                                  onPressed: () {
+                                    _searchController.clear();
+                                    setState(() => _roomQuery = '');
+                                  },
+                                )
+                              : null,
                           labelText: selectedAreaModel.kind == AreaKind.outdoor
                               ? context.l10n.searchZones
                               : context.l10n.searchRooms,
@@ -408,21 +432,23 @@ class AreaSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
       key: const ValueKey('area-selector-row'),
-      children: [
-        for (var index = 0; index < areas.length; index++) ...[
-          Expanded(
-            child: AreaChip(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var index = 0; index < areas.length; index++) ...[
+            AreaChip(
               area: areas[index],
               selected: areas[index].id == selectedAreaId,
               roomCount: roomCountsByArea[areas[index].id] ?? 0,
               onTap: () => onSelected(areas[index].id),
             ),
-          ),
-          if (index != areas.length - 1) const SizedBox(width: HkSpacing.xs),
+            if (index != areas.length - 1) const SizedBox(width: HkSpacing.xs),
+          ],
         ],
-      ],
+      ),
     );
   }
 }
@@ -458,7 +484,7 @@ class AreaChip extends StatelessWidget {
         onTap: onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
-          height: 44,
+          constraints: const BoxConstraints(minHeight: 48),
           padding: const EdgeInsets.symmetric(
             horizontal: HkSpacing.xs,
             vertical: HkSpacing.base,
@@ -478,6 +504,7 @@ class AreaChip extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Row(
+                mainAxisSize: MainAxisSize.min,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(
@@ -486,22 +513,14 @@ class AreaChip extends StatelessWidget {
                     size: 15,
                   ),
                   const SizedBox(width: 3),
-                  Flexible(
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: DynamicText(
-                        area.name,
-                        contentType: 'area.name',
-                        maxLines: 1,
-                        softWrap: false,
-                        style: Theme.of(context).textTheme.labelMedium
-                            ?.copyWith(
-                              color: foreground,
-                              fontWeight: selected
-                                  ? FontWeight.w800
-                                  : FontWeight.w700,
-                            ),
-                      ),
+                  DynamicText(
+                    area.name,
+                    contentType: 'area.name',
+                    maxLines: 1,
+                    softWrap: false,
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: foreground,
+                      fontWeight: selected ? FontWeight.w800 : FontWeight.w700,
                     ),
                   ),
                 ],
@@ -734,8 +753,8 @@ class RoomCard extends StatelessWidget {
               ),
               const SizedBox(width: HkSpacing.space4),
               SizedBox(
-                width: 44,
-                height: 44,
+                width: 48,
+                height: 48,
                 child: PopupMenuButton<String>(
                   useRootNavigator: true,
                   tooltip: context.l10n.roomActions,

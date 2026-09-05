@@ -273,15 +273,18 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
     if (!mounted) return;
     final choice = await showDialog<RestoreCloudDisposition>(
       context: context,
-      builder: (context) => AlertDialog(
-        icon: const _BackupIconBadge(
-          icon: Symbols.restore_rounded,
-          color: HkColors.green,
-          size: 58,
-        ),
-        title: Text(context.l10n.restoreThisBackup),
-        content: SingleChildScrollView(
-          child: Column(
+      builder: (context) {
+        final scheme = Theme.of(context).colorScheme;
+        return AlertDialog(
+          scrollable: true,
+          actionsOverflowButtonSpacing: HkSpacing.xs,
+          icon: _BackupIconBadge(
+            icon: Symbols.restore_rounded,
+            color: scheme.primary,
+            size: 58,
+          ),
+          title: Text(context.l10n.restoreThisBackup),
+          content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -300,37 +303,37 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
                 const SizedBox(height: HkSpacing.sm),
                 _BackupDialogNotice(
                   icon: Symbols.cloud_sync_rounded,
-                  color: HkColors.green,
+                  color: scheme.primary,
                   text: context.l10n.cloudRestoreSafetyNotice,
                 ),
               ],
             ],
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text(context.l10n.cancel),
-          ),
-          if (syncStatus.enabled)
+          actions: [
             TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(context.l10n.cancel),
+            ),
+            if (syncStatus.enabled)
+              TextButton(
+                onPressed: () =>
+                    Navigator.of(context)
+                        .pop(RestoreCloudDisposition.updateCloud),
+                child: Text(context.l10n.restoreAndUpdateCloudBackup),
+              ),
+            FilledButton(
               onPressed: () =>
                   Navigator.of(context)
-                      .pop(RestoreCloudDisposition.updateCloud),
-              child: Text(context.l10n.restoreAndUpdateCloudBackup),
+                      .pop(RestoreCloudDisposition.localOnlyPaused),
+              child: Text(
+                syncStatus.enabled
+                    ? context.l10n.restoreLocallyAndPauseCloudBackup
+                    : context.l10n.restoreBackup,
+              ),
             ),
-          FilledButton(
-            onPressed: () =>
-                Navigator.of(context)
-                    .pop(RestoreCloudDisposition.localOnlyPaused),
-            child: Text(
-              syncStatus.enabled
-                  ? context.l10n.restoreLocallyAndPauseCloudBackup
-                  : context.l10n.restoreBackup,
-            ),
-          ),
-        ],
-      ),
+          ],
+        );
+      },
     );
     if (choice == null) {
       if (mounted) {
@@ -515,35 +518,44 @@ class _ExportPassphraseDialogState extends State<_ExportPassphraseDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
+      scrollable: true,
+      actionsOverflowButtonSpacing: HkSpacing.xs,
       title: Text(context.l10n.backupPassphraseDialogTitle),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            TextField(
-              controller: _passphraseController,
-              obscureText: true,
-              autofillHints: const [AutofillHints.newPassword],
-              decoration: InputDecoration(
-                labelText: context.l10n.backupPassphraseLabel,
-                helperText: context.l10n.backupPassphraseHelp,
-              ),
-              onChanged: (_) => setState(() {}),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextField(
+            controller: _passphraseController,
+            obscureText: true,
+            autofillHints: const [AutofillHints.newPassword],
+            textInputAction: TextInputAction.next,
+            decoration: InputDecoration(
+              labelText: context.l10n.backupPassphraseLabel,
+              helperText: context.l10n.backupPassphraseHelp,
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _confirmController,
-              obscureText: true,
-              autofillHints: const [AutofillHints.newPassword],
-              decoration: InputDecoration(
-                labelText: context.l10n.backupPassphraseConfirmLabel,
-                errorText: _validationError(),
-              ),
-              onChanged: (_) => setState(() {}),
+            onChanged: (_) => setState(() {}),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _confirmController,
+            obscureText: true,
+            autofillHints: const [AutofillHints.newPassword],
+            textInputAction: TextInputAction.done,
+            decoration: InputDecoration(
+              labelText: context.l10n.backupPassphraseConfirmLabel,
+              errorText: _validationError(),
             ),
-          ],
-        ),
+            onChanged: (_) => setState(() {}),
+            onSubmitted: (_) {
+              if (_validationError() != null) {
+                setState(() {});
+                return;
+              }
+              Navigator.of(context).pop(_passphraseController.text);
+            },
+          ),
+        ],
       ),
       actions: [
         TextButton(
@@ -588,12 +600,15 @@ class _RestorePassphraseDialogState extends State<_RestorePassphraseDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
+      scrollable: true,
+      actionsOverflowButtonSpacing: HkSpacing.xs,
       title: Text(context.l10n.backupEnterPassphraseTitle),
       content: TextField(
         controller: _controller,
         autofocus: true,
         obscureText: true,
         autofillHints: const [AutofillHints.password],
+        textInputAction: TextInputAction.done,
         onSubmitted: (_) => _submit(),
         decoration: InputDecoration(
           labelText: context.l10n.backupPassphraseLabel,

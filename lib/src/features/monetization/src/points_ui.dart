@@ -18,7 +18,7 @@ class HkPointsPill extends ConsumerWidget {
 
     // Spec Component C: independent squircle tile (border-radius: 16px).
     // The solid filled star is enclosed in a circular tinted container.
-    final height = compact ? 40.0 : 44.0;
+    final height = 48.0;
     final starCircleSize = compact ? 28.0 : 32.0;
     final innerGap = compact ? 6.0 : HkSpacing.space6;
     final hPadStart = compact ? 6.0 : HkSpacing.xs;
@@ -46,9 +46,9 @@ class HkPointsPill extends ConsumerWidget {
                 borderRadius: BorderRadius.circular(HkRadii.lg),
                 boxShadow: [
                   BoxShadow(
-                    color: HkColors.appTextPrimary.withValues(alpha: 0.06),
+                    color: scheme.shadow.withValues(alpha: 0.06),
                     blurRadius: 14,
-                    offset: const Offset(0, 6),
+                    offset: const Offset(0, 4),
                   ),
                 ],
               ),

@@ -36,46 +36,50 @@ Future<void> snoozeTaskWithFeedback(
       useRootNavigator: true,
       useSafeArea: true,
       showDragHandle: true,
+      isScrollControlled: true,
       builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Symbols.snooze_rounded),
-              title: Text(context.l10n.snoozeTask(task.plan.title)),
-              subtitle: Text(context.l10n.snoozeReminderDescription),
-            ),
-            ListTile(
-              leading: const Icon(Symbols.timer_rounded),
-              title: Text(context.l10n.message30Minutes),
-              onTap: () =>
-                  Navigator.of(context).pop(_SnoozePreset.thirtyMinutes),
-            ),
-            ListTile(
-              leading: const Icon(Symbols.schedule_rounded),
-              title: Text(context.l10n.message1Hour),
-              onTap: () => Navigator.of(context).pop(_SnoozePreset.oneHour),
-            ),
-            ListTile(
-              leading: const Icon(Symbols.more_time_rounded),
-              title: Text(context.l10n.message3Hours),
-              onTap: () => Navigator.of(context).pop(_SnoozePreset.threeHours),
-            ),
-            ListTile(
-              leading: const Icon(Symbols.today_rounded),
-              title: Text(
-                context.l10n.tomorrowAtTime(
-                  hourLabel(context, preferences.reminderHour),
-                ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Symbols.snooze_rounded),
+                title: Text(context.l10n.snoozeTask(task.plan.title)),
+                subtitle: Text(context.l10n.snoozeReminderDescription),
               ),
-              onTap: () => Navigator.of(context).pop(_SnoozePreset.tomorrow),
-            ),
-            ListTile(
-              leading: const Icon(Symbols.edit_calendar_rounded),
-              title: Text(context.l10n.customDateAndTime),
-              onTap: () => Navigator.of(context).pop(_SnoozePreset.custom),
-            ),
-          ],
+              ListTile(
+                leading: const Icon(Symbols.timer_rounded),
+                title: Text(context.l10n.message30Minutes),
+                onTap: () =>
+                    Navigator.of(context).pop(_SnoozePreset.thirtyMinutes),
+              ),
+              ListTile(
+                leading: const Icon(Symbols.schedule_rounded),
+                title: Text(context.l10n.message1Hour),
+                onTap: () => Navigator.of(context).pop(_SnoozePreset.oneHour),
+              ),
+              ListTile(
+                leading: const Icon(Symbols.more_time_rounded),
+                title: Text(context.l10n.message3Hours),
+                onTap: () =>
+                    Navigator.of(context).pop(_SnoozePreset.threeHours),
+              ),
+              ListTile(
+                leading: const Icon(Symbols.today_rounded),
+                title: Text(
+                  context.l10n.tomorrowAtTime(
+                    hourLabel(context, preferences.reminderHour),
+                  ),
+                ),
+                onTap: () => Navigator.of(context).pop(_SnoozePreset.tomorrow),
+              ),
+              ListTile(
+                leading: const Icon(Symbols.edit_calendar_rounded),
+                title: Text(context.l10n.customDateAndTime),
+                onTap: () => Navigator.of(context).pop(_SnoozePreset.custom),
+              ),
+            ],
+          ),
         ),
       ),
     ),
@@ -249,6 +253,8 @@ Future<String?> _taskReasonDialog(
       () => showDialog<String?>(
         context: context,
         builder: (context) => AlertDialog(
+          scrollable: true,
+          actionsOverflowButtonSpacing: HkSpacing.xs,
           icon: Icon(icon),
           title: Text(title),
           content: Column(
@@ -639,14 +645,14 @@ class _TaskActionFeedbackStyle {
       ),
       TaskActionFeedbackType.completed => _TaskActionFeedbackStyle(
         icon: Symbols.check_circle_rounded,
-        accent: HkColors.green,
-        secondary: scheme.primary,
-        onAccent: Colors.white,
+        accent: scheme.primary,
+        secondary: scheme.primaryContainer,
+        onAccent: scheme.onPrimary,
       ),
       TaskActionFeedbackType.deleted => _TaskActionFeedbackStyle(
         icon: Symbols.delete_rounded,
         accent: scheme.error,
-        secondary: HkColors.appWarning,
+        secondary: scheme.errorContainer,
         onAccent: scheme.onError,
       ),
     };

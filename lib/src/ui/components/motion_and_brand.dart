@@ -319,14 +319,14 @@ class BrandMark extends StatelessWidget {
             size: size * 0.56,
             color: scheme.primary,
           ),
-          Positioned(
-            right: size * 0.17,
+          PositionedDirectional(
+            end: size * 0.17,
             top: size * 0.17,
             child: Container(
               width: size * 0.16,
               height: size * 0.16,
               decoration: BoxDecoration(
-                color: HkColors.tertiary,
+                color: scheme.tertiary,
                 shape: BoxShape.circle,
                 border: Border.all(
                   color: scheme.surfaceContainerLowest,

@@ -261,11 +261,11 @@ class _LanguageSelectorDropdownState extends State<LanguageSelectorDropdown> {
                   border: Border.all(
                     color: _isOpen
                         ? scheme.primary.withValues(alpha: 0.72)
-                        : HkColors.appBorder.withValues(alpha: 0.75),
+                        : scheme.outlineVariant.withValues(alpha: 0.75),
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: HkColors.appTextPrimary.withValues(alpha: 0.08),
+                      color: scheme.shadow.withValues(alpha: 0.08),
                       blurRadius: 8,
                       offset: const Offset(0, 3),
                     ),
