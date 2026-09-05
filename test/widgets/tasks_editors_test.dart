@@ -164,6 +164,69 @@ void main() {
       expect(repository.savedAreaNames, ['Keyboard area']);
       expect(find.text('Create area'), findsNothing);
     });
+
+    testWidgets(
+      'editor sheet dynamically adapts when keyboard appears and disappears',
+      (tester) async {
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(tester.view.resetViewInsets);
+        tester.view.physicalSize = const Size(390, 844);
+        tester.view.devicePixelRatio = 1;
+
+        final settings = FakeSettingsRepository(onboardingCompletedValue: true);
+        addTearDown(settings.close);
+        final repository = StartupAssetRepository(
+          assets: const [],
+          rooms: const [],
+        );
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: testOverrides(settings, assetRepository: repository),
+            child: MaterialApp(
+              theme: testLightTheme(),
+              home: Builder(
+                builder: (context) => Scaffold(
+                  body: TextButton(
+                    onPressed: () =>
+                        showRoomEditorSheet(context, areaId: 'area_test'),
+                    child: const Text('Open room editor'),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+
+        await tester.tap(find.text('Open room editor'));
+        await tester.pumpAndSettle();
+
+        // Initially keyboard is closed (viewInsets.bottom == 0)
+        final saveInitial = find.text('Create room');
+        expect(saveInitial, findsOneWidget);
+        final initialBottom = tester.getBottomLeft(saveInitial).dy;
+
+        // Simulate keyboard opening (340dp)
+        tester.view.viewInsets = const FakeViewPadding(bottom: 340);
+        await tester.pumpAndSettle();
+
+        final saveLifted = find.text('Create room');
+        expect(saveLifted, findsOneWidget);
+        final liftedBottom = tester.getBottomLeft(saveLifted).dy;
+        // The save button MUST have moved up above the keyboard
+        expect(liftedBottom, lessThan(844 - 340));
+        expect(liftedBottom, lessThan(initialBottom));
+
+        // Simulate keyboard dismissing
+        tester.view.viewInsets = FakeViewPadding.zero;
+        await tester.pumpAndSettle();
+
+        final saveRestored = find.text('Create room');
+        expect(saveRestored, findsOneWidget);
+        final restoredBottom = tester.getBottomLeft(saveRestored).dy;
+        expect(restoredBottom, closeTo(initialBottom, 2.0));
+      },
+    );
   });
 
   group('task card completion', () {

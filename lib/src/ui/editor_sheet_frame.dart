@@ -31,9 +31,14 @@ class EditorSheetFrame extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
-    final availableHeight = MediaQuery.sizeOf(context).height - keyboardInset;
-    final maxHeight = math.max(240.0, availableHeight * 0.92);
+    final mediaQuery = MediaQuery.of(context);
+    final keyboardInset = mediaQuery.viewInsets.bottom;
+    final topPadding = mediaQuery.padding.top;
+    final availableHeight = math.max(
+      160.0,
+      mediaQuery.size.height - keyboardInset - topPadding,
+    );
+    final maxHeight = math.max(160.0, availableHeight * 0.90);
     return Material(
       color: scheme.surface,
       borderRadius: const BorderRadius.vertical(
@@ -83,6 +88,8 @@ class EditorSheetFrame extends StatelessWidget {
             ),
             Flexible(
               child: SingleChildScrollView(
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
                 padding: const EdgeInsets.fromLTRB(
                   HkSpacing.md,
                   0,
@@ -94,6 +101,7 @@ class EditorSheetFrame extends StatelessWidget {
             ),
             SafeArea(
               top: false,
+              bottom: keyboardInset == 0,
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(
                   HkSpacing.md,

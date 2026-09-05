@@ -358,14 +358,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           ),
           PermissionEducationOverlayWrapper(
             targetLink: _weatherEducationLink,
-            onChooseLocationManually: () => runWithNativeAdsSuspended(
+            onChooseLocationManually: () => showEditorModal<HomeLocation>(
               context,
-              () => showModalBottomSheet<HomeLocation>(
-                context: context,
-                isScrollControlled: true,
-                backgroundColor: Colors.transparent,
-                builder: (_) => const LocationPickerSheet(),
-              ),
+              builder: (_) => const LocationPickerSheet(),
             ),
           ),
         ],

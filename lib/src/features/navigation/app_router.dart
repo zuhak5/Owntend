@@ -187,10 +187,8 @@ final routerProvider = Provider<GoRouter>((ref) {
                   placement: 'permission_setup',
                 ),
                 onChooseLocationManually: (context) =>
-                    showModalBottomSheet<HomeLocation>(
-                      context: context,
-                      isScrollControlled: true,
-                      backgroundColor: Colors.transparent,
+                    showEditorModal<HomeLocation>(
+                      context,
                       builder: (_) => const LocationPickerSheet(),
                     ),
               ),
