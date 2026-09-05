@@ -115,7 +115,7 @@ $$;
 ALTER FUNCTION "owntend_media_private"."claim_media_cleanup_batch"("p_batch_size" integer) OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "owntend_media_private"."delete_asset_photo_impl"("p_asset_id" "text", "p_photo_id" "text") RETURNS "jsonb"
+CREATE OR REPLACE FUNCTION "owntend_media_private"."delete_asset_photo_impl"("p_asset_id" "text" DEFAULT NULL, "p_photo_id" "text" DEFAULT NULL) RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -127,18 +127,30 @@ BEGIN
     RAISE EXCEPTION 'AUTH_REQUIRED' USING ERRCODE = '42501';
   END IF;
 
+  IF p_photo_id IS NULL THEN
+    RAISE EXCEPTION 'PHOTO_ID_REQUIRED' USING ERRCODE = '22023';
+  END IF;
+
   DELETE FROM public.asset_photos
-  WHERE user_id = v_user_id AND asset_id = p_asset_id AND id = p_photo_id
+  WHERE user_id = v_user_id
+    AND id = p_photo_id
+    AND (p_asset_id IS NULL OR asset_id = p_asset_id)
   RETURNING * INTO v_photo;
 
   IF NOT FOUND THEN
-    RETURN jsonb_build_object('success', true, 'idempotent', true, 'photo_id', p_photo_id);
+    RETURN jsonb_build_object(
+      'success', true,
+      'idempotent', true,
+      'photo_id', p_photo_id,
+      'asset_id', p_asset_id
+    );
   END IF;
 
   RETURN jsonb_build_object(
     'success', true,
     'idempotent', false,
     'photo_id', p_photo_id,
+    'asset_id', v_photo.asset_id,
     'object_path', v_photo.object_path
   );
 END;
@@ -3672,7 +3684,7 @@ $$;
 ALTER FUNCTION "public"."create_task_with_point_debit"("p_operation" "jsonb") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."delete_asset_photo"("p_asset_id" "text", "p_photo_id" "text") RETURNS "jsonb"
+CREATE OR REPLACE FUNCTION "public"."delete_asset_photo"("p_asset_id" "text" DEFAULT NULL, "p_photo_id" "text" DEFAULT NULL) RETURNS "jsonb"
     LANGUAGE "plpgsql"
     SET "search_path" TO ''
     AS $$

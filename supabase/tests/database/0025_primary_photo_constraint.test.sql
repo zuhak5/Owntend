@@ -4,7 +4,7 @@ create extension if not exists pgtap with schema extensions;
 set local role postgres;
 set search_path = public, extensions, pg_catalog;
 
-select extensions.plan(19);
+select extensions.plan(23);
 
 -- Setup test user
 insert into auth.users (id, email) values ('00000000-0000-0000-0000-00000000000a', 'usera@example.com');
@@ -177,5 +177,41 @@ select extensions.is(
   1,
   'exactly 1 primary photo exists for asset after multi-way switching'
 );
+
+-- 18. Delete photo 905 with explicit asset_id
+set local role authenticated;
+set local "request.jwt.claims" = '{"sub": "00000000-0000-0000-0000-00000000000a"}';
+
+select extensions.lives_ok(
+  $$ select public.delete_asset_photo('00000000-0000-0000-0000-000000000111', '00000000-0000-0000-0000-000000000905') $$,
+  'delete photo 905 with explicit asset_id succeeds'
+);
+
+-- 19. Delete photo 904 with omitted/NULL asset_id
+select extensions.lives_ok(
+  $$ select public.delete_asset_photo(p_photo_id := '00000000-0000-0000-0000-000000000904') $$,
+  'delete photo 904 with omitted asset_id succeeds'
+);
+
+set local role postgres;
+
+-- 20. Verify 3 photos remaining
+select extensions.is(
+  (select count(*)::int from public.asset_photos where asset_id = '00000000-0000-0000-0000-000000000111'),
+  3,
+  '3 photos remain after deleting 2 photos'
+);
+
+-- 21. Idempotent delete on photo 904
+set local role authenticated;
+set local "request.jwt.claims" = '{"sub": "00000000-0000-0000-0000-00000000000a"}';
+
+select extensions.is(
+  (select (public.delete_asset_photo(p_photo_id := '00000000-0000-0000-0000-000000000904') ->> 'idempotent')::boolean),
+  true,
+  'subsequent delete on already-deleted photo 904 is idempotent'
+);
+
+set local role postgres;
 
 rollback;

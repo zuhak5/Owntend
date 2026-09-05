@@ -51,6 +51,7 @@ void main() {
     await tester.pumpWidget(_testApp(store));
     await tester.pumpAndSettle();
 
+    expect(find.text('Needs attention'), findsOneWidget);
     expect(find.text('Changes needing attention'), findsOneWidget);
     expect(find.text('Updated item could not sync'), findsOneWidget);
     expect(find.text('asset-private-key'), findsNothing);
@@ -67,6 +68,7 @@ void main() {
             .getSingle();
     expect(row.state, 'pending');
     expect(row.attempts, 0);
+    expect(find.text('All in Sync'), findsOneWidget);
     expect(find.text('No sync issues need attention'), findsOneWidget);
   });
 

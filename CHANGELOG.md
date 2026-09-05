@@ -6,6 +6,7 @@ The current application version is defined only in `pubspec.yaml`. Released vers
 
 ## Unreleased
 
+- Resolved photo deletion synchronization failure where `record.values['asset_id']` evaluated to null during outbox processing (`TypeError: null is not a subtype of type 'String'`). Updated SQLite outbox delete triggers to preserve `OLD.asset_id` in the JSON payload, aligned `OutboxStore.readMutation` to extract `asset_id` from delete payloads, made `asset_id` optional in `SupabaseSyncGateway` and `delete_asset_photo` RPC, and corrected the Sync Health screen UI to accurately display "Needs attention" instead of "All in Sync" when failed mutations or conflicts require user intervention (`[SYNC-14]`, `[BUG-12]`).
 - Fixed intermittent HTTP 409 Conflict in `set_primary_asset_photo` RPC by adopting a two-phase state transition (demoting old primary photos before promoting the target photo), eliminating intra-statement uniqueness violations on `idx_asset_photos_single_primary` under non-deferrable PostgreSQL evaluation order (`[MEDIA-02]`, `[BUG-11]`).
 - Preserved offline task maintenance completions across Google account sign-in identity binding, selectively purging only un-authenticated entity mutations while retargeting completion operations to the bound account (`[SYNC-11]`, `[BUG-01]`).
 - Aligned maintenance outbox authority checks with the JSON payload schema by matching `operation_id` to `row.recordKey`, preventing generic mutation deduplication collisions during history sync (`[SYNC-12]`, `[BUG-02]`).

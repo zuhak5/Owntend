@@ -830,6 +830,10 @@ WHERE entity = 'profile'
         if (cleanupObjectPath != null) {
           values['cleanup_object_path'] = cleanupObjectPath;
         }
+        final assetId = _photoDeleteAssetId(mutation);
+        if (assetId != null) {
+          values['asset_id'] = assetId;
+        }
       }
       return SyncRecord(
         spec: spec,
@@ -891,6 +895,19 @@ WHERE entity = 'profile'
       if (decoded is! Map) return null;
       final path = decoded['cleanup_object_path'];
       return path is String && path.trim().isNotEmpty ? path : null;
+    } on Object {
+      return null;
+    }
+  }
+
+  String? _photoDeleteAssetId(LocalSyncMutation mutation) {
+    final payloadJson = mutation.payloadJson;
+    if (payloadJson == null || payloadJson.trim().isEmpty) return null;
+    try {
+      final decoded = jsonDecode(payloadJson);
+      if (decoded is! Map) return null;
+      final assetId = decoded['asset_id'];
+      return assetId is String && assetId.trim().isNotEmpty ? assetId : null;
     } on Object {
       return null;
     }

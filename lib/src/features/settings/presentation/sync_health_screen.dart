@@ -226,7 +226,11 @@ class _SyncHealthScreenState extends ConsumerState<SyncHealthScreen> {
             HkSpacing.bottomAction,
           ),
           children: [
-            _SyncStatusCard(status: status, busy: _busy),
+            _SyncStatusCard(
+              status: status,
+              busy: _busy,
+              hasIssues: snapshot.value?.needsAttention ?? false,
+            ),
             const SizedBox(height: HkSpacing.sm),
             snapshot.when(
               loading: () => const Center(
@@ -300,17 +304,23 @@ class _SyncHealthScreenState extends ConsumerState<SyncHealthScreen> {
 }
 
 class _SyncStatusCard extends StatelessWidget {
-  const _SyncStatusCard({required this.status, required this.busy});
+  const _SyncStatusCard({
+    required this.status,
+    required this.busy,
+    this.hasIssues = false,
+  });
 
   final SyncStatus? status;
   final bool busy;
+  final bool hasIssues;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final phase = status?.phase;
     final needsAttention =
-        phase == SyncPhase.blocked || phase == SyncPhase.error;
+        hasIssues || phase == SyncPhase.blocked || phase == SyncPhase.error;
+    final pendingCount = status?.pendingChanges ?? 0;
     return hk_ui.PremiumCard(
       padding: const EdgeInsets.all(HkSpacing.md),
       child: Row(
@@ -328,15 +338,20 @@ class _SyncStatusCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  _syncStatusTitle(context.l10n, status),
+                  _syncStatusTitle(context.l10n, status, hasIssues: hasIssues),
                   style: Theme.of(context).textTheme.titleMedium
                       ?.copyWith(fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: HkSpacing.space4),
                 Text(
-                  context.l10n.pendingSyncChanges(status?.pendingChanges ?? 0),
-                  style: Theme.of(context).textTheme.bodySmall
-                      ?.copyWith(color: scheme.onSurfaceVariant),
+                  hasIssues && pendingCount == 0
+                      ? context.l10n.reviewChangesThatNeedSyncAttention
+                      : context.l10n.pendingSyncChanges(pendingCount),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: needsAttention
+                        ? scheme.error
+                        : scheme.onSurfaceVariant,
+                  ),
                 ),
                 if (busy) ...[
                   const SizedBox(height: HkSpacing.sm),
@@ -530,7 +545,14 @@ class _SyncHealthMessageCard extends StatelessWidget {
   }
 }
 
-String _syncStatusTitle(AppLocalizations l10n, SyncStatus? status) {
+String _syncStatusTitle(
+  AppLocalizations l10n,
+  SyncStatus? status, {
+  bool hasIssues = false,
+}) {
+  if (hasIssues) {
+    return l10n.needsAttention;
+  }
   return switch (status?.phase) {
     SyncPhase.offline => l10n.waitingForInternet,
     SyncPhase.syncing || SyncPhase.initializing => l10n.backingUpChanges,

@@ -440,26 +440,29 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
       }
       if (record.spec.entity == 'asset_photo') {
         final photoId = record.values['id'] as String;
-        final assetId = record.values['asset_id'] as String;
         if (record.isDeleted) {
+          final assetId = record.values['asset_id'] as String?;
           final deleteRes = await _withDataTimeout(
             () => _client.rpc<Map<String, dynamic>>(
               'delete_asset_photo',
-              params: {'p_asset_id': assetId, 'p_photo_id': photoId},
+              params: {'p_asset_id': ?assetId, 'p_photo_id': photoId},
             ),
           );
           final deletedPath = deleteRes['object_path'] as String?;
+          final canonicalAssetId =
+              (deleteRes['asset_id'] as String?) ?? assetId ?? '';
           return _appliedDeleteResult(
             record: record,
             userId: userId,
             deletedValues: {
               'id': photoId,
-              'asset_id': assetId,
+              'asset_id': canonicalAssetId,
               'user_id': userId,
               'object_path': ?deletedPath,
             },
           );
         }
+        final assetId = record.values['asset_id'] as String;
         if (expectedRevision == null ||
             record.values['relative_path'] != null) {
           final localPath = record.values['relative_path'] as String?;

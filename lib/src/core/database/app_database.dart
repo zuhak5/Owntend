@@ -1064,8 +1064,8 @@ WHERE id = 1
   static const _assetPhotoDeletePayloadExpression = '''
 CASE
   WHEN OLD.cloud_object_path IS NOT NULL
-  THEN json_object('cleanup_object_path', OLD.cloud_object_path)
-  ELSE NULL
+  THEN json_object('asset_id', OLD.asset_id, 'cleanup_object_path', OLD.cloud_object_path)
+  ELSE json_object('asset_id', OLD.asset_id)
 END
 ''';
 
