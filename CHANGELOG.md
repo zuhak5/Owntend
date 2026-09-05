@@ -6,6 +6,10 @@ The current application version is defined only in `pubspec.yaml`. Released vers
 
 ## Unreleased
 
+- Resolved Android software keyboard occlusion issue (`[UI-02]`):
+  - Removed obsolete custom system UI fullscreen manipulation (`hideSystemBars()`, `SYSTEM_UI_FLAG_FULLSCREEN`, `BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE`) and orphaned `owntend/system_ui` channel from `MainActivity.kt`.
+  - Allowed native Android edge-to-edge window management with `windowSoftInputMode="adjustResize"` to function unimpeded across all Android versions (API 29+), ensuring the Android WindowManager resizes the Flutter window and passes correct IME keyboard insets to Flutter's `MediaQuery.viewInsets.bottom`.
+
 - Resolved 40 UI, accessibility, and localization issues across the application:
   - Enforced 48×48dp minimum accessible touch targets on switches (`SwitchThemeData.materialTapTargetSize`), `ListTile` items, `HkPointsPill`, `CompactActionGroup`, `WeatherThemeButton`, `TaskCard` action/menu buttons, `AreaChip`, and `RoomCard` popup menus.
   - Resolved dark theme contrast and palette issues: splash screen launch background and system navigation bar (`#0D2118`), dynamic `SystemUiOverlayStyle` in `StandardSystemUi` and `FullCanvasSystemUi`, theme-aware disabled button colors, unselected notification filter chip text (`scheme.onSurface`), unread notification badge border, dashboard metric tiles, and pie chart slice text contrast with dynamic luminance selection (`contrastTextColor`).
