@@ -14,18 +14,29 @@ class _LocationPickerSheetState extends ConsumerState<LocationPickerSheet> {
   Future<List<HomeLocation>>? _results;
 
   @override
+  void initState() {
+    super.initState();
+    _controller.addListener(_onTextChanged);
+  }
+
+  @override
   void dispose() {
+    _controller.removeListener(_onTextChanged);
     _controller.dispose();
     super.dispose();
   }
 
+  void _onTextChanged() => setState(() {});
+
   @override
   Widget build(BuildContext context) {
+    final query = _controller.text.trim();
     return EditorSheetFrame(
       title: context.l10n.homeLocation,
-      saveLabel: context.l10n.close,
+      saveLabel: context.l10n.search,
+      saveEnabled: query.isNotEmpty,
       onCancel: () => Navigator.of(context).pop(),
-      onSave: () => Navigator.of(context).pop(),
+      onSave: () => _search(_controller.text),
       child: Column(
         children: [
           TextField(
@@ -37,15 +48,6 @@ class _LocationPickerSheetState extends ConsumerState<LocationPickerSheet> {
               labelText: context.l10n.cityOrZip,
             ),
             onSubmitted: _search,
-          ),
-          const SizedBox(height: HkSpacing.sm),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: () => _search(_controller.text),
-              icon: const Icon(Symbols.search_rounded),
-              label: Text(context.l10n.search),
-            ),
           ),
           const SizedBox(height: HkSpacing.md),
           FutureBuilder<List<HomeLocation>>(

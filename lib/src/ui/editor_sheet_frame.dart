@@ -40,7 +40,10 @@ class EditorSheetFrame extends StatelessWidget {
       160.0,
       mediaQuery.size.height - keyboardInset - topPadding,
     );
-    final maxHeight = math.max(160.0, availableHeight * 0.90);
+    final maxHeight = math.max(
+      160.0,
+      keyboardInset > 0 ? availableHeight : availableHeight * 0.90,
+    );
     return Material(
       color: scheme.surface,
       borderRadius: const BorderRadius.vertical(
@@ -107,11 +110,11 @@ class EditorSheetFrame extends StatelessWidget {
               top: false,
               bottom: keyboardInset == 0,
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(
+                padding: EdgeInsets.fromLTRB(
                   HkSpacing.md,
                   HkSpacing.xs,
                   HkSpacing.md,
-                  HkSpacing.md,
+                  keyboardInset > 0 ? HkSpacing.sm : HkSpacing.md,
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,

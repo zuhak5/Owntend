@@ -93,16 +93,17 @@ class _HkNativeAdCardState extends ConsumerState<HkNativeAdCard> {
 
   @override
   Widget build(BuildContext context) {
+    final hasAd = _displayLease != null;
     return HkNativeAdSlotFrame(
-      collapsed: !_enabled || _failed,
+      collapsed: !_enabled || _failed || !hasAd,
       height: widget.variant.height,
       bottomSpacing: HkSpacing.sm,
-      child: _displayLease != null
+      child: hasAd
           ? ClipRRect(
               borderRadius: BorderRadius.circular(18),
               child: AdWidget(ad: _displayLease!.value),
             )
-          : HkNativeAdLoadingSkeleton(variant: widget.variant),
+          : const SizedBox.shrink(),
     );
   }
 

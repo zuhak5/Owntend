@@ -6,6 +6,13 @@ The current application version is defined only in `pubspec.yaml`. Released vers
 
 ## Unreleased
 
+- Resolved Android 10 (API 27–29) soft keyboard window inset suppression and editor bottom sheet ergonomics (`[UI-41]`):
+  - Fixed theme-level IME window inset suppression by disabling `android:windowFullscreen` (`false`) in `res/values-v27`, `res/values-v29`, and `res/values-night-v29` styles, allowing Android WindowManager to dispatch proper `adjustResize` insets to Flutter on Android 8.1–10.
+  - Improved `EditorSheetFrame` height constraints and keyboard clearance, utilizing full available height during active text input and reserving safe bottom margins above the keyboard suggestion bar.
+  - Unified `LocationPickerSheet` actions with the standard `EditorSheetFrame` footer button, eliminating duplicate internal search buttons.
+  - Suppressed redundant Floating Action Buttons on Home and Tasks screens when empty-state hero cards provide prominent primary CTAs, eliminating visual overlap and touch target collisions.
+  - Collapsed `HkNativeAdCard` slots to zero height when no ad lease is loaded, preventing empty gray skeleton placeholder cards from permanently occupying screen space.
+
 - Resolved Android software keyboard occlusion issue (`[UI-02]`):
   - Removed obsolete custom system UI fullscreen manipulation (`hideSystemBars()`, `SYSTEM_UI_FLAG_FULLSCREEN`, `BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE`) and orphaned `owntend/system_ui` channel from `MainActivity.kt`.
   - Allowed native Android edge-to-edge window management with `windowSoftInputMode="adjustResize"` to function unimpeded across all Android versions (API 29+), ensuring the Android WindowManager resizes the Flutter window and passes correct IME keyboard insets to Flutter's `MediaQuery.viewInsets.bottom`.
