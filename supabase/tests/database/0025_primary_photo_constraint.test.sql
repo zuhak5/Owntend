@@ -4,7 +4,7 @@ create extension if not exists pgtap with schema extensions;
 set local role postgres;
 set search_path = public, extensions, pg_catalog;
 
-select extensions.plan(7);
+select extensions.plan(19);
 
 -- Setup test user
 insert into auth.users (id, email) values ('00000000-0000-0000-0000-00000000000a', 'usera@example.com');
@@ -76,6 +76,106 @@ select extensions.is(
   (select count(*)::int from public.asset_photos where asset_id = '00000000-0000-0000-0000-000000000111' and is_primary = true),
   1,
   'exactly 1 primary photo exists for asset'
+);
+
+-- 7. Add 3 more photos (simulating 5-photo real user scenario)
+select extensions.lives_ok(
+  $$
+  insert into public.asset_photos (user_id, id, asset_id, object_path, is_primary, created_at, updated_at, revision)
+  values
+    ('00000000-0000-0000-0000-00000000000a', '00000000-0000-0000-0000-000000000903', '00000000-0000-0000-0000-000000000111', '00000000-0000-0000-0000-00000000000a/assets/00000000-0000-0000-0000-000000000111/00000000-0000-0000-0000-000000000903.jpg', false, NOW(), NOW(), 1),
+    ('00000000-0000-0000-0000-00000000000a', '00000000-0000-0000-0000-000000000904', '00000000-0000-0000-0000-000000000111', '00000000-0000-0000-0000-00000000000a/assets/00000000-0000-0000-0000-000000000111/00000000-0000-0000-0000-000000000904.jpg', false, NOW(), NOW(), 1),
+    ('00000000-0000-0000-0000-00000000000a', '00000000-0000-0000-0000-000000000905', '00000000-0000-0000-0000-000000000111', '00000000-0000-0000-0000-00000000000a/assets/00000000-0000-0000-0000-000000000111/00000000-0000-0000-0000-000000000905.jpg', false, NOW(), NOW(), 1);
+  $$,
+  'inserting 3 additional non-primary photos succeeds'
+);
+
+-- 8. Verify total photos count is 5
+select extensions.is(
+  (select count(*)::int from public.asset_photos where asset_id = '00000000-0000-0000-0000-000000000111'),
+  5,
+  'all 5 photo rows are present'
+);
+
+-- 9. Switch primary to photo 905
+set local role authenticated;
+set local "request.jwt.claims" = '{"sub": "00000000-0000-0000-0000-00000000000a"}';
+
+select extensions.lives_ok(
+  $$ select public.set_primary_asset_photo('00000000-0000-0000-0000-000000000111', '00000000-0000-0000-0000-000000000905') $$,
+  'switch primary to photo 905 succeeds without unique constraint violation'
+);
+
+set local role postgres;
+
+-- 10. Verify 905 is primary
+select extensions.is(
+  (select is_primary from public.asset_photos where id = '00000000-0000-0000-0000-000000000905'),
+  true,
+  'photo 905 is now primary'
+);
+
+-- 11. Verify exactly 1 primary exists
+select extensions.is(
+  (select count(*)::int from public.asset_photos where asset_id = '00000000-0000-0000-0000-000000000111' and is_primary = true),
+  1,
+  'exactly 1 primary photo exists after switching to 905'
+);
+
+-- 12. Switch primary to photo 903
+set local role authenticated;
+set local "request.jwt.claims" = '{"sub": "00000000-0000-0000-0000-00000000000a"}';
+
+select extensions.lives_ok(
+  $$ select public.set_primary_asset_photo('00000000-0000-0000-0000-000000000111', '00000000-0000-0000-0000-000000000903') $$,
+  'switch primary to photo 903 succeeds without unique constraint violation'
+);
+
+set local role postgres;
+
+-- 13. Verify 903 is primary and 905 is demoted
+select extensions.is(
+  (select is_primary from public.asset_photos where id = '00000000-0000-0000-0000-000000000903'),
+  true,
+  'photo 903 is now primary'
+);
+
+select extensions.is(
+  (select is_primary from public.asset_photos where id = '00000000-0000-0000-0000-000000000905'),
+  false,
+  'former primary photo 905 is now non-primary'
+);
+
+-- 14. Verify exactly 1 primary exists
+select extensions.is(
+  (select count(*)::int from public.asset_photos where asset_id = '00000000-0000-0000-0000-000000000111' and is_primary = true),
+  1,
+  'exactly 1 primary photo exists after switching to 903'
+);
+
+-- 15. Switch back to original photo 901
+set local role authenticated;
+set local "request.jwt.claims" = '{"sub": "00000000-0000-0000-0000-00000000000a"}';
+
+select extensions.lives_ok(
+  $$ select public.set_primary_asset_photo('00000000-0000-0000-0000-000000000111', '00000000-0000-0000-0000-000000000901') $$,
+  'switch back to original photo 901 succeeds'
+);
+
+set local role postgres;
+
+-- 16. Verify 901 is primary and 903 is demoted
+select extensions.is(
+  (select is_primary from public.asset_photos where id = '00000000-0000-0000-0000-000000000901'),
+  true,
+  'photo 901 is now primary'
+);
+
+-- 17. Verify exactly 1 primary photo exists for asset
+select extensions.is(
+  (select count(*)::int from public.asset_photos where asset_id = '00000000-0000-0000-0000-000000000111' and is_primary = true),
+  1,
+  'exactly 1 primary photo exists for asset after multi-way switching'
 );
 
 rollback;

@@ -6,6 +6,7 @@ The current application version is defined only in `pubspec.yaml`. Released vers
 
 ## Unreleased
 
+- Fixed intermittent HTTP 409 Conflict in `set_primary_asset_photo` RPC by adopting a two-phase state transition (demoting old primary photos before promoting the target photo), eliminating intra-statement uniqueness violations on `idx_asset_photos_single_primary` under non-deferrable PostgreSQL evaluation order (`[MEDIA-02]`, `[BUG-11]`).
 - Preserved offline task maintenance completions across Google account sign-in identity binding, selectively purging only un-authenticated entity mutations while retargeting completion operations to the bound account (`[SYNC-11]`, `[BUG-01]`).
 - Aligned maintenance outbox authority checks with the JSON payload schema by matching `operation_id` to `row.recordKey`, preventing generic mutation deduplication collisions during history sync (`[SYNC-12]`, `[BUG-02]`).
 - Guarded account deletion against transport loss and session invalidation race conditions by wrapping administrative deletion completion in retries and routing invalidated active sessions to durable deletion recovery (`[AUTH-06]`, `[BUG-03]`).

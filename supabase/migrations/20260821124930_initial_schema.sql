@@ -488,14 +488,27 @@ BEGIN
         RAISE EXCEPTION 'Target photo not found or unauthorized.' USING ERRCODE = 'P0002';
     END IF;
 
+    -- Step 1: Demote existing primary photo(s) to avoid unique constraint collision under idx_asset_photos_single_primary
     UPDATE public.asset_photos
     SET
-        is_primary = (id = p_photo_id),
+        is_primary = false,
         revision = revision + 1,
         updated_at = NOW()
     WHERE asset_id = p_asset_id
       AND user_id = v_user_id
-      AND (is_primary <> (id = p_photo_id));
+      AND is_primary = true
+      AND id <> p_photo_id;
+
+    -- Step 2: Promote candidate photo to primary
+    UPDATE public.asset_photos
+    SET
+        is_primary = true,
+        revision = revision + 1,
+        updated_at = NOW()
+    WHERE asset_id = p_asset_id
+      AND user_id = v_user_id
+      AND id = p_photo_id
+      AND is_primary = false;
 
     SELECT jsonb_agg(to_jsonb(p)) INTO v_updated_rows
     FROM public.asset_photos p
