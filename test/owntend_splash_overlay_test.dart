@@ -62,6 +62,7 @@ class _NavObserverSpy extends NavigatorObserver {
 void main() {
   setUp(() {
     _TestChildWidgetState.initStateCallCount = 0;
+    resetOwntendStartupNotifiers();
   });
 
   testWidgets('Test 1 — App child is built immediately', (tester) async {
@@ -259,4 +260,183 @@ void main() {
 
     expect(find.byType(OwntendAnimatedSplashScreen), findsNothing);
   });
+
+  testWidgets(
+    'Test 10 — Early dismissal via isReadyNotifier respects minDisplayDuration',
+    (tester) async {
+      final readyNotifier = ValueNotifier<bool>(false);
+      const minDisplay = Duration(milliseconds: 600);
+      const fadeOut = Duration(milliseconds: 250);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: OwntendSplashOverlay(
+            minDisplayDuration: minDisplay,
+            fadeOutDuration: fadeOut,
+            isReadyNotifier: readyNotifier,
+            child: const _TestChildWidget(),
+          ),
+        ),
+      );
+
+      expect(find.byType(OwntendAnimatedSplashScreen), findsOneWidget);
+
+      // Ready signaled early at 200ms
+      await tester.pump(const Duration(milliseconds: 200));
+      readyNotifier.value = true;
+      await tester.pump();
+
+      // At 400ms (elapsed 400ms < 600ms minDisplay), splash is still visible
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(find.byType(OwntendAnimatedSplashScreen), findsOneWidget);
+
+      // Advance past minDisplayDuration (600ms) + fadeOut (250ms)
+      await tester.pump(const Duration(milliseconds: 500) + fadeOut);
+      expect(find.byType(OwntendAnimatedSplashScreen), findsNothing);
+    },
+  );
+
+  testWidgets('Test 11 — Immediate dismissal when isFailed is true', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: OwntendSplashOverlay(isFailed: true, child: _TestChildWidget()),
+      ),
+    );
+
+    expect(find.byType(OwntendAnimatedSplashScreen), findsNothing);
+    expect(find.byType(_TestChildWidget), findsOneWidget);
+  });
+
+  testWidgets('Test 12 — Immediate dismissal when isFailedNotifier triggers', (
+    tester,
+  ) async {
+    final failedNotifier = ValueNotifier<bool>(false);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: OwntendSplashOverlay(
+          isFailedNotifier: failedNotifier,
+          child: const _TestChildWidget(),
+        ),
+      ),
+    );
+
+    expect(find.byType(OwntendAnimatedSplashScreen), findsOneWidget);
+
+    // Fatal failure occurs
+    failedNotifier.value = true;
+    await tester.pump();
+
+    // Splash dismissed immediately without waiting for timer or fade
+    expect(find.byType(OwntendAnimatedSplashScreen), findsNothing);
+    expect(find.byType(_TestChildWidget), findsOneWidget);
+  });
+
+  testWidgets(
+    'Test 13 — Reduced motion bypasses minDisplayDuration upon readiness',
+    (tester) async {
+      final readyNotifier = ValueNotifier<bool>(false);
+      const minDisplay = Duration(milliseconds: 600);
+      const fadeOut = Duration(milliseconds: 250);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: const MediaQueryData(disableAnimations: true),
+            child: OwntendSplashOverlay(
+              minDisplayDuration: minDisplay,
+              fadeOutDuration: fadeOut,
+              isReadyNotifier: readyNotifier,
+              child: const _TestChildWidget(),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.byType(OwntendAnimatedSplashScreen), findsOneWidget);
+
+      // Signaled at 100ms
+      await tester.pump(const Duration(milliseconds: 100));
+      readyNotifier.value = true;
+      await tester.pump();
+
+      // With disableAnimations, minDisplayDuration is Duration.zero, so fade out begins immediately.
+      // Advance fadeOut + buffer
+      await tester.pump(fadeOut + const Duration(milliseconds: 50));
+      expect(find.byType(OwntendAnimatedSplashScreen), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'Test 14 — Splash overlay updates listeners when notifiers change on rebuild',
+    (tester) async {
+      final notifier1 = ValueNotifier<bool>(false);
+      final notifier2 = ValueNotifier<bool>(false);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: OwntendSplashOverlay(
+            isReadyNotifier: notifier1,
+            child: const _TestChildWidget(),
+          ),
+        ),
+      );
+
+      expect(find.byType(OwntendAnimatedSplashScreen), findsOneWidget);
+
+      // Rebuild with new notifier
+      await tester.pumpWidget(
+        MaterialApp(
+          home: OwntendSplashOverlay(
+            isReadyNotifier: notifier2,
+            child: const _TestChildWidget(),
+          ),
+        ),
+      );
+
+      // Old notifier trigger should not cause dismissal
+      notifier1.value = true;
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.byType(OwntendAnimatedSplashScreen), findsOneWidget);
+
+      // New notifier trigger should trigger dismissal
+      notifier2.value = true;
+      await tester.pump();
+      await tester.pump(
+        const Duration(milliseconds: 650) +
+            owntendSplashFadeOutDuration +
+            const Duration(milliseconds: 50),
+      );
+      expect(find.byType(OwntendAnimatedSplashScreen), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'Test 15 — Splash overlay dismisses immediately if isFailed becomes true on update',
+    (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: OwntendSplashOverlay(
+            isFailed: false,
+            child: _TestChildWidget(),
+          ),
+        ),
+      );
+
+      expect(find.byType(OwntendAnimatedSplashScreen), findsOneWidget);
+
+      // Rebuild with isFailed: true
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: OwntendSplashOverlay(isFailed: true, child: _TestChildWidget()),
+        ),
+      );
+
+      // Immediately dismissed without fade delay
+      expect(find.byType(OwntendAnimatedSplashScreen), findsNothing);
+      expect(find.byType(_TestChildWidget), findsOneWidget);
+    },
+  );
 }

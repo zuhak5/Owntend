@@ -37,6 +37,29 @@ class _InitialCloudHydrationOverlayState
       vsync: this,
       duration: const Duration(seconds: 12),
     );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _failedStatus) {
+        // ignore: deprecated_member_use
+        SemanticsService.announce(failureMessage, Directionality.of(context));
+      }
+    });
+  }
+
+  @override
+  void didUpdateWidget(_InitialCloudHydrationOverlay oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final wasFailed =
+        oldWidget.status.phase == SyncPhase.error ||
+        oldWidget.status.phase == SyncPhase.offline ||
+        oldWidget.status.phase == SyncPhase.blocked;
+    if (!wasFailed && _failedStatus) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          // ignore: deprecated_member_use
+          SemanticsService.announce(failureMessage, Directionality.of(context));
+        }
+      });
+    }
   }
 
   @override
@@ -417,6 +440,7 @@ class _HydrationTitle extends StatelessWidget {
         ),
       );
     }
+    final isRtl = Directionality.of(context) == TextDirection.rtl;
     return Stack(
       alignment: Alignment.center,
       clipBehavior: Clip.none,
@@ -438,12 +462,21 @@ class _HydrationTitle extends StatelessWidget {
           end: 25 * sizeScale,
           top: -4 * sizeScale,
           child: Transform.rotate(
-            angle: -0.45,
-            child: Icon(
-              Symbols.trending_up_rounded,
-              color: HkColors.appPrimary,
-              size: 25 * sizeScale,
-            ),
+            angle: isRtl ? 0.45 : -0.45,
+            child: isRtl
+                ? Transform.flip(
+                    flipX: true,
+                    child: Icon(
+                      Symbols.trending_up_rounded,
+                      color: HkColors.appPrimary,
+                      size: 25 * sizeScale,
+                    ),
+                  )
+                : Icon(
+                    Symbols.trending_up_rounded,
+                    color: HkColors.appPrimary,
+                    size: 25 * sizeScale,
+                  ),
           ),
         ),
       ],
@@ -515,13 +548,22 @@ class _HydrationFailureActions extends StatelessWidget {
     final actions = <Widget>[
       FilledButton.icon(
         key: const ValueKey('restore-retry-button'),
-        onPressed: onRetry,
+        style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
+        onPressed: () {
+          // ignore: deprecated_member_use
+          SemanticsService.announce(
+            context.l10n.cloudRestorationInProgress,
+            Directionality.of(context),
+          );
+          onRetry();
+        },
         icon: Icon(Symbols.refresh_rounded, size: 20 * sizeScale),
         label: Text(context.l10n.retry),
       ),
       if (showConnectionCheck)
         OutlinedButton.icon(
           key: const ValueKey('restore-check-connection-button'),
+          style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48)),
           onPressed: onCheckConnection,
           icon: Icon(Symbols.wifi_rounded, size: 20 * sizeScale),
           label: Text(context.l10n.checkConnection),
@@ -529,11 +571,13 @@ class _HydrationFailureActions extends StatelessWidget {
       if (canContinueOffline && onContinueOffline != null)
         OutlinedButton(
           key: const ValueKey('restore-continue-offline-button'),
+          style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48)),
           onPressed: onContinueOffline,
           child: Text(context.l10n.continueOffline),
         ),
       OutlinedButton(
         key: const ValueKey('restore-sign-out-button'),
+        style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48)),
         onPressed: onSignOut,
         child: Text(context.l10n.signOut),
       ),
@@ -570,7 +614,7 @@ class _HydrationFailureActions extends StatelessWidget {
                   for (var index = 0; index < actions.length; index++) ...[
                     SizedBox(
                       width: double.infinity,
-                      height: 42,
+                      height: math.max(48.0, 48.0 * sizeScale),
                       child: actions[index],
                     ),
                     if (index != actions.length - 1)
@@ -831,6 +875,7 @@ class _HydrationProgress extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Semantics(
+      liveRegion: true,
       label: context.l10n.cloudRestorationInProgress,
       value: '$percentage percent, $label',
       child: _HydrationCard(

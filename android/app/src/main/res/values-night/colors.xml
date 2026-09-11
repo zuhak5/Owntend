@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <color name="splash_background">#0D2118</color>
     <color name="owntend_ad_surface">#0D2118</color>
     <color name="owntend_ad_border">#234034</color>
     <color name="owntend_ad_text_primary">#F4F8F5</color>

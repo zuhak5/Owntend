@@ -48,6 +48,15 @@ The coordinator exposes states equivalent to:
 
 Hydration and realtime readiness have their own lifecycle and must not be collapsed into a single boolean.
 
+### Initial hydration lifecycle & foreground service
+
+Initial hydration represents the initial synchronization of a newly bound cloud account before startup can publish ready:
+
+- **State progression**: Hydration progresses across stages (`connecting`, `restoringCloudData`, `restoringPhotos`, `syncingLocalChanges`, `checkingLatestUpdates`, `finalizing`).
+- **Liveness & failure visibility**: `InitialHydrationProgress.isActive` evaluates to `state != RestoreRunState.completed`, ensuring that both in-flight running and failed states are preserved in `SyncStatus.initialHydrationProgress` so user-facing overlays and retry affordances remain functional.
+- **Foreground execution boundary**: Android foreground restore service (`startRestoreForegroundService`) runs strictly during active running restores (`InitialHydrationProgress.isRunning`, i.e., `state == RestoreRunState.running`), and terminates immediately upon failure or completion to prevent background loop runaway.
+- **Unit plan reset on retry**: When rebuilding a hydration plan during retry (`setHydrationPlan(totalUnits, resetCompleted: true)`), completed units reset to 0 to prevent monotonic accumulation across interrupted sync attempts.
+
 ## Account binding
 
 Every synchronized local working set is associated with an authenticated account identity.

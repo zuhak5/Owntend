@@ -55,6 +55,8 @@ class InitialHydrationProgress {
   int get percentage => (fraction * 100).floor();
 
   bool get isActive => state != RestoreRunState.completed;
+
+  bool get isRunning => state == RestoreRunState.running;
 }
 
 class SyncStatus {
@@ -154,6 +156,7 @@ abstract interface class CloudSyncRepository {
   Future<void> retry();
   Future<void> fullReconcile();
   Future<void> syncNow();
+  Future<void> suspend();
 }
 
 class DisabledCloudSyncRepository implements CloudSyncRepository {
@@ -179,6 +182,9 @@ class DisabledCloudSyncRepository implements CloudSyncRepository {
 
   @override
   Future<void> syncNow() async {}
+
+  @override
+  Future<void> suspend() async {}
 
   @override
   Future<SyncStatus> status() async => const SyncStatus.disabled();

@@ -40,6 +40,7 @@ migrate_working_dir/
 /.tmp-*
 /artifacts/
 /release/
+/release-apk-*/
 /output/
 /dist/
 /.versiondeck-site/

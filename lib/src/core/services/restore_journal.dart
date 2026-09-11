@@ -22,20 +22,6 @@ const int kCurrentRestoreJournalVersion = 3;
 /// Canonical media roots restored as one generation.
 const List<String> kRestoreMediaRoots = ['photos', 'profile', 'cloud_media'];
 
-enum RestorePhase {
-  validated,
-  safetyBackupComplete,
-  servicesSuspended,
-  mediaStaged,
-  dbCommitStarted,
-  dbCommitComplete,
-  mediaActivated,
-  cloudIntentDurable,
-  derivedRebuilt,
-  cleanupPending,
-  terminal,
-}
-
 class RestoreJournalEntry {
   const RestoreJournalEntry({
     required this.version,

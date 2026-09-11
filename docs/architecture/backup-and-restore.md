@@ -10,6 +10,22 @@ provider layer (`app_providers.dart`) owns the single epoch publication;
 `databaseRestoreEpochProvider.bump()` no longer lives in the backup screen, so
 every completion path rebuilds dependent streams.
 
+Before reaching the database commit transaction, `OwntendBackupService` executes
+the restore barrier via `onBeforeRestoreBarrier`. In production, this callback
+suspends `CloudSyncRepository` (invalidating active sync epochs, stopping realtime,
+cancelling retry timers, and awaiting in-flight sync completions), cancels WorkManager
+background sync tasks, and clears scheduled notifications. This prevents race
+conditions between ongoing cloud operations, reminders, and the restore transaction.
+
+Restore progress is published in real-time through the `onProgress` callback
+accepting `RestorePhase` transitions (`validated`, `safetyBackupComplete`,
+`servicesSuspended`, `mediaStaged`, `dbCommitStarted`, `dbCommitComplete`,
+`mediaActivated`, `cloudIntentDurable`, `terminal`). Presentation surfaces
+contextual, localized status updates ("Creating safety backup...", "Restoring local data...",
+"Restoring media files...", "Finalizing restore..."), preventing apparent UI freezes
+during long-running restores. Navigation is locked via `PopScope(canPop: !_busy)`
+so users cannot accidentally pop or interrupt the screen while restore is in flight.
+
 Post-restore outbox requeue respects user decisions: `enqueueRestoreSnapshot`
 clears backoff only for retryable states (`pending`, `inFlight`,
 `conflictRecovery`); `failedVisible` and `conflict` rows are never resurrected.
@@ -128,6 +144,8 @@ Restore can introduce local state that differs from the cloud. The implementatio
 For the current signed-in restore path, ordinary synchronized entities are requeued through their normal contracts, but maintenance history is never emitted as direct table CRUD. `enqueueRestoreSnapshot` groups records by existing plan into deterministic batches of at most 100 and creates `maintenance_history_restore` execute intents. Each history entry carries its occurrence identity, acceptance instant, and IANA time-zone identity. Before sending, the client reads the canonical cloud plan revision and snapshot. The server inserts exact missing rows, accepts exact replay, retains unrelated cloud rows, and persists either `plan_snapshot_conflict` or `history_record_conflict` when data diverges. A record-ID, operation-ID, or plan/occurrence collision is a conflict; a conflicted batch commits no history rows and remains visible/durable across restart. Previously pending generic history mutations are converted when restore-derived; unsupported mutations become `server_authority_required` conflicts rather than being discarded.
 
 A `localOnlyPaused` restore clears account binding and synchronization runtime state while retaining the restored domain rows. Authenticated startup does not call generic sync enable while `migrationState == restorePaused` and `restorePending` is true. Generic `enable()` also rejects that state. Only `resumeRestoredSnapshotToCloud()` may leave it: the local store atomically binds the current account and journals the complete restored snapshot in one transaction, then initial hydration owns convergence and publishes the final active state.
+
+To provide clear user control over this state, both `BackupScreen` and `SyncHealthScreen` present dedicated resumption cards (`_ResumeCloudUploadCard` and `_SyncHealthResumeCloudCard`) when `syncStatus.restorePending` is true. Users can explicitly trigger cloud synchronization of the restored snapshot or continue using the restored state locally.
 
 This merge does not authenticate the historical truth of an imported archive. It only validates the current owner, plan match, bounded structure, timestamp precision, uniqueness, and exact replay. Product support must not describe restored history as independently verified.
 

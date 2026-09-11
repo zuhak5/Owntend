@@ -615,6 +615,7 @@ extension _SyncRunCoordinator on SyncCoordinator {
             cleanup +
             specs.length +
             pending,
+        resetCompleted: true,
       );
       await _localStore.addHydrationUnits(1);
     }

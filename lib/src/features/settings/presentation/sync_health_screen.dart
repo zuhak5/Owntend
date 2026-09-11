@@ -233,6 +233,18 @@ class _SyncHealthScreenState extends ConsumerState<SyncHealthScreen> {
               busy: _busy,
               hasIssues: snapshot.value?.needsAttention ?? false,
             ),
+            if (status != null && status.restorePending) ...[
+              const SizedBox(height: HkSpacing.sm),
+              _SyncHealthResumeCloudCard(
+                busy: _busy,
+                onResume: () => _runAction(
+                  () => ref
+                      .read(cloudSyncRepositoryProvider)
+                      .resumeRestoredSnapshotToCloud(),
+                  success: context.l10n.backupRestored,
+                ),
+              ),
+            ],
             const SizedBox(height: HkSpacing.sm),
             snapshot.when(
               loading: () => const Center(
@@ -300,6 +312,80 @@ class _SyncHealthScreenState extends ConsumerState<SyncHealthScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _SyncHealthResumeCloudCard extends StatelessWidget {
+  const _SyncHealthResumeCloudCard({
+    required this.busy,
+    required this.onResume,
+  });
+
+  final bool busy;
+  final VoidCallback onResume;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return hk_ui.PremiumCard(
+      padding: const EdgeInsets.all(HkSpacing.md),
+      borderRadius: HkRadii.xxl,
+      backgroundColor: scheme.primary.withValues(alpha: 0.05),
+      borderColor: scheme.primary.withValues(alpha: 0.22),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: scheme.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(HkRadii.md),
+                ),
+                child: Icon(
+                  Symbols.cloud_upload_rounded,
+                  color: scheme.primary,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: HkSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      context.l10n.resumeCloudUploadTitle,
+                      style: Theme.of(context).textTheme.titleSmall
+                          ?.copyWith(fontWeight: FontWeight.w800),
+                    ),
+                    const SizedBox(height: HkSpacing.space4),
+                    Text(
+                      context.l10n.resumeCloudUploadDescription,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: HkSpacing.md),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: busy ? null : onResume,
+              icon: const Icon(Symbols.cloud_upload_rounded),
+              label: Text(context.l10n.resumeCloudUploadAction),
+            ),
+          ),
+        ],
       ),
     );
   }

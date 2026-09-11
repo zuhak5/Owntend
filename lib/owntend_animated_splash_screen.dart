@@ -1,13 +1,36 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:owntend/l10n/app_localizations.dart';
 
 const Color owntendSplashBackground = Color(0xFFF9FCF8);
+
+/// Dark-mode background for all splash and pre-ready surfaces.
+///
+/// Matches the Android native splash [android:windowSplashScreenBackground]
+/// value in values-night-v31/styles.xml. Use this constant everywhere a
+/// dark splash background is needed so native and Flutter surfaces stay
+/// visually consistent.
+const Color owntendSplashBackgroundDark = Color(0xFF0D2118);
+
 const Duration owntendSplashDisplayDuration = Duration(milliseconds: 3200);
+const Duration owntendSplashMinDisplayDuration = Duration(milliseconds: 600);
 const Duration owntendSplashFadeOutDuration = Duration(milliseconds: 250);
+
+/// Global readiness and failure notifiers allowing domain and startup controllers
+/// to signal when bootstrap is ready to dismiss the splash, or when a fatal
+/// startup error occurred that warrants immediate splash dismissal.
+final ValueNotifier<bool> hkStartupReadyNotifier = ValueNotifier<bool>(false);
+final ValueNotifier<bool> hkStartupFailedNotifier = ValueNotifier<bool>(false);
+
+void resetOwntendStartupNotifiers() {
+  hkStartupReadyNotifier.value = false;
+  hkStartupFailedNotifier.value = false;
+}
 
 Locale _supportedSplashLocale(Locale locale) {
   return locale.languageCode == 'ar' ? const Locale('ar') : const Locale('en');
@@ -15,6 +38,17 @@ Locale _supportedSplashLocale(Locale locale) {
 
 TextDirection _splashTextDirection(Locale locale) {
   return locale.languageCode == 'ar' ? TextDirection.rtl : TextDirection.ltr;
+}
+
+/// Resolves whether the ambient splash context is dark mode.
+/// Prefers the explicit ancestor [Theme] if present; otherwise falls back to
+/// [MediaQuery.platformBrightnessOf].
+bool _isDarkSplash(BuildContext context) {
+  final themeWidget = context.findAncestorWidgetOfExactType<Theme>();
+  if (themeWidget != null) {
+    return Theme.of(context).brightness == Brightness.dark;
+  }
+  return MediaQuery.platformBrightnessOf(context) == Brightness.dark;
 }
 
 /// Stable, process-lifetime owner for the one Flutter launch splash.
@@ -26,13 +60,25 @@ class OwntendProcessSplash extends StatefulWidget {
   const OwntendProcessSplash({
     required this.child,
     this.displayDuration = owntendSplashDisplayDuration,
+    this.minDisplayDuration = owntendSplashMinDisplayDuration,
     this.fadeOutDuration = owntendSplashFadeOutDuration,
+    this.initialThemeBrightness,
+    this.initialLocale,
+    this.isReadyNotifier,
+    this.isFailedNotifier,
+    this.isFailed = false,
     super.key,
   });
 
   final Widget child;
   final Duration displayDuration;
+  final Duration minDisplayDuration;
   final Duration fadeOutDuration;
+  final Brightness? initialThemeBrightness;
+  final Locale? initialLocale;
+  final ValueListenable<bool>? isReadyNotifier;
+  final ValueListenable<bool>? isFailedNotifier;
+  final bool isFailed;
 
   @override
   State<OwntendProcessSplash> createState() => _OwntendProcessSplashState();
@@ -40,18 +86,24 @@ class OwntendProcessSplash extends StatefulWidget {
 
 class _OwntendProcessSplashState extends State<OwntendProcessSplash>
     with WidgetsBindingObserver {
-  Locale _deviceLocale = WidgetsBinding.instance.platformDispatcher.locale;
-  Brightness _brightness =
-      WidgetsBinding.instance.platformDispatcher.platformBrightness;
+  late Locale _deviceLocale;
+  late Brightness _brightness;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _deviceLocale =
+        widget.initialLocale ??
+        WidgetsBinding.instance.platformDispatcher.locale;
+    _brightness =
+        widget.initialThemeBrightness ??
+        WidgetsBinding.instance.platformDispatcher.platformBrightness;
   }
 
   @override
   void didChangeLocales(List<Locale>? locales) {
+    if (widget.initialLocale != null) return;
     final next =
         locales?.firstOrNull ??
         WidgetsBinding.instance.platformDispatcher.locale;
@@ -61,6 +113,7 @@ class _OwntendProcessSplashState extends State<OwntendProcessSplash>
 
   @override
   void didChangePlatformBrightness() {
+    if (widget.initialThemeBrightness != null) return;
     final next = WidgetsBinding.instance.platformDispatcher.platformBrightness;
     if (next == _brightness) return;
     setState(() => _brightness = next);
@@ -77,8 +130,10 @@ class _OwntendProcessSplashState extends State<OwntendProcessSplash>
     final locale = _supportedSplashLocale(_deviceLocale);
     final isDark = _brightness == Brightness.dark;
     final background = isDark
-        ? const Color(0xFF0E1512)
+        ? owntendSplashBackgroundDark
         : owntendSplashBackground;
+    final isFailure = widget.isFailed;
+
     return MediaQuery.fromView(
       view: View.of(context),
       child: Directionality(
@@ -97,7 +152,12 @@ class _OwntendProcessSplashState extends State<OwntendProcessSplash>
           child: OwntendSplashOverlay(
             locale: locale,
             displayDuration: widget.displayDuration,
+            minDisplayDuration: widget.minDisplayDuration,
             fadeOutDuration: widget.fadeOutDuration,
+            isReadyNotifier: widget.isReadyNotifier ?? hkStartupReadyNotifier,
+            isFailedNotifier:
+                widget.isFailedNotifier ?? hkStartupFailedNotifier,
+            isFailed: isFailure,
             child: widget.child,
           ),
         ),
@@ -108,6 +168,10 @@ class _OwntendProcessSplashState extends State<OwntendProcessSplash>
 
 /// Non-blank, non-animated surface shown only when bootstrap outlives the
 /// fixed process splash timer.
+///
+/// Supports dark and light mode. Reads OS brightness directly from
+/// [MediaQuery] — this intentionally uses the device preference rather than
+/// any stored user preference, which has not yet been loaded at this point.
 class OwntendStartupSurface extends StatelessWidget {
   const OwntendStartupSurface({super.key});
 
@@ -117,36 +181,63 @@ class OwntendStartupSurface extends StatelessWidget {
       WidgetsBinding.instance.platformDispatcher.locale,
     );
     final l10n = lookupAppLocalizations(locale);
-    Widget surface = ColoredBox(
-      color: owntendSplashBackground,
-      child: SafeArea(
-        child: Center(
-          child: Semantics(
-            container: true,
-            label: l10n.startupStartingOwntend,
-            textDirection: _splashTextDirection(locale),
-            child: ExcludeSemantics(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Image.asset(
-                    'assets/splash/owntend_splash_icon_3d.png',
-                    width: 112,
-                    height: 112,
-                    fit: BoxFit.contain,
-                    filterQuality: FilterQuality.high,
-                  ),
-                  const SizedBox(height: 12),
-                  const Text(
-                    'Owntend',
-                    textDirection: TextDirection.ltr,
-                    style: TextStyle(
-                      color: Color(0xFF0B1726),
-                      fontSize: 28,
-                      fontWeight: FontWeight.w800,
+    final isDark = _isDarkSplash(context);
+    final bg = isDark ? owntendSplashBackgroundDark : owntendSplashBackground;
+    // Text color: dark navy on light, near-white on dark.
+    final textColor = isDark
+        ? const Color(0xFFD8EDE0)
+        : const Color(0xFF0B1726);
+
+    Widget surface = AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+        statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
+        systemNavigationBarColor: Colors.transparent,
+        systemNavigationBarDividerColor: Colors.transparent,
+        systemNavigationBarIconBrightness: isDark
+            ? Brightness.light
+            : Brightness.dark,
+      ),
+      child: ColoredBox(
+        color: bg,
+        child: SafeArea(
+          child: Center(
+            child: Semantics(
+              container: true,
+              liveRegion: true,
+              label: l10n.startupStartingOwntend,
+              textDirection: _splashTextDirection(locale),
+              child: ExcludeSemantics(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Image.asset(
+                      'assets/splash/owntend_splash_icon_3d.png',
+                      width: 112,
+                      height: 112,
+                      fit: BoxFit.contain,
+                      filterQuality: FilterQuality.high,
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 12),
+                    // Brand name is always left-to-right per design policy.
+                    // See docs/development/localization-and-rtl.md.
+                    Text(
+                      'Owntend',
+                      textDirection: TextDirection.ltr,
+                      style: TextStyle(
+                        color: textColor,
+                        fontSize: 28,
+                        fontWeight: FontWeight.w800,
+                        fontFamilyFallback: const [
+                          'Noto Sans Arabic',
+                          'Noto Naskh Arabic',
+                          'sans-serif',
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -169,20 +260,29 @@ class OwntendStartupSurface extends StatelessWidget {
 /// Purely visual, isolated startup splash overlay controller for Owntend.
 ///
 /// Places the animated splash visually above the already-running application child
-/// for a fixed duration, fades out, and removes itself from the widget tree.
+/// until readiness or the specified presentation duration completes, fades out,
+/// and removes itself from the widget tree.
 class OwntendSplashOverlay extends StatefulWidget {
   const OwntendSplashOverlay({
     required this.child,
     this.locale = const Locale('en'),
     this.displayDuration = owntendSplashDisplayDuration,
+    this.minDisplayDuration = owntendSplashMinDisplayDuration,
     this.fadeOutDuration = owntendSplashFadeOutDuration,
+    this.isReadyNotifier,
+    this.isFailedNotifier,
+    this.isFailed = false,
     super.key,
   });
 
   final Widget child;
   final Locale locale;
   final Duration displayDuration;
+  final Duration minDisplayDuration;
   final Duration fadeOutDuration;
+  final ValueListenable<bool>? isReadyNotifier;
+  final ValueListenable<bool>? isFailedNotifier;
+  final bool isFailed;
 
   @override
   State<OwntendSplashOverlay> createState() => _OwntendSplashOverlayState();
@@ -191,14 +291,97 @@ class OwntendSplashOverlay extends StatefulWidget {
 class _OwntendSplashOverlayState extends State<OwntendSplashOverlay> {
   Timer? _displayTimer;
   Timer? _removalTimer;
+  Timer? _safetyTimer;
   bool _showSplash = true;
   bool _isFadingOut = false;
+  late final DateTime _startTime;
 
   @override
   void initState() {
     super.initState();
-    _displayTimer = Timer(widget.displayDuration, () {
-      if (!mounted) return;
+    _startTime = DateTime.now();
+
+    if (widget.isFailed) {
+      _showSplash = false;
+      return;
+    }
+
+    widget.isReadyNotifier?.addListener(_checkReadiness);
+    widget.isFailedNotifier?.addListener(_checkFailed);
+
+    if (widget.isFailedNotifier?.value == true) {
+      _showSplash = false;
+      return;
+    }
+
+    if (widget.isReadyNotifier?.value == true) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _checkReadiness());
+      return;
+    }
+
+    if (widget.isReadyNotifier == null) {
+      _displayTimer = Timer(widget.displayDuration, _triggerFadeOut);
+    } else {
+      _safetyTimer = Timer(widget.displayDuration, _triggerFadeOut);
+    }
+  }
+
+  void _checkFailed() {
+    if (!mounted || !_showSplash) return;
+    if (widget.isFailedNotifier?.value == true) {
+      _displayTimer?.cancel();
+      _safetyTimer?.cancel();
+      _removalTimer?.cancel();
+      void update() {
+        if (mounted) {
+          setState(() {
+            _showSplash = false;
+            _isFadingOut = false;
+          });
+        }
+      }
+
+      if (WidgetsBinding.instance.schedulerPhase ==
+          SchedulerPhase.persistentCallbacks) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => update());
+      } else {
+        update();
+      }
+    }
+  }
+
+  void _checkReadiness() {
+    if (!mounted || !_showSplash || _isFadingOut) return;
+    if (widget.isReadyNotifier?.value != true) return;
+
+    final reduceMotion = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    final minDuration = reduceMotion
+        ? Duration.zero
+        : widget.minDisplayDuration;
+    final elapsed = DateTime.now().difference(_startTime);
+
+    void trigger() {
+      if (!mounted || !_showSplash || _isFadingOut) return;
+      if (elapsed >= minDuration) {
+        _triggerFadeOut();
+      } else {
+        _displayTimer?.cancel();
+        _displayTimer = Timer(minDuration - elapsed, _triggerFadeOut);
+      }
+    }
+
+    if (WidgetsBinding.instance.schedulerPhase ==
+        SchedulerPhase.persistentCallbacks) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => trigger());
+    } else {
+      trigger();
+    }
+  }
+
+  void _triggerFadeOut() {
+    if (!mounted || !_showSplash || _isFadingOut) return;
+    void startFade() {
+      if (!mounted || !_showSplash || _isFadingOut) return;
       setState(() {
         _isFadingOut = true;
       });
@@ -208,12 +391,51 @@ class _OwntendSplashOverlayState extends State<OwntendSplashOverlay> {
           _showSplash = false;
         });
       });
-    });
+    }
+
+    if (WidgetsBinding.instance.schedulerPhase ==
+        SchedulerPhase.persistentCallbacks) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => startFade());
+    } else {
+      startFade();
+    }
+  }
+
+  @override
+  void didUpdateWidget(OwntendSplashOverlay oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isFailed && _showSplash) {
+      _displayTimer?.cancel();
+      _safetyTimer?.cancel();
+      _removalTimer?.cancel();
+      setState(() {
+        _showSplash = false;
+        _isFadingOut = false;
+      });
+      return;
+    }
+    if (oldWidget.isReadyNotifier != widget.isReadyNotifier) {
+      oldWidget.isReadyNotifier?.removeListener(_checkReadiness);
+      widget.isReadyNotifier?.addListener(_checkReadiness);
+      if (widget.isReadyNotifier?.value == true) {
+        _checkReadiness();
+      }
+    }
+    if (oldWidget.isFailedNotifier != widget.isFailedNotifier) {
+      oldWidget.isFailedNotifier?.removeListener(_checkFailed);
+      widget.isFailedNotifier?.addListener(_checkFailed);
+      if (widget.isFailedNotifier?.value == true) {
+        _checkFailed();
+      }
+    }
   }
 
   @override
   void dispose() {
+    widget.isReadyNotifier?.removeListener(_checkReadiness);
+    widget.isFailedNotifier?.removeListener(_checkFailed);
     _displayTimer?.cancel();
+    _safetyTimer?.cancel();
     _removalTimer?.cancel();
     super.dispose();
   }
@@ -273,7 +495,6 @@ class _OwntendAnimatedSplashScreenState
   late final Animation<double> _logoLift;
   late final Animation<double> _titleOpacity;
   late final Animation<Offset> _titleOffset;
-  late final Animation<double> _progressValue;
   late final Animation<double> _footerOpacity;
 
   @override
@@ -287,48 +508,26 @@ class _OwntendAnimatedSplashScreenState
       duration: const Duration(milliseconds: 5200),
     );
 
-    _logoOpacity = CurvedAnimation(
-      parent: _intro,
-      curve: const Interval(0.00, 0.22, curve: Curves.easeOut),
-    );
-
-    _logoScale = Tween<double>(begin: 0.72, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _intro,
-        curve: const Interval(0.00, 0.42, curve: Curves.easeOutBack),
-      ),
-    );
-
-    _logoLift = Tween<double>(begin: 24.0, end: 0.0).animate(
-      CurvedAnimation(
-        parent: _intro,
-        curve: const Interval(0.00, 0.46, curve: Curves.easeOutCubic),
-      ),
-    );
+    _logoOpacity = const AlwaysStoppedAnimation<double>(1.0);
+    _logoScale = const AlwaysStoppedAnimation<double>(1.0);
+    _logoLift = const AlwaysStoppedAnimation<double>(0.0);
 
     _titleOpacity = CurvedAnimation(
       parent: _intro,
-      curve: const Interval(0.30, 0.58, curve: Curves.easeOut),
+      curve: const Interval(0.10, 0.45, curve: Curves.easeOut),
     );
 
-    _titleOffset = Tween<Offset>(begin: const Offset(0, 0.18), end: Offset.zero)
+    _titleOffset = Tween<Offset>(begin: const Offset(0, 0.12), end: Offset.zero)
         .animate(
           CurvedAnimation(
             parent: _intro,
-            curve: const Interval(0.30, 0.60, curve: Curves.easeOutCubic),
+            curve: const Interval(0.10, 0.45, curve: Curves.easeOutCubic),
           ),
         );
 
-    _progressValue = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _intro,
-        curve: const Interval(0.44, 0.92, curve: Curves.easeInOutCubic),
-      ),
-    );
-
     _footerOpacity = CurvedAnimation(
       parent: _intro,
-      curve: const Interval(0.62, 0.88, curve: Curves.easeOut),
+      curve: const Interval(0.40, 0.75, curve: Curves.easeOut),
     );
 
     _intro.forward();
@@ -356,6 +555,14 @@ class _OwntendAnimatedSplashScreenState
   }
 
   @override
+  void didUpdateWidget(OwntendAnimatedSplashScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.duration != oldWidget.duration) {
+      _intro.duration = widget.duration;
+    }
+  }
+
+  @override
   void dispose() {
     _intro.dispose();
     _loop.dispose();
@@ -375,15 +582,18 @@ class _OwntendAnimatedSplashScreenState
       (media.size.height * logoHeightFraction).clamp(minimumLogoSize, 430.0),
     );
     final horizontalPadding = (media.size.width * 0.075).clamp(16.0, 44.0);
-    final isDark = MediaQuery.platformBrightnessOf(context) == Brightness.dark;
-    final splashBg = isDark ? const Color(0xFF0D2118) : owntendSplashBackground;
+    final isDark = _isDarkSplash(context);
+    final splashBg = isDark
+        ? owntendSplashBackgroundDark
+        : owntendSplashBackground;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
         statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
         statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
-        systemNavigationBarColor: splashBg,
+        systemNavigationBarColor: Colors.transparent,
+        systemNavigationBarDividerColor: Colors.transparent,
         systemNavigationBarIconBrightness: isDark
             ? Brightness.light
             : Brightness.dark,
@@ -392,6 +602,7 @@ class _OwntendAnimatedSplashScreenState
         absorbing: true,
         child: Semantics(
           container: true,
+          liveRegion: true,
           label: l10n.startupStartingOwntend,
           textDirection: _splashTextDirection(widget.locale),
           child: ExcludeSemantics(
@@ -404,63 +615,84 @@ class _OwntendAnimatedSplashScreenState
                     return Stack(
                       fit: StackFit.expand,
                       children: [
-                        CustomPaint(
-                          painter: _OwntendSplashBackgroundPainter(
-                            loopValue: _loop.value,
-                            introValue: _intro.value,
-                            isDark: isDark,
+                        RepaintBoundary(
+                          child: CustomPaint(
+                            painter: _OwntendSplashBackgroundPainter(
+                              loopValue: _loop.value,
+                              introValue: _intro.value,
+                              isDark: isDark,
+                            ),
                           ),
                         ),
 
-                        Padding(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: horizontalPadding,
-                          ),
-                          child: Column(
-                            children: [
-                              const Spacer(flex: 9),
+                        LayoutBuilder(
+                          builder: (context, constraints) {
+                            return SingleChildScrollView(
+                              physics: const NeverScrollableScrollPhysics(),
+                              child: ConstrainedBox(
+                                constraints: BoxConstraints(
+                                  minHeight: constraints.maxHeight,
+                                ),
+                                child: IntrinsicHeight(
+                                  child: Padding(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: horizontalPadding,
+                                    ),
+                                    child: Column(
+                                      children: [
+                                        const Spacer(flex: 9),
 
-                              Transform.translate(
-                                offset: Offset(0, _logoLift.value),
-                                child: FadeTransition(
-                                  opacity: _logoOpacity,
-                                  child: ScaleTransition(
-                                    scale: _logoScale,
-                                    child: _AnimatedSplashIcon(
-                                      assetPath: widget.assetPath,
-                                      size: logoSize,
-                                      loopValue: _loop.value,
+                                        Transform.translate(
+                                          offset: Offset(0, _logoLift.value),
+                                          child: FadeTransition(
+                                            opacity: _logoOpacity,
+                                            child: ScaleTransition(
+                                              scale: _logoScale,
+                                              child: RepaintBoundary(
+                                                child: _AnimatedSplashIcon(
+                                                  assetPath: widget.assetPath,
+                                                  size: logoSize,
+                                                  loopValue: _loop.value,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+
+                                        SizedBox(height: compact ? 8 : 18),
+
+                                        FadeTransition(
+                                          opacity: _titleOpacity,
+                                          child: SlideTransition(
+                                            position: _titleOffset,
+                                            child: _SplashTitle(
+                                              tagline:
+                                                  l10n.owntendSplashTagline,
+                                              compact: compact,
+                                            ),
+                                          ),
+                                        ),
+
+                                        const Spacer(flex: 7),
+
+                                        _LoadingSection(
+                                          loopValue: _loop.value,
+                                          statusText:
+                                              l10n.startupStartingOwntend,
+                                          footerText:
+                                              l10n.worksOnlineAndOffline,
+                                          footerOpacity: _footerOpacity.value,
+                                          compact: compact,
+                                        ),
+
+                                        const Spacer(flex: 3),
+                                      ],
                                     ),
                                   ),
                                 ),
                               ),
-
-                              SizedBox(height: compact ? 8 : 18),
-
-                              FadeTransition(
-                                opacity: _titleOpacity,
-                                child: SlideTransition(
-                                  position: _titleOffset,
-                                  child: _SplashTitle(
-                                    tagline: l10n.owntendSplashTagline,
-                                    compact: compact,
-                                  ),
-                                ),
-                              ),
-
-                              const Spacer(flex: 7),
-
-                              _LoadingSection(
-                                value: _progressValue.value,
-                                statusText: l10n.startupStartingOwntend,
-                                footerText: l10n.worksOnlineAndOffline,
-                                footerOpacity: _footerOpacity.value,
-                                compact: compact,
-                              ),
-
-                              const Spacer(flex: 3),
-                            ],
-                          ),
+                            );
+                          },
                         ),
                       ],
                     );
@@ -514,14 +746,14 @@ class _AnimatedSplashIcon extends StatelessWidget {
               boxShadow: [
                 BoxShadow(
                   color: _green.withValues(alpha: 0.20),
-                  blurRadius: 54,
-                  spreadRadius: 2,
-                  offset: const Offset(0, 24),
+                  blurRadius: 28,
+                  spreadRadius: 1,
+                  offset: const Offset(0, 14),
                 ),
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.08),
-                  blurRadius: 30,
-                  offset: const Offset(0, 18),
+                  blurRadius: 18,
+                  offset: const Offset(0, 10),
                 ),
               ],
             ),
@@ -539,13 +771,13 @@ class _AnimatedSplashIcon extends StatelessWidget {
               ),
             ),
           ),
-          PositionedDirectional(
-            end: size * 0.15,
+          Positioned(
+            right: size * 0.15,
             top: size * 0.20,
             child: _Sparkle(size: size * 0.045),
           ),
-          PositionedDirectional(
-            start: size * 0.17,
+          Positioned(
+            left: size * 0.17,
             bottom: size * 0.24,
             child: _Sparkle(size: size * 0.035),
           ),
@@ -564,14 +796,26 @@ class _SplashTitle extends StatelessWidget {
   static const Color _navy = Color(0xFF0B1726);
   static const Color _green = Color(0xFF159A3B);
   static const Color _muted = Color(0xFF5F6B76);
+  static const _fontFallback = <String>[
+    'Noto Sans Arabic',
+    'Noto Naskh Arabic',
+    'sans-serif',
+  ];
 
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
     final titleSize = width < 380 ? 38.0 : 44.0;
+    final isDark = _isDarkSplash(context);
+
+    final ownColor = isDark ? const Color(0xFFD8EDE0) : _navy;
+    final tendColor = isDark ? const Color(0xFF45DA67) : _green;
+    final mutedColor = isDark ? const Color(0xFFA1B0BC) : _muted;
 
     return Column(
       children: [
+        // Brand name "Owntend" is always left-to-right per design policy.
+        // See docs/development/localization-and-rtl.md.
         RichText(
           textAlign: TextAlign.center,
           textDirection: TextDirection.ltr,
@@ -580,21 +824,23 @@ class _SplashTitle extends StatelessWidget {
               TextSpan(
                 text: 'Own',
                 style: TextStyle(
-                  color: _navy,
+                  color: ownColor,
                   fontSize: titleSize,
                   fontWeight: FontWeight.w800,
                   height: 1,
                   letterSpacing: 0.2,
+                  fontFamilyFallback: _fontFallback,
                 ),
               ),
               TextSpan(
                 text: 'tend',
                 style: TextStyle(
-                  color: _green,
+                  color: tendColor,
                   fontSize: titleSize,
                   fontWeight: FontWeight.w800,
                   height: 1,
                   letterSpacing: 0.2,
+                  fontFamilyFallback: _fontFallback,
                 ),
               ),
             ],
@@ -605,11 +851,12 @@ class _SplashTitle extends StatelessWidget {
           Text(
             tagline,
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: _muted,
+            style: TextStyle(
+              color: mutedColor,
               fontSize: 16.5,
               height: 1.45,
               fontWeight: FontWeight.w500,
+              fontFamilyFallback: _fontFallback,
             ),
           ),
         ],
@@ -620,71 +867,70 @@ class _SplashTitle extends StatelessWidget {
 
 class _LoadingSection extends StatelessWidget {
   const _LoadingSection({
-    required this.value,
     required this.statusText,
     required this.footerText,
     required this.footerOpacity,
     required this.compact,
+    this.loopValue = 0.0,
   });
 
-  final double value;
   final String statusText;
   final String footerText;
   final double footerOpacity;
   final bool compact;
 
-  static const Color _green = Color(0xFF159A3B);
+  /// Current value of the repeating loop animation (0.0–1.0).
+  /// Used to drive the pulsing dots so they are explicitly indeterminate.
+  final double loopValue;
+
   static const Color _muted = Color(0xFF5F6B76);
+  static const Color _dot = Color(0xFF22B953);
+  static const _fontFallback = <String>[
+    'Noto Sans Arabic',
+    'Noto Naskh Arabic',
+    'sans-serif',
+  ];
 
   @override
   Widget build(BuildContext context) {
+    final isDark = _isDarkSplash(context);
+    final statusColor = isDark ? const Color(0xFFA1B0BC) : _muted;
+    final footerColor = isDark
+        ? const Color(0xFF7E9287)
+        : const Color(0xFF7B858F);
+
+    // Three dots pulse in sequence using the loop animation value.
+    final t = loopValue;
+    double dotOpacity(int index) {
+      // Each dot leads by 1/3 of the cycle.
+      final phase = (t + index / 3.0) % 1.0;
+      // Sine curve in [0.25, 1.0] range.
+      return 0.25 + 0.75 * math.sin(phase * math.pi).clamp(0.0, 1.0);
+    }
+
     return Column(
       children: [
+        // Indeterminate three-dot indicator — explicitly decorative and
+        // not connected to any startup progress measurement.
         ExcludeSemantics(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final progressWidth = math.min(310.0, constraints.maxWidth);
-              return SizedBox(
-                width: progressWidth,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(999),
-                  child: Stack(
-                    children: [
-                      Container(
-                        height: 12,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFE7EFE8),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                      ),
-                      FractionallySizedBox(
-                        widthFactor: value.clamp(0.0, 1.0),
-                        child: Container(
-                          height: 12,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(999),
-                            gradient: const LinearGradient(
-                              colors: [
-                                Color(0xFF64D85F),
-                                Color(0xFF159A3B),
-                                Color(0xFF0C7A31),
-                              ],
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: _green.withValues(alpha: 0.32),
-                                blurRadius: 16,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: List.generate(3, (i) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Opacity(
+                  opacity: dotOpacity(i),
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(
+                      color: _dot,
+                      shape: BoxShape.circle,
+                    ),
                   ),
                 ),
               );
-            },
+            }),
           ),
         ),
         SizedBox(height: compact ? 8 : 18),
@@ -694,11 +940,12 @@ class _LoadingSection extends StatelessWidget {
             statusText,
             key: ValueKey<String>(statusText),
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: _muted,
+            style: TextStyle(
+              color: statusColor,
               fontSize: 14.5,
               fontWeight: FontWeight.w600,
               letterSpacing: 0.1,
+              fontFamilyFallback: _fontFallback,
             ),
           ),
         ),
@@ -708,10 +955,11 @@ class _LoadingSection extends StatelessWidget {
             opacity: footerOpacity.clamp(0.0, 1.0),
             child: Text(
               footerText,
-              style: const TextStyle(
-                color: Color(0xFF7B858F),
+              style: TextStyle(
+                color: footerColor,
                 fontSize: 12.5,
                 fontWeight: FontWeight.w500,
+                fontFamilyFallback: _fontFallback,
               ),
             ),
           ),
@@ -838,7 +1086,8 @@ class _OwntendSplashBackgroundPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _OwntendSplashBackgroundPainter oldDelegate) {
     return oldDelegate.loopValue != loopValue ||
-        oldDelegate.introValue != introValue;
+        oldDelegate.introValue != introValue ||
+        oldDelegate.isDark != isDark;
   }
 }
 

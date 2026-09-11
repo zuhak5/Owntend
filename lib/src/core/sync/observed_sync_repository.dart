@@ -84,6 +84,13 @@ class ObservedCloudSyncRepository implements CloudSyncRepository {
     callback: _delegate.syncNow,
   );
 
+  @override
+  Future<void> suspend() => _run<void>(
+    operation: 'sync.suspend',
+    syncMode: 'suspend',
+    callback: _delegate.suspend,
+  );
+
   Future<T> _run<T>({
     required String operation,
     required String syncMode,

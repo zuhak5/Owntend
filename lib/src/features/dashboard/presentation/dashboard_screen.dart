@@ -9,13 +9,10 @@ class DashboardScreen extends ConsumerStatefulWidget {
 
 class _DashboardScreenState extends ConsumerState<DashboardScreen>
     with WidgetsBindingObserver {
-  final LayerLink _weatherEducationLink = LayerLink();
-  final LayerLink _notificationEducationLink = LayerLink();
-  final GlobalKey _weatherEducationTargetKey = GlobalKey();
-  final GlobalKey _notificationEducationTargetKey = GlobalKey();
   late final NativeAdPresentationDepth _nativeAdPresentationDepth;
   bool _forcePermissionEducationHandled = false;
   bool _permissionOverlaySuspendsNativeAds = false;
+  Future<void>? _activeRefresh;
   ProviderSubscription<PermissionEducationControllerState>?
   _permissionEducationSubscription;
 
@@ -65,6 +62,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           _clearPermissionSetupQuery();
         }
       });
+    } else if (!force) {
+      _forcePermissionEducationHandled = false;
     }
   }
 
@@ -152,16 +151,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     final now =
         ref.watch(localClockProvider).value ?? ref.read(localNowProvider)();
     final taskBuckets = getTaskBuckets(tasks, now);
-    final homeTaskSections = _homeTaskSections(context, taskBuckets);
-    const homeTaskLimit = 3;
     final topPadding = MediaQuery.paddingOf(context).top;
     final headerExtent = _dashboardHeaderExtent(context, topPadding);
     final hasThings = assets.isNotEmpty;
     final canAddThing = rooms.isNotEmpty;
-    final permissionState = ref.watch(permissionEducationControllerProvider);
-    final weatherCapability = permissionState.setupSnapshot?.weather;
+    final homeTaskSections = _homeTaskSections(context, taskBuckets);
+    final showFab = hasThings && homeTaskSections.isNotEmpty;
     return Scaffold(
-      floatingActionButton: hasThings
+      floatingActionButton: showFab
           ? Padding(
               padding: const EdgeInsets.only(bottom: HkSpacing.bottomNav),
               child: hk_ui.OwntendFloatingActionButton(
@@ -178,10 +175,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           RepaintBoundary(
             key: const ValueKey('home-stability-boundary'),
             child: RefreshIndicator(
-              onRefresh: () => ref
-                  .read(streakServiceProvider)
-                  .refresh(ref.read(localNowProvider)()),
+              onRefresh: () => _handleRefresh(ref),
               child: CustomScrollView(
+                key: const PageStorageKey<String>('home-scroll-storage'),
                 physics: const AlwaysScrollableScrollPhysics(),
                 slivers: [
                   SliverPersistentHeader(
@@ -189,10 +185,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                     delegate: _DashboardHeaderDelegate(
                       topPadding: topPadding,
                       extent: headerExtent,
-                      notificationEducationLink: _notificationEducationLink,
-                      notificationEducationTargetKey:
-                          _notificationEducationTargetKey,
-                      onNotificationEducationTap: null,
                     ),
                   ),
                   SliverToBoxAdapter(
@@ -219,133 +211,36 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                                 ),
                                 const SizedBox(height: HkSpacing.sm),
                               ],
-                              RepaintBoundary(
-                                child: _DashboardWeatherCard(
-                                  educationLink: _weatherEducationLink,
-                                  educationTargetKey:
-                                      _weatherEducationTargetKey,
-                                  capability: weatherCapability,
-                                  onEducationTap: () => unawaited(
-                                    ref
-                                        .read(
-                                          permissionEducationControllerProvider
-                                              .notifier,
-                                        )
-                                        .initialize(
-                                          source: PermissionEducationSource
-                                              .weatherCard,
-                                          forceShow: true,
-                                        ),
-                                  ),
+                              _DashboardWeatherCard(
+                                onEducationTap: () => unawaited(
+                                  ref
+                                      .read(
+                                        permissionEducationControllerProvider
+                                            .notifier,
+                                      )
+                                      .initialize(
+                                        source: PermissionEducationSource
+                                            .weatherCard,
+                                        forceShow: true,
+                                      ),
                                 ),
                               ),
                               const SizedBox(height: HkSpacing.sm),
-                              RepaintBoundary(
-                                child: _DashboardReadinessCard(
-                                  rooms: rooms,
-                                  assets: assets,
-                                  tasks: tasks,
-                                  taskBuckets: taskBuckets,
-                                ),
+                              _DashboardReadinessCard(
+                                rooms: rooms,
+                                assets: assets,
+                                tasks: tasks,
+                                taskBuckets: taskBuckets,
+                              ),
+                              const SizedBox(height: HkSpacing.sm),
+                              _DashboardTaskList(
+                                taskBuckets: taskBuckets,
+                                tasks: tasks,
+                                hasThings: hasThings,
+                                canAddThing: canAddThing,
                               ),
                               const SizedBox(height: HkSpacing.sm),
                               const HkNativeAdCard(placement: 'home'),
-                              if (homeTaskSections.isEmpty)
-                                hk_ui.PremiumEmptyState(
-                                  icon: hasThings
-                                      ? Symbols.task_alt_rounded
-                                      : Symbols.inventory_2_rounded,
-                                  title: hasThings
-                                      ? context.l10n.noMaintenancePlansYet
-                                      : canAddThing
-                                      ? context.l10n.createYourFirstItem
-                                      : context.l10n.createYourFirstRoom,
-                                  body: hasThings
-                                      ? context
-                                            .l10n
-                                            .scheduleRecurringCareForAnItemToStartTracking
-                                      : canAddThing
-                                      ? context.l10n.addAHomeItemFirst
-                                      : context
-                                            .l10n
-                                            .addARoomOrZoneBeforeAddingItems,
-                                  action: FilledButton.icon(
-                                    onPressed: () => hasThings
-                                        ? showPlanEditorSheet(context)
-                                        : startThingSetupFlow(context, ref),
-                                    icon: Icon(
-                                      hasThings
-                                          ? Symbols.add_task_rounded
-                                          : canAddThing
-                                          ? Symbols.add_home_work_rounded
-                                          : Symbols.meeting_room_rounded,
-                                    ),
-                                    label: Text(
-                                      hasThings
-                                          ? context.l10n.addTask
-                                          : canAddThing
-                                          ? context.l10n.createFirstItem
-                                          : context.l10n.createFirstRoom,
-                                    ),
-                                  ),
-                                )
-                              else
-                                Column(
-                                  children: [
-                                    for (final section in homeTaskSections) ...[
-                                      hk_ui.SectionHeader(
-                                        title: section.title,
-                                        actionLabel: context.l10n.seeAll,
-                                        onAction: () =>
-                                            context.push('/maintenance'),
-                                      ),
-                                      for (final task in section.tasks.take(
-                                        homeTaskLimit,
-                                      ))
-                                        hk_ui.SwipeDelete(
-                                          margin: const EdgeInsets.only(
-                                            bottom: HkSpacing.sm,
-                                          ),
-                                          dismissKey: ValueKey(
-                                            'home-task-delete-${task.plan.id}',
-                                          ),
-                                          action: hk_ui.SwipeAction.moveToTrash(
-                                            onAction: () =>
-                                                deleteTaskWithConfirmation(
-                                                  context,
-                                                  ref,
-                                                  task,
-                                                ),
-                                          ),
-                                          child: hk_ui.TaskCard(
-                                            task: task,
-                                            margin: EdgeInsets.zero,
-                                            onTap: () => context.push(
-                                              '/maintenance/${task.plan.id}',
-                                            ),
-                                            onComplete: () => _completeTask(
-                                              context,
-                                              ref,
-                                              task,
-                                            ),
-                                            onSnooze: () =>
-                                                snoozeTaskWithFeedback(
-                                                  context,
-                                                  ref,
-                                                  task,
-                                                ),
-                                            onSetEnabled: (enabled) =>
-                                                setTaskEnabledWithFeedback(
-                                                  context,
-                                                  ref,
-                                                  task,
-                                                  enabled,
-                                                ),
-                                          ),
-                                        ),
-                                    ],
-                                  ],
-                                ),
                             ],
                           ),
                         ),
@@ -357,7 +252,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
             ),
           ),
           PermissionEducationOverlayWrapper(
-            targetLink: _weatherEducationLink,
             onChooseLocationManually: () => runWithNativeAdsSuspended(
               context,
               () => showEditorModal<HomeLocation>(
@@ -371,12 +265,39 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     );
   }
 
-  Future<bool> _completeTask(
-    BuildContext context,
-    WidgetRef ref,
-    TaskItem task,
-  ) async {
-    return completeTaskWithFeedback(context, ref, task);
+  Future<void> _handleRefresh(WidgetRef ref) async {
+    if (_activeRefresh != null) {
+      return _activeRefresh!;
+    }
+    final refreshFuture = _executeRefresh(ref);
+    _activeRefresh = refreshFuture;
+    try {
+      await refreshFuture;
+    } finally {
+      if (identical(_activeRefresh, refreshFuture)) {
+        _activeRefresh = null;
+      }
+    }
+  }
+
+  Future<void> _executeRefresh(WidgetRef ref) async {
+    final now = ref.read(localNowProvider)();
+    final tasksState = ref.read(tasksProvider);
+    final assetsState = ref.read(assetsProvider);
+    final roomsState = ref.read(roomsProvider);
+    if (tasksState.hasError) ref.invalidate(tasksProvider);
+    if (assetsState.hasError) ref.invalidate(assetsProvider);
+    if (roomsState.hasError) ref.invalidate(roomsProvider);
+
+    try {
+      await Future.wait([
+        ref.read(streakServiceProvider).refresh(now),
+        ref.read(weatherRepositoryProvider).refreshWeather(),
+        syncProfileIfEnabled(ref),
+      ]);
+    } catch (_) {
+      // Coordinated refresh is best-effort.
+    }
   }
 }
 
@@ -410,76 +331,191 @@ class _DashboardDataWarning extends StatelessWidget {
 }
 
 class _HomeTaskSectionData {
-  const _HomeTaskSectionData({required this.title, required this.tasks});
+  const _HomeTaskSectionData({
+    required this.title,
+    required this.tasks,
+    this.filter,
+  });
 
   final String title;
   final List<TaskItem> tasks;
+  final String? filter;
 }
 
 List<_HomeTaskSectionData> _homeTaskSections(
   BuildContext context,
   TaskBuckets buckets,
 ) {
+  final sections = <_HomeTaskSectionData>[];
+  if (buckets.overdue.isNotEmpty) {
+    sections.add(
+      _HomeTaskSectionData(
+        title: context.l10n.overdue,
+        tasks: buckets.overdue,
+        filter: 'overdue',
+      ),
+    );
+  }
   if (buckets.today.isNotEmpty || buckets.tomorrow.isNotEmpty) {
-    return [
-      if (buckets.today.isNotEmpty)
+    if (buckets.today.isNotEmpty) {
+      sections.add(
         _HomeTaskSectionData(
           title: context.l10n.todaySTasks,
           tasks: buckets.today,
+          filter: 'today',
         ),
-      if (buckets.tomorrow.isNotEmpty)
+      );
+    }
+    if (buckets.tomorrow.isNotEmpty) {
+      sections.add(
         _HomeTaskSectionData(
           title: context.l10n.tomorrowSTasks,
           tasks: buckets.tomorrow,
         ),
-    ];
-  }
-  if (buckets.upcoming.isNotEmpty) {
-    return [
+      );
+    }
+  } else if (buckets.upcoming.isNotEmpty) {
+    sections.add(
       _HomeTaskSectionData(
         title: context.l10n.upcomingTasks,
         tasks: buckets.upcoming,
       ),
-    ];
+    );
   }
-  return const [];
+  return sections;
+}
+
+class _DashboardTaskList extends ConsumerWidget {
+  const _DashboardTaskList({
+    required this.taskBuckets,
+    required this.tasks,
+    required this.hasThings,
+    required this.canAddThing,
+  });
+
+  final TaskBuckets taskBuckets;
+  final List<TaskItem> tasks;
+  final bool hasThings;
+  final bool canAddThing;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final homeTaskSections = _homeTaskSections(context, taskBuckets);
+
+    if (homeTaskSections.isEmpty) {
+      final isPlanUpToDate = tasks.isNotEmpty;
+      return hk_ui.PremiumEmptyState(
+        icon: isPlanUpToDate || hasThings
+            ? Symbols.task_alt_rounded
+            : Symbols.inventory_2_rounded,
+        title: isPlanUpToDate
+            ? context.l10n.yourMaintenancePlanIsUpToDate
+            : hasThings
+            ? context.l10n.noMaintenancePlansYet
+            : canAddThing
+            ? context.l10n.createYourFirstItem
+            : context.l10n.createYourFirstRoom,
+        body: isPlanUpToDate
+            ? context.l10n.yourMaintenancePlanIsClearToday
+            : hasThings
+            ? context.l10n.scheduleRecurringCareForAnItemToStartTracking
+            : canAddThing
+            ? context.l10n.addAHomeItemFirst
+            : context.l10n.addARoomOrZoneBeforeAddingItems,
+        action: FilledButton.icon(
+          onPressed: () => (isPlanUpToDate || hasThings)
+              ? showPlanEditorSheet(context)
+              : startThingSetupFlow(context, ref),
+          icon: Icon(
+            (isPlanUpToDate || hasThings)
+                ? Symbols.add_task_rounded
+                : canAddThing
+                ? Symbols.add_home_work_rounded
+                : Symbols.meeting_room_rounded,
+          ),
+          label: Text(
+            (isPlanUpToDate || hasThings)
+                ? context.l10n.addTask
+                : canAddThing
+                ? context.l10n.createFirstItem
+                : context.l10n.createFirstRoom,
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        for (final section in homeTaskSections) ...[
+          Builder(
+            builder: (context) {
+              final sectionLimit = section.filter == 'overdue' ? 5 : 3;
+              final hasMore = section.tasks.length > sectionLimit;
+              return hk_ui.SectionHeader(
+                title: section.title,
+                subtitle: hasMore
+                    ? context.l10n.taskCountLabel(section.tasks.length)
+                    : null,
+                actionLabel: context.l10n.seeAll,
+                onAction: () => context.push(
+                  section.filter != null
+                      ? '/maintenance?filter=${section.filter}'
+                      : '/maintenance',
+                ),
+              );
+            },
+          ),
+          for (final task in section.tasks.take(
+            section.filter == 'overdue' ? 5 : 3,
+          ))
+            hk_ui.SwipeDelete(
+              margin: const EdgeInsets.only(bottom: HkSpacing.sm),
+              dismissKey: ValueKey('home-task-delete-${task.plan.id}'),
+              action: hk_ui.SwipeAction.moveToTrash(
+                onAction: () => deleteTaskWithConfirmation(context, ref, task),
+              ),
+              child: hk_ui.TaskCard(
+                task: task,
+                margin: EdgeInsets.zero,
+                onTap: () => context.push('/maintenance/${task.plan.id}'),
+                onComplete: () => completeTaskWithFeedback(context, ref, task),
+                onSnooze: () => snoozeTaskWithFeedback(context, ref, task),
+                onSetEnabled: (enabled) =>
+                    setTaskEnabledWithFeedback(context, ref, task, enabled),
+              ),
+            ),
+        ],
+      ],
+    );
+  }
 }
 
 class _DashboardWeatherCard extends ConsumerWidget {
-  const _DashboardWeatherCard({
-    required this.educationLink,
-    required this.educationTargetKey,
-    required this.capability,
-    this.onEducationTap,
-  });
+  const _DashboardWeatherCard({this.onEducationTap});
 
-  final LayerLink educationLink;
-  final GlobalKey educationTargetKey;
-  final WeatherAreaCapabilitySnapshot? capability;
   final VoidCallback? onEducationTap;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final snapshot = ref.watch(initialHomeSnapshotProvider).value;
-    final themeNow =
-        ref.watch(localClockProvider).value ?? ref.read(localNowProvider)();
-    final brightness = Theme.of(context).brightness;
     final location =
         ref.watch(homeLocationProvider).value ?? snapshot?.homeLocation;
-    return CompositedTransformTarget(
-      link: educationLink,
-      child: KeyedSubtree(
-        key: educationTargetKey,
-        child: _WeatherCard(
-          weather: ref.watch(weatherProvider).value ?? snapshot?.weather,
-          location: location,
-          capability: capability,
-          localNow: themeNow,
-          isDark: brightness == Brightness.dark,
-          onToggleTheme: () => _toggleWeatherTheme(context, ref, brightness),
-          onCapabilityAction: onEducationTap,
-        ),
+    final capability = ref.watch(
+      permissionEducationControllerProvider.select(
+        (s) => s.setupSnapshot?.weather,
       ),
+    );
+    final now =
+        ref.watch(localClockProvider).value ?? ref.read(localNowProvider)();
+    final brightness = Theme.of(context).brightness;
+    return _WeatherCard(
+      weather: ref.watch(weatherProvider).value ?? snapshot?.weather,
+      location: location,
+      capability: capability,
+      localNow: now,
+      isDark: brightness == Brightness.dark,
+      onToggleTheme: () => _toggleWeatherTheme(context, ref, brightness),
+      onCapabilityAction: onEducationTap,
     );
   }
 
@@ -616,16 +652,10 @@ class _DashboardHeaderDelegate extends SliverPersistentHeaderDelegate {
   const _DashboardHeaderDelegate({
     required this.topPadding,
     required this.extent,
-    required this.notificationEducationLink,
-    required this.notificationEducationTargetKey,
-    this.onNotificationEducationTap,
   });
 
   final double topPadding;
   final double extent;
-  final LayerLink notificationEducationLink;
-  final GlobalKey notificationEducationTargetKey;
-  final VoidCallback? onNotificationEducationTap;
 
   @override
   double get minExtent => extent;
@@ -639,37 +669,19 @@ class _DashboardHeaderDelegate extends SliverPersistentHeaderDelegate {
     double shrinkOffset,
     bool overlapsContent,
   ) {
-    return _DashboardHeader(
-      overlapsContent: overlapsContent,
-      notificationEducationLink: notificationEducationLink,
-      notificationEducationTargetKey: notificationEducationTargetKey,
-      onNotificationEducationTap: onNotificationEducationTap,
-    );
+    return _DashboardHeader(overlapsContent: overlapsContent);
   }
 
   @override
   bool shouldRebuild(_DashboardHeaderDelegate oldDelegate) {
-    return topPadding != oldDelegate.topPadding ||
-        extent != oldDelegate.extent ||
-        notificationEducationLink != oldDelegate.notificationEducationLink ||
-        notificationEducationTargetKey !=
-            oldDelegate.notificationEducationTargetKey ||
-        onNotificationEducationTap != oldDelegate.onNotificationEducationTap;
+    return topPadding != oldDelegate.topPadding || extent != oldDelegate.extent;
   }
 }
 
 class _DashboardHeader extends ConsumerWidget {
-  const _DashboardHeader({
-    required this.overlapsContent,
-    required this.notificationEducationLink,
-    required this.notificationEducationTargetKey,
-    this.onNotificationEducationTap,
-  });
+  const _DashboardHeader({required this.overlapsContent});
 
   final bool overlapsContent;
-  final LayerLink notificationEducationLink;
-  final GlobalKey notificationEducationTargetKey;
-  final VoidCallback? onNotificationEducationTap;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -741,17 +753,12 @@ class _DashboardHeader extends ConsumerWidget {
                           screenWidth: screenWidth,
                           isCompact: isCompact,
                           unreadCount: unreadCount,
-                          notificationEducationLink: notificationEducationLink,
-                          notificationEducationTargetKey:
-                              notificationEducationTargetKey,
                           avatarUrl: session?.avatarUrl,
                           avatarProvider: snapshot?.avatarProvider,
                           fallbackName: greetingName,
                           onSearch: () => context.push('/search'),
                           onPoints: () => showPointsWalletSheet(context, ref),
-                          onNotifications:
-                              onNotificationEducationTap ??
-                              () => context.push('/notifications'),
+                          onNotifications: () => context.push('/notifications'),
                         ),
                       );
                     },
@@ -771,8 +778,6 @@ class _DashboardHeaderActions extends StatelessWidget {
     required this.screenWidth,
     required this.isCompact,
     required this.unreadCount,
-    required this.notificationEducationLink,
-    required this.notificationEducationTargetKey,
     required this.avatarUrl,
     required this.avatarProvider,
     required this.fallbackName,
@@ -788,8 +793,6 @@ class _DashboardHeaderActions extends StatelessWidget {
   final bool isCompact;
 
   final int unreadCount;
-  final LayerLink notificationEducationLink;
-  final GlobalKey notificationEducationTargetKey;
   final String? avatarUrl;
   final ImageProvider<Object>? avatarProvider;
   final String fallbackName;
@@ -811,18 +814,12 @@ class _DashboardHeaderActions extends StatelessWidget {
       onTap: onPoints,
       compact: isCompact,
     );
-    final notifications = CompositedTransformTarget(
-      link: notificationEducationLink,
-      child: KeyedSubtree(
-        key: notificationEducationTargetKey,
-        child: _NotificationButton(
-          key: const ValueKey('home-notifications-control'),
-          size: componentHeight,
-          isCompact: isCompact,
-          unreadCount: unreadCount,
-          onPressed: onNotifications,
-        ),
-      ),
+    final notifications = _NotificationButton(
+      key: const ValueKey('home-notifications-control'),
+      size: componentHeight,
+      isCompact: isCompact,
+      unreadCount: unreadCount,
+      onPressed: onNotifications,
     );
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,

@@ -4,7 +4,9 @@
 
 Owntend currently supports English and Arabic. The ARB source files under `lib/l10n/` and `l10n.yaml` are authoritative. Generated localization Dart files are outputs and must not be edited manually.
 
-The process splash appears before the full `MaterialApp`, so it performs a deliberately small device-locale selection: Arabic uses Arabic text/direction and every other device locale falls back to English. Its tagline, startup status, footer, and single semantic announcement come from the generated localization API. The `Owntend` brand remains left-to-right inside either surrounding direction.
+The process splash appears before the full `MaterialApp`. It checks the user's stored locale preference from SQLite, falling back to device-locale selection: Arabic uses Arabic text/direction and every other locale falls back to English. Its tagline, startup status, footer, and single semantic announcement come from the generated localization API. Ambient decorative elements such as the splash sparkles are positioned with absolute canvas coordinates to prevent asymmetric flipping or distortion across layout directions. The `Owntend` brand remains left-to-right inside either surrounding direction.
+
+Both `OwntendStartupSurface` and `_SplashTitle` explicitly set `textDirection: TextDirection.ltr` on the brand-name `Text`/`RichText` widget. This is intentional and correct — the word "Owntend" is a Latin-script brand name that must always render left-to-right regardless of whether the surrounding `Directionality` is RTL for Arabic. Do not remove these overrides.
 
 ## Workflow
 

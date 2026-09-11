@@ -12,7 +12,6 @@ import 'package:owntend/main.dart';
 import 'package:owntend/src/core/domain/contracts.dart';
 import 'package:owntend/src/core/domain/models.dart';
 import 'package:owntend/src/core/services/app_permission_coordinator.dart';
-import 'package:owntend/src/core/services/backup_service.dart';
 import 'package:owntend/src/core/sync/sync_contracts.dart';
 import 'package:owntend/src/features/auth/domain/auth_repository.dart';
 import 'package:owntend/src/features/monetization/monetization.dart';
@@ -429,29 +428,6 @@ List<Override> testOverrides(
         ),
       ),
     ],
-    dashboardProvider.overrideWithValue(
-      AsyncData(
-        DashboardSummary(
-          todayTasks: tasks
-              .where((task) => task.status == TaskStatus.dueToday)
-              .length,
-          upcomingTasks: tasks
-              .where((task) => task.status == TaskStatus.upcoming)
-              .length,
-          overdueTasks: tasks
-              .where((task) => task.status == TaskStatus.overdue)
-              .length,
-          health: const HealthScoreBreakdown(
-            score: 100,
-            groupScores: {},
-            activeWeights: {},
-          ),
-          streak: streak,
-          completionRate: tasks.isEmpty ? 1 : 0,
-          completedThisMonth: 0,
-        ),
-      ),
-    ),
     statisticsProvider.overrideWithValue(
       const AsyncData(
         StatisticsSummary(
@@ -483,6 +459,7 @@ WeatherSnapshot makeWeather({
   double windSpeed = 12,
   int humidity = 56,
   String locationLabel = 'Baghdad',
+  DateTime? updatedAt,
 }) {
   final now = DateTime(2026, 6, 18, 9);
   return WeatherSnapshot(
@@ -492,7 +469,7 @@ WeatherSnapshot makeWeather({
       longitude: 44.3661,
       timezone: 'Asia/Baghdad',
     ),
-    updatedAt: now,
+    updatedAt: updatedAt ?? now,
     temperature: temperature,
     apparentTemperature: apparentTemperature,
     weatherCode: 0,
@@ -751,10 +728,20 @@ class FakeBackupRepository implements BackupRepository {
     String backupPath, {
     String? passphrase,
     required RestoreCloudDisposition cloudDisposition,
+    void Function(RestorePhase phase)? onProgress,
   }) async {
     restoreCount++;
     lastRestorePassphrase = passphrase;
     lastRestoreCloudDisposition = cloudDisposition;
+    onProgress?.call(RestorePhase.validated);
+    onProgress?.call(RestorePhase.safetyBackupComplete);
+    onProgress?.call(RestorePhase.servicesSuspended);
+    onProgress?.call(RestorePhase.mediaStaged);
+    onProgress?.call(RestorePhase.dbCommitStarted);
+    onProgress?.call(RestorePhase.dbCommitComplete);
+    onProgress?.call(RestorePhase.mediaActivated);
+    onProgress?.call(RestorePhase.cloudIntentDurable);
+    onProgress?.call(RestorePhase.terminal);
   }
 }
 
@@ -765,9 +752,15 @@ class FakeCloudSyncRepository implements CloudSyncRepository {
   Future<void>? enableFuture;
   var enableCount = 0;
   var disableCount = 0;
+  var suspendCount = 0;
   var fullReconcileCount = 0;
   var resumeRestoredSnapshotCount = 0;
   var syncNowCount = 0;
+
+  @override
+  Future<void> suspend() async {
+    suspendCount++;
+  }
 
   @override
   Future<void> disable() async {

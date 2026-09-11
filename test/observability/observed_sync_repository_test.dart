@@ -14,6 +14,7 @@ void main() {
     await repository.retry();
     await repository.fullReconcile();
     await repository.syncNow();
+    await repository.suspend();
 
     expect(delegate.calls, [
       'status',
@@ -23,6 +24,7 @@ void main() {
       'retry',
       'fullReconcile',
       'syncNow',
+      'suspend',
     ]);
   });
 
@@ -86,6 +88,11 @@ class _FakeCloudSyncRepository implements CloudSyncRepository {
   Future<void> syncNow() async {
     calls.add('syncNow');
     if (failSyncNow) throw StateError('controlled sync failure');
+  }
+
+  @override
+  Future<void> suspend() async {
+    calls.add('suspend');
   }
 
   @override

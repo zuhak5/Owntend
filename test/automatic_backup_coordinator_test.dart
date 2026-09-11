@@ -157,6 +157,7 @@ class _FakeBackupRepository implements BackupRepository {
     String backupPath, {
     String? passphrase,
     required RestoreCloudDisposition cloudDisposition,
+    void Function(RestorePhase phase)? onProgress,
   }) {
     throw UnimplementedError();
   }

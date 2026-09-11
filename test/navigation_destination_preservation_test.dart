@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:owntend/src/features/navigation/app_navigation.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   group('WP-011 validatedNotificationRoute exact-segment matching', () {
     test('allows every documented root and the two-segment exception', () {
       expect(validatedNotificationRoute('/maintenance/plan-1'), isNotNull);
@@ -39,6 +40,13 @@ void main() {
     test('take() consumes exactly once', () {
       PendingNotificationRoute.pending = '/assets/thing/a-1';
       expect(PendingNotificationRoute.take(), '/assets/thing/a-1');
+      expect(PendingNotificationRoute.take(), isNull);
+    });
+
+    test('openNotificationPayload records pending route when navigator is unmounted', () {
+      PendingNotificationRoute.pending = null;
+      openNotificationPayload('/maintenance/plan-1');
+      expect(PendingNotificationRoute.take(), '/maintenance/plan-1');
       expect(PendingNotificationRoute.take(), isNull);
     });
   });

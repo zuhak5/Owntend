@@ -1613,4 +1613,13 @@
   ,"confirmAssetTypeChargeBody": "Changing this item type requires {points} points for {tasks} attached tasks, including archived tasks. No refund is issued later."
   ,"@confirmAssetTypeChargeBody": {"placeholders": {"points": {"type": "int"}, "tasks": {"type": "int"}}}
   ,"confirmPointChargeAction": "Use points"
+  ,"unlockBackup": "Unlock backup"
+  ,"restorePhaseSafetyBackup": "Creating safety backup…"
+  ,"restorePhaseRestoringData": "Restoring database…"
+  ,"restorePhaseRestoringMedia": "Restoring photos and files…"
+  ,"restorePhaseFinalizing": "Finalizing restore…"
+  ,"dismissPreview": "Dismiss"
+  ,"resumeCloudUploadTitle": "Upload restored data to cloud"
+  ,"resumeCloudUploadDescription": "Local restore is complete. Upload this snapshot to resume cloud sync."
+  ,"resumeCloudUploadAction": "Upload now"
 }

@@ -112,15 +112,21 @@ mixin _LocalSyncAccountStore on _LocalSyncStoreBase {
     return (await hydrationProgress())!;
   }
 
-  Future<void> setHydrationPlan(int totalUnits) async {
+  Future<void> setHydrationPlan(
+    int totalUnits, {
+    bool resetCompleted = false,
+  }) async {
     final current = await hydrationProgress();
     if (current == null || current.state == RestoreRunState.completed) return;
-    if (current.totalUnits > 0) return;
-    final monotonicTotal = math.max(
-      math.max(totalUnits, 1),
-      current.completedUnits,
+    if (current.totalUnits > 0 && !resetCompleted) return;
+    final targetTotal = math.max(totalUnits, 1);
+    final monotonicTotal = resetCompleted
+        ? targetTotal
+        : math.max(targetTotal, current.completedUnits);
+    await _writeHydration(
+      completedUnits: resetCompleted ? 0 : null,
+      totalUnits: monotonicTotal,
     );
-    await _writeHydration(totalUnits: monotonicTotal);
   }
 
   Future<void> addHydrationUnits(int units) async {

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 import 'package:owntend/l10n/app_localizations_ext.dart';
 
+import '../core/domain/contracts.dart';
 import '../core/domain/input_validation.dart';
 import '../core/domain/models.dart';
 import '../core/utils/app_failure.dart';
@@ -28,6 +29,12 @@ String failureMessage(
       InputValidationIssue.mustBePositive => context.l10n.use1OrMore,
       InputValidationIssue.mustBeNonNegative => context.l10n.use0OrMore,
     };
+  }
+  if (error is BackupPassphraseRequiredException) {
+    return context.l10n.backupPassphraseNeededError;
+  }
+  if (error is BackupException) {
+    return error.message;
   }
   return localizedFailureMessage(
     context.l10n,

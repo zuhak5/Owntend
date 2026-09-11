@@ -393,6 +393,39 @@ class SyncCoordinator implements CloudSyncRepository, _SyncScheduleEnv {
   @override
   Future<void> fullReconcile() => _startSync(mode: SyncMode.fullReconcile);
 
+  @override
+  Future<void> suspend() => _serializeAccountTransition(() async {
+    _advanceAccountEpoch('restore_barrier_suspend');
+    _cancelScheduledSyncWork();
+    _deferredRemoteMedia.clear();
+    _phaseOverride = SyncPhase.offline;
+    _messageOverride = 'Cloud sync is suspended for restore.';
+    try {
+      await configureBackgroundSync?.call(false);
+    } on Object catch (error) {
+      AppLogger.warning(
+        'sync_restore_suspend_background_cancel_failed',
+        error: error,
+      );
+    }
+    await _stopRealtime();
+    final active = _activeSync;
+    if (active != null) {
+      try {
+        await active.timeout(_localCleanupTimeout);
+      } on TimeoutException catch (error) {
+        AppLogger.warning(
+          'sync_restore_active_sync_detached',
+          error: error,
+          fields: {'attempt': _syncAttemptSerial},
+        );
+      } on Object {
+        // The active operation already recorded its actionable failure.
+      }
+    }
+    await _emit();
+  });
+
   Future<void> syncIncremental() => _startSync(mode: SyncMode.incrementalPull);
 
   Future<void> prepareForAccountDeletion(String userId) {

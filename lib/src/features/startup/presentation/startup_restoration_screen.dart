@@ -41,15 +41,15 @@ class StartupHome extends StatelessWidget {
         onSignOut: onSignOut,
       ),
       StartupBootstrapKind.checkingStoredSession ||
-      StartupBootstrapKind.authenticatedReady => const Scaffold(
-        backgroundColor: HkColors.appBackground,
-        body: SizedBox.expand(),
+      StartupBootstrapKind.authenticatedReady => Scaffold(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        body: const SizedBox.expand(),
       ),
     };
   }
 }
 
-class _StartupRestorationScreen extends ConsumerStatefulWidget {
+class _StartupRestorationScreen extends StatelessWidget {
   const _StartupRestorationScreen({
     required this.status,
     required this.failure,
@@ -69,45 +69,17 @@ class _StartupRestorationScreen extends ConsumerStatefulWidget {
   final Future<void> Function() onSignOut;
 
   @override
-  ConsumerState<_StartupRestorationScreen> createState() =>
-      _StartupRestorationScreenState();
-}
-
-class _StartupRestorationScreenState
-    extends ConsumerState<_StartupRestorationScreen> {
-  bool _restoreServiceRequested = false;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (!_restoreServiceRequested) {
-      _restoreServiceRequested = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          unawaited(_startStartupRestoreService(context));
-        }
-      });
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
     return _InitialCloudHydrationOverlay(
-      status: widget.status,
-      failure: widget.failure,
-      canContinueOffline: widget.canContinueOffline,
-      onRetry: widget.onRetry,
-      onCheckConnection: widget.onCheckConnection,
-      onContinueOffline: widget.onContinueOffline,
-      onSignOut: widget.onSignOut,
+      status: status,
+      failure: failure,
+      canContinueOffline: canContinueOffline,
+      onRetry: onRetry,
+      onCheckConnection: onCheckConnection,
+      onContinueOffline: onContinueOffline,
+      onSignOut: onSignOut,
     );
   }
-}
-
-Future<void> _startStartupRestoreService(BuildContext context) async {
-  if (!context.mounted || !Platform.isAndroid) return;
-  final localeCode = Localizations.localeOf(context).languageCode;
-  await startRestoreForegroundService(localeCode: localeCode);
 }
 
 SyncStatus _hydrationStatusFor(SyncStatus? observed, SyncStatus fallback) {

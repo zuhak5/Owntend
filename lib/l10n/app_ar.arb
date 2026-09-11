@@ -1110,5 +1110,14 @@
     "placeholders": {
       "count": {"type": "int"}
     }
-  }
+  },
+  "unlockBackup": "فتح النسخة الاحتياطية",
+  "restorePhaseSafetyBackup": "جارٍ إنشاء نسخة أمان احتياطية…",
+  "restorePhaseRestoringData": "جارٍ استعادة قاعدة البيانات…",
+  "restorePhaseRestoringMedia": "جارٍ استعادة الصور والملفات…",
+  "restorePhaseFinalizing": "جارٍ إنهاء الاستعادة…",
+  "dismissPreview": "إلغاء المعاينة",
+  "resumeCloudUploadTitle": "رفع البيانات المستعادة إلى السحابة",
+  "resumeCloudUploadDescription": "اكتملت الاستعادة المحلية. ارفع هذه اللقطة لاستئناف المزامنة السحابية.",
+  "resumeCloudUploadAction": "رفع الآن"
 }

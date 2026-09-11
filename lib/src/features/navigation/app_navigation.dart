@@ -25,6 +25,7 @@ void openNotificationPayload(String payload) {
     if (context == null || !context.mounted) {
       return;
     }
+    PendingNotificationRoute.take();
     context.push(route);
   });
 }

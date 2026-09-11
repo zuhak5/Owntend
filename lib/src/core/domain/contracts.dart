@@ -293,6 +293,7 @@ abstract interface class BackupRepository {
     String backupPath, {
     String? passphrase,
     required RestoreCloudDisposition cloudDisposition,
+    void Function(RestorePhase phase)? onProgress,
   });
 }
 
@@ -304,6 +305,36 @@ enum BackupTrigger { manual, automatic, preRestore }
 /// process-death recovery can honor the exact choice made before local data is
 /// replaced.
 enum RestoreCloudDisposition { localOnlyPaused, updateCloud }
+
+enum RestorePhase {
+  validated,
+  safetyBackupComplete,
+  servicesSuspended,
+  mediaStaged,
+  dbCommitStarted,
+  dbCommitComplete,
+  mediaActivated,
+  cloudIntentDurable,
+  derivedRebuilt,
+  cleanupPending,
+  terminal,
+}
+
+class BackupException implements Exception {
+  const BackupException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
+class BackupPassphraseRequiredException implements Exception {
+  const BackupPassphraseRequiredException();
+
+  @override
+  String toString() => 'Passphrase required to open this backup.';
+}
 
 class BackupState {
   const BackupState({this.lastBackup, this.automaticBackupsEnabled = true});
@@ -411,6 +442,7 @@ abstract interface class BackupService {
     String backupPath, {
     String? passphrase,
     required RestoreCloudDisposition cloudDisposition,
+    void Function(RestorePhase phase)? onProgress,
   });
 }
 
@@ -419,6 +451,7 @@ abstract interface class RestoreService {
     String backupPath, {
     String? passphrase,
     required RestoreCloudDisposition cloudDisposition,
+    void Function(RestorePhase phase)? onProgress,
   });
 }
 

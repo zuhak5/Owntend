@@ -16,6 +16,7 @@ import '../services/notification_service.dart';
 import '../services/reminder_schedule_reconciler.dart';
 import '../services/restore_journal.dart';
 import '../services/weather_service.dart';
+import '../sync/background_sync_scheduler.dart';
 import '../sync/sync_providers.dart';
 import '../../features/auth/presentation/auth_providers.dart';
 import '../../features/navigation/app_navigation.dart';
@@ -166,6 +167,22 @@ final backupRepositoryProvider = Provider<BackupRepository>(
   (ref) => OwntendBackupService(
     ref.watch(databaseProvider),
     journalStore: ref.watch(restoreJournalStoreProvider),
+    onBeforeRestoreBarrier: () async {
+      final sync = ref.read(cloudSyncRepositoryProvider);
+      await sync.suspend();
+      try {
+        await configureCloudSyncBackgroundTask(false);
+      } on Object {
+        // Best effort background task cancellation.
+      }
+      try {
+        await ref
+            .read(notificationSchedulerProvider)
+            .clearAllScheduledReminders();
+      } on Object {
+        // Best effort reminder clearing.
+      }
+    },
     // WP-005 (F-007): the service reports verified restore commits; the
     // provider layer owns the single epoch publication boundary.
     onRestoreCommit: () =>
@@ -401,13 +418,6 @@ final assetRecordsProvider = StreamProvider.autoDispose
           .watchRecordsForAsset(assetId)
           .distinctByFingerprint(maintenanceRecordListFingerprint);
     });
-
-final dashboardProvider = StreamProvider.autoDispose<DashboardSummary>((ref) {
-  return ref
-      .watch(statisticsRepositoryProvider)
-      .watchDashboardSummary()
-      .distinctByFingerprint(dashboardSummaryFingerprint);
-});
 
 final statisticsProvider = StreamProvider.autoDispose<StatisticsSummary>(
   (ref) => ref

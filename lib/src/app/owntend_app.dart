@@ -70,7 +70,8 @@ Future<void> runOwntendApplication() async {
       error: error,
       stackTrace: stackTrace,
     );
-    _runOwntendProcess(const OwntendStartupFailure());
+    hkStartupFailedNotifier.value = true;
+    _runOwntendProcess(const OwntendStartupFailure(), isFailed: true);
     return;
   }
 
@@ -89,11 +90,39 @@ Future<void> runOwntendApplication() async {
         stackTrace: stackTrace,
       );
       await database.close();
+      hkStartupFailedNotifier.value = true;
       _runOwntendProcess(
         const OwntendStartupFailure(databaseUnrecoverable: true),
+        isFailed: true,
       );
       return;
     }
+
+    Brightness? initialBrightness;
+    Locale? initialLocale;
+    try {
+      final settingsRepo = DriftSettingsRepository(database);
+      final themePref = await settingsRepo.themePreference();
+      final timeOfDayEnabled = await settingsRepo.timeOfDayThemeEnabled();
+      final localePref = await settingsRepo.appLocalePreference();
+      final themeMode = effectiveThemeMode(
+        themePref,
+        timeOfDayThemeEnabled: timeOfDayEnabled,
+        now: DateTime.now(),
+      );
+      initialBrightness = switch (themeMode) {
+        ThemeMode.dark => Brightness.dark,
+        ThemeMode.light => Brightness.light,
+        ThemeMode.system =>
+          WidgetsBinding.instance.platformDispatcher.platformBrightness,
+      };
+      if (localePref.isExplicit) {
+        initialLocale = Locale(localePref.language.name);
+      }
+    } on Object catch (error) {
+      AppLogger.warning('startup_early_settings', error: error);
+    }
+
     final restoreJournalStore = RestoreJournalStore();
     _runOwntendProcess(
       _RestoreRecoveryGate(
@@ -108,6 +137,8 @@ Future<void> runOwntendApplication() async {
           appBuilder: (startupTheme) => OwntendApp(startupTheme: startupTheme),
         ),
       ),
+      initialThemeBrightness: initialBrightness,
+      initialLocale: initialLocale,
     );
   }
 
@@ -128,8 +159,20 @@ Future<void> runOwntendApplication() async {
   }
 }
 
-void _runOwntendProcess(Widget child) {
-  runApp(OwntendProcessSplash(child: child));
+void _runOwntendProcess(
+  Widget child, {
+  Brightness? initialThemeBrightness,
+  Locale? initialLocale,
+  bool isFailed = false,
+}) {
+  runApp(
+    OwntendProcessSplash(
+      initialThemeBrightness: initialThemeBrightness,
+      initialLocale: initialLocale,
+      isFailed: isFailed,
+      child: child,
+    ),
+  );
 }
 
 class _RestoreRecoveryGate extends StatefulWidget {
@@ -168,6 +211,7 @@ class _RestoreRecoveryGateState extends State<_RestoreRecoveryGate> {
         stackTrace: stackTrace,
       );
       if (!mounted) return;
+      hkStartupFailedNotifier.value = true;
       setState(() => _failure = error);
     }
   }
@@ -191,10 +235,10 @@ class _RestoreRecoveryGateState extends State<_RestoreRecoveryGate> {
       );
     }
 
-    final deviceLocale = WidgetsBinding.instance.platformDispatcher.locale;
-    final locale = deviceLocale.languageCode == 'ar'
-        ? const Locale('ar')
-        : const Locale('en');
+    final locale = Locale(
+      supportedDeviceLanguage(WidgetsBinding.instance.platformDispatcher.locale)
+          .name,
+    );
     return MaterialApp(
       title: 'Owntend',
       debugShowCheckedModeBanner: false,
@@ -202,6 +246,8 @@ class _RestoreRecoveryGateState extends State<_RestoreRecoveryGate> {
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       theme: OwntendTheme.light(),
+      darkTheme: OwntendTheme.dark(),
+      themeMode: ThemeMode.system,
       home: Builder(
         builder: (context) => Scaffold(
           body: SafeArea(
@@ -272,12 +318,23 @@ class _OwntendAppState extends ConsumerState<OwntendApp>
     );
     startup.stateListenable.addListener(_handleAutomaticBackupStartupState);
     _handleAutomaticBackupStartupState();
+    startup.stateListenable.addListener(_handleStartupReadinessState);
+    _handleStartupReadinessState();
     _authSubscription = ref.listenManual(authStateProvider, (previous, next) {
       startup.handleAuthValue(next);
     }, fireImmediately: true);
     _syncSubscription = ref.listenManual(syncStatusProvider, (previous, next) {
       startup.handleSyncStatusValue(next);
     }, fireImmediately: true);
+  }
+
+  void _handleStartupReadinessState() {
+    final state = _startupController.currentState;
+    if (state.kind == StartupBootstrapKind.startupFailed) {
+      hkStartupFailedNotifier.value = true;
+    } else if (state.kind != StartupBootstrapKind.checkingStoredSession) {
+      hkStartupReadyNotifier.value = true;
+    }
   }
 
   void _handleAutomaticBackupStartupState() {
@@ -327,6 +384,9 @@ class _OwntendAppState extends ConsumerState<OwntendApp>
     _syncSubscription = null;
     _startupController.stateListenable.removeListener(
       _handleAutomaticBackupStartupState,
+    );
+    _startupController.stateListenable.removeListener(
+      _handleStartupReadinessState,
     );
     _automaticBackupCoordinator.reset();
     WidgetsBinding.instance.removeObserver(this);

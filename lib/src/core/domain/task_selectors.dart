@@ -125,10 +125,15 @@ TaskBuckets getTaskBuckets(Iterable<TaskItem> tasks, DateTime now) {
   final next7Days = <TaskItem>[];
   final later = <TaskItem>[];
   final completedToday = <TaskItem>[];
-  for (final task in tasks) {
-    if (task.plan.archivedAt != null || !task.plan.isEnabled) {
+  for (final rawTask in tasks) {
+    if (rawTask.plan.archivedAt != null || !rawTask.plan.isEnabled) {
       continue;
     }
+    final task = rawTask.status == TaskStatus.completed
+        ? rawTask
+        : rawTask.copyWith(
+            status: activeTaskStatusForDueDate(rawTask.plan.nextDueDate, now),
+          );
     switch (getTaskBucketStatus(task, now)) {
       case TaskBucketStatus.overdue:
         overdue.add(task);

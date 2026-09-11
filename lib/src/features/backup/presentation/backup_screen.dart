@@ -31,55 +31,70 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
   @override
   Widget build(BuildContext context) {
     final last = _state.lastBackup;
+    final syncStatus = ref.watch(syncStatusProvider).value;
     final backupRunning = _busy && _busyLabel == context.l10n.creatingBackup;
     final canShare =
         !_busy && last?.successful == true && (last?.path?.isNotEmpty ?? false);
     final bottomPadding = MediaQuery.paddingOf(context).bottom;
-    return Scaffold(
-      appBar: AppBar(title: Text(context.l10n.backupAndRestore)),
-      body: hk_ui.ProductivityBackdrop(
-        child: SafeArea(
-          top: false,
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 720),
-              child: ListView(
-                padding: EdgeInsets.fromLTRB(
-                  HkSpacing.gutter,
-                  HkSpacing.xs,
-                  HkSpacing.gutter,
-                  96 + bottomPadding,
+    return PopScope(
+      canPop: !_busy,
+      child: Scaffold(
+        appBar: AppBar(title: Text(context.l10n.backupAndRestore)),
+        body: hk_ui.ProductivityBackdrop(
+          child: SafeArea(
+            top: false,
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 720),
+                child: ListView(
+                  padding: EdgeInsets.fromLTRB(
+                    HkSpacing.gutter,
+                    HkSpacing.xs,
+                    HkSpacing.gutter,
+                    96 + bottomPadding,
+                  ),
+                  children: [
+                    const HkNativeAdCard(placement: 'backup'),
+                    _BackupStatusPanel(
+                      status: last,
+                      description: _statusDescription(context, last),
+                      showDetails: _showBackupDetails,
+                      onToggleDetails: last?.path == null
+                          ? null
+                          : () => setState(
+                              () => _showBackupDetails = !_showBackupDetails,
+                            ),
+                    ),
+                    const SizedBox(height: HkSpacing.sm),
+                    _BackupCreatePanel(
+                      busy: backupRunning,
+                      showLoadingIndicator: _backupLoadingIndicatorVisible,
+                      automaticBackupsEnabled: _state.automaticBackupsEnabled,
+                      canShare: canShare,
+                      onCreate: _exportBackup,
+                      onShare: _shareBackup,
+                      onAutomaticChanged: _setAutomaticBackupsEnabled,
+                    ),
+                    if (syncStatus != null && syncStatus.restorePending) ...[
+                      const SizedBox(height: HkSpacing.sm),
+                      _ResumeCloudUploadCard(
+                        busy: _busy,
+                        onResume: _resumeCloudUpload,
+                      ),
+                    ],
+                    const SizedBox(height: HkSpacing.sm),
+                    _BackupRestorePanel(
+                      busy: _busy,
+                      preview: _restorePreview,
+                      onChoose: _chooseRestoreBackup,
+                      onRestore: _confirmRestore,
+                      onDismiss: () => setState(() {
+                        _restorePreview = null;
+                        _restorePassphrase = null;
+                      }),
+                    ),
+                  ],
                 ),
-                children: [
-                  const HkNativeAdCard(placement: 'backup'),
-                  _BackupStatusPanel(
-                    status: last,
-                    description: _statusDescription(context, last),
-                    showDetails: _showBackupDetails,
-                    onToggleDetails: last?.path == null
-                        ? null
-                        : () => setState(
-                            () => _showBackupDetails = !_showBackupDetails,
-                          ),
-                  ),
-                  const SizedBox(height: HkSpacing.sm),
-                  _BackupCreatePanel(
-                    busy: backupRunning,
-                    showLoadingIndicator: _backupLoadingIndicatorVisible,
-                    automaticBackupsEnabled: _state.automaticBackupsEnabled,
-                    canShare: canShare,
-                    onCreate: _exportBackup,
-                    onShare: _shareBackup,
-                    onAutomaticChanged: _setAutomaticBackupsEnabled,
-                  ),
-                  const SizedBox(height: HkSpacing.sm),
-                  _BackupRestorePanel(
-                    busy: _busy,
-                    preview: _restorePreview,
-                    onChoose: _chooseRestoreBackup,
-                    onRestore: _confirmRestore,
-                  ),
-                ],
               ),
             ),
           ),
@@ -224,18 +239,25 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
             .read(backupRepositoryProvider)
             .inspectBackup(path, passphrase: null);
       } on BackupPassphraseRequiredException {
-        if (!mounted) {
-          return;
+        String? passphraseError;
+        while (true) {
+          if (!mounted) return;
+          final entered = await _promptForRestorePassphrase(
+            errorMessage: passphraseError,
+          );
+          if (!mounted || entered == null || entered.isEmpty) return;
+          _setBusy(context.l10n.checkingBackup);
+          try {
+            preview = await ref
+                .read(backupRepositoryProvider)
+                .inspectBackup(path, passphrase: entered);
+            _restorePassphrase = entered;
+            break;
+          } on BackupException catch (error) {
+            passphraseError = error.message;
+            if (mounted) _clearBusy();
+          }
         }
-        final entered = await _promptForRestorePassphrase();
-        if (!mounted || entered == null || entered.isEmpty) {
-          return;
-        }
-        _setBusy(context.l10n.checkingBackup);
-        _restorePassphrase = entered;
-        preview = await ref
-            .read(backupRepositoryProvider)
-            .inspectBackup(path, passphrase: entered);
       }
       if (!mounted) {
         return;
@@ -259,10 +281,11 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
     }
   }
 
-  Future<String?> _promptForRestorePassphrase() => showDialog<String>(
-    context: context,
-    builder: (_) => const _RestorePassphraseDialog(),
-  );
+  Future<String?> _promptForRestorePassphrase({String? errorMessage}) =>
+      showDialog<String>(
+        context: context,
+        builder: (_) => _RestorePassphraseDialog(errorMessage: errorMessage),
+      );
 
   Future<void> _confirmRestore() async {
     final preview = _restorePreview;
@@ -336,12 +359,6 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
       },
     );
     if (choice == null) {
-      if (mounted) {
-        setState(() {
-          _restorePreview = null;
-          _restorePassphrase = null;
-        });
-      }
       return;
     }
     await _restoreSelectedBackup(preview, choice);
@@ -364,18 +381,47 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
             preview.path,
             passphrase: _restorePassphrase,
             cloudDisposition: choice,
+            onProgress: (phase) {
+              if (!mounted) return;
+              final label = switch (phase) {
+                RestorePhase.validated => context.l10n.checkingBackup,
+                RestorePhase.safetyBackupComplete =>
+                  context.l10n.restorePhaseSafetyBackup,
+                RestorePhase.servicesSuspended => context.l10n.restoringBackup,
+                RestorePhase.mediaStaged =>
+                  context.l10n.restorePhaseRestoringMedia,
+                RestorePhase.dbCommitStarted =>
+                  context.l10n.restorePhaseRestoringData,
+                RestorePhase.dbCommitComplete =>
+                  context.l10n.restorePhaseRestoringData,
+                RestorePhase.mediaActivated =>
+                  context.l10n.restorePhaseRestoringMedia,
+                RestorePhase.cloudIntentDurable =>
+                  context.l10n.restorePhaseFinalizing,
+                RestorePhase.derivedRebuilt =>
+                  context.l10n.restorePhaseFinalizing,
+                RestorePhase.cleanupPending =>
+                  context.l10n.restorePhaseFinalizing,
+                RestorePhase.terminal => context.l10n.restorePhaseFinalizing,
+              };
+              setState(() => _busyLabel = label);
+            },
           );
-      if (choice == RestoreCloudDisposition.updateCloud) {
-        await ref.read(cloudSyncRepositoryProvider).fullReconcile();
-      }
-      // WP-005 (F-007): the restore service publishes the database epoch on
-      // verified commit, so every completion path — not just this screen —
-      // rebuilds dependent streams.
-      await ref.read(searchRepositoryProvider).rebuildIndex();
-      if (ref.read(notificationAutoStartProvider)) {
-        final scheduler = ref.read(notificationSchedulerProvider);
-        await scheduler.initialize();
-        await scheduler.refreshSchedules();
+      try {
+        if (choice == RestoreCloudDisposition.updateCloud) {
+          await ref.read(cloudSyncRepositoryProvider).fullReconcile();
+        }
+        // WP-005 (F-007): the restore service publishes the database epoch on
+        // verified commit, so every completion path — not just this screen —
+        // rebuilds dependent streams.
+        await ref.read(searchRepositoryProvider).rebuildIndex();
+        if (ref.read(notificationAutoStartProvider)) {
+          final scheduler = ref.read(notificationSchedulerProvider);
+          await scheduler.initialize();
+          await scheduler.refreshSchedules();
+        }
+      } catch (error) {
+        AppLogger.warning('backup_restore_post_reconcile', error: error);
       }
       await _loadBackupState();
       if (!mounted) {
@@ -406,6 +452,33 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
         _clearBusy();
       } else {
         _restorePassphrase = null;
+      }
+    }
+  }
+
+  Future<void> _resumeCloudUpload() async {
+    _setBusy(context.l10n.resumeCloudUploadTitle);
+    try {
+      await ref
+          .read(cloudSyncRepositoryProvider)
+          .resumeRestoredSnapshotToCloud();
+      if (mounted) {
+        hk_ui.showToast(context, content: Text(context.l10n.backupRestored));
+      }
+    } catch (error) {
+      if (mounted) {
+        AppLogger.warning('resume_restored_snapshot_failed', error: error);
+        hk_ui.showToast(
+          context,
+          content: Text(
+            failureMessage(context, error, fallback: AppFailureCode.backup),
+          ),
+          severity: hk_ui.HkToastSeverity.error,
+        );
+      }
+    } finally {
+      if (mounted) {
+        _clearBusy();
       }
     }
   }
@@ -578,7 +651,9 @@ class _ExportPassphraseDialogState extends State<_ExportPassphraseDialog> {
 }
 
 class _RestorePassphraseDialog extends StatefulWidget {
-  const _RestorePassphraseDialog();
+  const _RestorePassphraseDialog({this.errorMessage});
+
+  final String? errorMessage;
 
   @override
   State<_RestorePassphraseDialog> createState() =>
@@ -587,6 +662,7 @@ class _RestorePassphraseDialog extends StatefulWidget {
 
 class _RestorePassphraseDialogState extends State<_RestorePassphraseDialog> {
   final _controller = TextEditingController();
+  bool _obscureText = true;
 
   @override
   void dispose() {
@@ -606,12 +682,21 @@ class _RestorePassphraseDialogState extends State<_RestorePassphraseDialog> {
       content: TextField(
         controller: _controller,
         autofocus: true,
-        obscureText: true,
+        obscureText: _obscureText,
         autofillHints: const [AutofillHints.password],
         textInputAction: TextInputAction.done,
         onSubmitted: (_) => _submit(),
         decoration: InputDecoration(
           labelText: context.l10n.backupPassphraseLabel,
+          errorText: widget.errorMessage,
+          suffixIcon: IconButton(
+            icon: Icon(
+              _obscureText
+                  ? Symbols.visibility_rounded
+                  : Symbols.visibility_off_rounded,
+            ),
+            onPressed: () => setState(() => _obscureText = !_obscureText),
+          ),
         ),
       ),
       actions: [
@@ -621,7 +706,7 @@ class _RestorePassphraseDialogState extends State<_RestorePassphraseDialog> {
         ),
         FilledButton(
           onPressed: _submit,
-          child: Text(context.l10n.restoreBackup),
+          child: Text(context.l10n.unlockBackup),
         ),
       ],
     );
@@ -896,12 +981,14 @@ class _BackupRestorePanel extends StatelessWidget {
     required this.preview,
     required this.onChoose,
     required this.onRestore,
+    required this.onDismiss,
   });
 
   final bool busy;
   final BackupPreview? preview;
   final VoidCallback onChoose;
   final VoidCallback onRestore;
+  final VoidCallback onDismiss;
 
   @override
   Widget build(BuildContext context) {
@@ -931,7 +1018,9 @@ class _BackupRestorePanel extends StatelessWidget {
             const SizedBox(height: HkSpacing.md),
             _BackupPreviewPanel(
               preview: preview!,
+              busy: busy,
               onRestore: busy ? null : onRestore,
+              onDismiss: busy ? null : onDismiss,
             ),
           ],
         ],
@@ -1098,10 +1187,17 @@ class _BackupDialogNotice extends StatelessWidget {
 }
 
 class _BackupPreviewPanel extends StatelessWidget {
-  const _BackupPreviewPanel({required this.preview, required this.onRestore});
+  const _BackupPreviewPanel({
+    required this.preview,
+    required this.onRestore,
+    required this.onDismiss,
+    this.busy = false,
+  });
 
   final BackupPreview preview;
   final VoidCallback? onRestore;
+  final VoidCallback? onDismiss;
+  final bool busy;
 
   @override
   Widget build(BuildContext context) {
@@ -1130,13 +1226,20 @@ class _BackupPreviewPanel extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
+                      p.basename(preview.path),
+                      style: Theme.of(context).textTheme.titleSmall
+                          ?.copyWith(fontWeight: FontWeight.w800),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: HkSpacing.space4),
+                    Text(
                       context.l10n.backupFromDate(
                         _formatDate(context, preview.createdAt),
                       ),
-                      style: Theme.of(context).textTheme.titleSmall
-                          ?.copyWith(fontWeight: FontWeight.w800),
+                      style: Theme.of(context).textTheme.bodySmall
+                          ?.copyWith(color: scheme.onSurfaceVariant),
                     ),
-                    const SizedBox(height: HkSpacing.space4),
+                    const SizedBox(height: HkSpacing.space2),
                     Text(
                       context.l10n.backupFormatSummary(
                         preview.formatVersion,
@@ -1211,12 +1314,83 @@ class _BackupPreviewPanel extends StatelessWidget {
               ),
           ],
           const SizedBox(height: HkSpacing.md),
+          Row(
+            children: [
+              OutlinedButton(
+                onPressed: busy ? null : onDismiss,
+                child: Text(context.l10n.dismissPreview),
+              ),
+              const SizedBox(width: HkSpacing.sm),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: onRestore,
+                  icon: const Icon(Symbols.restore_rounded),
+                  label: Text(context.l10n.restoreThisBackup2),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ResumeCloudUploadCard extends StatelessWidget {
+  const _ResumeCloudUploadCard({required this.busy, required this.onResume});
+
+  final bool busy;
+  final VoidCallback onResume;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return hk_ui.PremiumCard(
+      padding: const EdgeInsets.all(HkSpacing.md),
+      borderRadius: HkRadii.xxl,
+      backgroundColor: _backupTintedSurface(context, scheme.primary, 0.04),
+      borderColor: scheme.primary.withValues(alpha: 0.22),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _BackupIconBadge(
+                icon: Symbols.cloud_upload_rounded,
+                color: scheme.primary,
+                size: 48,
+              ),
+              const SizedBox(width: HkSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      context.l10n.resumeCloudUploadTitle,
+                      style: Theme.of(context).textTheme.titleSmall
+                          ?.copyWith(fontWeight: FontWeight.w800),
+                    ),
+                    const SizedBox(height: HkSpacing.space4),
+                    Text(
+                      context.l10n.resumeCloudUploadDescription,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: HkSpacing.md),
           SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
-              onPressed: onRestore,
-              icon: const Icon(Symbols.restore_rounded),
-              label: Text(context.l10n.restoreThisBackup2),
+              onPressed: busy ? null : onResume,
+              icon: const Icon(Symbols.cloud_upload_rounded),
+              label: Text(context.l10n.resumeCloudUploadAction),
             ),
           ),
         ],
@@ -1329,6 +1503,7 @@ String _formatBytes(BuildContext context, int bytes) {
 String _localizedBackupDetail(BuildContext context, String value) {
   return switch (value) {
     'Tasks and due dates' => context.l10n.backupIncludedTasks,
+    'Items, rooms, areas, tags, and photos' ||
     'Items, rooms, areas, categories, tags, and photos' =>
       context.l10n.backupIncludedItems,
     'Task history, timeline, streaks, and statistics source data' =>

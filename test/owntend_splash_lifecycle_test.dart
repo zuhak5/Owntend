@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:owntend/owntend_animated_splash_screen.dart';
 import 'package:owntend/l10n/app_localizations.dart';
@@ -44,6 +45,7 @@ class _BranchHostState extends State<_BranchHost> {
 void main() {
   setUp(() {
     _BranchHostState.initCount = 0;
+    resetOwntendStartupNotifiers();
   });
 
   testWidgets('first Flutter frame contains the process splash', (
@@ -184,4 +186,152 @@ void main() {
     expect(tester.binding.hasScheduledFrame, isFalse);
     expect(tester.takeException(), isNull);
   });
+  testWidgets('OwntendStartupSurface uses dark background in dark mode', (
+    tester,
+  ) async {
+    tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
+    addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
+
+    await tester.pumpWidget(
+      MediaQuery(
+        data: const MediaQueryData(platformBrightness: Brightness.dark),
+        child: const Directionality(
+          textDirection: TextDirection.ltr,
+          child: OwntendStartupSurface(),
+        ),
+      ),
+    );
+
+    final boxes = tester
+        .widgetList<ColoredBox>(find.byType(ColoredBox))
+        .toList();
+    expect(
+      boxes.any((b) => b.color == owntendSplashBackgroundDark),
+      isTrue,
+      reason:
+          'OwntendStartupSurface must use owntendSplashBackgroundDark '
+          'in dark mode',
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('OwntendStartupSurface uses light background in light mode', (
+    tester,
+  ) async {
+    tester.platformDispatcher.platformBrightnessTestValue = Brightness.light;
+    addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
+
+    await tester.pumpWidget(
+      MediaQuery(
+        data: const MediaQueryData(platformBrightness: Brightness.light),
+        child: const Directionality(
+          textDirection: TextDirection.ltr,
+          child: OwntendStartupSurface(),
+        ),
+      ),
+    );
+
+    final boxes = tester
+        .widgetList<ColoredBox>(find.byType(ColoredBox))
+        .toList();
+    expect(
+      boxes.any((b) => b.color == owntendSplashBackground),
+      isTrue,
+      reason:
+          'OwntendStartupSurface must use owntendSplashBackground '
+          'in light mode',
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'OwntendStartupSurface provides a SystemUiOverlayStyle annotation',
+    (tester) async {
+      await tester.pumpWidget(
+        MediaQuery(
+          data: const MediaQueryData(),
+          child: const Directionality(
+            textDirection: TextDirection.ltr,
+            child: OwntendStartupSurface(),
+          ),
+        ),
+      );
+
+      expect(
+        find.byType(AnnotatedRegion<SystemUiOverlayStyle>),
+        findsOneWidget,
+        reason:
+            'OwntendStartupSurface must manage system bar icon brightness '
+            'during the interstitial loading period',
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'splash screen uses indeterminate indicator, not a progress bar',
+    (tester) async {
+      await tester.pumpWidget(
+        const OwntendProcessSplash(
+          displayDuration: Duration(seconds: 30),
+          child: SizedBox.expand(),
+        ),
+      );
+      await tester.pump();
+
+      expect(
+        find.byType(LinearProgressIndicator),
+        findsNothing,
+        reason:
+            'The splash must not show a determinate progress bar '
+            'because it has no connection to actual startup progress',
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'OwntendProcessSplash propagates initialThemeBrightness to splash widgets',
+    (tester) async {
+      tester.platformDispatcher.platformBrightnessTestValue = Brightness.light;
+      addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
+
+      await tester.pumpWidget(
+        const OwntendProcessSplash(
+          initialThemeBrightness: Brightness.dark,
+          child: SizedBox.expand(),
+        ),
+      );
+      await tester.pump();
+
+      final scaffold = tester.widget<Scaffold>(find.byType(Scaffold));
+      expect(scaffold.backgroundColor, owntendSplashBackgroundDark);
+    },
+  );
+
+  testWidgets(
+    'OwntendProcessSplash propagates initialLocale to splash directionality',
+    (tester) async {
+      tester.platformDispatcher.localeTestValue = const Locale('en', 'US');
+      addTearDown(tester.platformDispatcher.clearLocaleTestValue);
+
+      await tester.pumpWidget(
+        const OwntendProcessSplash(
+          initialLocale: Locale('ar'),
+          child: SizedBox.expand(),
+        ),
+      );
+      await tester.pump();
+
+      final directionality = tester.widget<Directionality>(
+        find
+            .descendant(
+              of: find.byType(OwntendProcessSplash),
+              matching: find.byType(Directionality),
+            )
+            .first,
+      );
+      expect(directionality.textDirection, TextDirection.rtl);
+    },
+  );
 }

@@ -4,7 +4,7 @@
 
 Owntend helps users inventory household assets and keep recurring or one-time maintenance work visible, scheduled, and recoverable across offline and signed-in use.
 
-The first Flutter frame is owned by one process-lifetime splash above deferred startup, theme loading, application, and failure branches. A non-blank startup surface remains available underneath. Supabase initialization failure stays on a localized blocking surface with an explicit retry instead of silently launching a signed-out, cloud-disabled application. English/Arabic semantics, scaled compact layout, and reduced-motion behavior are part of the widget contract; a physical release launch still requires device validation.
+The first Flutter frame is owned by one process-lifetime splash above deferred startup, theme loading, application, and failure branches. Dismissal is gated on startup readiness (minimum 600ms brand settling duration, 0ms on reduced motion, immediate dismissal on fatal errors). A non-blank startup surface remains available underneath. Supabase initialization failure stays on a localized blocking surface with an explicit retry instead of silently launching a signed-out, cloud-disabled application. English/Arabic semantics, scaled compact layout, and reduced-motion behavior are part of the widget contract; a physical release launch still requires device validation.
 
 ## Navigation surfaces
 
@@ -39,6 +39,7 @@ cannot create two records for one occurrence. Undo is guarded so it cannot
 rewind a later completion or edit. UI changes must not bypass repository and
 synchronization semantics.
 
+
 Transient feedback has one protected queue. Passive messages and errors wait behind an active Undo opportunity, compatible operations batch only under an exact non-null key, Trash never batches with maintenance completion, and accessible-navigation mode keeps actionable Undo available until action or dismissal. Floating feedback follows the active Scaffold's real navigation, footer, keyboard, and floating-action obstruction instead of route-specific offsets. See [`transient-feedback.md`](../development/transient-feedback.md).
 
 ## Search and insights
@@ -46,7 +47,8 @@ Transient feedback has one protected queue. Passive messages and errors wait beh
 - Search across supported home and maintenance data.
 - Search results are request-generation bound, so a slower response for an older query cannot replace the current query's results.
 - Statistics and chart-based summaries.
-- Dashboard summaries and actionable status.
+- Dashboard summaries and actionable status: dynamic urgency task sections prioritize overdue maintenance directly above today's and upcoming tasks with direct-filter navigation (`/maintenance?filter=overdue`), showing up to 5 overdue items with total count labels; an aligned up-to-date empty state when all active maintenance is clear today that reinforces 100% home readiness while suppressing redundant floating action buttons; and CLS-free below-fold native ad placement.
+- Coordinated dashboard pull-to-refresh running streaks, weather, and sync operations concurrently.
 - Health, readiness, and warranty indicators where data is available.
 
 ## Accounts and synchronization
@@ -67,7 +69,6 @@ unavailable. The in-app authenticated deletion flow is unchanged. See the
 Signed-out or offline operation must remain explicit; the application should not imply cloud protection when synchronization is unavailable.
 
 Google sign-in is the required production authentication method; it is not an optional enhancement to cloud synchronization.
-
 The public page is not an anonymous deletion endpoint. It accepts success only when the protected function returns a deletion receipt for the authenticated user. Repository coverage does not prove the page, OAuth redirect configuration, or Edge Function is deployed to production.
 
 ## Notifications and background work

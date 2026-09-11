@@ -136,15 +136,48 @@ void main() {
     expect(owntendSplashDisplayDuration, const Duration(milliseconds: 3200));
     expect(owntendSplashFadeOutDuration, const Duration(milliseconds: 250));
     expect(owntendSplashBackground.toARGB32(), 0xFFF9FCF8);
+    // The dark constant must match the Android values-night-v31 resource.
+    expect(owntendSplashBackgroundDark.toARGB32(), 0xFF0D2118);
+  });
+
+  test('Android splash background colors match Flutter constants', () {
+    // Light: values-v31 and colors.xml must carry #F9FCF8
+    final v31 = File('android/app/src/main/res/values-v31/styles.xml')
+        .readAsStringSync();
+    expect(
+      v31,
+      contains('#F9FCF8'),
+      reason:
+          'values-v31 windowSplashScreenBackground must match '
+          'owntendSplashBackground',
+    );
+
+    final colors = File('android/app/src/main/res/values/colors.xml')
+        .readAsStringSync();
+    expect(
+      colors,
+      contains('#F9FCF8'),
+      reason: 'colors.xml splash_background must match owntendSplashBackground',
+    );
+
+    // Dark: values-night-v31 must carry #0D2118
+    final nightV31 = File(
+      'android/app/src/main/res/values-night-v31/styles.xml',
+    ).readAsStringSync();
+    expect(
+      nightV31,
+      contains('#0D2118'),
+      reason:
+          'values-night-v31 windowSplashScreenBackground must match '
+          'owntendSplashBackgroundDark',
+    );
   });
 
   test('first runApp child owns the process splash above startup branches', () {
     final source = File('lib/src/app/owntend_app.dart').readAsStringSync();
-    expect(source, contains('runApp(OwntendProcessSplash(child: child))'));
-    expect(
-      source,
-      contains('_runOwntendProcess(const OwntendStartupFailure())'),
-    );
+    expect(source, matches(RegExp(r'runApp\(\s*OwntendProcessSplash\(')));
+    expect(source, contains('child: child'));
+    expect(source, contains('_runOwntendProcess(const OwntendStartupFailure('));
     expect(source, contains('_RestoreRecoveryGate('));
     expect(source, contains('RestoreRecoveryCoordinator('));
     expect(

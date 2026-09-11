@@ -160,7 +160,7 @@ class _WeatherCard extends StatelessWidget {
                                     ),
                                     const SizedBox(height: HkSpacing.space2),
                                     Text(
-                                      '${localizedWeatherSummary(context, current.weatherCode)} · ${context.l10n.updatedTime(formatShortTime(context, current.updatedAt))}',
+                                      '${localizedWeatherSummary(context, current.weatherCode)} · ${context.l10n.updatedTime(DateUtils.isSameDay(current.updatedAt, localNow) ? formatShortTime(context, current.updatedAt) : formatShortDateTime(context, current.updatedAt))}',
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: Theme.of(context)
@@ -186,7 +186,10 @@ class _WeatherCard extends StatelessWidget {
                                   fit: BoxFit.scaleDown,
                                   alignment: AlignmentDirectional.centerEnd,
                                   child: Text(
-                                    '${current.temperature.round()}°C',
+                                    bidiIsolate(
+                                      context,
+                                      '${current.temperature.round()}°C',
+                                    ),
                                     style: Theme.of(context)
                                         .textTheme
                                         .displaySmall
@@ -538,8 +541,7 @@ class _WeatherDetailText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isRtl = Directionality.of(context) == TextDirection.rtl;
-    final formattedValue = isRtl ? '\u2066$value\u2069' : value;
+    final formattedValue = bidiIsolate(context, value);
     return Text(
       '$label $formattedValue',
       maxLines: 1,

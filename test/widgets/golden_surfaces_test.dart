@@ -136,7 +136,10 @@ void main() {
 
       await tester.pumpWidget(
         ProviderScope(
-          overrides: testOverrides(settings),
+          overrides: testOverrides(
+            settings,
+            tasks: [makeTaskItem(DateTime(2026, 7, 22))],
+          ),
           child: const OwntendApp(),
         ),
       );

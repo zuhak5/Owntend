@@ -572,7 +572,7 @@ void main() {
       expect(find.text('88%'), findsOneWidget);
       expect(find.text('100%'), findsNothing);
       expect(find.text('1'), findsWidgets);
-      expect(find.text('Overdue'), findsOneWidget);
+      expect(find.text('Overdue'), findsNWidgets(2));
     });
 
     testWidgets('Home scroll stays enabled for short and long task lists', (

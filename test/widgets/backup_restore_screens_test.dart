@@ -310,7 +310,7 @@ void main() {
         await tester.tap(
           find.descendant(
             of: find.byType(AlertDialog),
-            matching: find.widgetWithText(FilledButton, 'Restore backup'),
+            matching: find.widgetWithText(FilledButton, 'Unlock backup'),
           ),
         );
         await tester.pumpAndSettle();

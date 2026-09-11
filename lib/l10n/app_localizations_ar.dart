@@ -4036,4 +4036,32 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get confirmPointChargeAction => 'استخدام النقاط';
+
+  @override
+  String get unlockBackup => 'فتح النسخة الاحتياطية';
+
+  @override
+  String get restorePhaseSafetyBackup => 'جارٍ إنشاء نسخة أمان احتياطية…';
+
+  @override
+  String get restorePhaseRestoringData => 'جارٍ استعادة قاعدة البيانات…';
+
+  @override
+  String get restorePhaseRestoringMedia => 'جارٍ استعادة الصور والملفات…';
+
+  @override
+  String get restorePhaseFinalizing => 'جارٍ إنهاء الاستعادة…';
+
+  @override
+  String get dismissPreview => 'إلغاء المعاينة';
+
+  @override
+  String get resumeCloudUploadTitle => 'رفع البيانات المستعادة إلى السحابة';
+
+  @override
+  String get resumeCloudUploadDescription =>
+      'اكتملت الاستعادة المحلية. ارفع هذه اللقطة لاستئناف المزامنة السحابية.';
+
+  @override
+  String get resumeCloudUploadAction => 'رفع الآن';
 }

@@ -1043,7 +1043,12 @@ class DriftMaintenanceRepository
     )..where((metadata) => metadata.planId.isIn(planIds))).get();
     final metadataMap = {for (final row in metadataRows) row.planId: row};
     final assetMap = {for (final row in assetRows) row.id: row};
-    final roomRows = await db.select(db.rooms).get();
+    final roomIds = assetRows.map((asset) => asset.roomId).toSet().toList();
+    final roomRows = roomIds.isEmpty
+        ? <RoomRow>[]
+        : await (db.select(
+            db.rooms,
+          )..where((room) => room.id.isIn(roomIds))).get();
     final roomMap = {for (final row in roomRows) row.id: row};
     final now = DateTime.now();
     final items = <domain.TaskItem>[];

@@ -303,17 +303,27 @@ class _DeferredOwntendBootstrapState extends State<DeferredOwntendBootstrap> {
     final locale = DriftSettingsRepository(widget.database)
         .appLocalePreference();
 
-    late final SupabaseClient client;
+    late final SupabaseClient? client;
     try {
       client =
           await (widget.supabaseClientInitializer ??
               SupabaseBootstrap.initialize)(widget.config);
     } on Object catch (error) {
       AppLogger.warning('startup_cloud_initialization', error: error);
-      if (mounted) {
-        setState(() => _cloudInitializationFailure = error);
+      final store = LocalSyncStore(widget.database);
+      final account = await store.existingAccount();
+      final hasBoundUser = account?.boundUserId != null;
+      final isPristine = await store.isDomainDataPristine();
+      final canProceedOffline = hasBoundUser || !isPristine;
+      if (canProceedOffline) {
+        AppLogger.info('startup_cloud_initialization_offline_fallback');
+        client = null;
+      } else {
+        if (mounted) {
+          setState(() => _cloudInitializationFailure = error);
+        }
+        return;
       }
-      return;
     }
 
     var restoreLanguage = deviceLanguage;
@@ -329,10 +339,12 @@ class _DeferredOwntendBootstrapState extends State<DeferredOwntendBootstrap> {
       initializeRestoreForegroundService(localeCode: restoreLanguage.name);
     }
 
-    try {
-      await _removeUnsupportedCloudSession(client, widget.database);
-    } on Object catch (error) {
-      AppLogger.warning('unsupported_cloud_session_cleanup', error: error);
+    if (client != null) {
+      try {
+        await _removeUnsupportedCloudSession(client, widget.database);
+      } on Object catch (error) {
+        AppLogger.warning('unsupported_cloud_session_cleanup', error: error);
+      }
     }
     if (!mounted) return;
     setState(() {
@@ -345,12 +357,14 @@ class _DeferredOwntendBootstrapState extends State<DeferredOwntendBootstrap> {
   @override
   Widget build(BuildContext context) {
     if (_accountCleanupRecoveryFailure != null) {
+      hkStartupFailedNotifier.value = true;
       return OwntendStartupFailure(
         accountCleanupBlocked: true,
         onRetry: _accountCleanupRetrying ? null : _retryPendingAccountCleanup,
       );
     }
     if (_cloudInitializationFailure != null) {
+      hkStartupFailedNotifier.value = true;
       return OwntendStartupFailure(
         cloudUnavailable: true,
         onRetry: _cloudInitializationRetrying
@@ -388,6 +402,7 @@ class OwntendStartupFailure extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    hkStartupFailedNotifier.value = true;
     return MaterialApp(
       title: 'Owntend',
       debugShowCheckedModeBanner: false,
@@ -399,6 +414,8 @@ class OwntendStartupFailure extends StatelessWidget {
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       theme: OwntendTheme.light(),
+      darkTheme: OwntendTheme.dark(),
+      themeMode: ThemeMode.system,
       home: Builder(
         builder: (context) => Scaffold(
           body: SafeArea(
@@ -568,6 +585,14 @@ final startupRestoreTimeoutProvider = Provider<Duration>(
   (ref) => const Duration(seconds: 140),
 );
 
+final startupRestoreServiceStarterProvider =
+    Provider<
+      Future<bool> Function({
+        required String localeCode,
+        InitialHydrationProgress? progress,
+      })
+    >((ref) => startRestoreForegroundService);
+
 final startupRestoreServiceStopperProvider = Provider<Future<void> Function()>(
   (ref) => stopRestoreForegroundService,
 );
@@ -581,7 +606,9 @@ final startupBootstrapControllerProvider = Provider<StartupBootstrapController>(
 );
 
 class StartupBootstrapController {
-  StartupBootstrapController(this._ref);
+  StartupBootstrapController(this._ref)
+    : _restoreServiceStarter = _ref.read(startupRestoreServiceStarterProvider),
+      _restoreServiceStopper = _ref.read(startupRestoreServiceStopperProvider);
 
   static const _startupProviderTimeout = Duration(seconds: 4);
   static const _startupAvatarTimeout = Duration(seconds: 2);
@@ -589,6 +616,12 @@ class StartupBootstrapController {
   static const _restoreServiceStopTimeout = Duration(seconds: 2);
 
   final Ref _ref;
+  final Future<bool> Function({
+    required String localeCode,
+    InitialHydrationProgress? progress,
+  })
+  _restoreServiceStarter;
+  final Future<void> Function() _restoreServiceStopper;
   final _state = ValueNotifier<StartupBootstrapState>(
     const StartupBootstrapState.checkingStoredSession(),
   );
@@ -610,6 +643,7 @@ class StartupBootstrapController {
     _disposed = true;
     _startupGeneration += 1;
     _offlineSnapshotCandidate = null;
+    _scheduleRestoreServiceStop();
     _state.dispose();
   }
 
@@ -627,9 +661,16 @@ class StartupBootstrapController {
     if (status == null) return;
     final current = _state.value;
     if (!current.isHydrating) return;
-    _publishStartupState(
-      current.withStatus(_mergeStartupSyncStatus(current.status, status)),
-    );
+    final mergedStatus = _mergeStartupSyncStatus(current.status, status);
+    _publishStartupState(current.withStatus(mergedStatus));
+    final progress = mergedStatus.initialHydrationProgress;
+    if (progress != null) {
+      if (progress.isRunning) {
+        _scheduleRestoreServiceStart(progress: progress);
+      } else {
+        _scheduleRestoreServiceStop();
+      }
+    }
   }
 
   Future<void> handleAuthState(AuthStateChange state) async {
@@ -707,12 +748,25 @@ class StartupBootstrapController {
   Future<void> signOutFromStartup() async {
     final session = _state.value.session;
     _startupGeneration += 1;
+    final inFlight = _activeBootstrap;
     _activeBootstrap = null;
     _activeUserId = null;
     _routeHomeAfterReady = false;
     _navigationCompleted = false;
     _offlineSnapshotCandidate = null;
     try {
+      _scheduleRestoreServiceStop();
+      final syncCoordinator = _ref.read(syncCoordinatorProvider);
+      if (syncCoordinator != null) {
+        await syncCoordinator.suspend();
+      }
+      if (inFlight != null) {
+        try {
+          await inFlight.timeout(const Duration(seconds: 2));
+        } on Object {
+          // Discard in-flight error during sign-out cancellation.
+        }
+      }
       if (session != null) {
         await _ref
             .read(notificationSchedulerProvider)
@@ -831,6 +885,9 @@ class StartupBootstrapController {
         canContinueOffline: offlineSnapshot != null,
       ),
     );
+    _scheduleRestoreServiceStart(
+      progress: startingStatus.initialHydrationProgress,
+    );
 
     try {
       await _runCloudRestore(generation);
@@ -843,6 +900,7 @@ class StartupBootstrapController {
       _ref.read(initialHomeSnapshotProvider).value = snapshot;
       _publishReady(snapshot);
     } on Object catch (error) {
+      _scheduleRestoreServiceStop();
       if (!_isCurrentStartup(generation, session)) return;
       final observedFailureStatus = await _guardStartup(
         'failed sync status',
@@ -1189,6 +1247,16 @@ class StartupBootstrapController {
       final provider = FileImage(cached);
       if (await _warmImageProvider(provider)) return provider;
     }
+    // Defer network fetch post-readiness so startup critical path is never blocked.
+    unawaited(_fetchAndCacheAvatar(session.userId, avatarUrl, cached));
+    return null;
+  }
+
+  Future<void> _fetchAndCacheAvatar(
+    String userId,
+    String avatarUrl,
+    File cached,
+  ) async {
     try {
       final response = await http
           .get(Uri.parse(avatarUrl))
@@ -1196,13 +1264,10 @@ class StartupBootstrapController {
       if (response.statusCode >= 200 && response.statusCode < 300) {
         await cached.parent.create(recursive: true);
         await cached.writeAsBytes(response.bodyBytes, flush: true);
-        final provider = FileImage(cached);
-        if (await _warmImageProvider(provider)) return provider;
       }
     } on Object catch (error) {
       AppLogger.warning('startup_avatar_download', error: error);
     }
-    return null;
   }
 
   Future<File> _cachedAvatarFile(String userId, String avatarUrl) async {
@@ -1312,20 +1377,61 @@ class StartupBootstrapController {
   }
 
   void _scheduleRestoreServiceStop() {
+    _latestRestoreProgress = null;
     if (_restoreServiceStopWork != null) return;
     final completion = Completer<void>();
     _restoreServiceStopWork = completion.future;
     scheduleMicrotask(() async {
       try {
-        await _ref
-            .read(startupRestoreServiceStopperProvider)()
-            .timeout(_restoreServiceStopTimeout);
+        await _restoreServiceStopper().timeout(_restoreServiceStopTimeout);
       } on Object catch (error) {
         AppLogger.warning('startup_restore_service_stop', error: error);
       } finally {
         completion.complete();
         if (identical(_restoreServiceStopWork, completion.future)) {
           _restoreServiceStopWork = null;
+        }
+      }
+    });
+  }
+
+  InitialHydrationProgress? _latestRestoreProgress;
+  bool _restoreServiceStarting = false;
+
+  void _scheduleRestoreServiceStart({InitialHydrationProgress? progress}) {
+    if (progress != null) {
+      _latestRestoreProgress = progress;
+    }
+    if (_restoreServiceStarting) return;
+    _restoreServiceStarting = true;
+    var initialRun = true;
+    scheduleMicrotask(() async {
+      try {
+        while (initialRun || _latestRestoreProgress != null) {
+          if (_disposed) return;
+          initialRun = false;
+          final targetProgress = _latestRestoreProgress ?? progress;
+          _latestRestoreProgress = null;
+          final localePreference = await _ref
+              .read(settingsRepositoryProvider)
+              .appLocalePreference();
+          final deviceLocale =
+              WidgetsBinding.instance.platformDispatcher.locale;
+          final language = localePreference.isExplicit
+              ? localePreference.language
+              : supportedDeviceLanguage(deviceLocale);
+          if (_disposed) return;
+          await _restoreServiceStarter(
+            localeCode: language.name,
+            progress: targetProgress,
+          );
+        }
+      } on Object catch (error) {
+        AppLogger.warning('startup_restore_service_start_failed', error: error);
+      } finally {
+        _restoreServiceStarting = false;
+        if (!_disposed && _latestRestoreProgress != null) {
+          _scheduleRestoreServiceStart();
         }
       }
     });
@@ -1390,12 +1496,14 @@ class StartupBootstrapController {
   }
 
   void _goHomeAfterReadyIfRequested(AuthSession session) {
-    if (!_routeHomeAfterReady || _navigationCompleted) return;
+    // WP-011 (F-019): a notification tapped before readiness wins over the
+    // default home destination, and must be honored on cold starts even when
+    // an existing session was already present.
+    final pendingRoute = PendingNotificationRoute.take();
+    if (!_routeHomeAfterReady && pendingRoute == null) return;
+    if (_navigationCompleted && pendingRoute == null) return;
     _routeHomeAfterReady = false;
     _navigationCompleted = true;
-    // WP-011 (F-019): a notification tapped before readiness wins over the
-    // default home destination.
-    final pendingRoute = PendingNotificationRoute.take();
     final target = pendingRoute ?? '/';
     AppLogger.info(
       'startup_finalization_navigation_scheduled',

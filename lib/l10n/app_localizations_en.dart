@@ -3938,4 +3938,32 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get confirmPointChargeAction => 'Use points';
+
+  @override
+  String get unlockBackup => 'Unlock backup';
+
+  @override
+  String get restorePhaseSafetyBackup => 'Creating safety backup…';
+
+  @override
+  String get restorePhaseRestoringData => 'Restoring database…';
+
+  @override
+  String get restorePhaseRestoringMedia => 'Restoring photos and files…';
+
+  @override
+  String get restorePhaseFinalizing => 'Finalizing restore…';
+
+  @override
+  String get dismissPreview => 'Dismiss';
+
+  @override
+  String get resumeCloudUploadTitle => 'Upload restored data to cloud';
+
+  @override
+  String get resumeCloudUploadDescription =>
+      'Local restore is complete. Upload this snapshot to resume cloud sync.';
+
+  @override
+  String get resumeCloudUploadAction => 'Upload now';
 }

@@ -71,24 +71,6 @@ const _currentSchemaTables = [
   'streaks',
 ];
 
-class BackupException implements Exception {
-  const BackupException(this.message);
-
-  final String message;
-
-  @override
-  String toString() => message;
-}
-
-/// Thrown when a user-passphrase backup is inspected or restored without a
-/// passphrase. The UI maps this to the passphrase prompt.
-class BackupPassphraseRequiredException implements Exception {
-  const BackupPassphraseRequiredException();
-
-  @override
-  String toString() => 'Passphrase required to open this backup.';
-}
-
 /// Injectable process-death simulation for restore tests. Each named
 /// failpoint throws on its configured occurrence number; production leaves
 /// the map empty.
@@ -247,10 +229,12 @@ class OwntendBackupService
     String zipPath, {
     String? passphrase,
     required RestoreCloudDisposition cloudDisposition,
+    void Function(RestorePhase phase)? onProgress,
   }) => restoreZip(
     zipPath,
     passphrase: passphrase,
     cloudDisposition: cloudDisposition,
+    onProgress: onProgress,
   );
 
   @override
@@ -258,10 +242,12 @@ class OwntendBackupService
     String zipPath, {
     String? passphrase,
     required RestoreCloudDisposition cloudDisposition,
+    void Function(RestorePhase phase)? onProgress,
   }) => restoreZip(
     zipPath,
     passphrase: passphrase,
     cloudDisposition: cloudDisposition,
+    onProgress: onProgress,
   );
 
   @override
@@ -269,17 +255,24 @@ class OwntendBackupService
     String zipPath, {
     String? passphrase,
     required RestoreCloudDisposition cloudDisposition,
+    void Function(RestorePhase phase)? onProgress,
   }) {
     return _runExclusive(
-      () => _restoreZipInternal(zipPath, passphrase, cloudDisposition),
+      () => _restoreZipInternal(
+        zipPath,
+        passphrase,
+        cloudDisposition,
+        onProgress: onProgress,
+      ),
     );
   }
 
   Future<void> _restoreZipInternal(
     String zipPath,
     String? passphrase,
-    RestoreCloudDisposition cloudDisposition,
-  ) async {
+    RestoreCloudDisposition cloudDisposition, {
+    void Function(RestorePhase phase)? onProgress,
+  }) async {
     final validation = await _validateBackup(
       zipPath,
       passphrase: passphrase,
@@ -314,6 +307,7 @@ class OwntendBackupService
       updatedAt: now,
     );
     await journalStore.saveEntry(journalEntry);
+    onProgress?.call(RestorePhase.validated);
 
     String? safetyBackupPath;
     try {
@@ -339,6 +333,7 @@ class OwntendBackupService
         updatedAt: DateTime.now(),
       );
       await journalStore.saveEntry(journalEntry);
+      onProgress?.call(RestorePhase.safetyBackupComplete);
 
       if (onBeforeRestoreBarrier != null) {
         await onBeforeRestoreBarrier!();
@@ -348,6 +343,7 @@ class OwntendBackupService
         updatedAt: DateTime.now(),
       );
       await journalStore.saveEntry(journalEntry);
+      onProgress?.call(RestorePhase.servicesSuspended);
 
       final appDir = await getApplicationDocumentsDirectory();
       final extractedDb = File(
@@ -363,6 +359,7 @@ class OwntendBackupService
         updatedAt: DateTime.now(),
       );
       await journalStore.saveEntry(journalEntry);
+      onProgress?.call(RestorePhase.mediaStaged);
       failpoints.maybeThrow('journal:mediaStaged');
 
       // Staging copies media only. Canonical folders stay untouched until the
@@ -380,6 +377,7 @@ class OwntendBackupService
         updatedAt: DateTime.now(),
       );
       await journalStore.saveEntry(journalEntry);
+      onProgress?.call(RestorePhase.dbCommitStarted);
       failpoints.maybeThrow('journal:dbCommitStarted');
 
       try {
@@ -405,6 +403,7 @@ class OwntendBackupService
         updatedAt: DateTime.now(),
       );
       await journalStore.saveEntry(journalEntry);
+      onProgress?.call(RestorePhase.dbCommitComplete);
       failpoints.maybeThrow('journal:dbCommitComplete');
 
       await _activateStagedMedia(
@@ -419,6 +418,7 @@ class OwntendBackupService
         updatedAt: DateTime.now(),
       );
       await journalStore.saveEntry(journalEntry);
+      onProgress?.call(RestorePhase.mediaActivated);
       failpoints.maybeThrow('journal:mediaActivated');
 
       if (journalEntry.cloudDisposition ==
@@ -432,6 +432,7 @@ class OwntendBackupService
         updatedAt: DateTime.now(),
       );
       await journalStore.saveEntry(journalEntry);
+      onProgress?.call(RestorePhase.cloudIntentDurable);
       failpoints.maybeThrow('journal:cloudIntentDurable');
 
       final safetyBackup = File(safetyBackupPath);
@@ -461,6 +462,7 @@ class OwntendBackupService
         updatedAt: DateTime.now(),
       );
       await journalStore.saveEntry(journalEntry);
+      onProgress?.call(RestorePhase.terminal);
       await journalStore.clearActiveEntry();
 
       // WP-005 (F-007): publish the restore epoch from the service layer so

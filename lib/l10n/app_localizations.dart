@@ -6537,6 +6537,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Use points'**
   String get confirmPointChargeAction;
+
+  /// No description provided for @unlockBackup.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock backup'**
+  String get unlockBackup;
+
+  /// No description provided for @restorePhaseSafetyBackup.
+  ///
+  /// In en, this message translates to:
+  /// **'Creating safety backup…'**
+  String get restorePhaseSafetyBackup;
+
+  /// No description provided for @restorePhaseRestoringData.
+  ///
+  /// In en, this message translates to:
+  /// **'Restoring database…'**
+  String get restorePhaseRestoringData;
+
+  /// No description provided for @restorePhaseRestoringMedia.
+  ///
+  /// In en, this message translates to:
+  /// **'Restoring photos and files…'**
+  String get restorePhaseRestoringMedia;
+
+  /// No description provided for @restorePhaseFinalizing.
+  ///
+  /// In en, this message translates to:
+  /// **'Finalizing restore…'**
+  String get restorePhaseFinalizing;
+
+  /// No description provided for @dismissPreview.
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss'**
+  String get dismissPreview;
+
+  /// No description provided for @resumeCloudUploadTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload restored data to cloud'**
+  String get resumeCloudUploadTitle;
+
+  /// No description provided for @resumeCloudUploadDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Local restore is complete. Upload this snapshot to resume cloud sync.'**
+  String get resumeCloudUploadDescription;
+
+  /// No description provided for @resumeCloudUploadAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload now'**
+  String get resumeCloudUploadAction;
 }
 
 class _AppLocalizationsDelegate

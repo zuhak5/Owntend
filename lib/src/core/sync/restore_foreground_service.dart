@@ -13,6 +13,7 @@ import '../observability/sentry_bootstrap.dart';
 import '../observability/sentry_logger_bridge.dart';
 import '../observability/sentry_tracing.dart';
 import '../services/notification_service.dart';
+import '../utils/redacting_logger.dart';
 import 'background_sync_scheduler.dart';
 import 'local_sync_store.dart';
 import 'sync_contracts.dart';
@@ -44,36 +45,49 @@ void initializeRestoreForegroundService({required String localeCode}) {
   );
 }
 
-Future<bool> startRestoreForegroundService({required String localeCode}) async {
+Future<bool> startRestoreForegroundService({
+  required String localeCode,
+  InitialHydrationProgress? progress,
+}) async {
   if (!Platform.isAndroid) return true;
-  final progress = await _readProgress();
-  if (progress == null || !progress.isActive) return true;
-  final l10n = _restoreLocalizations(localeCode);
-  final text = _notificationText(l10n, progress);
-  final ServiceRequestResult result;
-  if (await FlutterForegroundTask.isRunningService) {
-    result = await FlutterForegroundTask.updateService(
-      notificationTitle: l10n.restoringOwntend,
-      notificationText: text,
-    );
-  } else {
-    result = await FlutterForegroundTask.startService(
-      serviceId: _restoreServiceId,
-      serviceTypes: const [ForegroundServiceTypes.dataSync],
-      notificationTitle: l10n.restoringOwntend,
-      notificationText: text,
-      notificationInitialRoute: '/',
-      callback: owntendRestoreForegroundCallback,
-    );
+  try {
+    final effectiveProgress = progress ?? await _readProgress();
+    if (effectiveProgress == null || !effectiveProgress.isRunning) return true;
+    final l10n = _restoreLocalizations(localeCode);
+    final text = _notificationText(l10n, effectiveProgress);
+    final ServiceRequestResult result;
+    if (await FlutterForegroundTask.isRunningService) {
+      result = await FlutterForegroundTask.updateService(
+        notificationTitle: l10n.restoringOwntend,
+        notificationText: text,
+      );
+    } else {
+      result = await FlutterForegroundTask.startService(
+        serviceId: _restoreServiceId,
+        serviceTypes: const [ForegroundServiceTypes.dataSync],
+        notificationTitle: l10n.restoringOwntend,
+        notificationText: text,
+        notificationInitialRoute: '/',
+        callback: owntendRestoreForegroundCallback,
+      );
+    }
+    final started = result is ServiceRequestSuccess;
+    if (!started) await enqueueRestoreRecovery();
+    return started;
+  } on Object catch (error) {
+    AppLogger.warning('start_restore_foreground_service_failed', error: error);
+    return false;
   }
-  final started = result is ServiceRequestSuccess;
-  if (!started) await enqueueRestoreRecovery();
-  return started;
 }
 
 Future<void> stopRestoreForegroundService() async {
-  if (Platform.isAndroid && await FlutterForegroundTask.isRunningService) {
-    await FlutterForegroundTask.stopService();
+  if (!Platform.isAndroid) return;
+  try {
+    if (await FlutterForegroundTask.isRunningService) {
+      await FlutterForegroundTask.stopService();
+    }
+  } on Object catch (error) {
+    AppLogger.warning('stop_restore_foreground_service_failed', error: error);
   }
 }
 
@@ -105,13 +119,14 @@ class _RestoreTaskHandler extends TaskHandler {
     try {
       await _ensureSentry();
       await traceOwntendOperation<void>('restore.foreground_cycle', () async {
-        final initialProgress =
-            await traceOwntendOperation<InitialHydrationProgress?>(
-              'restore.read_progress',
-              _readProgress,
+        final statusSnapshot =
+            await traceOwntendOperation<_RestoreStatusSnapshot>(
+              'restore.read_status',
+              _readRestoreStatus,
               attributes: const {'execution': 'foreground_service'},
             );
-        if (initialProgress == null || !initialProgress.isActive) {
+        final initialProgress = statusSnapshot.progress;
+        if (initialProgress == null || !initialProgress.isRunning) {
           await FlutterForegroundTask.stopService();
           return;
         }
@@ -131,7 +146,8 @@ class _RestoreTaskHandler extends TaskHandler {
             'percentage': initialProgress.percentage,
           },
         );
-        if (initialProgress.state != RestoreRunState.completed) {
+        if (initialProgress.state == RestoreRunState.running &&
+            !statusSnapshot.hasActiveLease) {
           await traceOwntendOperation<void>(
             'restore.cloud_sync',
             () async {
@@ -151,7 +167,7 @@ class _RestoreTaskHandler extends TaskHandler {
               _readProgress,
               attributes: const {'execution': 'foreground_service'},
             );
-        if (latestProgress == null || !latestProgress.isActive) {
+        if (latestProgress == null || !latestProgress.isRunning) {
           await traceOwntendOperation<void>('restore.finalize', () async {
             await FlutterForegroundTask.stopService();
           }, attributes: const {'execution': 'foreground_service'});
@@ -220,6 +236,32 @@ class _RestoreTaskHandler extends TaskHandler {
         );
       }
     }
+  }
+}
+
+class _RestoreStatusSnapshot {
+  const _RestoreStatusSnapshot({
+    required this.progress,
+    required this.hasActiveLease,
+  });
+
+  final InitialHydrationProgress? progress;
+  final bool hasActiveLease;
+}
+
+Future<_RestoreStatusSnapshot> _readRestoreStatus() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final database = AppDatabase();
+  try {
+    final store = LocalSyncStore(database);
+    final progress = await store.hydrationProgress();
+    final hasActiveLease = await store.hasActiveLease();
+    return _RestoreStatusSnapshot(
+      progress: progress,
+      hasActiveLease: hasActiveLease,
+    );
+  } finally {
+    await database.close();
   }
 }
 

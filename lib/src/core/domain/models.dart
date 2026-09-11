@@ -551,6 +551,20 @@ class TaskItem {
   final Asset asset;
   final Room room;
   final TaskStatus status;
+
+  TaskItem copyWith({
+    MaintenancePlan? plan,
+    Asset? asset,
+    Room? room,
+    TaskStatus? status,
+  }) {
+    return TaskItem(
+      plan: plan ?? this.plan,
+      asset: asset ?? this.asset,
+      room: room ?? this.room,
+      status: status ?? this.status,
+    );
+  }
 }
 
 class HealthScoreBreakdown {

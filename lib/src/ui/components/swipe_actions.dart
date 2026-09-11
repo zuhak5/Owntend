@@ -121,9 +121,10 @@ class _SwipeDeleteState extends State<SwipeDelete> {
     final swipeRow = KeyedSubtree(
       key: widget.dismissKey,
       child: Semantics(
-        button: true,
-        label: action.label(context),
-        onTap: () => _startAction(callback),
+        customSemanticsActions: {
+          CustomSemanticsAction(label: action.label(context)): () =>
+              _startAction(callback),
+        },
         child: Padding(
           padding: widget.margin,
           child: LayoutBuilder(
