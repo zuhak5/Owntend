@@ -15,11 +15,11 @@ build evidence only; protected release builds remain governed by
 
 | Component | Pin |
 | --- | --- |
-| Flutter / Dart | `3.47.1` stable / `^3.13.0` |
+| Flutter / Dart | `3.47.4` stable / `^3.13.0` |
 | Java / Node / Deno | Temurin `21` / `24` (npm major `11`) / `2.9.3` |
 | Android | compile SDK `37`, target `36`, min `26`, build tools `36.0.0` |
 | Gradle / AGP / Kotlin | `9.6.1-bin` with committed distribution SHA-256 and tracked wrapper bootstrap JAR SHA-256 / `9.3.0` / `2.4.10` |
-| Shorebird | CLI `1.6.119` at exact repository commit; bundled fork `3.47.1`; releases aligned to canonical `3.47.1` with exact fork/engine revisions |
+| Shorebird | CLI `1.6.122` at exact repository commit; bundled fork `3.47.4`; releases aligned to canonical `3.47.4` with exact fork/engine revisions |
 | Bundletool / gcloud | `1.18.3` with committed download SHA-256 / `581.0.0` (protected release tools) |
 | Sentry CLI / Supabase CLI | `2.58.6` (protected release tool) / `2.117.0` |
 
@@ -42,7 +42,7 @@ The JSON file, Gradle configuration, lockfiles, and tests hold the complete hash
 
 [`tool/install_shorebird.ps1`](../../tool/install_shorebird.ps1) creates a local `owntend-pinned` branch at the exact configured commit, validates the CLI's bundled `bin/internal/flutter.version`, bootstraps the CLI, and validates its reported version. The local branch tracks `origin/stable` only so `shorebird doctor` can report upstream freshness; every installer run forcibly returns it to the configured commit. Mutable `latest`, release branches, and an unpinned setup action are not release inputs.
 
-CLI `1.6.119` bundles Shorebird Flutter `3.47.1`, matching canonical Flutter `3.47.1`. [`tool/invoke_shorebird_release.ps1`](../../tool/invoke_shorebird_release.ps1) passes `--flutter-version=3.47.1` from the canonical JSON. Patch builds inherit the selected base release's Flutter revision. A CLI refresh cannot silently upgrade Owntend's release Flutter; changing `releaseFlutterVersion`, its revision, or its engine is a separately reviewed full-release toolchain change.
+CLI `1.6.122` bundles Shorebird Flutter `3.47.4`, matching canonical Flutter `3.47.4`. [`tool/invoke_shorebird_release.ps1`](../../tool/invoke_shorebird_release.ps1) passes `--flutter-version=3.47.4` from the canonical JSON. Patch builds inherit the selected base release's Flutter revision. A CLI refresh cannot silently upgrade Owntend's release Flutter; changing `releaseFlutterVersion`, its revision, or its engine is a separately reviewed full-release toolchain change.
 
 For release evidence, `SHOREBIRD_HOME` lets [`tool/toolchain_manifest.mjs`](../../tool/toolchain_manifest.mjs) resolve the checkout commit, CLI version, Flutter revision, and cached engine revision. `--require-shorebird` makes missing or different values fatal. Ordinary validation omits that switch so developers do not need Shorebird for normal Flutter work.
 

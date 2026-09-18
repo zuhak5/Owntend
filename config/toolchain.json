@@ -7,7 +7,7 @@
   "description": "Authoritative machine-readable canonical toolchain specification for Owntend validation, Shorebird Android releases and patches, exact-AAB VersionDeck derivation, and release evidence. Workflows and verification tools consume or validate this specification to guarantee deterministic, reproducible release builds.",
   "canonicalToolchain": {
     "flutter": {
-      "version": "3.47.1",
+      "version": "3.47.4",
       "channel": "stable"
     },
     "dart": {
@@ -37,14 +37,14 @@
     },
     "tools": {
       "shorebirdCli": {
-        "version": "1.6.119",
+        "version": "1.6.122",
         "repository": "https://github.com/shorebirdtech/shorebird.git",
-        "commit": "cdd0edf0e04ab94ac1a25d1be3ab0c375257e4f9",
-        "bundledFlutterRevision": "91f8bd75076e9c740aa13cf67eb9ec1a093f68f5",
-        "bundledEngineRevision": "03e67977a7ff5893d96ac97f22c6a795530c0040",
-        "releaseFlutterVersion": "3.47.1",
-        "releaseFlutterRevision": "91f8bd75076e9c740aa13cf67eb9ec1a093f68f5",
-        "releaseEngineRevision": "03e67977a7ff5893d96ac97f22c6a795530c0040"
+        "commit": "59ab146856d8c2d48cc09115bb600532e848f2f3",
+        "bundledFlutterRevision": "72bc6869d6a0f7d5c71097d15c7efeeebbd2b681",
+        "bundledEngineRevision": "2c6e13f6780942303fce2dad4d571893f8e81f97",
+        "releaseFlutterVersion": "3.47.4",
+        "releaseFlutterRevision": "72bc6869d6a0f7d5c71097d15c7efeeebbd2b681",
+        "releaseEngineRevision": "2c6e13f6780942303fce2dad4d571893f8e81f97"
       },
       "bundletool": {
         "version": "1.18.3",

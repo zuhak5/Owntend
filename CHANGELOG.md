@@ -6,9 +6,10 @@ The current application version is defined only in `pubspec.yaml`. Released vers
 
 ## Unreleased
 
-- Upgraded Flutter SDK to 3.47.1 and Dart SDK to 3.13.1:
-  - Upgraded Flutter SDK checkout to `3.47.1` (channel `stable`, Dart `3.13.1`) and updated Flutter constraint to `>=3.47.1` in `pubspec.yaml`.
-  - Synchronized canonical toolchain manifest (`config/toolchain.json`) to Flutter `3.47.1`, aligning full releases with Shorebird Code Push targets (`releaseFlutterVersion: 3.47.1`, `releaseFlutterRevision: 91f8bd75076e9c740aa13cf67eb9ec1a093f68f5`, `releaseEngineRevision: 03e67977a7ff5893d96ac97f22c6a795530c0040`).
+- Upgraded Flutter SDK to 3.47.4, Dart SDK to 3.13.3, and Shorebird CLI to 1.6.122:
+  - Upgraded Flutter SDK checkout to `3.47.4` (channel `stable`, Dart `3.13.3`) and updated Flutter constraint to `>=3.47.4` in `pubspec.yaml`.
+  - Upgraded Shorebird CLI to `1.6.122` (commit `59ab146856d8c2d48cc09115bb600532e848f2f3`), bundling Flutter `3.47.4` fork and custom engine (`72bc6869d6a0f7d5c71097d15c7efeeebbd2b681`, engine revision `2c6e13f6780942303fce2dad4d571893f8e81f97`).
+  - Synchronized canonical toolchain manifest (`config/toolchain.json`) to Flutter `3.47.4` and Shorebird `1.6.122`, aligning full releases and patch targets.
   - Updated toolchain policy test assertions (`tool/toolchain.test.mjs`) and synced documentation (`README.md`, `CONTRIBUTING.md`, `docs/development/getting-started.md`, `docs/development/toolchain.md`, `docs/operations/shorebird-code-push.md`).
 
 - Upgraded direct, dev, and tooling dependencies across Flutter, Dart, Node.js, and canonical toolchain:

@@ -4,7 +4,7 @@ Owntend is an Android-first Flutter application for organizing household assets 
 
 ## Current stack
 
-- Flutter 3.47.1 and Dart 3.13 ([canonical toolchain](config/toolchain.json))
+- Flutter 3.47.4 and Dart 3.13 ([canonical toolchain](config/toolchain.json))
 - Riverpod and GoRouter
 - Drift and SQLite
 - Supabase Auth, Postgres, Storage, Realtime, RPCs, and Edge Functions

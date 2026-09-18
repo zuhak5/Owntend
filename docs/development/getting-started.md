@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Flutter 3.47.1 stable or the version currently pinned in [`config/toolchain.json`](../../config/toolchain.json).
+- Flutter 3.47.4 stable or the version currently pinned in [`config/toolchain.json`](../../config/toolchain.json).
 - Dart included with Flutter.
 - Temurin JDK 21 as the canonical Java runtime; `JAVA_HOME` must resolve to it or the toolchain gate fails (see [`toolchain.md`](toolchain.md)).
 - Android SDK and a supported emulator or device.
