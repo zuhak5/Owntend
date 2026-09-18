@@ -1482,26 +1482,47 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
   static bool _recordsMatch(SyncRecord a, SyncRecord b) {
     if (a.spec.entity != b.spec.entity) return false;
     if (a.isDeleted != b.isDeleted) return false;
-    for (final col in a.spec.localColumns) {
+    for (final col in a.spec.semanticDataColumns) {
       if (a.spec.localOnlyColumns.contains(col)) continue;
       final valA = a.values[col];
       final valB = b.values[col];
-      if (valA != valB) {
-        if (valA == null && valB == null) continue;
-        if (valA is DateTime && valB is DateTime) {
-          if (valA.toUtc().isAtSameMomentAs(valB.toUtc())) continue;
-        }
-        if (a.spec.jsonColumns.contains(col)) {
-          try {
-            if (jsonEncode(valA) == jsonEncode(valB)) continue;
-          } on Object {
-            // If not encodable, fall through to mismatch
-          }
-        }
+      if (!_sameRecordValue(a.spec, col, valA, valB)) {
         return false;
       }
     }
     return true;
+  }
+
+  static bool _sameRecordValue(
+    SyncEntitySpec spec,
+    String col,
+    Object? valA,
+    Object? valB,
+  ) {
+    if (valA == valB) return true;
+    if (valA == null || valB == null) return false;
+    if (spec.dateColumns.contains(col)) {
+      final dateA = valA is DateTime
+          ? valA.toUtc()
+          : (valA is String ? DateTime.tryParse(valA)?.toUtc() : null);
+      final dateB = valB is DateTime
+          ? valB.toUtc()
+          : (valB is String ? DateTime.tryParse(valB)?.toUtc() : null);
+      if (dateA != null && dateB != null) {
+        return dateA.isAtSameMomentAs(dateB);
+      }
+    }
+    if (valA is num && valB is num) {
+      return valA.toDouble() == valB.toDouble();
+    }
+    if (spec.jsonColumns.contains(col)) {
+      try {
+        return jsonEncode(valA) == jsonEncode(valB);
+      } on Object {
+        return false;
+      }
+    }
+    return false;
   }
 }
 

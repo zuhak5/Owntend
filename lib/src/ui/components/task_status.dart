@@ -223,8 +223,8 @@ class _TaskCardState extends State<TaskCard>
           margin ??
           EdgeInsets.only(bottom: dense ? HkSpacing.xs : HkSpacing.sm),
       padding: EdgeInsets.symmetric(
-        horizontal: dense ? HkSpacing.xs : 9,
-        vertical: dense ? HkSpacing.space6 : 7,
+        horizontal: dense ? HkSpacing.xs : HkSpacing.sm,
+        vertical: dense ? HkSpacing.space6 : HkSpacing.xs,
       ),
       borderRadius: kSwipeRowRadius,
       backgroundColor: Color.alphaBlend(
@@ -256,10 +256,10 @@ class _TaskCardState extends State<TaskCard>
             ),
           if (!disabled && task.status == TaskStatus.overdue)
             PositionedDirectional(
-              start: -10,
-              top: -10,
-              bottom: -10,
-              child: Container(width: 3, color: colors.accent),
+              start: -(dense ? HkSpacing.xs : HkSpacing.sm),
+              top: -(dense ? HkSpacing.space6 : HkSpacing.xs),
+              bottom: -(dense ? HkSpacing.space6 : HkSpacing.xs),
+              child: Container(width: 3.5, color: colors.accent),
             ),
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
@@ -315,20 +315,24 @@ class _TaskCardState extends State<TaskCard>
                       const SizedBox(height: 2),
                       Wrap(
                         crossAxisAlignment: WrapCrossAlignment.center,
-                        runSpacing: 1,
+                        spacing: HkSpacing.xs,
+                        runSpacing: HkSpacing.space4,
                         children: [
-                          Icon(
-                            Symbols.autorenew_rounded,
-                            size: 14,
-                            color: scheme.primary,
-                          ),
-                          const SizedBox(width: 3),
-                          Text(
-                            _recurrenceText(context, task.plan.recurrence),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(color: scheme.onSurfaceVariant),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Symbols.autorenew_rounded,
+                                size: 14,
+                                color: scheme.primary,
+                              ),
+                              const SizedBox(width: 3),
+                              Text(
+                                _recurrenceText(context, task.plan.recurrence),
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(color: scheme.onSurfaceVariant),
+                              ),
+                            ],
                           ),
                           const _InlineSeparator(),
                           if (disabled)
@@ -356,16 +360,34 @@ class _TaskCardState extends State<TaskCard>
                                   ),
                             ),
                           if (showLocation) ...[
-                            const _InlineSeparator(),
                             ConstrainedBox(
-                              constraints: const BoxConstraints(maxWidth: 220),
-                              child: DynamicText(
-                                locationText,
-                                contentType: 'task.location',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.bodySmall
-                                    ?.copyWith(color: scheme.onSurfaceVariant),
+                              constraints: const BoxConstraints(maxWidth: 150),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Symbols.place_rounded,
+                                    size: 13,
+                                    color: scheme.onSurfaceVariant.withValues(
+                                      alpha: 0.75,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 2),
+                                  Flexible(
+                                    child: DynamicText(
+                                      locationText,
+                                      contentType: 'task.location',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
+                                            color: scheme.onSurfaceVariant,
+                                          ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
@@ -398,15 +420,11 @@ class _TaskCardState extends State<TaskCard>
                             scheme.onPrimary,
                             completionProgress,
                           ),
-                          minimumSize: const Size.square(48),
+                          minimumSize: const Size.square(40),
                           padding: EdgeInsets.zero,
                           tapTargetSize: MaterialTapTargetSize.padded,
                         ),
-                        icon: Icon(
-                          completionProgress > 0.52
-                              ? Symbols.check_rounded
-                              : Symbols.check_circle_rounded,
-                        ),
+                        icon: const Icon(Symbols.check_rounded),
                       ),
                     if (onComplete != null &&
                         (onEdit != null ||
@@ -419,10 +437,12 @@ class _TaskCardState extends State<TaskCard>
                         onArchive != null ||
                         onSetEnabled != null)
                       Container(
-                        width: 48,
-                        height: 48,
+                        width: 40,
+                        height: 40,
                         decoration: BoxDecoration(
-                          color: scheme.surfaceContainerLow,
+                          color: scheme.surfaceContainerHighest.withValues(
+                            alpha: 0.35,
+                          ),
                           shape: BoxShape.circle,
                         ),
                         child: Center(
@@ -430,7 +450,7 @@ class _TaskCardState extends State<TaskCard>
                             useRootNavigator: true,
                             tooltip: context.l10n.taskActions,
                             padding: EdgeInsets.zero,
-                            iconSize: 20,
+                            iconSize: 18,
                             icon: Icon(
                               Symbols.more_vert_rounded,
                               color: scheme.onSurfaceVariant,

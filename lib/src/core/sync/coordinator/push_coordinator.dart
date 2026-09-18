@@ -482,6 +482,11 @@ extension _SyncPushCoordinator on SyncCoordinator {
       return;
     }
     await _localStore.applyRemoteRecords([canonical]);
+    if (local.spec.entity == 'notification_inbox') {
+      // Notifications auto-converge: creation is satisfied by canonical record.
+      await _localStore.markMutationSucceeded(mutation, canonical);
+      return;
+    }
     if (_sameRecordData(local, canonical)) {
       await _localStore.markMutationSucceeded(mutation, canonical);
       return;
@@ -785,6 +790,12 @@ extension _SyncPushCoordinator on SyncCoordinator {
       return;
     } else if (remote == null) {
       if (mutation.operation == 'update') {
+        if (mutation.entity == 'notification_inbox') {
+          // If a notification was pruned remotely, local read update is obsolete.
+          await _ensureActiveAccountScope(scope);
+          await _localStore.markMutationSucceeded(mutation, null);
+          return;
+        }
         await _ensureActiveAccountScope(scope);
         await _localStore.markMutationConflicted(
           mutation,
@@ -810,6 +821,10 @@ extension _SyncPushCoordinator on SyncCoordinator {
       // is acknowledged or explicitly resolved.
       await _ensureActiveAccountScope(scope);
       await _localStore.applyRemoteRecords([remote]);
+      if (mutation.entity == 'notification_inbox') {
+        await _localStore.markMutationSucceeded(mutation, remote);
+        return;
+      }
       await _localStore.markMutationConflicted(
         mutation,
         accountId: userId,
@@ -846,6 +861,10 @@ extension _SyncPushCoordinator on SyncCoordinator {
       // server acknowledges a newer generation or the user resolves it.
       await _ensureActiveAccountScope(scope);
       await _localStore.applyRemoteRecords([remote]);
+      if (mutation.entity == 'notification_inbox') {
+        await _localStore.markMutationSucceeded(mutation, remote);
+        return;
+      }
       await _localStore.markMutationConflicted(
         mutation,
         accountId: userId,
@@ -857,6 +876,15 @@ extension _SyncPushCoordinator on SyncCoordinator {
       return;
     }
     if (result.conflict) {
+      if (mutation.entity == 'notification_inbox') {
+        final canonical = result.canonical;
+        if (canonical != null) {
+          await _ensureActiveAccountScope(scope);
+          await _localStore.applyRemoteRecords([canonical]);
+          await _localStore.markMutationSucceeded(mutation, canonical);
+          return;
+        }
+      }
       final entity = mutation.entity.replaceAll('_', ' ');
       throw SupabaseFailure(
         kind: SupabaseFailureKind.conflict,

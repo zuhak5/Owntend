@@ -615,4 +615,99 @@ void main() {
       );
     },
   );
+
+  test(
+    'semanticDataColumns excludes created_at and updated_at across entities',
+    () {
+      for (final spec in syncEntitySpecs) {
+        expect(spec.semanticDataColumns.contains('created_at'), isFalse);
+        expect(spec.semanticDataColumns.contains('updated_at'), isFalse);
+      }
+      final notifSpec = syncSpecByEntity['notification_inbox']!;
+      expect(
+        notifSpec.semanticDataColumns,
+        containsAll({'title', 'body', 'kind', 'read_at'}),
+      );
+    },
+  );
+
+  test('listUnresolvedSyncConflictSummaries auto-heals legacy notification conflicts', () async {
+    final now = DateTime.now().toUtc();
+    await db
+        .into(db.syncOutbox)
+        .insert(
+          SyncOutboxCompanion.insert(
+            entity: 'notification_inbox',
+            recordKey: 'notif-storm-1',
+            operation: 'upsert',
+            changedAt: Value(now),
+            state: const Value('conflict'),
+          ),
+        );
+    await db
+        .into(db.syncConflicts)
+        .insert(
+          SyncConflictsCompanion.insert(
+            id: 'conflict-legacy-notif',
+            accountId: 'user-1',
+            entity: 'notification_inbox',
+            recordKey: 'notif-storm-1',
+            localPayloadJson: const Value(
+              '{"operation":"upsert","record":{"title":"Storm Warning"}}',
+            ),
+            remotePayloadJson: const Value('{"title":"Storm Warning"}'),
+          ),
+        );
+
+    final summaries = await store.listUnresolvedSyncConflictSummaries(
+      accountId: 'user-1',
+    );
+
+    expect(summaries, isEmpty);
+
+    final outbox = await outboxRow('notification_inbox', 'notif-storm-1');
+    expect(outbox, isNull);
+
+    final conflict = await (db.select(
+      db.syncConflicts,
+    )..where((row) => row.id.equals('conflict-legacy-notif'))).getSingle();
+    expect(conflict.resolutionStatus, 'resolved_keep_remote');
+  });
+
+  test('readMutationByKey returns pending and inFlight mutations but ignores conflict state rows', () async {
+    final now = DateTime.now().toUtc();
+    // Updating the existing 'theme' setting triggers an automatic update into syncOutbox (pending).
+    await (db.update(
+      db.settings,
+    )..where((row) => row.key.equals('theme'))).write(
+      SettingsCompanion(value: const Value('dark'), updatedAt: Value(now)),
+    );
+
+    // 1. Pending state row is returned.
+    var record = await store.readMutationByKey(
+      'user_setting',
+      'theme',
+      'device-1',
+    );
+    expect(record, isNotNull);
+    expect(record!.recordKey, 'theme');
+
+    // 2. inFlight state row is returned.
+    await (db.update(db.syncOutbox)..where(
+          (row) =>
+              row.entity.equals('user_setting') & row.recordKey.equals('theme'),
+        ))
+        .write(const SyncOutboxCompanion(state: Value('inFlight')));
+    record = await store.readMutationByKey('user_setting', 'theme', 'device-1');
+    expect(record, isNotNull);
+
+    // 3. Conflict state row is ignored (returns null).
+    await (db.update(db.syncOutbox)..where(
+          (row) =>
+              row.entity.equals('user_setting') & row.recordKey.equals('theme'),
+        ))
+        .write(const SyncOutboxCompanion(state: Value('conflict')));
+    record = await store.readMutationByKey('user_setting', 'theme', 'device-1');
+    expect(record, isNull);
+  });
 }

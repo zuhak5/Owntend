@@ -133,6 +133,14 @@ class SyncEntitySpec {
   String remoteColumnFor(String localColumn) =>
       remoteRenames[localColumn] ?? localColumn;
 
+  /// Returns the subset of [localColumns] representing business domain data,
+  /// excluding system-assigned metadata timestamps (`created_at`, `updated_at`).
+  /// Used for semantic equality checks during creation replays and deduplication.
+  Set<String> get semanticDataColumns => {
+    for (final column in localColumns)
+      if (column != 'created_at' && column != 'updated_at') column,
+  };
+
   String localColumnFor(String remoteColumn) {
     for (final entry in remoteRenames.entries) {
       if (entry.value == remoteColumn) return entry.key;

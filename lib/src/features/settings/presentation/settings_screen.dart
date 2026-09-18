@@ -259,26 +259,52 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                               const SizedBox(width: HkSpacing.sm),
                               Flexible(
                                 flex: 2,
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Flexible(
-                                      child: Text(
-                                        label,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .labelLarge
-                                            ?.copyWith(
-                                              color: scheme.onSurfaceVariant,
-                                              fontWeight: FontWeight.w700,
-                                            ),
-                                      ),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: isOpen
+                                        ? scheme.primary.withValues(alpha: 0.10)
+                                        : scheme.surfaceContainerHighest
+                                              .withValues(alpha: 0.45),
+                                    borderRadius: BorderRadius.circular(
+                                      HkRadii.full,
                                     ),
-                                    const SizedBox(width: HkSpacing.space4),
-                                    chevron,
-                                  ],
+                                    border: Border.all(
+                                      color: isOpen
+                                          ? scheme.primary.withValues(
+                                              alpha: 0.30,
+                                            )
+                                          : scheme.outlineVariant.withValues(
+                                              alpha: 0.40,
+                                            ),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Flexible(
+                                        child: Text(
+                                          label,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .labelLarge
+                                              ?.copyWith(
+                                                color: isOpen
+                                                    ? scheme.primary
+                                                    : scheme.onSurfaceVariant,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: HkSpacing.space4),
+                                      chevron,
+                                    ],
+                                  ),
                                 ),
                               ),
                             ],
@@ -444,14 +470,28 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                                     EffectiveCapabilityState.active,
                               ),
                             ],
-                            const Divider(height: HkSpacing.md),
+                            const Padding(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: HkSpacing.xs,
+                              ),
+                              child: Divider(height: HkSpacing.md),
+                            ),
                             ListTile(
                               key: const ValueKey(
                                 'settings-permission-education',
                               ),
-                              contentPadding: EdgeInsets.zero,
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: HkSpacing.xs,
+                              ),
+                              minLeadingWidth: 32,
+                              horizontalTitleGap: HkSpacing.xs,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(HkRadii.md),
+                              ),
                               leading: const _SettingsTileIcon(
                                 icon: Symbols.health_and_safety_rounded,
+                                size: 32,
+                                iconSize: 18,
                               ),
                               title: Text(
                                 context.l10n.permissionSetup,

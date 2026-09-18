@@ -19,6 +19,7 @@ import '../../core/supabase/secure_supabase_storage.dart';
 import '../../core/sync/sync_providers.dart';
 import '../../core/utils/redacting_logger.dart';
 import '../../ui/app_theme.dart';
+import '../../ui/presentation_formatters.dart';
 import '../auth/presentation/auth_providers.dart';
 import 'ad_cache.dart';
 import 'ad_retry_policy.dart';

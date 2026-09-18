@@ -51,7 +51,7 @@ bool _sameRecordData(SyncRecord local, SyncRecord remote) {
       local.isDeleted != remote.isDeleted) {
     return false;
   }
-  for (final column in local.spec.localColumns) {
+  for (final column in local.spec.semanticDataColumns) {
     if (!local.values.containsKey(column) ||
         !remote.values.containsKey(column) ||
         !_sameValue(

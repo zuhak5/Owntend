@@ -94,6 +94,13 @@ String languageSelectorLabel(BuildContext context, AppLanguage language) {
   };
 }
 
+String _languageEndonym(AppLanguage language) {
+  return switch (language) {
+    AppLanguage.en => 'English (US)',
+    AppLanguage.ar => 'العربية',
+  };
+}
+
 typedef LanguageSelectorTriggerBuilder = Widget Function(
   BuildContext context,
   String label,
@@ -196,7 +203,7 @@ class _LanguageSelectorDropdownState extends State<LanguageSelectorDropdown> {
       child: Icon(
         Symbols.expand_more_rounded,
         size: widget.chevronSize,
-        color: scheme.onSurfaceVariant,
+        color: _isOpen ? scheme.primary : scheme.onSurfaceVariant,
       ),
     );
     final menuWidth = _menuWidth;
@@ -216,8 +223,27 @@ class _LanguageSelectorDropdownState extends State<LanguageSelectorDropdown> {
         alignmentOffset: const Offset(0, _menuGap),
         style: MenuStyle(
           alignment: AlignmentDirectional.bottomStart,
+          elevation: const WidgetStatePropertyAll<double>(6),
+          shadowColor: WidgetStatePropertyAll<Color>(
+            scheme.shadow.withValues(alpha: 0.14),
+          ),
+          backgroundColor: WidgetStatePropertyAll<Color>(
+            scheme.surfaceContainerLowest,
+          ),
+          surfaceTintColor: const WidgetStatePropertyAll<Color>(
+            Colors.transparent,
+          ),
+          shape: WidgetStatePropertyAll<OutlinedBorder>(
+            RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(HkRadii.xl),
+              side: BorderSide(
+                color: scheme.outlineVariant.withValues(alpha: 0.70),
+                width: 1,
+              ),
+            ),
+          ),
           padding: const WidgetStatePropertyAll<EdgeInsetsGeometry>(
-            EdgeInsets.zero,
+            EdgeInsets.symmetric(vertical: 4),
           ),
           fixedSize: menuWidth == null
               ? null
@@ -227,21 +253,38 @@ class _LanguageSelectorDropdownState extends State<LanguageSelectorDropdown> {
         onClose: _handleClose,
         menuChildren: [
           for (final option in AppLanguage.values)
-            MenuItemButton(
-              key: ValueKey('language-option-${option.name}'),
-              closeOnActivate: true,
-              onPressed: widget.onChanged == null
-                  ? null
-                  : () => widget.onChanged?.call(option),
-              child: Semantics(
-                selected: option == widget.language,
-                child: _LanguageMenuRow(
-                  label: languageSelectorLabel(context, option),
-                  textDirection: option == AppLanguage.ar
-                      ? TextDirection.rtl
-                      : TextDirection.ltr,
+            Padding(
+              padding: const EdgeInsets.only(bottom: 2),
+              child: MenuItemButton(
+                key: ValueKey('language-option-${option.name}'),
+                closeOnActivate: true,
+                style: MenuItemButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 48),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(HkRadii.md),
+                  ),
+                  backgroundColor: option == widget.language
+                      ? scheme.primary.withValues(alpha: 0.08)
+                      : Colors.transparent,
+                ),
+                onPressed: widget.onChanged == null
+                    ? null
+                    : () => widget.onChanged?.call(option),
+                child: Semantics(
                   selected: option == widget.language,
-                  optionName: option.name,
+                  child: _LanguageMenuRow(
+                    label: languageSelectorLabel(context, option),
+                    nativeEndonym: _languageEndonym(option),
+                    textDirection: option == AppLanguage.ar
+                        ? TextDirection.rtl
+                        : TextDirection.ltr,
+                    selected: option == widget.language,
+                    optionName: option.name,
+                  ),
                 ),
               ),
             ),
@@ -342,12 +385,14 @@ class _LanguageSelectorDropdownState extends State<LanguageSelectorDropdown> {
 class _LanguageMenuRow extends StatelessWidget {
   const _LanguageMenuRow({
     required this.label,
+    required this.nativeEndonym,
     required this.textDirection,
     required this.selected,
     required this.optionName,
   });
 
   final String label;
+  final String nativeEndonym;
   final TextDirection textDirection;
   final bool selected;
   final String optionName;
@@ -355,51 +400,113 @@ class _LanguageMenuRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: 32),
-      child: SizedBox(
-        width: double.infinity,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            Padding(
-              padding: const EdgeInsetsDirectional.symmetric(horizontal: 28),
-              child: Directionality(
-                textDirection: textDirection,
-                child: Text(
-                  label,
-                  key: ValueKey('language-option-label-$optionName'),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                    color: selected ? scheme.primary : scheme.onSurface,
+    final showEndonym =
+        label.trim().toLowerCase() != nativeEndonym.trim().toLowerCase();
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final showBadge = constraints.maxWidth >= 180;
+        return Padding(
+          padding: const EdgeInsetsDirectional.symmetric(horizontal: 2),
+          child: Row(
+            children: [
+              Container(
+                width: 22,
+                height: 22,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: selected
+                      ? scheme.primary.withValues(alpha: 0.12)
+                      : Colors.transparent,
+                  border: Border.all(
+                    color: selected
+                        ? scheme.primary
+                        : scheme.outlineVariant.withValues(alpha: 0.50),
+                    width: selected ? 2.0 : 1.5,
                   ),
                 ),
-              ),
-            ),
-            Align(
-              alignment: AlignmentDirectional.centerStart,
-              child: SizedBox(
-                width: 20,
                 child: selected
-                    ? Icon(
-                        Symbols.check_rounded,
-                        key: ValueKey('language-option-check-$optionName'),
-                        size: 18,
-                        color: scheme.primary,
+                    ? Center(
+                        child: Icon(
+                          Symbols.check_rounded,
+                          key: ValueKey('language-option-check-$optionName'),
+                          size: 15,
+                          color: scheme.primary,
+                          weight: 700,
+                        ),
                       )
                     : null,
               ),
-            ),
-            const Align(
-              alignment: AlignmentDirectional.centerEnd,
-              child: SizedBox(width: 20),
-            ),
-          ],
-        ),
-      ),
+              const SizedBox(width: HkSpacing.xs),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Directionality(
+                      textDirection: textDirection,
+                      child: Text(
+                        label,
+                        key: ValueKey('language-option-label-$optionName'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: selected
+                              ? FontWeight.w700
+                              : FontWeight.w600,
+                          color: selected ? scheme.primary : scheme.onSurface,
+                        ),
+                      ),
+                    ),
+                    if (showEndonym) ...[
+                      const SizedBox(height: 1),
+                      Text(
+                        nativeEndonym,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: selected
+                              ? scheme.primary.withValues(alpha: 0.72)
+                              : scheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              if (showBadge) ...[
+                const SizedBox(width: HkSpacing.xs),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? scheme.primary.withValues(alpha: 0.10)
+                        : scheme.surfaceContainerHighest.withValues(
+                            alpha: 0.45,
+                          ),
+                    borderRadius: BorderRadius.circular(HkRadii.sm),
+                  ),
+                  child: Text(
+                    optionName.toUpperCase(),
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: selected
+                          ? scheme.primary
+                          : scheme.onSurfaceVariant,
+                      letterSpacing: 0.4,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
     );
   }
 }

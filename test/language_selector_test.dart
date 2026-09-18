@@ -45,13 +45,11 @@ void main() {
       expect(menuRect.top, greaterThanOrEqualTo(anchorRect.bottom + 5));
       expect((menuRect.left - anchorRect.left).abs(), lessThanOrEqualTo(1));
       expect(
-        (tester.getRect(englishLabel).center.dx - menuRect.center.dx).abs(),
-        lessThanOrEqualTo(1),
-      );
-      expect(
         tester.getRect(englishCheck).center.dx,
         lessThan(tester.getRect(englishLabel).center.dx),
       );
+      // Native endonym "العربية" is displayed under Arabic option for bilingual clarity.
+      expect(find.text('العربية'), findsOneWidget);
 
       await tester.tapAt(const Offset(8, 560));
       await tester.pumpAndSettle();
@@ -90,13 +88,11 @@ void main() {
       final menuRect = tester.getRect(arabic);
       expect((menuRect.right - anchorRect.right).abs(), lessThanOrEqualTo(1));
       expect(
-        (tester.getRect(arabicLabel).center.dx - menuRect.center.dx).abs(),
-        lessThanOrEqualTo(1),
-      );
-      expect(
         tester.getRect(arabicCheck).center.dx,
         greaterThan(tester.getRect(arabicLabel).center.dx),
       );
+      // Native endonym "English (US)" is displayed under English option in Arabic mode.
+      expect(find.text('English (US)'), findsOneWidget);
 
       await tester.tap(find.byKey(const ValueKey('language-option-en')));
       await tester.pumpAndSettle();

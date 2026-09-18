@@ -184,9 +184,11 @@ class _BottomNavItem extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                width: selected ? 42 : 32,
-                height: 24,
+                duration: MediaQuery.of(context).disableAnimations
+                    ? Duration.zero
+                    : const Duration(milliseconds: 180),
+                width: selected ? 50 : 32,
+                height: 28,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: selected
@@ -198,6 +200,7 @@ class _BottomNavItem extends StatelessWidget {
                   selected ? destination.selectedIcon : destination.icon,
                   color: color,
                   size: 19,
+                  fill: selected ? 1.0 : 0.0,
                 ),
               ),
               const SizedBox(height: 2),

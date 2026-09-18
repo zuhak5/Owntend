@@ -289,7 +289,9 @@ class _TaskGroupData {
 String _taskScreenTitle(BuildContext context, String? filter) {
   return switch (filter) {
     'today' => context.l10n.today,
+    'tomorrow' => context.l10n.tomorrow,
     'next7' => context.l10n.next7Days,
+    'upcoming' => context.l10n.upcomingTasks,
     'overdue' => context.l10n.overdue,
     _ => context.l10n.tasks,
   };
@@ -300,6 +302,8 @@ String _filteredTaskGroupTitle(BuildContext context, String filter, int count) {
     'overdue' => context.l10n.needsAttention,
     'next7' => context.l10n.itemStatusDueSoon(count),
     'today' => context.l10n.dueToday,
+    'tomorrow' => context.l10n.tomorrowSTasks,
+    'upcoming' => context.l10n.upcomingTasks,
     _ => context.l10n.taskCountLabel(count),
   };
 }
@@ -338,6 +342,7 @@ List<_TaskGroupData> _visibleTaskGroups({
   ];
   return switch (filter) {
     'today' => [all[1]],
+    'tomorrow' => [all[2]],
     'next7' => [
       _TaskGroupData(
         title: context.l10n.next7Days,
@@ -345,6 +350,7 @@ List<_TaskGroupData> _visibleTaskGroups({
         color: HkColors.indigo,
       ),
     ],
+    'upcoming' => [all[2], all[3], all[4]],
     'overdue' => [all[0]],
     _ => all,
   };

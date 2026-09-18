@@ -228,16 +228,113 @@ mixin _LocalSyncMutationStore on _LocalSyncStoreBase {
               )
               ..orderBy([(row) => OrderingTerm.desc(row.createdAt)]))
             .get();
+
+    // Auto-heal legacy or errant notification conflicts immediately.
+    // The update and delete are wrapped in a single transaction so a
+    // crash between them cannot leave an orphaned conflict-state outbox row.
+    final notificationRows = rows
+        .where((r) => r.entity == 'notification_inbox')
+        .toList();
+    if (notificationRows.isNotEmpty) {
+      final resolvedAt = DateTime.now().toUtc();
+      final notifIds = notificationRows.map((r) => r.id).toList();
+      final notifKeys = notificationRows.map((r) => r.recordKey).toList();
+      await db.transaction(() async {
+        await (db.update(
+          db.syncConflicts,
+        )..where((c) => c.id.isIn(notifIds))).write(
+          SyncConflictsCompanion(
+            resolutionStatus: const Value('resolved_keep_remote'),
+            resolvedAt: Value(resolvedAt),
+          ),
+        );
+        await (db.delete(db.syncOutbox)..where(
+              (o) =>
+                  o.entity.equals('notification_inbox') &
+                  o.recordKey.isIn(notifKeys) &
+                  o.state.equals(SyncMutationState.conflict.name),
+            ))
+            .go();
+      });
+    }
+
     final seen = <String>{};
-    return [
-      for (final row in rows)
-        if (seen.add('${row.entity}\u0000${row.recordKey}'))
+    final summaries = <SyncConflictSummary>[];
+    for (final row in rows) {
+      if (row.entity == 'notification_inbox') continue;
+      if (seen.add('${row.entity}\u0000${row.recordKey}')) {
+        final (title, localModifiedAt, remoteModifiedAt) =
+            _extractConflictDisplayDetails(row);
+        summaries.add(
           SyncConflictSummary(
             entity: row.entity,
             recordKey: row.recordKey,
             createdAt: row.createdAt,
+            title: title,
+            localModifiedAt: localModifiedAt,
+            remoteModifiedAt: remoteModifiedAt,
           ),
-    ];
+        );
+      }
+    }
+    return summaries;
+  }
+
+  (String?, DateTime?, DateTime?) _extractConflictDisplayDetails(
+    SyncConflictRow row,
+  ) {
+    String? title;
+    DateTime? localModifiedAt;
+    DateTime? remoteModifiedAt;
+
+    if (row.localPayloadJson != null && row.localPayloadJson!.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(row.localPayloadJson!);
+        final record = decoded is Map && decoded['record'] is Map
+            ? decoded['record'] as Map
+            : decoded is Map
+            ? decoded
+            : null;
+        if (record != null) {
+          final t = record['name'] ?? record['title'] ?? record['key'];
+          if (t is String && t.trim().isNotEmpty) {
+            title = t.trim();
+          }
+          final mod = record['updated_at'] ?? record['client_modified_at'];
+          if (mod is String) {
+            localModifiedAt = DateTime.tryParse(mod)?.toLocal();
+          } else if (mod is DateTime) {
+            localModifiedAt = mod.toLocal();
+          }
+        }
+      } on Object {
+        // Safe fallback if JSON cannot be parsed.
+      }
+    }
+
+    if (row.remotePayloadJson != null && row.remotePayloadJson!.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(row.remotePayloadJson!);
+        if (decoded is Map) {
+          if (title == null) {
+            final t = decoded['name'] ?? decoded['title'] ?? decoded['key'];
+            if (t is String && t.trim().isNotEmpty) {
+              title = t.trim();
+            }
+          }
+          final mod = decoded['updated_at'] ?? decoded['client_modified_at'];
+          if (mod is String) {
+            remoteModifiedAt = DateTime.tryParse(mod)?.toLocal();
+          } else if (mod is DateTime) {
+            remoteModifiedAt = mod.toLocal();
+          }
+        }
+      } on Object {
+        // Safe fallback if JSON cannot be parsed.
+      }
+    }
+
+    return (title, localModifiedAt, remoteModifiedAt);
   }
 
   /// Reads the transactional restore-generation marker written inside the
@@ -795,6 +892,76 @@ mixin _LocalSyncMutationStore on _LocalSyncStoreBase {
         remoteRevision: remoteRevision,
         expectedGeneration: row.generation,
         skipIfAlreadyConflicted: true,
+      );
+    });
+  }
+
+  /// Pull-path helper to read the current pending mutation record for an entity key.
+  Future<SyncRecord?> readMutationByKey(
+    String entity,
+    String recordKey,
+    String deviceId,
+  ) async {
+    final row =
+        await (db.select(db.syncOutbox)..where(
+              (candidate) =>
+                  candidate.entity.equals(entity) &
+                  candidate.recordKey.equals(recordKey) &
+                  candidate.state.isIn([
+                    SyncMutationState.pending.name,
+                    SyncMutationState.inFlight.name,
+                  ]),
+            ))
+            .getSingleOrNull();
+    if (row == null) return null;
+    return readMutation(
+      LocalSyncMutation(
+        entity: row.entity,
+        recordKey: row.recordKey,
+        operation: row.operation,
+        changedAt: row.changedAt,
+        attempts: row.attempts,
+        localSequence: row.localSequence,
+        generation: row.generation,
+        payloadJson: row.payloadJson,
+        userId: row.userId,
+        createdAt: row.createdAt,
+        state: SyncMutationState.fromStorage(row.state),
+      ),
+      deviceId,
+    );
+  }
+
+  /// Pull-path variant of [markMutationSucceeded] when only entity and recordKey are known.
+  Future<bool> markEntityMutationSucceeded({
+    required String entity,
+    required String recordKey,
+    SyncRecord? canonical,
+  }) async {
+    return db.transaction(() async {
+      final row =
+          await (db.select(db.syncOutbox)..where(
+                (candidate) =>
+                    candidate.entity.equals(entity) &
+                    candidate.recordKey.equals(recordKey),
+              ))
+              .getSingleOrNull();
+      if (row == null) return false;
+      return markMutationSucceeded(
+        LocalSyncMutation(
+          entity: row.entity,
+          recordKey: row.recordKey,
+          operation: row.operation,
+          changedAt: row.changedAt,
+          attempts: row.attempts,
+          localSequence: row.localSequence,
+          generation: row.generation,
+          payloadJson: row.payloadJson,
+          userId: row.userId,
+          createdAt: row.createdAt,
+          state: SyncMutationState.fromStorage(row.state),
+        ),
+        canonical,
       );
     });
   }

@@ -44,7 +44,7 @@ class HkColors {
   static const secondaryFixed = appSurfaceGreen;
   static const onSecondaryFixed = appPrimaryDark;
   static const tertiary = appWarning;
-  static const tertiaryContainer = appWarning;
+  static const tertiaryContainer = appWarningSurface;
   static const tertiaryFixed = appWarningSurface;
   static const tertiaryFixedDim = Color(0xFFE8C069);
   static const error = appDanger;
@@ -237,7 +237,7 @@ class OwntendTheme {
       tertiary: HkColors.appWarning,
       onTertiary: Colors.white,
       tertiaryContainer: HkColors.tertiaryContainer,
-      onTertiaryContainer: Color(0xFFFFEBE6),
+      onTertiaryContainer: Color(0xFF4A3400),
       error: HkColors.error,
       onError: Colors.white,
       errorContainer: HkColors.errorContainer,

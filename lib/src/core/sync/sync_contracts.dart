@@ -133,17 +133,23 @@ class FailedSyncMutationSummary {
   };
 }
 
-/// Payload-free summary of a preserved synchronization conflict.
+/// Privacy-safe summary of a preserved synchronization conflict.
 class SyncConflictSummary {
   const SyncConflictSummary({
     required this.entity,
     required this.recordKey,
     required this.createdAt,
+    this.title,
+    this.localModifiedAt,
+    this.remoteModifiedAt,
   });
 
   final String entity;
   final String recordKey;
   final DateTime createdAt;
+  final String? title;
+  final DateTime? localModifiedAt;
+  final DateTime? remoteModifiedAt;
 }
 
 abstract interface class CloudSyncRepository {

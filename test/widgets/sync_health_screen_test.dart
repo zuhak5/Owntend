@@ -122,6 +122,101 @@ void main() {
     expect(conflict.resolutionStatus, 'resolved_keep_remote');
     expect(find.text('No sync issues need attention'), findsOneWidget);
   });
+
+  testWidgets(
+    'displays enriched conflict card with item title and version timestamps',
+    (tester) async {
+      await store.setEnabled(enabled: true, boundUserId: 'user-1');
+      await (database.update(database.syncOutbox)..where(
+            (row) =>
+                row.entity.equals('asset') & row.recordKey.equals('asset-1'),
+          ))
+          .write(
+            SyncOutboxCompanion(
+              operation: const Value('upsert'),
+              changedAt: Value(DateTime.now().toUtc()),
+              state: const Value('conflict'),
+            ),
+          );
+      await database
+          .into(database.syncConflicts)
+          .insert(
+            SyncConflictsCompanion.insert(
+              id: 'conflict-asset-1',
+              accountId: 'user-1',
+              entity: 'asset',
+              recordKey: 'asset-1',
+              localPayloadJson: const Value(
+                '{"operation":"upsert","record":{"name":"Refrigerator","updated_at":"2026-09-18T10:30:00.000Z"}}',
+              ),
+              remotePayloadJson: const Value(
+                '{"name":"Refrigerator","updated_at":"2026-09-18T10:45:00.000Z"}',
+              ),
+            ),
+          );
+
+      await tester.pumpWidget(_testApp(store));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Sync conflicts'), findsOneWidget);
+      expect(find.text('Conflicting item: Refrigerator'), findsOneWidget);
+      expect(find.textContaining('This device:'), findsOneWidget);
+      expect(find.textContaining('Cloud:'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'auto-heals legacy notification conflicts and does not display them',
+    (tester) async {
+      await store.setEnabled(enabled: true, boundUserId: 'user-1');
+      await database
+          .into(database.syncOutbox)
+          .insert(
+            SyncOutboxCompanion.insert(
+              entity: 'notification_inbox',
+              recordKey: 'notif-1',
+              operation: 'upsert',
+              changedAt: Value(DateTime.now().toUtc()),
+              state: const Value('conflict'),
+            ),
+          );
+      await database
+          .into(database.syncConflicts)
+          .insert(
+            SyncConflictsCompanion.insert(
+              id: 'conflict-notif-1',
+              accountId: 'user-1',
+              entity: 'notification_inbox',
+              recordKey: 'notif-1',
+              localPayloadJson: const Value(
+                '{"operation":"upsert","record":{"title":"Task overdue"}}',
+              ),
+              remotePayloadJson: const Value('{"title":"Task overdue"}'),
+            ),
+          );
+
+      await tester.pumpWidget(_testApp(store));
+      await tester.pumpAndSettle();
+
+      // The notification conflict should be auto-healed and never displayed to the user.
+      expect(find.text('Conflicting notification'), findsNothing);
+      expect(find.text('No sync issues need attention'), findsOneWidget);
+
+      final resolvedOutbox =
+          await (database.select(database.syncOutbox)..where(
+                (row) =>
+                    row.entity.equals('notification_inbox') &
+                    row.recordKey.equals('notif-1'),
+              ))
+              .getSingleOrNull();
+      expect(resolvedOutbox, isNull);
+
+      final conflict = await database
+          .select(database.syncConflicts)
+          .getSingle();
+      expect(conflict.resolutionStatus, 'resolved_keep_remote');
+    },
+  );
 }
 
 Widget _testApp(LocalSyncStore store) {

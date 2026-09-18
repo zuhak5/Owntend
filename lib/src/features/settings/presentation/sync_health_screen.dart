@@ -11,6 +11,7 @@ import '../../../core/sync/sync_providers.dart';
 import '../../../core/utils/redacting_logger.dart';
 import '../../../ui/app_theme.dart';
 import '../../../ui/components.dart' as hk_ui;
+import '../../../ui/presentation_formatters.dart';
 
 class SyncHealthSnapshot {
   const SyncHealthSnapshot({
@@ -552,6 +553,15 @@ class _SyncConflictCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final titleText = conflict.title != null && conflict.title!.isNotEmpty
+        ? '${context.l10n.syncConflictForCategory(_syncCategory(context.l10n, conflict.entity))}: ${conflict.title}'
+        : context.l10n.syncConflictForCategory(
+            _syncCategory(context.l10n, conflict.entity),
+          );
+
+    final hasTimestamps =
+        conflict.localModifiedAt != null || conflict.remoteModifiedAt != null;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: HkSpacing.sm),
       child: hk_ui.SurfaceCard(
@@ -560,9 +570,7 @@ class _SyncConflictCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              context.l10n.syncConflictForCategory(
-                _syncCategory(context.l10n, conflict.entity),
-              ),
+              titleText,
               style: Theme.of(context).textTheme.titleSmall
                   ?.copyWith(fontWeight: FontWeight.w800),
             ),
@@ -571,6 +579,27 @@ class _SyncConflictCard extends StatelessWidget {
               context.l10n.chooseWhichVersionToKeep,
               style: Theme.of(context).textTheme.bodySmall,
             ),
+            if (hasTimestamps) ...[
+              const SizedBox(height: HkSpacing.xs),
+              if (conflict.localModifiedAt != null)
+                Text(
+                  context.l10n.thisDeviceVersionLabel(
+                    formatShortDateTime(context, conflict.localModifiedAt!),
+                  ),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              if (conflict.remoteModifiedAt != null)
+                Text(
+                  context.l10n.cloudVersionLabel(
+                    formatShortDateTime(context, conflict.remoteModifiedAt!),
+                  ),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+            ],
             const SizedBox(height: HkSpacing.sm),
             Wrap(
               spacing: HkSpacing.xs,

@@ -385,6 +385,8 @@
   "syncStoppedAfterRepeatedAttempts": "توقف Owntend عن إعادة محاولة هذا التغيير بعد إخفاقات متكررة.",
   "syncConflictForCategory": "تعارض في {category}",
   "chooseWhichVersionToKeep": "اختر النسخة التي تريد الاحتفاظ بها.",
+  "thisDeviceVersionLabel": "هذا الجهاز: {time}",
+  "cloudVersionLabel": "السحابة: {time}",
   "removedCategoryCouldNotSync": "تعذرت مزامنة إزالة {category}",
   "updatedCategoryCouldNotSync": "تعذرت مزامنة تحديث {category}",
   "syncCategoryHomeStructure": "هيكل المنزل",

@@ -65,7 +65,7 @@ class _WeatherCard extends StatelessWidget {
                   ? Symbols.cloud_rounded
                   : weatherIcon(current.weatherCode),
               size: 96,
-              color: scheme.primary.withValues(alpha: 0.055),
+              color: scheme.primary.withValues(alpha: isDark ? 0.045 : 0.035),
             ),
           ),
           Padding(
@@ -77,7 +77,11 @@ class _WeatherCard extends StatelessWidget {
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      _WeatherIconBadge(icon: Symbols.location_on_rounded),
+                      _WeatherIconBadge(
+                        icon: location == null
+                            ? Symbols.location_on_rounded
+                            : Symbols.cloud_off_rounded,
+                      ),
                       const SizedBox(width: HkSpacing.sm),
                       Expanded(
                         child: Column(
@@ -124,7 +128,6 @@ class _WeatherCard extends StatelessWidget {
                           final gap = compactHeader
                               ? HkSpacing.xs
                               : HkSpacing.sm;
-                          final temperatureWidth = compactHeader ? 46.0 : 58.0;
                           return Row(
                             crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
@@ -180,26 +183,36 @@ class _WeatherCard extends StatelessWidget {
                                 onPressed: onToggleTheme,
                               ),
                               SizedBox(width: gap),
-                              SizedBox(
-                                width: temperatureWidth,
-                                child: FittedBox(
-                                  fit: BoxFit.scaleDown,
-                                  alignment: AlignmentDirectional.centerEnd,
-                                  child: Text(
-                                    bidiIsolate(
-                                      context,
-                                      '${current.temperature.round()}°C',
+                              Builder(
+                                builder: (context) {
+                                  final temp = current.temperature.round();
+                                  final tempColor = temp >= 35
+                                      ? (isDark
+                                            ? const Color(0xFFFFB4A4)
+                                            : HkColors.appWarning)
+                                      : scheme.primary;
+                                  return ConstrainedBox(
+                                    constraints: BoxConstraints(
+                                      minWidth: compactHeader ? 46.0 : 54.0,
+                                      maxWidth: compactHeader ? 60.0 : 78.0,
                                     ),
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .displaySmall
-                                        ?.copyWith(
-                                          color: scheme.primary,
-                                          fontWeight: FontWeight.w800,
-                                          height: 1,
-                                        ),
-                                  ),
-                                ),
+                                    child: FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      alignment: AlignmentDirectional.centerEnd,
+                                      child: Text(
+                                        bidiIsolate(context, '$temp°C'),
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .displaySmall
+                                            ?.copyWith(
+                                              color: tempColor,
+                                              fontWeight: FontWeight.w800,
+                                              height: 1,
+                                            ),
+                                      ),
+                                    ),
+                                  );
+                                },
                               ),
                             ],
                           );
@@ -330,9 +343,17 @@ class _WeatherCapabilityStatus extends StatelessWidget {
             SizedBox(
               height: 48,
               child: TextButton.icon(
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                ),
                 onPressed: onAction,
                 icon: const Icon(Symbols.settings_rounded, size: 18),
-                label: Text(actionLabel),
+                label: Text(
+                  actionLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ),
         ],
@@ -371,12 +392,12 @@ class _WeatherThemeButton extends StatelessWidget {
               backgroundColor: scheme.surfaceContainerLowest.withValues(
                 alpha: 0.86,
               ),
-              foregroundColor: daytime ? scheme.tertiary : scheme.primary,
+              foregroundColor: isDark ? scheme.tertiary : scheme.primary,
               shape: const CircleBorder(),
               side: BorderSide(color: scheme.primary.withValues(alpha: 0.12)),
             ),
             icon: Icon(
-              daytime ? Symbols.wb_sunny_rounded : Symbols.dark_mode_rounded,
+              isDark ? Symbols.wb_sunny_rounded : Symbols.dark_mode_rounded,
               size: 22,
             ),
           ),
@@ -422,12 +443,20 @@ class WeatherDetailChips extends StatelessWidget {
             ),
             SizedBox(width: gap),
             Expanded(
-              child: _WeatherDetailChip(
-                icon: Symbols.air_rounded,
-                label: context.l10n.wind,
-                value: '${weather.windSpeed.round()} km/h',
-                compact: compact,
-                showIcon: showIcons,
+              child: Builder(
+                builder: (context) {
+                  final isArabic =
+                      Localizations.localeOf(context).languageCode == 'ar';
+                  final speed = weather.windSpeed.round();
+                  final unit = isArabic ? 'كم/س' : 'km/h';
+                  return _WeatherDetailChip(
+                    icon: Symbols.air_rounded,
+                    label: context.l10n.wind,
+                    value: '$speed $unit',
+                    compact: compact,
+                    showIcon: showIcons,
+                  );
+                },
               ),
             ),
           ],
@@ -541,18 +570,33 @@ class _WeatherDetailText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final formattedValue = bidiIsolate(context, value);
-    return Text(
-      '$label $formattedValue',
+    final baseStyle = Theme.of(context).textTheme.labelMedium
+        ?.copyWith(fontSize: compact ? 10.5 : null);
+    return Text.rich(
+      TextSpan(
+        children: [
+          TextSpan(
+            text: '$label ',
+            style: baseStyle?.copyWith(
+              color: scheme.onSurfaceVariant,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          TextSpan(
+            text: formattedValue,
+            style: baseStyle?.copyWith(
+              color: scheme.onSurface,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
       maxLines: 1,
       softWrap: false,
       overflow: TextOverflow.visible,
       textAlign: TextAlign.center,
-      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-        color: Theme.of(context).colorScheme.onSurface,
-        fontWeight: FontWeight.w800,
-        fontSize: compact ? 10.5 : null,
-      ),
     );
   }
 }

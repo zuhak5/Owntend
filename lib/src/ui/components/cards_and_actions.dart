@@ -156,11 +156,14 @@ class _FixedFabButton extends StatelessWidget {
             constraints: const BoxConstraints(
               maxWidth: kOwntendFabLabelMaxWidth,
             ),
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+              ),
             ),
           ),
         ),
@@ -189,11 +192,12 @@ class SectionHeader extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(top: HkSpacing.sm, bottom: HkSpacing.xs),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
                   title,

@@ -1233,6 +1233,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chooseWhichVersionToKeep => 'Choose the version you want to keep.';
 
   @override
+  String thisDeviceVersionLabel(String time) {
+    return 'This device: $time';
+  }
+
+  @override
+  String cloudVersionLabel(String time) {
+    return 'Cloud: $time';
+  }
+
+  @override
   String removedCategoryCouldNotSync(String category) {
     return 'Removed $category could not sync';
   }

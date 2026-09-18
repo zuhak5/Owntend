@@ -192,11 +192,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                       child: ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 640),
                         child: Padding(
-                          padding: const EdgeInsets.fromLTRB(
+                          padding: EdgeInsets.fromLTRB(
                             HkSpacing.gutter,
                             HkSpacing.sm,
                             HkSpacing.gutter,
-                            HkSpacing.bottomAction + HkSpacing.bottomNav,
+                            showFab
+                                ? (HkSpacing.bottomNav +
+                                      hk_ui.kOwntendFabHeight +
+                                      HkSpacing.md)
+                                : (HkSpacing.bottomNav + HkSpacing.space32),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -312,6 +316,10 @@ class _DashboardDataWarning extends StatelessWidget {
     return hk_ui.SurfaceCard(
       key: const ValueKey('dashboard-stale-data-warning'),
       padding: const EdgeInsets.all(HkSpacing.sm),
+      backgroundColor: Color.alphaBlend(
+        scheme.errorContainer.withValues(alpha: 0.12),
+        scheme.surfaceContainerLowest,
+      ),
       borderColor: scheme.error.withValues(alpha: 0.35),
       child: Row(
         children: [
@@ -323,7 +331,14 @@ class _DashboardDataWarning extends StatelessWidget {
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ),
-          TextButton(onPressed: onRetry, child: Text(context.l10n.retry)),
+          TextButton(
+            style: TextButton.styleFrom(
+              foregroundColor: scheme.error,
+              visualDensity: VisualDensity.compact,
+            ),
+            onPressed: onRetry,
+            child: Text(context.l10n.retry),
+          ),
         ],
       ),
     );
@@ -371,6 +386,7 @@ List<_HomeTaskSectionData> _homeTaskSections(
         _HomeTaskSectionData(
           title: context.l10n.tomorrowSTasks,
           tasks: buckets.tomorrow,
+          filter: 'tomorrow',
         ),
       );
     }
@@ -379,6 +395,7 @@ List<_HomeTaskSectionData> _homeTaskSections(
       _HomeTaskSectionData(
         title: context.l10n.upcomingTasks,
         tasks: buckets.upcoming,
+        filter: 'upcoming',
       ),
     );
   }
@@ -423,6 +440,7 @@ class _DashboardTaskList extends ConsumerWidget {
             ? context.l10n.addAHomeItemFirst
             : context.l10n.addARoomOrZoneBeforeAddingItems,
         action: FilledButton.icon(
+          style: FilledButton.styleFrom(minimumSize: const Size(140, 48)),
           onPressed: () => (isPlanUpToDate || hasThings)
               ? showPlanEditorSheet(context)
               : startThingSetupFlow(context, ref),
@@ -479,6 +497,7 @@ class _DashboardTaskList extends ConsumerWidget {
                 margin: EdgeInsets.zero,
                 onTap: () => context.push('/maintenance/${task.plan.id}'),
                 onComplete: () => completeTaskWithFeedback(context, ref, task),
+                onEdit: () => showPlanEditorSheet(context, task: task),
                 onSnooze: () => snoozeTaskWithFeedback(context, ref, task),
                 onSetEnabled: (enabled) =>
                     setTaskEnabledWithFeedback(context, ref, task, enabled),
@@ -915,7 +934,7 @@ class _DashboardSearchField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final height = isCompact ? 40.0 : 44.0;
+    final height = isCompact ? 40.0 : 48.0;
     final hPad = isCompact ? 10.0 : HkSpacing.sm;
     final shape = RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(HkRadii.full),
@@ -1022,7 +1041,7 @@ class _NotificationButton extends StatelessWidget {
                 borderRadius: BorderRadius.circular(HkRadii.lg),
                 boxShadow: [
                   BoxShadow(
-                    color: HkColors.appTextPrimary.withValues(alpha: 0.06),
+                    color: scheme.shadow.withValues(alpha: 0.06),
                     blurRadius: 14,
                     offset: const Offset(0, 6),
                   ),
@@ -1264,14 +1283,14 @@ class _HomeReadinessSummaryCard extends StatelessWidget {
           Row(
             children: [
               SizedBox.square(
-                dimension: 56,
+                dimension: 60,
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
                     SizedBox.expand(
                       child: CircularProgressIndicator(
                         value: progress,
-                        strokeWidth: 6,
+                        strokeWidth: 5,
                         backgroundColor: scheme.surfaceContainerHighest,
                         valueColor: AlwaysStoppedAnimation<Color>(color),
                       ),
@@ -1296,14 +1315,18 @@ class _HomeReadinessSummaryCard extends StatelessWidget {
                               ? Symbols.warning_rounded
                               : Symbols.health_and_safety_rounded,
                           color: color,
-                          size: 18,
+                          size: 16,
                         ),
                         const SizedBox(width: HkSpacing.space4),
                         Expanded(
                           child: Text(
                             context.l10n.homeReadiness,
-                            style: Theme.of(context).textTheme.titleSmall
-                                ?.copyWith(fontWeight: FontWeight.w900),
+                            style: Theme.of(context).textTheme.labelMedium
+                                ?.copyWith(
+                                  color: color,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 0.2,
+                                ),
                           ),
                         ),
                       ],
@@ -1311,12 +1334,12 @@ class _HomeReadinessSummaryCard extends StatelessWidget {
                     const SizedBox(height: 3),
                     Text(
                       headline,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: scheme.onSurface,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 3),
                     Text(
                       context.l10n.nextValue(cleanNextAction),
                       maxLines: 1,
@@ -1345,7 +1368,7 @@ class _HomeReadinessSummaryCard extends StatelessWidget {
                 child: _SummaryMetric(
                   label: context.l10n.next7,
                   value: nextSeven,
-                  icon: Symbols.upcoming_rounded,
+                  icon: Symbols.date_range_rounded,
                   onTap: onNextSeven,
                 ),
               ),
@@ -1354,7 +1377,9 @@ class _HomeReadinessSummaryCard extends StatelessWidget {
                 child: _SummaryMetric(
                   label: context.l10n.overdue,
                   value: overdue,
-                  icon: Symbols.warning_rounded,
+                  icon: overdue > 0
+                      ? Symbols.warning_rounded
+                      : Symbols.schedule_rounded,
                   alert: overdue > 0,
                   onTap: onOverdue,
                 ),
@@ -1409,20 +1434,23 @@ class _SummaryMetric extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(icon, size: 15, color: color),
-                      const SizedBox(width: HkSpacing.space4),
-                      Text(
-                        '$value',
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(
-                              color: color,
-                              fontWeight: FontWeight.w900,
-                            ),
-                      ),
-                    ],
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(icon, size: 15, color: color),
+                        const SizedBox(width: HkSpacing.space4),
+                        Text(
+                          bidiIsolate(context, '$value'),
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(
+                                color: color,
+                                fontWeight: FontWeight.w900,
+                              ),
+                        ),
+                      ],
+                    ),
                   ),
                   Text(
                     label,

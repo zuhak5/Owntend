@@ -92,32 +92,16 @@ class HkPointsPill extends ConsumerWidget {
                           ],
                         ),
                         alignment: Alignment.center,
-                        child: Stack(
-                          clipBehavior: Clip.none,
-                          alignment: Alignment.center,
-                          children: [
-                            Icon(
-                              Symbols.star_rounded,
-                              size: 19,
-                              color: scheme.primary,
-                              fill: 1,
-                            ),
-                            PositionedDirectional(
-                              end: 3,
-                              top: 3,
-                              child: Icon(
-                                Symbols.auto_awesome_rounded,
-                                size: 7,
-                                color: scheme.tertiary,
-                                fill: 1,
-                              ),
-                            ),
-                          ],
+                        child: Icon(
+                          Symbols.star_rounded,
+                          size: 20,
+                          color: scheme.primary,
+                          fill: 1,
                         ),
                       ),
                       SizedBox(width: innerGap),
                       Text(
-                        balance?.toString() ?? '-',
+                        bidiIsolate(context, balance?.toString() ?? '-'),
                         maxLines: 1,
                         style: Theme.of(context).textTheme.titleMedium
                             ?.copyWith(

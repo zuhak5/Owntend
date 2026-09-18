@@ -478,6 +478,22 @@
     }
   },
   "chooseWhichVersionToKeep": "Choose the version you want to keep.",
+  "thisDeviceVersionLabel": "This device: {time}",
+  "@thisDeviceVersionLabel": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "cloudVersionLabel": "Cloud: {time}",
+  "@cloudVersionLabel": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
   "removedCategoryCouldNotSync": "Removed {category} could not sync",
   "@removedCategoryCouldNotSync": {
     "placeholders": {

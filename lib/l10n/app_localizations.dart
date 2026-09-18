@@ -2409,6 +2409,18 @@ abstract class AppLocalizations {
   /// **'Choose the version you want to keep.'**
   String get chooseWhichVersionToKeep;
 
+  /// No description provided for @thisDeviceVersionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'This device: {time}'**
+  String thisDeviceVersionLabel(String time);
+
+  /// No description provided for @cloudVersionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cloud: {time}'**
+  String cloudVersionLabel(String time);
+
   /// No description provided for @removedCategoryCouldNotSync.
   ///
   /// In en, this message translates to:

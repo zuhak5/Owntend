@@ -33,8 +33,8 @@ class _HomeShellState extends ConsumerState<HomeShell> {
                   label: hk_ui.SereneBottomNavLabel.home,
                 ),
                 hk_ui.SereneBottomNavDestination(
-                  icon: Symbols.inventory_2_rounded,
-                  selectedIcon: Symbols.inventory_2_rounded,
+                  icon: Symbols.meeting_room_rounded,
+                  selectedIcon: Symbols.meeting_room_rounded,
                   label: hk_ui.SereneBottomNavLabel.rooms,
                 ),
                 hk_ui.SereneBottomNavDestination(
@@ -48,8 +48,8 @@ class _HomeShellState extends ConsumerState<HomeShell> {
                   label: hk_ui.SereneBottomNavLabel.calendar,
                 ),
                 hk_ui.SereneBottomNavDestination(
-                  icon: Symbols.settings_rounded,
-                  selectedIcon: Symbols.settings_rounded,
+                  icon: Symbols.build_rounded,
+                  selectedIcon: Symbols.build_rounded,
                   label: hk_ui.SereneBottomNavLabel.tools,
                 ),
               ],

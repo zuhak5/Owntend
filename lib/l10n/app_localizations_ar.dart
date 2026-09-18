@@ -1238,6 +1238,16 @@ class AppLocalizationsAr extends AppLocalizations {
   String get chooseWhichVersionToKeep => 'اختر النسخة التي تريد الاحتفاظ بها.';
 
   @override
+  String thisDeviceVersionLabel(String time) {
+    return 'هذا الجهاز: $time';
+  }
+
+  @override
+  String cloudVersionLabel(String time) {
+    return 'السحابة: $time';
+  }
+
+  @override
   String removedCategoryCouldNotSync(String category) {
     return 'تعذرت مزامنة إزالة $category';
   }

@@ -652,19 +652,42 @@ extension _SyncRunCoordinator on SyncCoordinator {
             remoteWinners.add(record);
             maintenanceChanged =
                 maintenanceChanged || _isMaintenanceSyncEntity(record);
-            // A remote winner never deletes the queued local intent. The
-            // outbox row enters the durable `conflict` state (generation-
-            // checked) and survives restart until acknowledged or explicitly
-            // resolved by the user.
-            await _localStore.markEntityMutationConflicted(
-              entity: record.spec.entity,
-              recordKey: record.recordKey,
-              accountId: userId,
-              deviceId: deviceId,
-              reason: 'pulled_remote_winner',
-              remotePayloadJson: jsonEncode(record.values),
-              remoteRevision: record.revision,
-            );
+            if (record.spec.entity == 'notification_inbox') {
+              // Notification inbox auto-converges: remote winner satisfies local creation/update.
+              await _localStore.markEntityMutationSucceeded(
+                entity: record.spec.entity,
+                recordKey: record.recordKey,
+                canonical: record,
+              );
+            } else {
+              final localPending = await _localStore.readMutationByKey(
+                record.spec.entity,
+                record.recordKey,
+                deviceId,
+              );
+              if (localPending != null &&
+                  _sameRecordData(localPending, record)) {
+                await _localStore.markEntityMutationSucceeded(
+                  entity: record.spec.entity,
+                  recordKey: record.recordKey,
+                  canonical: record,
+                );
+              } else {
+                // A remote winner never deletes the queued local intent. The
+                // outbox row enters the durable `conflict` state (generation-
+                // checked) and survives restart until acknowledged or explicitly
+                // resolved by the user.
+                await _localStore.markEntityMutationConflicted(
+                  entity: record.spec.entity,
+                  recordKey: record.recordKey,
+                  accountId: userId,
+                  deviceId: deviceId,
+                  reason: 'pulled_remote_winner',
+                  remotePayloadJson: jsonEncode(record.values),
+                  remoteRevision: record.revision,
+                );
+              }
+            }
           }
           recordKey = record.recordKey;
         }
