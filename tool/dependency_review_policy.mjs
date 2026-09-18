@@ -85,6 +85,7 @@ export const KNOWN_PUB_LICENSES = Object.freeze({
   'crypto': 'BSD-3-Clause',
   'csslib': 'BSD-3-Clause',
   'cupertino_icons': 'MIT',
+  'cupertino_ui': 'BSD-3-Clause',
   'dart_style': 'BSD-3-Clause',
   'dbus': 'LGPL-3.0-or-later', // Has exception in exception registry or mapped
   'device_info_plus': 'BSD-3-Clause',
@@ -165,6 +166,7 @@ export const KNOWN_PUB_LICENSES = Object.freeze({
   'matcher': 'BSD-3-Clause',
   'material_color_utilities': 'Apache-2.0',
   'material_symbols_icons': 'Apache-2.0',
+  'material_ui': 'BSD-3-Clause',
   'meta': 'BSD-3-Clause',
   'mime': 'BSD-3-Clause',
   'mocktail': 'Apache-2.0',

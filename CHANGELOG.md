@@ -6,6 +6,17 @@ The current application version is defined only in `pubspec.yaml`. Released vers
 
 ## Unreleased
 
+- Upgraded Flutter SDK to 3.47.1 and Dart SDK to 3.13.1:
+  - Upgraded Flutter SDK checkout to `3.47.1` (channel `stable`, Dart `3.13.1`) and updated Flutter constraint to `>=3.47.1` in `pubspec.yaml`.
+  - Synchronized canonical toolchain manifest (`config/toolchain.json`) to Flutter `3.47.1`, aligning full releases with Shorebird Code Push targets (`releaseFlutterVersion: 3.47.1`, `releaseFlutterRevision: 91f8bd75076e9c740aa13cf67eb9ec1a093f68f5`, `releaseEngineRevision: 03e67977a7ff5893d96ac97f22c6a795530c0040`).
+  - Updated toolchain policy test assertions (`tool/toolchain.test.mjs`) and synced documentation (`README.md`, `CONTRIBUTING.md`, `docs/development/getting-started.md`, `docs/development/toolchain.md`, `docs/operations/shorebird-code-push.md`).
+
+- Upgraded direct, dev, and tooling dependencies across Flutter, Dart, Node.js, and canonical toolchain:
+  - **Flutter Packages**: Upgraded `go_router` to `18.0.1`, `file_picker` to `13.1.0`, `drift` and `drift_dev` to `2.35.0`, `flutter_riverpod` to `3.4.3`, `flutter_secure_storage` to `11.2.0`, `sentry_flutter` to `9.30.0`, `sqlite3` to `3.6.0`, `image` to `4.10.1`, `flutter_foreground_task` to `11.0.3`, `flutter_local_notifications` to `22.3.1`, `permission_handler` to `13.0.2`, `workmanager` to `0.10.10`, and `build_runner` to `2.16.1`.
+  - **Transitive Upgrades**: Upgraded 84 locked transitive packages via `flutter pub upgrade`.
+  - **Node Tooling & Toolchain Sync**: Upgraded `@supabase/supabase-js` to `2.116.0`, `supabase` CLI to `2.117.0`, and `yaml` to `2.9.1`. Synchronized canonical toolchain manifest in `config/toolchain.json` (`supabaseCli: 2.117.0`) and updated test suite expectations.
+  - **Licensing & Mock Compatibility**: Registered new transitive packages `cupertino_ui` and `material_ui` under BSD-3-Clause in `tool/dependency_review_policy.mjs`. Updated `FakeFilePicker` and `FakePlatformFile` for `file_picker` 13.x compatibility (`lengthSync()` and parameter signature alignment). Regenerated SPDX SBOM and third-party notices.
+
 - Modernized and standardized language selector dropdown UI design across settings and onboarding (`LanguageSelectorDropdown`):
   - **Start-Aligned Content Hierarchy**: Replaced awkward centered `Stack` layout with a natural start-aligned `Row` pairing an active status indicator badge (22dp circular checkmark pill when selected, subtle outline circle when unselected) with a structured text column, ensuring consistent vertical text alignment regardless of menu width.
   - **Bilingual Endonyms**: Enriched language selector options with native bilingual endonyms (displaying "العربية" under "Arabic" in English mode, and "English (US)" under "الإنجليزية" in Arabic mode) and added responsive locale badges (`EN` / `AR`), following internationalization best practices.
@@ -23,7 +34,7 @@ The current application version is defined only in `pubspec.yaml`. Released vers
   - **Legacy Conflict Auto-Healing**: Added automatic self-healing in `listUnresolvedSyncConflictSummaries` (`mutation_store.dart`), silently resolving and clearing any preexisting legacy `notification_inbox` conflict records from user devices on query.
   - **Enriched Conflict Card UX**: Enhanced `SyncConflictSummary` with readable entity title (`title`) and formatted timestamps (`localModifiedAt`, `remoteModifiedAt`). Rebuilt `_SyncConflictCard` in `sync_health_screen.dart` to display item names (e.g. "Conflicting item: Refrigerator") and localized timestamps ("This device: Today 10:30 AM", "Cloud: Today 10:45 AM") with full Arabic and English localization (`thisDeviceVersionLabel`, `cloudVersionLabel`).
 
-- Advanced the application build number to 14 (`1.0.1+14`) to ensure monotonic `versionCode` progression for Android update compatibility.
+- Advanced the application build number to 15 (`1.0.1+15`) to ensure monotonic `versionCode` progression for Android update compatibility.
 
 - Implemented comprehensive visual ergonomics, accessibility contrast, and UI/UX forensic remediation (UI-001 through UI-018):
   - **Category Icon Zero-Contrast in Light Mode (`UI-001`)**: Resolved invisible category icon badges by remapping `HkColors.tertiaryContainer` to `HkColors.appWarningSurface` (`Color(0xFFFFF2D5)`) and setting `onTertiaryContainer` to `Color(0xFF4A3400)` in `OwntendTheme.light()`, eliminating the 0:1 contrast failure on amber badge containers.

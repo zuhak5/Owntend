@@ -10,7 +10,7 @@
 
 ## Local setup
 
-Use Flutter 3.47.0 or the canonical toolchain pinned in [`config/toolchain.json`](config/toolchain.json). Copy an example configuration file:
+Use Flutter 3.47.1 or the canonical toolchain pinned in [`config/toolchain.json`](config/toolchain.json). Copy an example configuration file:
 
 ```powershell
 Copy-Item config/dev.example.json config/dev.json

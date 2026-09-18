@@ -25,7 +25,7 @@ test('Canonical toolchain configuration is complete and valid', async () => {
   assert.ok(canonical.canonicalToolchain, 'canonicalToolchain block must exist');
 
   const tc = canonical.canonicalToolchain;
-  assert.equal(tc.flutter.version, '3.47.0');
+  assert.equal(tc.flutter.version, '3.47.1');
   assert.equal(tc.flutter.channel, 'stable');
   assert.equal(tc.dart.sdkConstraint, '^3.13.0');
   assert.equal(tc.java.version, '21');
@@ -46,7 +46,7 @@ test('Canonical toolchain configuration is complete and valid', async () => {
   assert.match(tc.android.gradleWrapperJarSha256, /^[0-9a-f]{64}$/);
   assert.equal(tc.node.npmMajor, 11);
   assert.equal(tc.tools.sentryCli, '2.58.6');
-  assert.equal(tc.tools.supabaseCli, '2.115.0');
+  assert.equal(tc.tools.supabaseCli, '2.117.0');
   assert.equal(tc.tools.shorebirdCli.version, '1.6.119');
   assert.match(tc.tools.shorebirdCli.commit, /^[0-9a-f]{40}$/);
   assert.match(tc.tools.shorebirdCli.bundledFlutterRevision, /^[0-9a-f]{40}$/);
@@ -64,7 +64,7 @@ test('Repository configuration specifies matching canonical toolchain versions',
   const tc = canonical.canonicalToolchain;
 
   const pubspec = await read('pubspec.yaml');
-  assert.match(pubspec, new RegExp(`flutter:\\s*">=3\\.47\\.0"`));
+  assert.match(pubspec, new RegExp(`flutter:\\s*">=3\\.47\\.1"`));
   assert.match(pubspec, new RegExp(`sdk:\\s*\\^3\\.13\\.0`));
 
   const settingsGradle = await read('android/settings.gradle.kts');
@@ -91,7 +91,7 @@ test('Toolchain policy evaluation detects mismatches and fails closed', async ()
     dart: { version: '3.13.0' },
     node: { version: '24.11.1', npmVersion: '11.7.0' },
     deno: { version: '2.9.3' },
-    supabaseCli: { resolvedVersion: '2.115.0' },
+    supabaseCli: { resolvedVersion: '2.117.0' },
     android: {
       agpVersion: '9.3.0',
       kotlinVersion: '2.4.10',
@@ -103,7 +103,7 @@ test('Toolchain policy evaluation detects mismatches and fails closed', async ()
       minSdkVersion: 26,
       buildToolsVersion: '36.0.0',
     },
-    flutter: { version: '3.47.0', channel: 'stable' },
+    flutter: { version: '3.47.1', channel: 'stable' },
   };
 
   const passResult = evaluateToolchainPolicy(canonical, matchingResolved);
@@ -157,7 +157,7 @@ test('Toolchain policy evaluation detects mismatches and fails closed', async ()
     ['minSdk', 24, /Android minSdk/],
     ['buildTools', '35.0.0', /Android build tools/],
     ['flutter', { version: '3.44.7', channel: 'stable' }, /Flutter Version/],
-    ['flutterChannel', { version: '3.47.0', channel: 'beta' }, /Flutter channel/],
+    ['flutterChannel', { version: '3.47.1', channel: 'beta' }, /Flutter channel/],
   ];
 
   for (const [fixtureName, override, expectedError] of mismatchFixtures) {

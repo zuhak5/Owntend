@@ -15081,8 +15081,10 @@ class $$AreasTableTableManager
               ),
           withReferenceMapper: (p0) => p0
               .map(
-                (e) =>
-                    (e.readTable(table), $$AreasTableReferences(db, table, e)),
+                (e) => (
+                  e.readTable<$AreasTable, AreaRow>(table),
+                  $$AreasTableReferences(db, table, e),
+                ),
               )
               .toList(),
           prefetchHooksCallback: ({roomsRefs = false}) {
@@ -15522,8 +15524,10 @@ class $$RoomsTableTableManager
               ),
           withReferenceMapper: (p0) => p0
               .map(
-                (e) =>
-                    (e.readTable(table), $$RoomsTableReferences(db, table, e)),
+                (e) => (
+                  e.readTable<$RoomsTable, RoomRow>(table),
+                  $$RoomsTableReferences(db, table, e),
+                ),
               )
               .toList(),
           prefetchHooksCallback: ({areaId = false, assetsRefs = false}) {
@@ -16447,8 +16451,10 @@ class $$AssetsTableTableManager
               ),
           withReferenceMapper: (p0) => p0
               .map(
-                (e) =>
-                    (e.readTable(table), $$AssetsTableReferences(db, table, e)),
+                (e) => (
+                  e.readTable<$AssetsTable, AssetRow>(table),
+                  $$AssetsTableReferences(db, table, e),
+                ),
               )
               .toList(),
           prefetchHooksCallback:
@@ -17015,7 +17021,7 @@ class $$DeviceDetailsTableTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$DeviceDetailsTableTable, DeviceDetailRow>(table),
                   $$DeviceDetailsTableTableReferences(db, table, e),
                 ),
               )
@@ -17418,7 +17424,7 @@ class $$PetDetailsTableTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$PetDetailsTableTable, PetDetailRow>(table),
                   $$PetDetailsTableTableReferences(db, table, e),
                 ),
               )
@@ -17787,7 +17793,7 @@ class $$PlantDetailsTableTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$PlantDetailsTableTable, PlantDetailRow>(table),
                   $$PlantDetailsTableTableReferences(db, table, e),
                 ),
               )
@@ -18143,7 +18149,7 @@ class $$SafetyDetailsTableTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$SafetyDetailsTableTable, SafetyDetailRow>(table),
                   $$SafetyDetailsTableTableReferences(db, table, e),
                 ),
               )
@@ -18410,8 +18416,10 @@ class $$TagsTableTableManager
               ),
           withReferenceMapper: (p0) => p0
               .map(
-                (e) =>
-                    (e.readTable(table), $$TagsTableReferences(db, table, e)),
+                (e) => (
+                  e.readTable<$TagsTable, TagRow>(table),
+                  $$TagsTableReferences(db, table, e),
+                ),
               )
               .toList(),
           prefetchHooksCallback: ({assetTagsRefs = false}) {
@@ -18721,7 +18729,7 @@ class $$AssetTagsTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$AssetTagsTable, AssetTagRow>(table),
                   $$AssetTagsTableReferences(db, table, e),
                 ),
               )
@@ -19090,7 +19098,7 @@ class $$AssetPhotosTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$AssetPhotosTable, AssetPhotoRow>(table),
                   $$AssetPhotosTableReferences(db, table, e),
                 ),
               )
@@ -19834,7 +19842,9 @@ class $$MaintenancePlansTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$MaintenancePlansTable, MaintenancePlanRow>(
+                    table,
+                  ),
                   $$MaintenancePlansTableReferences(db, table, e),
                 ),
               )
@@ -20336,7 +20346,10 @@ class $$MaintenancePlanMetadataTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<
+                    $MaintenancePlanMetadataTable,
+                    MaintenancePlanMetadataRow
+                  >(table),
                   $$MaintenancePlanMetadataTableReferences(db, table, e),
                 ),
               )
@@ -20733,7 +20746,9 @@ class $$MaintenanceRecordsTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$MaintenanceRecordsTable, MaintenanceRecordRow>(
+                    table,
+                  ),
                   $$MaintenanceRecordsTableReferences(db, table, e),
                 ),
               )
@@ -21200,7 +21215,9 @@ class $$InboxNotificationsTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$InboxNotificationsTable, InboxNotificationRow>(
+                    table,
+                  ),
                   $$InboxNotificationsTableReferences(db, table, e),
                 ),
               )
@@ -21398,7 +21415,16 @@ class $$SettingsTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<$SettingsTable, SettingRow>(table),
+                  BaseReferences<_$AppDatabase, $SettingsTable, SettingRow>(
+                    db,
+                    table,
+                    e,
+                  ),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -21596,7 +21622,16 @@ class $$StreaksTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<$StreaksTable, StreakRow>(table),
+                  BaseReferences<_$AppDatabase, $StreaksTable, StreakRow>(
+                    db,
+                    table,
+                    e,
+                  ),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -21966,7 +22001,16 @@ class $$SyncOutboxTableTableManager
                 generation: generation,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<$SyncOutboxTable, SyncOutboxData>(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $SyncOutboxTable,
+                    SyncOutboxData
+                  >(db, table, e),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -22269,7 +22313,19 @@ class $$ReminderScheduleSnapshotsTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<
+                    $ReminderScheduleSnapshotsTable,
+                    ReminderScheduleSnapshot
+                  >(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $ReminderScheduleSnapshotsTable,
+                    ReminderScheduleSnapshot
+                  >(db, table, e),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -22481,7 +22537,16 @@ class $$SyncCursorsTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<$SyncCursorsTable, SyncCursor>(table),
+                  BaseReferences<_$AppDatabase, $SyncCursorsTable, SyncCursor>(
+                    db,
+                    table,
+                    e,
+                  ),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -22708,7 +22773,16 @@ class $$SyncShadowsTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<$SyncShadowsTable, SyncShadow>(table),
+                  BaseReferences<_$AppDatabase, $SyncShadowsTable, SyncShadow>(
+                    db,
+                    table,
+                    e,
+                  ),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -22889,7 +22963,16 @@ class $$SyncRuntimeTableTableManager
                 leaseExpiresAt: leaseExpiresAt,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<$SyncRuntimeTable, SyncRuntimeData>(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $SyncRuntimeTable,
+                    SyncRuntimeData
+                  >(db, table, e),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -23156,7 +23239,18 @@ class $$SyncMediaCleanupTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<$SyncMediaCleanupTable, SyncMediaCleanupData>(
+                    table,
+                  ),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $SyncMediaCleanupTable,
+                    SyncMediaCleanupData
+                  >(db, table, e),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -23375,7 +23469,18 @@ class $$LocalMediaCleanupTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<$LocalMediaCleanupTable, LocalMediaCleanupData>(
+                    table,
+                  ),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $LocalMediaCleanupTable,
+                    LocalMediaCleanupData
+                  >(db, table, e),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -23930,7 +24035,16 @@ class $$SyncAccountTableTableManager
                 updatedAt: updatedAt,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<$SyncAccountTable, SyncAccountData>(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $SyncAccountTable,
+                    SyncAccountData
+                  >(db, table, e),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -24248,7 +24362,19 @@ class $$NotificationReconciliationRequestsTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<
+                    $NotificationReconciliationRequestsTable,
+                    NotificationReconciliationRequestRow
+                  >(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $NotificationReconciliationRequestsTable,
+                    NotificationReconciliationRequestRow
+                  >(db, table, e),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -24578,7 +24704,16 @@ class $$SyncConflictsTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<$SyncConflictsTable, SyncConflictRow>(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $SyncConflictsTable,
+                    SyncConflictRow
+                  >(db, table, e),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -24774,7 +24909,19 @@ class $$SyncSkippedFeedEntriesTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<
+                    $SyncSkippedFeedEntriesTable,
+                    SyncSkippedFeedEntryRow
+                  >(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $SyncSkippedFeedEntriesTable,
+                    SyncSkippedFeedEntryRow
+                  >(db, table, e),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),

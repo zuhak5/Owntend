@@ -821,6 +821,9 @@ final class FakePlatformFile extends PlatformFile {
   XFile get xFile => XFile(_path);
 
   @override
+  int? lengthSync() => fileSize;
+
+  @override
   Future<int> length() async => fileSize;
 
   @override
@@ -842,15 +845,11 @@ class FakeFilePicker extends FilePickerPlatform {
     FileType type = FileType.any,
     List<String>? allowedExtensions,
     dynamic Function(FilePickerStatus)? onFileLoading,
-    bool allowMultiple = false,
-    bool withData = false,
-    bool withReadStream = false,
     int compressionQuality = 0,
     String? dialogTitle,
     String? initialDirectory,
-    bool lockParentWindow = false,
-    bool readSequential = false,
     AndroidOptions androidOptions = const AndroidOptions(),
+    DarwinOptions darwinOptions = const DarwinOptions(),
     LinuxOptions linuxOptions = const LinuxOptions(),
     WebOptions webOptions = const WebOptions(),
     WindowsOptions windowsOptions = const WindowsOptions(),

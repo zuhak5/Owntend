@@ -12,7 +12,9 @@ Future<void> main(List<String> args) async {
   final root = File.fromUri(Platform.script).parent.parent;
 
   if (args.length > 1 || (args.isNotEmpty && args.single != '--check')) {
-    stderr.writeln('Usage: dart run tool/generate_native_splash.dart [--check]');
+    stderr.writeln(
+      'Usage: dart run tool/generate_native_splash.dart [--check]',
+    );
     exitCode = 64;
     return;
   }
@@ -26,7 +28,9 @@ Future<void> main(List<String> args) async {
     );
     final result = await process.exitCode;
     if (result != 0) {
-      stderr.writeln('flutter_native_splash:create failed with exit code $result.');
+      stderr.writeln(
+        'flutter_native_splash:create failed with exit code $result.',
+      );
       exitCode = result;
       return;
     }
@@ -98,7 +102,9 @@ void _verifyAndroid12SplashContract(Directory root) {
     final file = File('${root.path}/$relativePath');
     final contents = file.readAsStringSync();
     if (!contents.contains('@drawable/android12splash')) {
-      throw StateError('$relativePath must reference @drawable/android12splash.');
+      throw StateError(
+        '$relativePath must reference @drawable/android12splash.',
+      );
     }
   }
 }
