@@ -61,6 +61,12 @@ function Get-ReleasePatches {
 $patchesBefore = if ($DryRun) { @() } else { @(Get-ReleasePatches) }
 
 $shorebirdConfigHash = (Get-FileHash -LiteralPath $shorebirdConfigPath -Algorithm SHA256).Hash.ToLowerInvariant()
+$legacyConfigAssetDiffAllowed = (
+    $Flavor -eq 'prod' -and
+    $ReleaseVersion -eq '1.0.2+16' -and
+    $ReleaseBaseSha -eq '5d73524df2ae0b8ae2ac302ba78c6f7db0478f44' -and
+    $shorebirdConfigHash -eq 'e020e0f579713e5c4849924db9ecd7b6495de68cc3a87b8f7aa71b9cd38bd88c'
+)
 
 $targetTrack = if ($Flavor -eq 'prod') { 'stable' } else { $Flavor }
 $symbols = Join-Path $workspace "build\shorebird-symbols\$Flavor\patch-$($ReleaseVersion.Replace('+', '-'))"
@@ -77,6 +83,10 @@ $arguments = @(
     '--public-key-cmd=bash tool/shorebird_kms_public_key.sh',
     '--sign-cmd=bash tool/shorebird_kms_sign.sh'
 )
+if ($legacyConfigAssetDiffAllowed) {
+    Write-Warning 'Allowing the known generated shorebird.yaml asset difference for legacy prod release 1.0.2+16 only.'
+    $arguments += '--allow-asset-diffs'
+}
 if ($DryRun) { $arguments += '--dry-run' }
 $arguments += @('--', '--no-pub')
 
@@ -133,8 +143,8 @@ $evidence = [ordered]@{
     ci_run_id = [string]$env:GITHUB_RUN_ID
     ci_run_attempt = [string]$env:GITHUB_RUN_ATTEMPT
     native_diff_bypass = $false
-    asset_diff_bypass = $false
-    asset_diff_bypass_reason = $null
+    asset_diff_bypass = [bool]$legacyConfigAssetDiffAllowed
+    asset_diff_bypass_reason = if ($legacyConfigAssetDiffAllowed) { 'legacy-generated-shorebird-yaml-only' } else { $null }
     shorebird_config_sha256 = $shorebirdConfigHash
     generated_at_utc = [DateTime]::UtcNow.ToString('o')
 }
