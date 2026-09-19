@@ -26,8 +26,21 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         actions: [
           if (unreadCount > 0)
             TextButton(
-              onPressed: () =>
-                  ref.read(notificationInboxRepositoryProvider).markAllRead(),
+              onPressed: () async {
+                try {
+                  await ref
+                      .read(notificationInboxRepositoryProvider)
+                      .markAllRead();
+                } catch (error) {
+                  if (context.mounted) {
+                    hk_ui.showToast(
+                      context,
+                      content: Text(failureMessage(context, error)),
+                      severity: hk_ui.HkToastSeverity.error,
+                    );
+                  }
+                }
+              },
               child: Text(context.l10n.markAllRead),
             ),
         ],

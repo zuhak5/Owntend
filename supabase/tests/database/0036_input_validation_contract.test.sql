@@ -4,7 +4,7 @@ create extension if not exists pgtap with schema extensions;
 set local role postgres;
 set search_path = public, extensions, pg_catalog;
 
-select extensions.plan(13);
+select extensions.plan(17);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password,
@@ -213,6 +213,98 @@ select extensions.throws_ok(
   '22023',
   'INVALID_TASK_PAYLOAD',
   'task RPC returns the stable invalid-payload taxonomy'
+);
+
+select extensions.is(
+  (public.create_task_with_point_debit(jsonb_build_object(
+    'operation_id', '35353535-0000-4000-8000-000000000003',
+    'request_hash', repeat('c', 64),
+    'plan', jsonb_build_object(
+      'id', 'task-with-quotes-and-slashes',
+      'asset_id', 'validation-asset',
+      'title', 'Task with "quotes"',
+      'instructions', 'Run "Drum Clean" cycle \ with detergent 🧺',
+      'recurrence_interval', ' 2 ',
+      'recurrence_unit', 'months',
+      'priority', 'high',
+      'reminder_days_before', ' 1 ',
+      'next_due_date', (now() + interval '10 days')::text
+    ),
+    'metadata', jsonb_build_object(
+      'task_type', 'Cleaning',
+      'estimated_duration_minutes', ' 45 ',
+      'sort_order', ' 3 '
+    )
+  ))->>'already_processed')::boolean,
+  false,
+  'task RPC successfully processes and hashes payloads containing quotes, slashes, and string numbers'
+);
+
+select extensions.is(
+  (public.create_task_with_point_debit(jsonb_build_object(
+    'operation_id', '35353535-0000-4000-8000-000000000003',
+    'request_hash', repeat('c', 64),
+    'plan', jsonb_build_object(
+      'id', 'task-with-quotes-and-slashes',
+      'asset_id', 'validation-asset',
+      'title', 'Task with "quotes"',
+      'instructions', 'Run "Drum Clean" cycle \ with detergent 🧺',
+      'recurrence_interval', ' 2 ',
+      'recurrence_unit', 'months',
+      'priority', 'high',
+      'reminder_days_before', ' 1 ',
+      'next_due_date', (now() + interval '10 days')::text
+    ),
+    'metadata', jsonb_build_object(
+      'task_type', 'Cleaning',
+      'estimated_duration_minutes', ' 45 ',
+      'sort_order', ' 3 '
+    )
+  ))->>'already_processed')::boolean,
+  true,
+  'task RPC idempotent replay matches payload hash computed via convert_to UTF8'
+);
+
+select extensions.is(
+  (public.create_asset(jsonb_build_object(
+    'operation_id', '35353535-0000-4000-8000-000000000004',
+    'request_hash', repeat('d', 64),
+    'asset', jsonb_build_object(
+      'id', 'asset-with-quotes',
+      'name', '65" TV "OLED"',
+      'asset_type', 'device',
+      'room_id', 'validation-room',
+      'placement', 'Wall mount \ bracket'
+    ),
+    'details', jsonb_build_object(
+      'brand', 'LG "Signature"',
+      'model', 'OLED65"G3',
+      'power_source', 'AC 220V'
+    )
+  ))->>'already_processed')::boolean,
+  false,
+  'create_asset RPC successfully processes and hashes payloads containing quotes and slashes'
+);
+
+select extensions.is(
+  (public.create_asset(jsonb_build_object(
+    'operation_id', '35353535-0000-4000-8000-000000000004',
+    'request_hash', repeat('d', 64),
+    'asset', jsonb_build_object(
+      'id', 'asset-with-quotes',
+      'name', '65" TV "OLED"',
+      'asset_type', 'device',
+      'room_id', 'validation-room',
+      'placement', 'Wall mount \ bracket'
+    ),
+    'details', jsonb_build_object(
+      'brand', 'LG "Signature"',
+      'model', 'OLED65"G3',
+      'power_source', 'AC 220V'
+    )
+  ))->>'already_processed')::boolean,
+  true,
+  'create_asset RPC idempotent replay matches payload hash computed via convert_to UTF8'
 );
 
 select * from extensions.finish();

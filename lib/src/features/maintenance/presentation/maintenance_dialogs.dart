@@ -288,6 +288,7 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
                     child: TextField(
                       controller: _intervalController,
                       keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                       decoration: InputDecoration(
                         labelText: context.l10n.every,
                       ),
@@ -356,6 +357,7 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
                     child: TextField(
                       controller: _durationController,
                       keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                       decoration: InputDecoration(
                         labelText: context.l10n.estMinutes,
                         errorText:
@@ -375,6 +377,7 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
                     child: TextField(
                       controller: _reminderDaysController,
                       keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                       decoration: InputDecoration(
                         labelText: context.l10n.remindDaysBefore,
                         errorText:
@@ -394,6 +397,9 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
               TextField(
                 controller: _materialsController,
                 textInputAction: TextInputAction.next,
+                inputFormatters: limitInputLength(
+                  InputValidationLimits.maintenanceRequiredMaterialsJson,
+                ),
                 decoration: InputDecoration(
                   labelText: context.l10n.requiredMaterials,
                   hintText: context.l10n.commaSeparated2,

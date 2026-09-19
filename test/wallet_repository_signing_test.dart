@@ -303,5 +303,133 @@ void main() {
         matches(RegExp(r'^[0-9a-f]{64}$')),
       );
     });
+
+    test('createTask computes and preserves SHA-256 hash when payload contains double quotes, backslashes, emojis, and newlines', () async {
+      final specialPayload = {
+        'operation_id': 'op-task-quotes-001',
+        'plan': {
+          'id': 'plan-quotes-001',
+          'asset_id': 'asset-001',
+          'title': 'Task with "Drum Clean"',
+          'instructions':
+              'Step 1: Add "detergent"\nStep 2: Run cycle \\ test 🧺\n"Done!"',
+          'recurrence_interval': 1,
+          'recurrence_unit': 'months',
+          'priority': 'high',
+        },
+        'metadata': {
+          'task_type': 'Clean "Deep"',
+          'required_materials': ['"Vinegar"', 'Baking "Soda" \\ Powder'],
+          'reminder_recommendation': 'Check "filter" \\ before starting 👍',
+        },
+      };
+
+      final expectedHash = sha256
+          .convert(utf8.encode(jsonEncode(specialPayload)))
+          .toString();
+
+      when(
+        () => client.rpc<Map<String, dynamic>>(
+          'create_task_with_point_debit',
+          params: any(named: 'params'),
+        ),
+      ).thenAnswer(
+        (_) => _FakePostgrestFilterBuilder(
+          Future.value({
+            'plan_id': 'plan-quotes-001',
+            'balance': 4,
+            'charged': 1,
+            'already_processed': false,
+          }),
+        ),
+      );
+
+      final result = await repository.createTask(specialPayload);
+
+      expect(result.charged, equals(1));
+      expect(result.balance, equals(4));
+
+      final captured = verify(
+        () => client.rpc<Map<String, dynamic>>(
+          'create_task_with_point_debit',
+          params: captureAny(named: 'params'),
+        ),
+      ).captured;
+
+      final params = captured.first as Map<String, dynamic>;
+      final sentPayload = params['p_operation'] as Map<String, dynamic>;
+      expect(sentPayload['request_hash'], equals(expectedHash));
+      expect(
+        sentPayload['request_hash'] as String,
+        matches(RegExp(r'^[0-9a-f]{64}$')),
+      );
+      expect((sentPayload['plan'] as Map)['title'], contains('"Drum Clean"'));
+      expect(
+        (sentPayload['plan'] as Map)['instructions'],
+        contains('"detergent"'),
+      );
+      expect((sentPayload['plan'] as Map)['instructions'], contains('\\'));
+      expect((sentPayload['plan'] as Map)['instructions'], contains('🧺'));
+    });
+
+    test('createAsset computes SHA-256 hash properly when asset payload contains quotes and escape sequences', () async {
+      final specialAssetPayload = {
+        'operation_id': 'op-asset-quotes-001',
+        'asset': {
+          'id': 'asset-quotes-001',
+          'name': '65" OLED "Master" Series',
+          'asset_type': 'device',
+          'room_id': 'room-001',
+          'placement': 'Wall mount \\ brackets "Living Room"',
+          'notes':
+              'Model notes with "quotes" and \n newlines and \\ backslashes 📺',
+        },
+        'details': {
+          'brand': 'Sony "Bravia"',
+          'model': 'XR-65"A95K',
+          'serial_number': 'SN-12345"XYZ"\\00',
+        },
+      };
+
+      final expectedHash = sha256
+          .convert(utf8.encode(jsonEncode(specialAssetPayload)))
+          .toString();
+
+      when(
+        () => client.rpc<Map<String, dynamic>>(
+          'create_asset',
+          params: any(named: 'params'),
+        ),
+      ).thenAnswer(
+        (_) => _FakePostgrestFilterBuilder(
+          Future.value({
+            'asset_id': 'asset-quotes-001',
+            'balance': 5,
+            'charged': 0,
+            'already_processed': false,
+          }),
+        ),
+      );
+
+      final result = await repository.createAsset(specialAssetPayload);
+
+      expect(result.charged, equals(0));
+      expect(result.balance, equals(5));
+
+      final captured = verify(
+        () => client.rpc<Map<String, dynamic>>(
+          'create_asset',
+          params: captureAny(named: 'params'),
+        ),
+      ).captured;
+
+      final params = captured.first as Map<String, dynamic>;
+      final sentPayload = params['p_operation'] as Map<String, dynamic>;
+      expect(sentPayload['request_hash'], equals(expectedHash));
+      expect(
+        sentPayload['request_hash'] as String,
+        matches(RegExp(r'^[0-9a-f]{64}$')),
+      );
+    });
   });
 }

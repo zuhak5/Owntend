@@ -6,6 +6,19 @@ The current application version is defined only in `pubspec.yaml`. Released vers
 
 ## Unreleased
 
+- Fixed notification inbox read-state reversion bug and plan completion sync timestamp:
+  - **Task Notification Reopening Elimination**: Fixed flawed `shouldReopen` condition in `DriftNotificationInboxRepository.createNotification` that previously reverted read task notifications back to unread (`read_at: null`) whenever background reconciliation or app launch evaluated due tasks. Confined reopening solely to digest notifications whose content changed (`normalizedKind == 'digest' && contentChanged`).
+  - **Plan Completion Read State Sync**: Updated `_markPlanInboxRead` in `DriftMaintenanceRepository` to set `updatedAt: Value(now)` alongside `readAt`, ensuring that marking a plan's notification as read upon task completion properly triggers cloud synchronization to Supabase.
+  - **Asynchronous Error Safety in Inbox**: Made `markAllRead()` call in `NotificationsScreen` properly awaited with error handling and toast feedback.
+  - **Unit Test Coverage**: Added `test/notification_inbox_repository_test.dart` verifying that `markAllRead()`, individual `markRead()`, reconciliation deduplication, and plan completion correctly preserve read states and timestamp metadata.
+
+- Hardened server-authoritative mutation RPCs against invalid bytea syntax and string-cast exceptions (`INVALID_TASK_PAYLOAD` / `22P02`):
+  - **PostgreSQL UTF-8 Bytea Payload Hashing**: Replaced `p_operation::text::bytea` with `convert_to(p_operation::text, 'UTF8')` across all 6 authoritative mutation and restore functions in `20260821124930_initial_schema.sql` (`create_task_with_point_debit_impl`, `create_asset_impl`, `copy_asset_impl`, `change_asset_type_with_point_delta_impl`, `move_maintenance_plan_with_point_delta_impl`, `restore_maintenance_history_impl`), preventing PostgreSQL bytea escape parser failures (`22P02: invalid input syntax for type bytea`) when payloads contain double quotes, backslashes, emojis, or escape sequences.
+  - **Bare Cast Hardening**: Hardened all JSON string extractions (`recurrence_interval`, `next_due_date`, `reminder_days_before`, `is_enabled`, `estimated_duration_minutes`, `sort_order`, `watering_interval_days`, etc.) with `NULLIF(btrim(...), '')` to safely handle whitespace or empty strings without runtime casting crashes.
+  - **Diagnostic Context Preservation**: Preserved detailed error context using `GET STACKED DIAGNOSTICS` while strictly maintaining the authoritative `22023` error code taxonomy and client failure classifications.
+  - **Flutter Presentation Formatting**: Added `limitInputLength` and `FilteringTextInputFormatter.digitsOnly` to maintenance dialog numeric and materials fields (`_materialsController`, `_intervalController`, `_durationController`, `_reminderDaysController`) in `PlanEditorDialog`.
+  - **Automated Database & Unit Test Coverage**: Extended database integration test `0036_input_validation_contract.test.sql` to verify that `create_task_with_point_debit` and `create_asset` successfully accept, hash, and idempotently replay payloads containing quotes, slashes, emojis, and whitespace-padded numeric strings; added unit tests in `test/wallet_repository_signing_test.dart` verifying client-side SHA-256 digest computation and preservation on special-character payloads.
+
 - Advanced the application version to 1.0.2 and build number to 16 (`1.0.2+16`) to ensure monotonic `versionCode` progression for Android update compatibility.
 
 - Upgraded Flutter SDK to 3.47.4, Dart SDK to 3.13.3, and Shorebird CLI to 1.6.122:

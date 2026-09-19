@@ -615,6 +615,9 @@ DECLARE
   v_balance integer;
   v_next_balance integer;
   v_plan_count integer;
+  v_err_msg text;
+  v_err_detail text;
+  v_err_hint text;
 BEGIN
   IF caller_id IS NULL THEN
     RAISE EXCEPTION USING errcode = '42501', message = 'AUTH_REQUIRED';
@@ -641,7 +644,7 @@ BEGIN
      OR v_expected_revision < 1 OR v_max_charge NOT BETWEEN 0 AND 1000 THEN
     RAISE EXCEPTION USING errcode = '22023', message = 'INVALID_TYPE_CHANGE_OPERATION';
   END IF;
-  v_request_hash := encode(extensions.digest(p_operation::text::bytea, 'sha256'), 'hex');
+  v_request_hash := encode(extensions.digest(convert_to(p_operation::text, 'UTF8'), 'sha256'), 'hex');
   -- Match the plan-move lock before taking asset/plan/wallet row locks so the
   -- two authoritative economy paths cannot deadlock within one account.
   PERFORM pg_catalog.pg_advisory_xact_lock(
@@ -787,7 +790,7 @@ BEGIN
       NULLIF(btrim(v_details->>'brand'), ''), NULLIF(btrim(v_details->>'model'), ''),
       NULLIF(btrim(v_details->>'serial_number'), ''),
       NULLIF(btrim(v_details->>'power_source'), ''),
-      NULLIF(v_details->>'warranty_until', '')::date,
+      NULLIF(btrim(v_details->>'warranty_until'), '')::date,
       NULLIF(btrim(v_details->>'manual_url'), ''),
       NULLIF(btrim(v_details->>'consumable'), ''), 1,
       clock_timestamp(), clock_timestamp()
@@ -800,7 +803,7 @@ BEGIN
     ) VALUES (
       caller_id, v_asset_id,
       NULLIF(btrim(v_details->>'species'), ''), NULLIF(btrim(v_details->>'breed'), ''),
-      NULLIF(v_details->>'birth_date', '')::date,
+      NULLIF(btrim(v_details->>'birth_date'), '')::date,
       NULLIF(btrim(v_details->>'microchip_id'), ''),
       NULLIF(btrim(v_details->>'vet_name'), ''), NULLIF(btrim(v_details->>'vet_phone'), ''),
       NULLIF(btrim(v_details->>'feeding_notes'), ''),
@@ -815,9 +818,9 @@ BEGIN
     ) VALUES (
       caller_id, v_asset_id,
       NULLIF(btrim(v_details->>'species'), ''), NULLIF(btrim(v_details->>'sunlight'), ''),
-      NULLIF(v_details->>'watering_interval_days', '')::integer,
+      NULLIF(btrim(v_details->>'watering_interval_days'), '')::integer,
       NULLIF(btrim(v_details->>'pot_size'), ''),
-      NULLIF(v_details->>'last_repotted_at', '')::timestamptz,
+      NULLIF(btrim(v_details->>'last_repotted_at'), '')::timestamptz,
       NULLIF(btrim(v_details->>'toxicity_notes'), ''),
       1, clock_timestamp(), clock_timestamp()
     );
@@ -828,10 +831,10 @@ BEGIN
     ) VALUES (
       caller_id, v_asset_id,
       NULLIF(btrim(v_details->>'safety_type'), ''),
-      NULLIF(v_details->>'installed_at', '')::timestamptz,
-      NULLIF(v_details->>'expires_at', '')::timestamptz,
+      NULLIF(btrim(v_details->>'installed_at'), '')::timestamptz,
+      NULLIF(btrim(v_details->>'expires_at'), '')::timestamptz,
       NULLIF(btrim(v_details->>'battery_type'), ''),
-      NULLIF(v_details->>'test_interval_days', '')::integer,
+      NULLIF(btrim(v_details->>'test_interval_days'), '')::integer,
       1, clock_timestamp(), clock_timestamp()
     );
   ELSIF v_details <> '{}'::jsonb THEN
@@ -849,7 +852,15 @@ BEGIN
   );
 EXCEPTION
   WHEN check_violation OR not_null_violation OR invalid_text_representation THEN
-    RAISE EXCEPTION USING errcode = '22023', message = 'INVALID_TYPE_CHANGE_OPERATION';
+    GET STACKED DIAGNOSTICS
+      v_err_msg = MESSAGE_TEXT,
+      v_err_detail = PG_EXCEPTION_DETAIL,
+      v_err_hint = PG_EXCEPTION_HINT;
+    RAISE EXCEPTION USING
+      errcode = '22023',
+      message = 'INVALID_TYPE_CHANGE_OPERATION',
+      detail = COALESCE(NULLIF(v_err_detail, ''), v_err_msg),
+      hint = v_err_hint;
 END;
 $_$;
 
@@ -894,7 +905,7 @@ BEGIN
   v_source_asset_id := NULLIF(btrim(p_operation->>'source_asset_id'), '');
   v_target_asset_id := NULLIF(btrim(p_operation->>'target_asset_id'), '');
   v_room_id := NULLIF(btrim(p_operation->>'destination_room_id'), '');
-  v_include_tasks := COALESCE((p_operation->>'include_tasks')::boolean, false);
+  v_include_tasks := COALESCE(NULLIF(btrim(p_operation->>'include_tasks'), '')::boolean, false);
   v_plan_map := COALESCE(p_operation->'plan_id_map', '{}'::jsonb);
   IF v_client_request_hash IS NULL OR v_client_request_hash !~ '^[0-9a-f]{64}$'
      OR v_source_asset_id IS NULL OR v_target_asset_id IS NULL OR v_room_id IS NULL
@@ -903,7 +914,7 @@ BEGIN
      OR jsonb_typeof(v_plan_map) <> 'object' THEN
     RAISE EXCEPTION USING errcode = '22023', message = 'INVALID_COPY_OPERATION';
   END IF;
-  v_request_hash := encode(extensions.digest(p_operation::text::bytea, 'sha256'), 'hex');
+  v_request_hash := encode(extensions.digest(convert_to(p_operation::text, 'UTF8'), 'sha256'), 'hex');
   PERFORM pg_catalog.pg_advisory_xact_lock(
     pg_catalog.hashtextextended(caller_id::text || ':asset_copy:' || operation_uuid::text, 0)
   );
@@ -1159,6 +1170,9 @@ DECLARE
   existing_operation public.creation_point_operations%ROWTYPE;
   v_request_hash text;
   v_client_request_hash text;
+  v_err_msg text;
+  v_err_detail text;
+  v_err_hint text;
 BEGIN
   IF caller_id IS NULL THEN
     RAISE EXCEPTION USING errcode = '42501', message = 'AUTH_REQUIRED';
@@ -1192,7 +1206,7 @@ BEGIN
      OR asset_kind NOT IN ('device', 'pet', 'plant', 'safety', 'general') THEN
     RAISE EXCEPTION USING errcode = '22023', message = 'INVALID_ASSET_PAYLOAD';
   END IF;
-  v_request_hash := encode(extensions.digest(p_operation::text::bytea, 'sha256'), 'hex');
+  v_request_hash := encode(extensions.digest(convert_to(p_operation::text, 'UTF8'), 'sha256'), 'hex');
   PERFORM pg_catalog.pg_advisory_xact_lock(
     pg_catalog.hashtextextended(caller_id::text || ':asset_op:' || operation_uuid::text, 0)
   );
@@ -1230,7 +1244,7 @@ BEGIN
   ) VALUES (
     caller_id, asset_id, asset_json->>'room_id', btrim(asset_json->>'name'),
     asset_kind, NULLIF(btrim(asset_json->>'placement'), ''),
-    NULLIF(asset_json->>'purchase_date', '')::date,
+    NULLIF(btrim(asset_json->>'purchase_date'), '')::date,
     NULLIF(btrim(asset_json->>'notes'), ''),
     clock_timestamp(), clock_timestamp(), NULL, 1
   );
@@ -1244,7 +1258,7 @@ BEGIN
       NULLIF(btrim(details_json->>'model'), ''),
       NULLIF(btrim(details_json->>'serial_number'), ''),
       NULLIF(btrim(details_json->>'power_source'), ''),
-      NULLIF(details_json->>'warranty_until', '')::date,
+      NULLIF(btrim(details_json->>'warranty_until'), '')::date,
       NULLIF(btrim(details_json->>'manual_url'), ''),
       NULLIF(btrim(details_json->>'consumable'), ''),
       clock_timestamp(), clock_timestamp(), 1
@@ -1257,7 +1271,7 @@ BEGIN
     ) VALUES (
       caller_id, asset_id, NULLIF(btrim(details_json->>'species'), ''),
       NULLIF(btrim(details_json->>'breed'), ''),
-      NULLIF(details_json->>'birth_date', '')::date,
+      NULLIF(btrim(details_json->>'birth_date'), '')::date,
       NULLIF(btrim(details_json->>'microchip_id'), ''),
       NULLIF(btrim(details_json->>'vet_name'), ''),
       NULLIF(btrim(details_json->>'vet_phone'), ''),
@@ -1273,9 +1287,9 @@ BEGIN
     ) VALUES (
       caller_id, asset_id, NULLIF(btrim(details_json->>'species'), ''),
       NULLIF(btrim(details_json->>'sunlight'), ''),
-      NULLIF(details_json->>'watering_interval_days', '')::integer,
+      NULLIF(btrim(details_json->>'watering_interval_days'), '')::integer,
       NULLIF(btrim(details_json->>'pot_size'), ''),
-      NULLIF(details_json->>'last_repotted_at', '')::timestamptz,
+      NULLIF(btrim(details_json->>'last_repotted_at'), '')::timestamptz,
       NULLIF(btrim(details_json->>'toxicity_notes'), ''),
       clock_timestamp(), clock_timestamp(), 1
     );
@@ -1285,10 +1299,10 @@ BEGIN
       battery_type, test_interval_days, created_at, updated_at, revision
     ) VALUES (
       caller_id, asset_id, NULLIF(btrim(details_json->>'safety_type'), ''),
-      NULLIF(details_json->>'installed_at', '')::timestamptz,
-      NULLIF(details_json->>'expires_at', '')::timestamptz,
+      NULLIF(btrim(details_json->>'installed_at'), '')::timestamptz,
+      NULLIF(btrim(details_json->>'expires_at'), '')::timestamptz,
       NULLIF(btrim(details_json->>'battery_type'), ''),
-      NULLIF(details_json->>'test_interval_days', '')::integer,
+      NULLIF(btrim(details_json->>'test_interval_days'), '')::integer,
       clock_timestamp(), clock_timestamp(), 1
     );
   ELSIF asset_kind = 'general' AND details_json <> '{}'::jsonb THEN
@@ -1310,7 +1324,15 @@ BEGIN
   );
 EXCEPTION
   WHEN check_violation OR not_null_violation OR invalid_text_representation THEN
-    RAISE EXCEPTION USING errcode = '22023', message = 'INVALID_ASSET_PAYLOAD';
+    GET STACKED DIAGNOSTICS
+      v_err_msg = MESSAGE_TEXT,
+      v_err_detail = PG_EXCEPTION_DETAIL,
+      v_err_hint = PG_EXCEPTION_HINT;
+    RAISE EXCEPTION USING
+      errcode = '22023',
+      message = 'INVALID_ASSET_PAYLOAD',
+      detail = COALESCE(NULLIF(v_err_detail, ''), v_err_msg),
+      hint = v_err_hint;
 END;
 $_$;
 
@@ -1522,6 +1544,9 @@ DECLARE
   existing_operation public.creation_point_operations%ROWTYPE;
   v_request_hash text;
   v_client_request_hash text;
+  v_err_msg text;
+  v_err_detail text;
+  v_err_hint text;
 BEGIN
   IF caller_id IS NULL THEN
     RAISE EXCEPTION USING errcode = '42501', message = 'AUTH_REQUIRED';
@@ -1553,7 +1578,7 @@ BEGIN
   IF v_plan_id IS NULL OR target_asset_id IS NULL THEN
     RAISE EXCEPTION USING errcode = '22023', message = 'INVALID_TASK_PAYLOAD';
   END IF;
-  v_request_hash := encode(extensions.digest(p_operation::text::bytea, 'sha256'), 'hex');
+  v_request_hash := encode(extensions.digest(convert_to(p_operation::text, 'UTF8'), 'sha256'), 'hex');
 
   PERFORM pg_catalog.pg_advisory_xact_lock(
     pg_catalog.hashtextextended(caller_id::text || ':task_op:' || operation_uuid::text, 0)
@@ -1617,13 +1642,13 @@ BEGIN
   ) VALUES (
     caller_id, v_plan_id, target_asset_id, btrim(plan_json->>'title'),
     NULLIF(btrim(plan_json->>'instructions'), ''),
-    COALESCE((plan_json->>'recurrence_interval')::integer, 1),
+    COALESCE(NULLIF(btrim(plan_json->>'recurrence_interval'), '')::integer, 1),
     COALESCE(plan_json->>'recurrence_unit', 'months'),
     COALESCE(plan_json->>'priority', 'medium'),
-    (plan_json->>'next_due_date')::timestamptz,
-    COALESCE((plan_json->>'reminder_days_before')::integer, 0),
+    NULLIF(btrim(plan_json->>'next_due_date'), '')::timestamptz,
+    COALESCE(NULLIF(btrim(plan_json->>'reminder_days_before'), '')::integer, 0),
     clock_timestamp(), clock_timestamp(), NULL, 1,
-    COALESCE((plan_json->>'is_enabled')::boolean, true)
+    COALESCE(NULLIF(btrim(plan_json->>'is_enabled'), '')::boolean, true)
   );
 
   IF metadata_json <> '{}'::jsonb THEN
@@ -1635,11 +1660,11 @@ BEGIN
       caller_id, v_plan_id,
       NULLIF(btrim(metadata_json->>'task_type'), ''),
       NULLIF(btrim(metadata_json->>'location_label'), ''),
-      (metadata_json->>'estimated_duration_minutes')::integer,
+      NULLIF(btrim(metadata_json->>'estimated_duration_minutes'), '')::integer,
       COALESCE(metadata_json->>'required_materials_json',
                (metadata_json->'required_materials')::text, '[]'),
       NULLIF(btrim(metadata_json->>'reminder_recommendation'), ''),
-      COALESCE((metadata_json->>'sort_order')::integer, 0),
+      COALESCE(NULLIF(btrim(metadata_json->>'sort_order'), '')::integer, 0),
       clock_timestamp(), clock_timestamp(), 1
     );
   END IF;
@@ -1682,7 +1707,15 @@ BEGIN
   );
 EXCEPTION
   WHEN check_violation OR not_null_violation OR invalid_text_representation THEN
-    RAISE EXCEPTION USING errcode = '22023', message = 'INVALID_TASK_PAYLOAD';
+    GET STACKED DIAGNOSTICS
+      v_err_msg = MESSAGE_TEXT,
+      v_err_detail = PG_EXCEPTION_DETAIL,
+      v_err_hint = PG_EXCEPTION_HINT;
+    RAISE EXCEPTION USING
+      errcode = '22023',
+      message = 'INVALID_TASK_PAYLOAD',
+      detail = COALESCE(NULLIF(v_err_detail, ''), v_err_msg),
+      hint = v_err_hint;
 END;
 $_$;
 
@@ -1826,7 +1859,7 @@ BEGIN
      OR v_expected_revision < 1 OR v_max_charge NOT BETWEEN 0 AND 1 THEN
     RAISE EXCEPTION USING errcode = '22023', message = 'INVALID_MOVE_OPERATION';
   END IF;
-  v_request_hash := encode(extensions.digest(p_operation::text::bytea, 'sha256'), 'hex');
+  v_request_hash := encode(extensions.digest(convert_to(p_operation::text, 'UTF8'), 'sha256'), 'hex');
   -- Serialize all plan-economy commits for one account before taking row
   -- locks. This prevents a same-asset move and type change from acquiring the
   -- plan and asset rows in opposite order while preserving cross-user
@@ -2712,6 +2745,9 @@ DECLARE
   v_inserted integer := 0;
   v_existing integer := 0;
   v_conflict boolean := false;
+  v_err_msg text;
+  v_err_detail text;
+  v_err_hint text;
 BEGIN
   IF caller_id IS NULL THEN
     RAISE EXCEPTION USING errcode = '42501', message = 'AUTH_REQUIRED';
@@ -2754,7 +2790,7 @@ BEGIN
   ) THEN
     RAISE EXCEPTION USING errcode = '22023', message = 'INVALID_HISTORY_RESTORE';
   END IF;
-  v_request_hash := encode(extensions.digest(p_operation::text::bytea, 'sha256'), 'hex');
+  v_request_hash := encode(extensions.digest(convert_to(p_operation::text, 'UTF8'), 'sha256'), 'hex');
 
   PERFORM pg_catalog.pg_advisory_xact_lock(
     pg_catalog.hashtextextended(caller_id::text || ':history_restore:' || operation_uuid::text, 0)
@@ -2804,10 +2840,10 @@ BEGIN
   IF v_plan.revision IS DISTINCT FROM v_expected_revision
      OR v_plan.asset_id IS DISTINCT FROM NULLIF(btrim(v_snapshot->>'asset_id'), '')
      OR v_plan.recurrence_interval IS DISTINCT FROM
-        NULLIF(v_snapshot->>'recurrence_interval', '')::integer
+        NULLIF(btrim(v_snapshot->>'recurrence_interval'), '')::integer
      OR v_plan.recurrence_unit IS DISTINCT FROM NULLIF(btrim(v_snapshot->>'recurrence_unit'), '')
      OR date_trunc('second', v_plan.next_due_date) IS DISTINCT FROM v_next_due_raw
-     OR v_plan.is_enabled IS DISTINCT FROM NULLIF(v_snapshot->>'is_enabled', '')::boolean
+     OR v_plan.is_enabled IS DISTINCT FROM NULLIF(btrim(v_snapshot->>'is_enabled'), '')::boolean
      OR date_trunc('second', v_plan.archived_at) IS DISTINCT FROM v_archived_raw THEN
     INSERT INTO owntend_private.maintenance_history_restore_operations (
       operation_id, user_id, plan_id, request_hash, client_request_hash,
@@ -2959,7 +2995,15 @@ BEGIN
   );
 EXCEPTION
   WHEN invalid_text_representation OR check_violation OR not_null_violation THEN
-    RAISE EXCEPTION USING errcode = '22023', message = 'INVALID_HISTORY_RESTORE';
+    GET STACKED DIAGNOSTICS
+      v_err_msg = MESSAGE_TEXT,
+      v_err_detail = PG_EXCEPTION_DETAIL,
+      v_err_hint = PG_EXCEPTION_HINT;
+    RAISE EXCEPTION USING
+      errcode = '22023',
+      message = 'INVALID_HISTORY_RESTORE',
+      detail = COALESCE(NULLIF(v_err_detail, ''), v_err_msg),
+      hint = v_err_hint;
 END;
 $_$;
 

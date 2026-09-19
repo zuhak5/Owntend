@@ -946,9 +946,12 @@ class DriftMaintenanceRepository
   }
 
   Future<void> _markPlanInboxRead(String planId) async {
-    await (db.update(db.inboxNotifications)
-          ..where((row) => row.planId.equals(planId) & row.readAt.isNull()))
-        .write(InboxNotificationsCompanion(readAt: Value(DateTime.now())));
+    final now = DateTime.now();
+    await (db.update(
+      db.inboxNotifications,
+    )..where((row) => row.planId.equals(planId) & row.readAt.isNull())).write(
+      InboxNotificationsCompanion(readAt: Value(now), updatedAt: Value(now)),
+    );
   }
 
   Future<void> _enqueueScheduleReconciliation(

@@ -97,9 +97,7 @@ class DriftNotificationInboxRepository implements NotificationInboxRepository {
           duplicate.body != cleanBody ||
           duplicate.messageCode != messageCode.wireValue ||
           duplicate.messageArgs != jsonEncode(messageArgs);
-      final shouldReopen =
-          normalizedKind == 'task' && duplicate.readAt != null ||
-          normalizedKind == 'digest' && contentChanged;
+      final shouldReopen = normalizedKind == 'digest' && contentChanged;
       if (contentChanged || shouldReopen) {
         await (db.update(
           db.inboxNotifications,
