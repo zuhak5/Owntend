@@ -15,7 +15,7 @@ The current application version is defined only in `pubspec.yaml`. Released vers
 - Upgraded direct, dev, and tooling dependencies across Flutter, Dart, Node.js, and canonical toolchain:
   - **Flutter Packages**: Upgraded `go_router` to `18.0.1`, `file_picker` to `13.1.0`, `drift` and `drift_dev` to `2.35.0`, `flutter_riverpod` to `3.4.3`, `flutter_secure_storage` to `11.2.0`, `sentry_flutter` to `9.30.0`, `sqlite3` to `3.6.0`, `image` to `4.10.1`, `flutter_foreground_task` to `11.0.3`, `flutter_local_notifications` to `22.3.1`, `permission_handler` to `13.0.2`, `workmanager` to `0.10.10`, and `build_runner` to `2.16.1`.
   - **Transitive Upgrades**: Upgraded 84 locked transitive packages via `flutter pub upgrade`.
-  - **Node Tooling & Toolchain Sync**: Upgraded `@supabase/supabase-js` to `2.116.0`, `supabase` CLI to `2.117.0`, and `yaml` to `2.9.1`. Synchronized canonical toolchain manifest in `config/toolchain.json` (`supabaseCli: 2.117.0`) and updated test suite expectations.
+  - **Node Tooling & Toolchain Sync**: Retained Supabase CLI pinned at `2.115.0` in `config/toolchain.json` and `@supabase/supabase-js` at `2.112.3` for backend contract stability.
   - **Licensing & Mock Compatibility**: Registered new transitive packages `cupertino_ui` and `material_ui` under BSD-3-Clause in `tool/dependency_review_policy.mjs`. Updated `FakeFilePicker` and `FakePlatformFile` for `file_picker` 13.x compatibility (`lengthSync()` and parameter signature alignment). Regenerated SPDX SBOM and third-party notices.
 
 - Modernized and standardized language selector dropdown UI design across settings and onboarding (`LanguageSelectorDropdown`):

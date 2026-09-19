@@ -46,7 +46,7 @@ test('Canonical toolchain configuration is complete and valid', async () => {
   assert.match(tc.android.gradleWrapperJarSha256, /^[0-9a-f]{64}$/);
   assert.equal(tc.node.npmMajor, 11);
   assert.equal(tc.tools.sentryCli, '2.58.6');
-  assert.equal(tc.tools.supabaseCli, '2.117.0');
+  assert.equal(tc.tools.supabaseCli, '2.115.0');
   assert.equal(tc.tools.shorebirdCli.version, '1.6.122');
   assert.match(tc.tools.shorebirdCli.commit, /^[0-9a-f]{40}$/);
   assert.match(tc.tools.shorebirdCli.bundledFlutterRevision, /^[0-9a-f]{40}$/);
@@ -91,7 +91,7 @@ test('Toolchain policy evaluation detects mismatches and fails closed', async ()
     dart: { version: '3.13.0' },
     node: { version: '24.11.1', npmVersion: '11.7.0' },
     deno: { version: '2.9.3' },
-    supabaseCli: { resolvedVersion: '2.117.0' },
+    supabaseCli: { resolvedVersion: '2.115.0' },
     android: {
       agpVersion: '9.3.0',
       kotlinVersion: '2.4.10',

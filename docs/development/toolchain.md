@@ -21,7 +21,7 @@ build evidence only; protected release builds remain governed by
 | Gradle / AGP / Kotlin | `9.6.1-bin` with committed distribution SHA-256 and tracked wrapper bootstrap JAR SHA-256 / `9.3.0` / `2.4.10` |
 | Shorebird | CLI `1.6.122` at exact repository commit; bundled fork `3.47.4`; releases aligned to canonical `3.47.4` with exact fork/engine revisions |
 | Bundletool / gcloud | `1.18.3` with committed download SHA-256 / `581.0.0` (protected release tools) |
-| Sentry CLI / Supabase CLI | `2.58.6` (protected release tool) / `2.117.0` |
+| Sentry CLI / Supabase CLI | `2.58.6` (protected release tool) / `2.115.0` |
 
 The JSON file, Gradle configuration, lockfiles, and tests hold the complete hashes/revisions.
 

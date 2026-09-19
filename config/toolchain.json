@@ -53,7 +53,7 @@
       },
       "gcloud": "581.0.0",
       "sentryCli": "2.58.6",
-      "supabaseCli": "2.117.0"
+      "supabaseCli": "2.115.0"
     },
     "runner": {
       "os": "windows-latest",
