@@ -1,6 +1,6 @@
 const REPOSITORY = "zuhak5/Owntend";
 const WORKFLOW_FILE = "shorebird-release-android.yml";
-const JOB_NAME = "Build signed production APK";
+const JOB_NAME_PATTERN = /^(?:publish|validate)\s+\w+\s+release$/i;
 const API_BASE = `https://api.github.com/repos/${REPOSITORY}`;
 const ACTIVE_POLL_MS = 90_000;
 const ACTIVE_HIDDEN_POLL_MS = 150_000;
@@ -373,6 +373,7 @@ export function createBuildSnapshot(run, job, history, { now = Date.now() } = {}
     runId: Number(run.id),
     runNumber: Number(run.run_number) || null,
     runAttempt: Number(run.run_attempt) || 1,
+    headSha: cleanText(run.head_sha),
     runUrl: safeRunUrl(run),
     status,
     conclusion,
@@ -573,7 +574,7 @@ async function fetchStatusJson(path, { signal } = {}) {
 }
 
 function productionJob(jobs) {
-  return (Array.isArray(jobs) ? jobs : []).find((job) => job?.name === JOB_NAME) || null;
+  return (Array.isArray(jobs) ? jobs : []).find((job) => JOB_NAME_PATTERN.test(job?.name || "")) || null;
 }
 
 export async function fetchLiveBuildRunJobs(runId, options = {}) {
@@ -769,6 +770,7 @@ function initializeBuildStatus() {
     const state = terminalState(snapshot);
     section.hidden = false;
     section.dataset.state = state;
+    if (snapshot.headSha) section.dataset.headSha = snapshot.headSha;
 
     heading.textContent = state === "success"
       ? "Production build completed"

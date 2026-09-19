@@ -69,18 +69,38 @@ export function shouldShowStarting(summary, percentText) {
   return /^Step 1 of \d+$/i.test(cleanText(summary)) && ["0%", "Starting"].includes(cleanText(percentText));
 }
 
-async function fetchTargetBuild() {
-  const response = await fetch("build-info.json", {
+async function fetchTargetBuild(headSha) {
+  try {
+    const response = await fetch("build-info.json", {
+      cache: "no-store",
+      referrerPolicy: "no-referrer",
+    });
+    if (response.ok) {
+      const payload = await response.json();
+      const info = payload?.target || { version: payload?.versionName, build: payload?.versionCode };
+      const revision = cleanText(payload?.sourceRevision);
+      // Use build-info.json only when it matches the active run's commit (not stale from a prior release).
+      const shaMatches = !headSha || !revision || revision.toLowerCase() === headSha.toLowerCase();
+      if (shaMatches && info?.version && Number.isFinite(info?.build)) {
+        return info;
+      }
+    }
+  } catch {
+    // Fall through to pubspec.yaml lookup below.
+  }
+
+  // build-info.json is stale or mismatched — fetch pubspec.yaml from the active run's commit.
+  if (!headSha) throw new Error("Target build version is unavailable.");
+  const rawUrl = `https://raw.githubusercontent.com/${REPOSITORY}/${headSha}/pubspec.yaml`;
+  const pubspecResponse = await fetch(rawUrl, {
     cache: "no-store",
     referrerPolicy: "no-referrer",
   });
-  if (!response.ok) throw new Error(`Target build metadata returned ${response.status}.`);
-  const payload = await response.json();
-  const target = payload?.target || { version: payload?.versionName, build: payload?.versionCode };
-  if (!target?.version || !Number.isFinite(target?.build)) {
-    throw new Error("Target build version is unavailable.");
-  }
-  return target;
+  if (!pubspecResponse.ok) throw new Error(`pubspec.yaml fetch returned ${pubspecResponse.status}.`);
+  const pubspecText = await pubspecResponse.text();
+  const parsed = parsePubspecVersion(pubspecText);
+  if (!parsed) throw new Error("pubspec.yaml version could not be parsed.");
+  return parsed;
 }
 
 function phaseState(items) {
@@ -165,12 +185,20 @@ function initializeBuildStatusUi() {
 
   let targetBuild = null;
   let targetPromise = null;
+  let targetSha = "";
   let grouping = false;
   let frame = 0;
 
   function loadTarget() {
+    const headSha = cleanText(section.dataset.headSha);
+    // Reset cached target if the active run changed (different commit).
+    if (headSha && headSha !== targetSha) {
+      targetBuild = null;
+      targetPromise = null;
+      targetSha = headSha;
+    }
     if (targetBuild || targetPromise) return;
-    targetPromise = fetchTargetBuild()
+    targetPromise = fetchTargetBuild(headSha || undefined)
       .then((target) => {
         targetBuild = target;
         scheduleEnhancement();
@@ -265,7 +293,7 @@ function initializeBuildStatusUi() {
     childList: true,
     characterData: true,
     attributes: true,
-    attributeFilter: ["hidden", "data-state", "aria-valuenow"],
+    attributeFilter: ["hidden", "data-state", "data-head-sha", "aria-valuenow"],
   });
 
   scheduleEnhancement();

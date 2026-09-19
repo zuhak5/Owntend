@@ -31,7 +31,7 @@ function step(name, offset, duration, status = "completed", conclusion = null) {
 
 function successfulJob(multiplier = 1) {
   return {
-    name: "Build signed production APK",
+    name: "Publish prod release",
     status: "completed",
     conclusion: "success",
     steps: [
@@ -120,7 +120,7 @@ test("snapshot reports step position, readable phase, context, and a history-bas
     created_at: new Date(START).toISOString(),
   };
   const job = {
-    name: "Build signed production APK",
+    name: "Publish prod release",
     status: "in_progress",
     started_at: new Date(START).toISOString(),
     steps: [
