@@ -66,7 +66,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Require triggering source to remain current main
+      - name: Require triggering source to be on current main lineage
         shell: bash
         run: |
           set -euo pipefail
@@ -74,8 +74,8 @@ jobs:
           checked_out_sha="$(git rev-parse HEAD)"
           main_sha="$(git rev-parse origin/main)"
           test "$checked_out_sha" = "$SOURCE_SHA"
-          if [[ "$SOURCE_SHA" != "$main_sha" ]]; then
-            echo "ABI artifact-set verification requires exact current main $main_sha, got $SOURCE_SHA." >&2
+          if ! git merge-base --is-ancestor "$SOURCE_SHA" "$main_sha"; then
+            echo "ABI artifact-set verification requires SOURCE_SHA $SOURCE_SHA to be an ancestor of main $main_sha." >&2
             exit 1
           fi
 
