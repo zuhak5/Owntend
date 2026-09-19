@@ -6,6 +6,8 @@ The current application version is defined only in `pubspec.yaml`. Released vers
 
 ## Unreleased
 
+- Advanced the application version to 1.0.2 and build number to 16 (`1.0.2+16`) to ensure monotonic `versionCode` progression for Android update compatibility.
+
 - Upgraded Flutter SDK to 3.47.4, Dart SDK to 3.13.3, and Shorebird CLI to 1.6.122:
   - Upgraded Flutter SDK checkout to `3.47.4` (channel `stable`, Dart `3.13.3`) and updated Flutter constraint to `>=3.47.4` in `pubspec.yaml`.
   - Upgraded Shorebird CLI to `1.6.122` (commit `59ab146856d8c2d48cc09115bb600532e848f2f3`), bundling Flutter `3.47.4` fork and custom engine (`72bc6869d6a0f7d5c71097d15c7efeeebbd2b681`, engine revision `2c6e13f6780942303fce2dad4d571893f8e81f97`).

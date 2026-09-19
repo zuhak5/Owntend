@@ -153,7 +153,7 @@ test('post-build artifact-set workflow independently verifies exactly the protec
   assert.match(workflow, /workflow_run\.conclusion == 'success'/);
   assert.match(workflow, /workflow_run\.event == 'workflow_dispatch'/);
   assert.match(workflow, /workflow_run\.head_branch == 'main'/);
-  assert.match(workflow, /Require triggering source to remain current main/);
+  assert.match(workflow, /Require triggering source to be on current main lineage/);
   assert.match(workflow, /Owntend-production-shorebird-apk-evidence-\$SOURCE_RUN_NUMBER/);
   assert.match(workflow, /should_verify=false/);
   assert.match(workflow, /verify_android_apk_artifact_set\.mjs/);
