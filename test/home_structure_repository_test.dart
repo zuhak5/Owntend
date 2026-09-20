@@ -1693,7 +1693,7 @@ void main() {
     });
 
     test(
-      'task dedupe reopens read reminder and digest dedupe updates counts',
+      'task dedupe preserves read reminder and digest dedupe updates counts',
       () async {
         final roomId = await repo.saveRoom(
           areaId: 'area_first_floor',
@@ -1732,7 +1732,8 @@ void main() {
           route: '/maintenance/plan-dedupe',
           planId: 'plan-dedupe',
         );
-        expect(await inbox.unreadCount(), 1);
+        expect(await inbox.unreadCount(), 0);
+        expect((await inbox.listNotifications()).single.readAt, isNotNull);
         expect(await inbox.listNotifications(), hasLength(1));
 
         await inbox.createNotification(
