@@ -129,6 +129,24 @@ replay of generic authorization failures. Hosted migration state, Advisor
 results, real-device convergence, and hosted log counts remain protected-
 environment evidence rather than local proof.
 
+## Asset-type detail response contract
+
+Asset-type economy commits return `detail_rows` using the same `{entity, row}`
+envelope as asset copy. First execution and replay read the stored detail rows
+for the authenticated owner and asset; a general asset returns an explicit empty
+array. The client can therefore atomically adopt the canonical asset and replace
+its type details without writing a stale editor revision or request projection.
+[`0032_authoritative_mutation_remediation.test.sql`](../../supabase/tests/database/0032_authoritative_mutation_remediation.test.sql)
+covers all four typed details, general/empty state, replay, and same-ID owner isolation.
+
+## Media-finalization response contract
+
+The prepare/finalize media saga also returns authoritative row state.
+`finalize_asset_photo_upload` returns the stored photo fields and server-owned
+revision/timestamps on first execution and replay; client gateway parsing rejects
+missing or malformed canonical values. Replacement and replay coverage resides
+in [`0022_media_saga.test.sql`](../../supabase/tests/database/0022_media_saga.test.sql).
+
 ## Maintenance-completion response contract
 
 The single initial baseline defines `complete_maintenance_task` at contract 1.

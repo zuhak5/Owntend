@@ -13,9 +13,15 @@ every completion path rebuilds dependent streams.
 Before reaching the database commit transaction, `OwntendBackupService` executes
 the restore barrier via `onBeforeRestoreBarrier`. In production, this callback
 suspends `CloudSyncRepository` (invalidating active sync epochs, stopping realtime,
-cancelling retry timers, and awaiting in-flight sync completions), cancels WorkManager
+cancelling retry timers, blocking every new manual/automatic/realtime/resume entry point, and awaiting in-flight sync completions), cancels WorkManager
 background sync tasks, and clears scheduled notifications. This prevents race
-conditions between ongoing cloud operations, reminders, and the restore transaction.
+conditions between ongoing cloud operations, reminders, and the restore transaction. Suspension remains active on that coordinator until the verified terminal restore publishes a new database epoch. A proven transaction rollback clears the journal and invokes `onRestoreRollback`, which recreates the coordinator against unchanged data. Failures retaining an unresolved journal keep synchronization blocked until startup recovery; account or app-resume events cannot release that barrier.
+
+Successful suspension waits for both the main sync run and optional post-ready
+photo downloads, including their filesystem writes and operations still owned
+by a disposed predecessor coordinator. If that bounded wait expires,
+restore fails before media replacement and retains its recovery journal. A
+timeout never permits an old download to race cleanup of the canonical tree.
 
 Restore progress is published in real-time through the `onProgress` callback
 accepting `RestorePhase` transitions (`validated`, `safetyBackupComplete`,
@@ -54,8 +60,7 @@ Key protection has two classes, recorded in the header:
 
 The manifest declares format version, schema version, total payload bytes, and per-entry sizes with SHA-256 hashes. The format version is independent from the Flutter package version and the Drift schema version. Compatibility must be decided explicitly rather than inferred from application version alone.
 
-The current application accepts backup format `1` with database schema `1`
-only. Those are technical format identities, not support for an unpublished
+The current application accepts backup format `1` with only the current database schema declared by [`AppDatabase.schemaVersion`](../../lib/src/core/database/app_database.dart). Those are technical format identities, not support for an unpublished
 historical application shape. `search_index_state` and synchronization runtime
 tables are not imported as user-domain authority: importing authoritative
 searchable tables fires local invalidation triggers, leaving search dirty until
@@ -69,11 +74,11 @@ recovery rebuild.
 3. Enumerate allowed media from controlled roots.
 4. Build the manifest and content hashes.
 5. Write the archive to a temporary path.
-6. Verify the completed archive.
+6. Verify the completed archive using the same manifest, entry, payload-length, framing, and SHA-256 checks as restore, without writing a second extracted copy.
 7. Move it atomically where supported.
 8. Apply automatic-backup retention without deleting the active or safety archive.
 
-Partial archives must not be presented as successful backups.
+The writer applies the reader's manifest and payload limits before publication, accounts for encrypted framing overhead, and checks the actual completed container size. An oversized manifest, changed source file, or mismatched hash fails before atomic publication. Partial files are removed and existing successful backup files remain available; a failed attempt is recorded as failed and does not trigger retention pruning.
 
 ## Import threat model
 
@@ -109,7 +114,7 @@ Validation must occur before any file is written outside a controlled staging di
 4. Enforce entry-count, per-entry, total-expanded-size, and compression limits.
 5. Normalize every path and reject absolute, traversal, duplicate, or disallowed entries.
 6. Verify hashes and expected file types.
-7. Require backup format `1` and schema `1`; reject any other version before import.
+7. Require backup format `1` and the current `AppDatabase.schemaVersion`; reject incompatible database versions before import.
 8. Create a pre-restore safety backup of the current state, hash it, and record `safetyBackupComplete`.
 9. Acquire restore barrier: suspend `SyncCoordinator`, cancel WorkManager background jobs, and clear scheduled reminders. Write `servicesSuspended` phase.
 10. Extract media into a private staging directory (`.restore-$token`) **without touching canonical folders**, register the sidecar root in `SidecarRegistryStore`, and write `mediaStaged` phase. Canonical media is never renamed before the database commit is proven, so a crash can never pair the old database with new media.

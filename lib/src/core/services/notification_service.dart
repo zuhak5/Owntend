@@ -56,6 +56,54 @@ bool notificationBackgroundAccountMatches({
       accountEnabled;
 }
 
+/// The daily worker supports a genuinely unbound local account as well as a
+/// matching authenticated one. Recheck identity after each asynchronous phase
+/// before acknowledging its durable reminder work.
+Future<NotificationReconciliationDrainResult> refreshBackgroundNotifications({
+  required AppDatabase database,
+  required NotificationScheduler scheduler,
+  required String? Function() currentUserId,
+}) async {
+  final expectedUserId = currentUserId();
+  final store = LocalSyncStore(database);
+  Future<bool> accountMatches() async {
+    final account = await store.existingAccount();
+    final actualUserId = currentUserId();
+    return actualUserId == expectedUserId &&
+        notificationBackgroundAccountMatches(
+          sessionUserId: actualUserId,
+          boundUserId: account?.boundUserId,
+          accountEnabled: account?.enabled ?? false,
+        );
+  }
+
+  if (!await accountMatches()) {
+    return NotificationReconciliationDrainResult.accountMismatch;
+  }
+  await scheduler.initialize();
+  if (!await accountMatches()) {
+    return NotificationReconciliationDrainResult.accountMismatch;
+  }
+  final consumer = NotificationReconciliationConsumer(
+    database: database,
+    scheduler: scheduler,
+    accountGuard: (userId) async =>
+        userId == expectedUserId && await accountMatches(),
+  );
+  final result = expectedUserId == null
+      ? await consumer.drainLocal(accountGuard: accountMatches)
+      : await consumer.drainForAccount(expectedUserId);
+  if (result == NotificationReconciliationDrainResult.noWork) {
+    if (!await accountMatches()) {
+      return NotificationReconciliationDrainResult.accountMismatch;
+    }
+    await scheduler.refreshSchedules();
+  }
+  return await accountMatches()
+      ? result
+      : NotificationReconciliationDrainResult.accountMismatch;
+}
+
 @pragma('vm:entry-point')
 void owntendWorkManagerCallback() {
   wm.Workmanager().executeTask((taskName, inputData) async {
@@ -112,31 +160,15 @@ void owntendWorkManagerCallback() {
             supabaseClient: client,
             localSyncStore: store,
           );
-          await scheduler.initialize();
-          final consumer = NotificationReconciliationConsumer(
+          final reconciliation = await refreshBackgroundNotifications(
             database: db,
             scheduler: scheduler,
-            accountGuard: (expectedUserId) async {
-              final currentSession = client?.auth.currentSession;
-              final currentAccount = await store.existingAccount();
-              return expectedUserId == currentSession?.user.id &&
-                  notificationBackgroundAccountMatches(
-                    sessionUserId: currentSession?.user.id,
-                    boundUserId: currentAccount?.boundUserId,
-                    accountEnabled: currentAccount?.enabled ?? false,
-                  );
-            },
-          );
-          final reconciliation = await consumer.drainForAccount(
-            session!.user.id,
+            currentUserId: () => client?.auth.currentSession?.user.id,
           );
           if (reconciliation ==
               NotificationReconciliationDrainResult.accountMismatch) {
             await cancelAccountScopedBackgroundWork();
             return true;
-          }
-          if (reconciliation == NotificationReconciliationDrainResult.noWork) {
-            await scheduler.refreshSchedules();
           }
           return true;
         },
@@ -505,7 +537,7 @@ class OwntendNotificationScheduler
     var scheduledCount = 0;
     final scheduledByDay = <String, int>{};
     final horizon = now.add(const Duration(days: 90));
-    for (final task in tasks.take(128)) {
+    for (final task in tasks) {
       if (scheduledCount >= _maxScheduledReminders) {
         break;
       }
@@ -608,22 +640,23 @@ class OwntendNotificationScheduler
     if (!_initialized) {
       await initialize();
     }
-    try {
-      await _plugin.cancel(
-        id: _stableNotificationId('task:$planId', _maintenanceIdBase),
-      );
-      await _plugin.cancel(
-        id: _stableNotificationId('snooze:$planId', _snoozeIdBase),
-      );
-    } finally {
-      final current = await _scheduleStore.readAll();
-      await _scheduleStore.replaceAll([
-        for (final entry in current)
-          if (entry.identity != 'task:$planId' &&
-              entry.identity != 'snooze:$planId')
-            entry,
-      ]);
+    final current = {
+      for (final entry in await _scheduleStore.readAll()) entry.identity: entry,
+    };
+    Object? firstError;
+    for (final target in [
+      ('task:$planId', _maintenanceIdBase),
+      ('snooze:$planId', _snoozeIdBase),
+    ]) {
+      try {
+        await _plugin.cancel(id: _stableNotificationId(target.$1, target.$2));
+        current.remove(target.$1);
+      } on Object catch (error) {
+        firstError ??= error;
+      }
     }
+    await _scheduleStore.replaceAll(current.values);
+    if (firstError != null) throw firstError;
   }
 
   AndroidNotificationChannel _dueChannel(AppLocalizations l10n) =>
@@ -913,25 +946,29 @@ class OwntendNotificationScheduler
     final desiredByIdentity = {
       for (final reminder in desired) reminder.snapshot.identity: reminder,
     };
-    final applied = {for (final entry in diff.unchanged) entry.identity: entry};
+    // Keep the last known platform state until the corresponding mutation
+    // succeeds. A failed cancellation or replacement must remain retryable.
+    final applied = {for (final entry in current) entry.identity: entry};
     final storedCurrent = await _scheduleStore.readAll();
     for (final entry in storedCurrent) {
-      if (entry.identity.startsWith('snooze:')) {
+      if (entry.identity.startsWith('snooze:') &&
+          desiredByIdentity.containsKey(entry.identity)) {
         applied[entry.identity] = entry;
       }
     }
+    Object? firstScheduleError;
     for (final removed in diff.removed) {
       try {
         await _plugin.cancel(id: removed.notificationId);
         applied.remove(removed.identity);
       } catch (e) {
+        firstScheduleError ??= e;
         AppLogger.warning(
           'reminder_cancel_failed',
           fields: {'id': removed.notificationId},
         );
       }
     }
-    Object? firstScheduleError;
     for (final entry in [...diff.added, ...diff.changed]) {
       try {
         final reminder = desiredByIdentity[entry.identity];

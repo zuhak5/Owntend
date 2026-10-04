@@ -16,6 +16,7 @@ class _MoveCopyItemDialogState extends ConsumerState<MoveCopyItemDialog> {
   bool _includeTasks = true;
   bool _includePhotos = false;
   bool _saving = false;
+  String? _copyDraftGeneration;
 
   @override
   void initState() {
@@ -29,14 +30,16 @@ class _MoveCopyItemDialogState extends ConsumerState<MoveCopyItemDialog> {
     return 'asset_copy_${userId ?? 'local'}_${widget.asset.id}';
   }
 
-  Future<void> _saveCopyDraft(String roomId) => ref
-      .read(offlineCreationDraftStoreProvider)
-      .save(_copyDraftKey, <String, dynamic>{
-        'source_asset_id': widget.asset.id,
-        'destination_room_id': roomId,
-        'include_tasks': _includeTasks,
-        'include_photos': _includePhotos,
-      });
+  Future<void> _saveCopyDraft(String roomId) async {
+    _copyDraftGeneration = await ref
+        .read(offlineCreationDraftStoreProvider)
+        .save(_copyDraftKey, <String, dynamic>{
+          'source_asset_id': widget.asset.id,
+          'destination_room_id': roomId,
+          'include_tasks': _includeTasks,
+          'include_photos': _includePhotos,
+        });
+  }
 
   Future<void> _restoreCopyDraft() async {
     final draft = await ref
@@ -48,6 +51,8 @@ class _MoveCopyItemDialogState extends ConsumerState<MoveCopyItemDialog> {
       return;
     }
     setState(() {
+      _copyDraftGeneration =
+          draft[OfflineCreationDraftStore.generationKey] as String?;
       _copy = true;
       _roomId = draft['destination_room_id'] as String? ?? _roomId;
       _includeTasks = draft['include_tasks'] != false;
@@ -179,6 +184,9 @@ class _MoveCopyItemDialogState extends ConsumerState<MoveCopyItemDialog> {
     try {
       final repository = ref.read(assetRepositoryProvider);
       if (_copy) {
+        final draftStore = ref.read(offlineCreationDraftStoreProvider);
+        final draftKey = _copyDraftKey;
+        final draftGeneration = _copyDraftGeneration;
         final copiedAssetId = _uuid.v7();
         final copyOperationId = _uuid.v7();
         final sourceTasks = _includeTasks
@@ -228,7 +236,7 @@ class _MoveCopyItemDialogState extends ConsumerState<MoveCopyItemDialog> {
                 taskIdBySource: copiedTaskIds,
               ),
             );
-        await ref.read(offlineCreationDraftStoreProvider).clear(_copyDraftKey);
+        await draftStore.clear(draftKey, expectedGeneration: draftGeneration);
       } else {
         await repository.moveAsset(assetId: widget.asset.id, roomId: roomId);
       }
@@ -379,6 +387,8 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
   bool _saving = false;
   String? _creationOperationId;
   String? _creationAssetId;
+  bool _initializing = true;
+  Object? _initializationError;
 
   @override
   void initState() {
@@ -444,14 +454,7 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
     _installedAt = safety?.installedAt;
     _expiresAt = safety?.expiresAt;
     _roomId = asset?.roomId ?? widget.roomId;
-    if (asset != null) {
-      scheduleMicrotask(() async {
-        await _loadInitialTags();
-        await _restoreOfflineDraft(overwriteExisting: true);
-      });
-    } else {
-      scheduleMicrotask(_restoreOfflineDraft);
-    }
+    scheduleMicrotask(_initialize);
   }
 
   @override
@@ -485,16 +488,49 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
 
   void _onFormChanged() => setState(() {});
 
+  Future<void> _initialize({bool retry = false}) async {
+    if (!mounted) return;
+    setState(() {
+      _initializing = true;
+      _initializationError = null;
+    });
+    try {
+      final asset = widget.asset;
+      if (retry && asset != null) {
+        ref.invalidate(assetTagsProvider(asset.id));
+      }
+      await _loadInitialTags();
+      if (!mounted) return;
+      await _restoreOfflineDraft(overwriteExisting: true);
+      if (!mounted) return;
+      setState(() => _initializing = false);
+    } on Object catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _initializing = false;
+        _initializationError = error;
+      });
+    }
+  }
+
   Future<void> _loadInitialTags() async {
     final asset = widget.asset;
     if (asset == null) {
       return;
     }
-    final tags = await ref.read(assetTagsProvider(asset.id).future);
-    if (!mounted || _tagsController.text.trim().isNotEmpty) {
-      return;
+    final subscription = ref.listenManual(
+      assetTagsProvider(asset.id).future,
+      (_, _) {},
+    );
+    try {
+      // Own the subscription while awaiting initial data. A bare read may
+      // pause an otherwise-unobserved auto-disposed stream before it emits.
+      final tags = await subscription.read();
+      if (!mounted || _tagsController.text.trim().isNotEmpty) return;
+      _tagsController.text = tags.map((tag) => tag.name).join(', ');
+    } finally {
+      subscription.close();
     }
-    _tagsController.text = tags.map((tag) => tag.name).join(', ');
   }
 
   String get _offlineDraftKey {
@@ -505,48 +541,55 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
         : 'asset_edit_${userId ?? 'local'}_$existingAssetId';
   }
 
-  Future<void> _saveOfflineDraft() {
+  String? _offlineDraftGeneration;
+
+  Future<String> _saveOfflineDraft() async {
     String? date(DateTime? value) => value?.toUtc().toIso8601String();
-    return ref.read(offlineCreationDraftStoreProvider).save(_offlineDraftKey, {
-      'operation_id': _creationOperationId ??= _uuid.v7(),
-      'asset_id': widget.asset?.id ?? (_creationAssetId ??= _uuid.v7()),
-      'name': _nameController.text,
-      'placement': _placementController.text,
-      'notes': _notesController.text,
-      'tags': _tagsController.text,
-      'asset_type': _assetType.name,
-      'power_source': _powerSource.name,
-      'pet_type': _petType,
-      'fish_type': _fishType,
-      'sunlight': _sunlight.name,
-      'purchase_date': date(_purchaseDate),
-      'warranty_until': date(_warrantyUntil),
-      'pet_birth_date': date(_petBirthDate),
-      'last_repotted_at': date(_lastRepottedAt),
-      'installed_at': date(_installedAt),
-      'expires_at': date(_expiresAt),
-      'area_id': _areaId,
-      'room_id': _roomId,
-      'brand': _brandController.text,
-      'model': _modelController.text,
-      'serial': _serialController.text,
-      'manual': _manualController.text,
-      'consumable': _consumableController.text,
-      'pet_species': _petSpeciesController.text,
-      'pet_breed': _petBreedController.text,
-      'microchip': _microchipController.text,
-      'vet_name': _vetNameController.text,
-      'vet_phone': _vetPhoneController.text,
-      'feeding': _feedingController.text,
-      'medical': _medicalController.text,
-      'plant_species': _plantSpeciesController.text,
-      'watering': _wateringController.text,
-      'pot_size': _potSizeController.text,
-      'toxicity': _toxicityController.text,
-      'safety_type': _safetyTypeController.text,
-      'battery_type': _batteryTypeController.text,
-      'test_interval': _testIntervalController.text,
-    });
+    final generation = await ref.read(offlineCreationDraftStoreProvider).save(
+      _offlineDraftKey,
+      {
+        'operation_id': _creationOperationId ??= _uuid.v7(),
+        'asset_id': widget.asset?.id ?? (_creationAssetId ??= _uuid.v7()),
+        'name': _nameController.text,
+        'placement': _placementController.text,
+        'notes': _notesController.text,
+        'tags': _tagsController.text,
+        'asset_type': _assetType.name,
+        'power_source': _powerSource.name,
+        'pet_type': _petType,
+        'fish_type': _fishType,
+        'sunlight': _sunlight.name,
+        'purchase_date': date(_purchaseDate),
+        'warranty_until': date(_warrantyUntil),
+        'pet_birth_date': date(_petBirthDate),
+        'last_repotted_at': date(_lastRepottedAt),
+        'installed_at': date(_installedAt),
+        'expires_at': date(_expiresAt),
+        'area_id': _areaId,
+        'room_id': _roomId,
+        'brand': _brandController.text,
+        'model': _modelController.text,
+        'serial': _serialController.text,
+        'manual': _manualController.text,
+        'consumable': _consumableController.text,
+        'pet_species': _petSpeciesController.text,
+        'pet_breed': _petBreedController.text,
+        'microchip': _microchipController.text,
+        'vet_name': _vetNameController.text,
+        'vet_phone': _vetPhoneController.text,
+        'feeding': _feedingController.text,
+        'medical': _medicalController.text,
+        'plant_species': _plantSpeciesController.text,
+        'watering': _wateringController.text,
+        'pot_size': _potSizeController.text,
+        'toxicity': _toxicityController.text,
+        'safety_type': _safetyTypeController.text,
+        'battery_type': _batteryTypeController.text,
+        'test_interval': _testIntervalController.text,
+      },
+    );
+    _offlineDraftGeneration = generation;
+    return generation;
   }
 
   Future<void> _restoreOfflineDraft({bool overwriteExisting = false}) async {
@@ -559,6 +602,8 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
       return;
     }
     String text(String key) => draft[key] as String? ?? '';
+    _offlineDraftGeneration =
+        draft[OfflineCreationDraftStore.generationKey] as String?;
     DateTime? date(String key) => DateTime.tryParse(text(key))?.toLocal();
     _creationOperationId = draft['operation_id'] as String?;
     _creationAssetId = draft['asset_id'] as String?;
@@ -649,6 +694,8 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
         : roomItems.where((room) => room.areaId == selectedAreaId).toList();
     final selectedRoomId = _roomId ?? visibleRooms.firstOrNull?.id;
     final saveEnabled =
+        !_initializing &&
+        _initializationError == null &&
         !_saving &&
         _nameController.text.trim().isNotEmpty &&
         _detailNumbersValid &&
@@ -664,164 +711,187 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
       isSaving: _saving,
       onCancel: () => Navigator.of(context).pop(),
       onSave: _save,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          hk_ui.PremiumCard(
-            padding: const EdgeInsets.all(14),
-            backgroundColor: scheme.primaryContainer,
-            child: Row(
+      child: _initializing
+          ? const Padding(
+              padding: EdgeInsets.all(24),
+              child: LinearProgressIndicator(),
+            )
+          : _initializationError != null
+          ? hk_ui.ErrorPanel(
+              message: failureMessage(context, _initializationError!),
+              onRetry: () => _initialize(retry: true),
+            )
+          : Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  iconForAssetType(_assetType),
-                  color: scheme.onPrimaryContainer,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    context.l10n.trackItemBody,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: scheme.onPrimaryContainer,
-                      fontWeight: FontWeight.w600,
-                    ),
+                hk_ui.PremiumCard(
+                  padding: const EdgeInsets.all(14),
+                  backgroundColor: scheme.primaryContainer,
+                  child: Row(
+                    children: [
+                      Icon(
+                        iconForAssetType(_assetType),
+                        color: scheme.onPrimaryContainer,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          context.l10n.trackItemBody,
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(
+                                color: scheme.onPrimaryContainer,
+                                fontWeight: FontWeight.w600,
+                              ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          _SubsectionTitle(
-            title: context.l10n.basic,
-            icon: Symbols.inventory_2_rounded,
-          ),
-          TextField(
-            controller: _nameController,
-            textInputAction: TextInputAction.next,
-            inputFormatters: limitInputLength(InputValidationLimits.assetName),
-            decoration: InputDecoration(labelText: context.l10n.itemName),
-          ),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<AssetType>(
-            key: const ValueKey('asset-item-type-picker'),
-            initialValue: _assetType,
-            decoration: InputDecoration(labelText: context.l10n.itemType),
-            items: [
-              for (final type in AssetType.values)
-                DropdownMenuItem(
-                  value: type,
-                  child: Text(assetTypeLabel(context, type)),
+                const SizedBox(height: 16),
+                _SubsectionTitle(
+                  title: context.l10n.basic,
+                  icon: Symbols.inventory_2_rounded,
                 ),
-            ],
-            onChanged: (value) {
-              if (value != null) {
-                _changeType(value);
-              }
-            },
-          ),
-          const SizedBox(height: 12),
-          _SubsectionTitle(
-            title: context.l10n.location,
-            icon: Symbols.location_on_rounded,
-          ),
-          if (areas.isNotEmpty)
-            DropdownButtonFormField<String>(
-              initialValue: selectedAreaId,
-              decoration: InputDecoration(labelText: context.l10n.area),
-              items: [
-                for (final area in areas)
-                  DropdownMenuItem(
-                    value: area.id,
-                    child: DynamicText(area.name, contentType: 'area.name'),
+                TextField(
+                  controller: _nameController,
+                  textInputAction: TextInputAction.next,
+                  inputFormatters: limitInputLength(
+                    InputValidationLimits.assetName,
                   ),
+                  decoration: InputDecoration(labelText: context.l10n.itemName),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<AssetType>(
+                  key: const ValueKey('asset-item-type-picker'),
+                  initialValue: _assetType,
+                  decoration: InputDecoration(labelText: context.l10n.itemType),
+                  items: [
+                    for (final type in AssetType.values)
+                      DropdownMenuItem(
+                        value: type,
+                        child: Text(assetTypeLabel(context, type)),
+                      ),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) {
+                      _changeType(value);
+                    }
+                  },
+                ),
+                const SizedBox(height: 12),
+                _SubsectionTitle(
+                  title: context.l10n.location,
+                  icon: Symbols.location_on_rounded,
+                ),
+                if (areas.isNotEmpty)
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedAreaId,
+                    decoration: InputDecoration(labelText: context.l10n.area),
+                    items: [
+                      for (final area in areas)
+                        DropdownMenuItem(
+                          value: area.id,
+                          child: DynamicText(
+                            area.name,
+                            contentType: 'area.name',
+                          ),
+                        ),
+                    ],
+                    onChanged: (value) {
+                      final firstRoom = roomItems
+                          .where((room) => room.areaId == value)
+                          .firstOrNull;
+                      setState(() {
+                        _areaId = value;
+                        _roomId = firstRoom?.id;
+                      });
+                    },
+                  ),
+                if (areas.isNotEmpty) const SizedBox(height: 12),
+                rooms.when(
+                  data: (_) {
+                    final selected =
+                        _roomId != null &&
+                            visibleRooms.any((item) => item.id == _roomId)
+                        ? _roomId
+                        : visibleRooms.firstOrNull?.id;
+                    return DropdownButtonFormField<String>(
+                      initialValue: selected,
+                      decoration: InputDecoration(
+                        labelText: context.l10n.roomOrZone,
+                      ),
+                      items: [
+                        for (final item in visibleRooms)
+                          DropdownMenuItem(
+                            value: item.id,
+                            child: DynamicText(
+                              item.name,
+                              contentType: 'room.name',
+                            ),
+                          ),
+                      ],
+                      onChanged: (value) => setState(() => _roomId = value),
+                    );
+                  },
+                  error: (error, _) => Text(failureMessage(context, error)),
+                  loading: () => const LinearProgressIndicator(),
+                ),
+                const SizedBox(height: 12),
+                _SubsectionTitle(
+                  title: context.l10n.details,
+                  icon: Symbols.category_rounded,
+                ),
+                TextField(
+                  controller: _placementController,
+                  textInputAction: TextInputAction.next,
+                  inputFormatters: limitInputLength(
+                    InputValidationLimits.assetPlacement,
+                  ),
+                  decoration: InputDecoration(
+                    labelText: context.l10n.placement,
+                    hintText: context.l10n.shelfCornerBalconyKennelArea,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: () => _pickDate(_purchaseDate, (value) {
+                    setState(() => _purchaseDate = value);
+                  }),
+                  icon: const Icon(Symbols.event_rounded),
+                  label: Text(
+                    _purchaseDate == null
+                        ? context.l10n.purchaseDate
+                        : context.l10n.purchasedDate(
+                            formatShortDate(context, _purchaseDate!),
+                          ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _notesController,
+                  maxLines: 3,
+                  keyboardType: TextInputType.multiline,
+                  textInputAction: TextInputAction.newline,
+                  textCapitalization: TextCapitalization.sentences,
+                  inputFormatters: limitInputLength(
+                    InputValidationLimits.assetNotes,
+                  ),
+                  decoration: InputDecoration(labelText: context.l10n.notes),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _tagsController,
+                  keyboardType: TextInputType.text,
+                  textInputAction: TextInputAction.next,
+                  decoration: InputDecoration(
+                    labelText: context.l10n.tags,
+                    hintText: context.l10n.commaSeparated,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _typeSpecificFields(),
               ],
-              onChanged: (value) {
-                final firstRoom = roomItems
-                    .where((room) => room.areaId == value)
-                    .firstOrNull;
-                setState(() {
-                  _areaId = value;
-                  _roomId = firstRoom?.id;
-                });
-              },
             ),
-          if (areas.isNotEmpty) const SizedBox(height: 12),
-          rooms.when(
-            data: (_) {
-              final selected =
-                  _roomId != null &&
-                      visibleRooms.any((item) => item.id == _roomId)
-                  ? _roomId
-                  : visibleRooms.firstOrNull?.id;
-              return DropdownButtonFormField<String>(
-                initialValue: selected,
-                decoration: InputDecoration(labelText: context.l10n.roomOrZone),
-                items: [
-                  for (final item in visibleRooms)
-                    DropdownMenuItem(
-                      value: item.id,
-                      child: DynamicText(item.name, contentType: 'room.name'),
-                    ),
-                ],
-                onChanged: (value) => setState(() => _roomId = value),
-              );
-            },
-            error: (error, _) => Text(failureMessage(context, error)),
-            loading: () => const LinearProgressIndicator(),
-          ),
-          const SizedBox(height: 12),
-          _SubsectionTitle(
-            title: context.l10n.details,
-            icon: Symbols.category_rounded,
-          ),
-          TextField(
-            controller: _placementController,
-            textInputAction: TextInputAction.next,
-            inputFormatters: limitInputLength(
-              InputValidationLimits.assetPlacement,
-            ),
-            decoration: InputDecoration(
-              labelText: context.l10n.placement,
-              hintText: context.l10n.shelfCornerBalconyKennelArea,
-            ),
-          ),
-          const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: () => _pickDate(_purchaseDate, (value) {
-              setState(() => _purchaseDate = value);
-            }),
-            icon: const Icon(Symbols.event_rounded),
-            label: Text(
-              _purchaseDate == null
-                  ? context.l10n.purchaseDate
-                  : context.l10n.purchasedDate(
-                      formatShortDate(context, _purchaseDate!),
-                    ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _notesController,
-            maxLines: 3,
-            keyboardType: TextInputType.multiline,
-            textInputAction: TextInputAction.newline,
-            textCapitalization: TextCapitalization.sentences,
-            inputFormatters: limitInputLength(InputValidationLimits.assetNotes),
-            decoration: InputDecoration(labelText: context.l10n.notes),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _tagsController,
-            keyboardType: TextInputType.text,
-            textInputAction: TextInputAction.next,
-            decoration: InputDecoration(
-              labelText: context.l10n.tags,
-              hintText: context.l10n.commaSeparated,
-            ),
-          ),
-          const SizedBox(height: 12),
-          _typeSpecificFields(),
-        ],
-      ),
     );
   }
 
@@ -1242,11 +1312,16 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
     DateTime? current,
     ValueChanged<DateTime?> onSelected,
   ) async {
+    final initialDate = DateUtils.dateOnly(current ?? DateTime.now());
+    final firstDate = DateTime(1990);
+    final lastDate = DateUtils.dateOnly(
+      DateTime.now().add(const Duration(days: 3650)),
+    );
     final selected = await showDatePicker(
       context: context,
-      initialDate: current ?? DateTime.now(),
-      firstDate: DateTime(1990),
-      lastDate: DateTime.now().add(const Duration(days: 3650)),
+      initialDate: initialDate,
+      firstDate: initialDate.isBefore(firstDate) ? initialDate : firstDate,
+      lastDate: initialDate.isAfter(lastDate) ? initialDate : lastDate,
     );
     if (selected != null && mounted) {
       onSelected(selected);
@@ -1254,7 +1329,7 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
   }
 
   Future<void> _save() async {
-    if (_saving) {
+    if (_saving || _initializing || _initializationError != null) {
       return;
     }
     final roomItems = ref.read(roomsProvider).value ?? const <Room>[];
@@ -1341,14 +1416,48 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
       );
       final isCreating = widget.asset == null;
       final assetId = widget.asset?.id ?? (_creationAssetId ??= _uuid.v7());
-      if (!isCreating && widget.asset!.assetType != _assetType) {
+      final repository = ref.read(assetRepositoryProvider);
+      final draftStore = ref.read(offlineCreationDraftStoreProvider);
+      final draftKey = _offlineDraftKey;
+      var draftGeneration = _offlineDraftGeneration;
+      final creationController = ref.read(assetCreationControllerProvider);
+      final name = _nameController.text;
+      final assetType = _assetType;
+      final placement = _placementController.text;
+      final notes = _notesController.text;
+      final purchaseDate = _purchaseDate;
+      final tags = _tagsController.text.split(',');
+      final detailsPayload = _pointAssetDetailsPayload();
+      Future<void> saveLocal(DateTime? expectedUpdatedAt) async {
+        await repository.saveAsset(
+          id: assetId,
+          name: name,
+          assetType: assetType,
+          roomId: roomId,
+          placement: placement,
+          notes: notes,
+          purchaseDate: purchaseDate,
+          tagNames: tags,
+          deviceDetails: deviceDetails,
+          petDetails: petDetails,
+          plantDetails: plantDetails,
+          safetyDetails: safetyDetails,
+          expectedUpdatedAt: expectedUpdatedAt,
+        );
+      }
+
+      if (!isCreating && widget.asset!.assetType != assetType) {
         final monetization = ref.read(monetizationRepositoryProvider);
-        if (monetization == null || monetization.currentUserId == null) {
+        final accountScope = monetization?.currentUserId;
+        if (monetization == null || accountScope == null) {
           throw StateError('Cloud points service is unavailable.');
         }
-        final online = await ref
-            .read(syncConnectivityInstanceProvider)
-            .isOnline();
+        final connectivity = ref.read(syncConnectivityInstanceProvider);
+        // Persist the complete unfinished form before any authoritative change.
+        // The captured continuation below remains valid after route disposal.
+        draftGeneration = await _saveOfflineDraft();
+        if (!mounted) return;
+        final online = await connectivity.isOnline();
         if (!mounted) return;
         if (!online) {
           await _saveOfflineDraft();
@@ -1362,7 +1471,7 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
         }
         final quote = await monetization.quoteAssetTypeChange(
           assetId: assetId,
-          targetType: _assetType.name,
+          targetType: assetType.name,
         );
         if (!mounted) return;
         if (quote.charge > 0) {
@@ -1392,46 +1501,31 @@ class _AssetEditorDialogState extends ConsumerState<AssetEditorDialog> {
           );
           if (confirmed != true) return;
         }
-        final result = await ref
-            .read(assetCreationControllerProvider)
-            .changeAssetTypeWithPointDelta(
-              operation: {
-                'operation_id': _uuid.v7(),
-                'asset_id': assetId,
-                'target_type': _assetType.name,
-                'details': _pointAssetDetailsPayload(),
-                'expected_asset_revision': quote.revision,
-                'max_charge': quote.charge,
-              },
-              accountScope: monetization.currentUserId!,
-            );
         if (!mounted) return;
+        final result = await creationController.changeAssetTypeWithPointDelta(
+          operation: {
+            'operation_id': _uuid.v7(),
+            'asset_id': assetId,
+            'target_type': assetType.name,
+            'details': detailsPayload,
+            'expected_asset_revision': quote.revision,
+            'max_charge': quote.charge,
+          },
+          accountScope: accountScope,
+          expectedUpdatedAt: widget.asset!.updatedAt,
+          saveLocalEdit: saveLocal,
+        );
         if (!result.applied) {
           throw StateError(
-            result.status == 'charge_changed'
+            result.status == 'charge_changed' && mounted
                 ? context.l10n.authoritativeChargeChanged
                 : result.conflictReason ?? result.status,
           );
         }
+      } else {
+        await saveLocal(widget.asset?.updatedAt);
       }
-      await ref
-          .read(assetRepositoryProvider)
-          .saveAsset(
-            id: assetId,
-            name: _nameController.text,
-            assetType: _assetType,
-            roomId: roomId,
-            placement: _placementController.text,
-            notes: _notesController.text,
-            purchaseDate: _purchaseDate,
-            tagNames: _tagsController.text.split(','),
-            deviceDetails: deviceDetails,
-            petDetails: petDetails,
-            plantDetails: plantDetails,
-            safetyDetails: safetyDetails,
-            expectedUpdatedAt: widget.asset?.updatedAt,
-          );
-      await ref.read(offlineCreationDraftStoreProvider).clear(_offlineDraftKey);
+      await draftStore.clear(draftKey, expectedGeneration: draftGeneration);
       if (mounted) {
         Navigator.of(context).pop();
       }

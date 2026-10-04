@@ -6,7 +6,7 @@ part of '../sync_coordinator.dart';
 /// sharing the coordinator's mutable field surface. The facade answers the
 /// environment queries; the controller decides when work runs.
 abstract interface class _SyncScheduleEnv {
-  bool get scheduleAccountDeletionInProgress;
+  bool get scheduleBlocked;
   bool get scheduleAutomaticEnabled;
   bool get scheduleIsInitializing;
   bool get scheduleHasActiveSync;
@@ -40,7 +40,7 @@ class _SyncScheduleController {
     bool pushOnly = false,
     bool requireBroadPull = false,
   }) {
-    if (env.scheduleAccountDeletionInProgress) return;
+    if (env.scheduleBlocked) return;
     if (requireBroadPull) {
       _broadPullRequested = true;
       _pendingTargetTables.clear();

@@ -64,6 +64,13 @@ The generated manifest must never exceed a 24-hour absolute trust lease. The
 runtime and cache policy treat any network-fetched or cached manifest past that
 lease as expired and disable downloads until a fresh manifest is revalidated.
 
+All primary, archive, checksum, sticky, and ABI variant controls consume the same
+accepted manifest during one synchronous render. ABI choices never fetch a
+second manifest and are added only for active releases. The loaded page revokes
+download authority at lease expiry and rechecks it on visibility changes,
+back/forward restoration, and click, auxiliary-click, or context-menu activation.
+An expired tab cannot keep offering previously enabled download links.
+
 The checked-in control uses `publication.status = "active"` so the verified
 downstream `workflow_run` can publish only after the official release and APK-set
 workflows succeed. This control value is not a workflow publication mode and does

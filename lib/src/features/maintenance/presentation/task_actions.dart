@@ -160,14 +160,17 @@ Future<bool> postponeTaskWithDialog(
   TaskItem task,
 ) async {
   final now = DateTime.now();
-  final initialPostponeDate = task.plan.nextDueDate.isAfter(now)
-      ? task.plan.nextDueDate
-      : now;
+  final initialPostponeDate = DateUtils.dateOnly(
+    task.plan.nextDueDate.isAfter(now) ? task.plan.nextDueDate : now,
+  );
+  final lastDate = DateUtils.dateOnly(now.add(const Duration(days: 3650)));
   final date = await showDatePicker(
     context: context,
     initialDate: initialPostponeDate,
     firstDate: DateTime(now.year, now.month, now.day),
-    lastDate: now.add(const Duration(days: 3650)),
+    lastDate: initialPostponeDate.isAfter(lastDate)
+        ? initialPostponeDate
+        : lastDate,
   );
   if (date == null || !context.mounted) {
     return false;
@@ -345,20 +348,44 @@ Future<Duration?> _durationForSnoozePreset(
 
 Future<void> wakeNotificationReconciliation(WidgetRef ref) async {
   try {
-    final session = ref.read(authRepositoryProvider)?.currentSession;
-    final consumer = ref.read(notificationReconciliationConsumerProvider);
-    if (consumer != null) {
-      if (session != null) {
-        await consumer.drainForAccount(session.userId);
-      } else {
-        await consumer.drainLocal();
-      }
-      return;
-    }
-    await ref.read(notificationSchedulerProvider).refreshSchedules();
+    await captureNotificationReconciliation(ref)();
   } catch (_) {
     // The repository transaction already persisted reconciliation intent.
   }
+}
+
+/// Capture services while the originating widget is alive. Undo may run after
+/// navigation has disposed its WidgetRef.
+Future<void> Function() captureNotificationReconciliation(WidgetRef ref) {
+  final auth = ref.read(authRepositoryProvider);
+  final consumer = ref.read(notificationReconciliationConsumerProvider);
+  final scheduler = ref.read(notificationSchedulerProvider);
+  return () async {
+    try {
+      final session = auth?.currentSession;
+      if (consumer != null) {
+        if (session != null) {
+          await consumer.drainForAccount(session.userId);
+        } else {
+          await consumer.drainLocal();
+        }
+      } else {
+        await scheduler.refreshSchedules();
+      }
+    } on Object {
+      // Durable repository intent remains available for the next drain.
+    }
+  };
+}
+
+VoidCallback captureUndoAccountGuard(WidgetRef ref) {
+  final auth = ref.read(authRepositoryProvider);
+  final userId = auth?.currentSession?.userId;
+  return () {
+    if (auth?.currentSession?.userId != userId) {
+      throw StateError('Undo belongs to a previous account session.');
+    }
+  };
 }
 
 Future<bool> setTaskEnabledWithFeedback(
@@ -726,6 +753,11 @@ Future<bool> completeTaskWithFeedback(
   TaskItem task, {
   bool collectNotes = false,
 }) async {
+  final checkUndoAccount = captureUndoAccountGuard(ref);
+  final repository = ref.read(maintenanceRepositoryProvider);
+  final streakService = ref.read(streakServiceProvider);
+  final reconcileNotifications = captureNotificationReconciliation(ref);
+  final nativeCapabilities = ref.read(nativeCapabilitiesProvider);
   final controllerNotifier = ref.read(
     taskCompletionControllerProvider(task.plan.id),
   );
@@ -749,8 +781,7 @@ Future<bool> completeTaskWithFeedback(
     controllerNotifier.cancelNotesCollection();
   }
   final previousDueDate = task.plan.nextDueDate;
-  final timeZoneId =
-      await ref.read(nativeCapabilitiesProvider).getTimeZoneId() ?? 'UTC';
+  final timeZoneId = await nativeCapabilities.getTimeZoneId() ?? 'UTC';
   final result = await controllerNotifier.complete(
     expectedOccurrenceId: task.plan.currentOccurrenceId,
     timeZoneId: timeZoneId,
@@ -770,10 +801,10 @@ Future<bool> completeTaskWithFeedback(
     return false;
   }
 
-  unawaited(wakeNotificationReconciliation(ref));
+  unawaited(reconcileNotifications());
 
   try {
-    await ref.read(streakServiceProvider).refresh(DateTime.now());
+    await streakService.refresh(DateTime.now());
   } catch (error) {
     AppLogger.warning('streak_refresh_failed', error: error);
   }
@@ -790,53 +821,35 @@ Future<bool> completeTaskWithFeedback(
   hk_ui.showUndoToast(
     context,
     content: Text(context.l10n.taskCompleted),
+    actionSuccessMessage: Text(context.l10n.completionUndone),
     onUndo: () async {
-      try {
-        final completionId = result.operationId;
-        final completedOccurrenceId = result.completedOccurrenceId;
-        final nextOccurrenceId = result.nextOccurrenceId;
-        final completedNextDue = result.nextDueDate;
-        if (completionId == null ||
-            completedOccurrenceId == null ||
-            nextOccurrenceId == null ||
-            completedNextDue == null) {
-          throw StateError(
-            'Completion acknowledgement is missing undo identity.',
-          );
-        }
-        await ref
-            .read(maintenanceRepositoryProvider)
-            .undoCompletion(
-              planId: task.plan.id,
-              completionId: completionId,
-              completedOccurrenceId: completedOccurrenceId,
-              expectedCurrentOccurrenceId: nextOccurrenceId,
-              previousDueDate: result.previousDueDate ?? previousDueDate,
-              expectedCurrentNextDueDate: completedNextDue,
-            );
-        try {
-          await ref.read(streakServiceProvider).refresh(DateTime.now());
-          await wakeNotificationReconciliation(ref);
-        } catch (error) {
-          AppLogger.warning('streak_undo_refresh_failed', error: error);
-        }
-        if (context.mounted) {
-          hk_ui.showToast(
-            context,
-            content: Text(context.l10n.completionUndone),
-          );
-        }
-      } catch (error) {
-        if (context.mounted) {
-          hk_ui.showToast(
-            context,
-            content: Text(
-              failureMessage(context, error, fallback: AppFailureCode.undo),
-            ),
-            severity: hk_ui.HkToastSeverity.error,
-          );
-        }
+      checkUndoAccount();
+      final completionId = result.operationId;
+      final completedOccurrenceId = result.completedOccurrenceId;
+      final nextOccurrenceId = result.nextOccurrenceId;
+      final completedNextDue = result.nextDueDate;
+      if (completionId == null ||
+          completedOccurrenceId == null ||
+          nextOccurrenceId == null ||
+          completedNextDue == null) {
+        throw StateError(
+          'Completion acknowledgement is missing undo identity.',
+        );
       }
+      await repository.undoCompletion(
+        planId: task.plan.id,
+        completionId: completionId,
+        completedOccurrenceId: completedOccurrenceId,
+        expectedCurrentOccurrenceId: nextOccurrenceId,
+        previousDueDate: result.previousDueDate ?? previousDueDate,
+        expectedCurrentNextDueDate: completedNextDue,
+      );
+      try {
+        await streakService.refresh(DateTime.now());
+      } on Object catch (error) {
+        AppLogger.warning('streak_undo_refresh_failed', error: error);
+      }
+      await reconcileNotifications();
     },
   );
   if (context.mounted) {

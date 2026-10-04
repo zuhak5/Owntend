@@ -190,7 +190,6 @@ export async function requestAccountDeletionStatus(
   expectedUserId,
   fetchApi = globalThis.fetch,
   acknowledge = false,
-  capabilityVersion = "web-v1.0",
 ) {
   if (!isRecoveryKey(recoveryKey)) throw new Error("recovery_key_required");
   if (typeof expectedUserId !== "string" || expectedUserId.length === 0) {
@@ -202,7 +201,6 @@ export async function requestAccountDeletionStatus(
   };
   if (acknowledge) {
     body.action = "acknowledge";
-    body.capability_version = capabilityVersion;
   }
   const response = await fetchApi(
     `${config.supabaseUrl}/functions/v1/account-deletion-status`,
@@ -238,7 +236,6 @@ export async function acknowledgeAccountDeletion(
   recoveryKey,
   expectedUserId,
   fetchApi = globalThis.fetch,
-  capabilityVersion = "web-v1.0",
 ) {
   return requestAccountDeletionStatus(
     config,
@@ -246,7 +243,6 @@ export async function acknowledgeAccountDeletion(
     expectedUserId,
     fetchApi,
     true,
-    capabilityVersion,
   );
 }
 

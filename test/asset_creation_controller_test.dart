@@ -122,6 +122,36 @@ class _ScriptedMonetizationRepository implements MonetizationRepository {
 class _RecordingLocalSyncStore implements LocalSyncStore {
   final List<String> reconciledAssetIds = [];
   final List<String> reconciledCopyIds = [];
+  final List<String> reconciledEditorIds = [];
+
+  @override
+  Future<AuthoritativeEditorSnapshot> captureAuthoritativeEditor({
+    required String entity,
+    required String recordKey,
+    required String accountId,
+    required DateTime expectedUpdatedAt,
+    String? expectedOccurrenceId,
+  }) async => AuthoritativeEditorSnapshot(
+    entity: entity,
+    recordKey: recordKey,
+    accountId: accountId,
+    rows: const {},
+    outbox: const [],
+  );
+
+  @override
+  Future<void> finishAuthoritativeEditor({
+    required AuthoritativeEditorSnapshot snapshot,
+    required Map<String, dynamic> canonicalJson,
+    required String expectedTarget,
+    required Future<void> Function(DateTime) saveLocalEdit,
+    List<Map<String, dynamic>> detailRows = const [],
+    required bool Function() accountIsCurrent,
+  }) async {
+    expect(accountIsCurrent(), isTrue);
+    await saveLocalEdit(DateTime.utc(2026));
+    reconciledEditorIds.add(snapshot.recordKey);
+  }
 
   @override
   Future<void> reconcileAssetCreationComposite({
@@ -465,15 +495,19 @@ void main() {
             charged: 2,
             balance: 3,
             alreadyProcessed: false,
+            asset: {'id': 'asset-1'},
           ),
         );
+        final syncStore = _RecordingLocalSyncStore();
         final container = _container(
           repo: repo,
           store: TaskCreationOperationStore(),
+          syncStore: syncStore,
         );
         final operation = <String, dynamic>{
           'operation_id': 'type-operation',
           'asset_id': 'asset-1',
+          'target_type': 'general',
         };
 
         final result = await container
@@ -481,11 +515,14 @@ void main() {
             .changeAssetTypeWithPointDelta(
               operation: operation,
               accountScope: 'user-a',
+              expectedUpdatedAt: DateTime.utc(2026),
+              saveLocalEdit: (at) async => expect(at, DateTime.utc(2026)),
             );
 
         expect(result.balance, 3);
         expect(repo.changeAssetTypeCalls, [operation]);
         expect(container.read(pointWalletProvider).value?.balance, 3);
+        expect(syncStore.reconciledEditorIds, ['asset-1']);
       },
     );
 
@@ -496,27 +533,35 @@ void main() {
           charged: 1,
           balance: 4,
           alreadyProcessed: false,
+          plan: {'id': 'plan-1'},
         ),
       );
+      final syncStore = _RecordingLocalSyncStore();
       final container = _container(
         repo: repo,
         store: TaskCreationOperationStore(),
+        syncStore: syncStore,
       );
       final controller = container.read(taskCreationControllerProvider);
       addTearDown(controller.dispose);
       final operation = <String, dynamic>{
         'operation_id': 'move-operation',
         'plan_id': 'plan-1',
+        'target_asset_id': 'asset-1',
       };
 
       final result = await controller.movePlanWithPointDelta(
         operation: operation,
         accountScope: 'user-a',
+        expectedUpdatedAt: DateTime.utc(2026),
+        expectedOccurrenceId: 'occurrence-1',
+        saveLocalEdit: (at) async => expect(at, DateTime.utc(2026)),
       );
 
       expect(result.balance, 4);
       expect(repo.movePlanCalls, [operation]);
       expect(container.read(pointWalletProvider).value?.balance, 4);
+      expect(syncStore.reconciledEditorIds, ['plan-1']);
     });
   });
 }

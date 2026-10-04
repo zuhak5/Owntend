@@ -164,6 +164,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
+          $PSNativeCommandUseErrorActionPreference = $true
           flutter clean
           .\tool\verify_android_release_registrants.ps1 -RemoveGeneratedMain
           .\tool\install_shorebird.ps1

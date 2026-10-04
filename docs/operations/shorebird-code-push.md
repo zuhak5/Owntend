@@ -18,6 +18,12 @@ The canonical CLI, bundled Flutter fork/engine, release Flutter fork/engine, Bun
 
 Patch verification is `strict`. Native and asset bypass flags are forbidden. [`tool/shorebird_patch_eligibility.mjs`](../../tool/shorebird_patch_eligibility.mjs) rejects native projects, assets, dependencies, toolchain/delivery inputs, unknown paths, a base that is not an ancestor, or a candidate with no patchable Flutter source. Shorebird's mandatory dry-run is a second independent gate.
 
+Release and patch validation stop on the first failing native command, including
+Flutter, Dart, dependency, and toolchain checks. The PowerShell failure policy is
+explicit in both workflows; later successful commands cannot replace a failed
+validation result. See the [release runbook](release-runbook.md) for the local
+regression evidence and protected CI boundary.
+
 ## Value classification
 
 | Location | Values | Handling |

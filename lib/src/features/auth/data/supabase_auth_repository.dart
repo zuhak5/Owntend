@@ -263,11 +263,14 @@ class SupabaseAuthRepository implements AuthRepository {
       await _completeAccountDeletion(operation);
     } on Object catch (error) {
       final functionErrorCode = _functionErrorCode(error);
+      // A new attempt cannot prove that a previously persisted operation never
+      // reached the server. Only this invocation's fresh operation is safe to
+      // cancel after a preparation failure or a definitive remote rejection.
       final safeCancellation =
-          !requestStarted ||
-          (createdOperation &&
-              functionErrorCode != 'invalid_session' &&
-              _isSafePreDestructiveFailure(error));
+          createdOperation &&
+          (!requestStarted ||
+              (functionErrorCode != 'invalid_session' &&
+                  _isSafePreDestructiveFailure(error)));
       if (safeCancellation && operation != null) {
         await _accountDeletionRecoveryStore.clear();
       }

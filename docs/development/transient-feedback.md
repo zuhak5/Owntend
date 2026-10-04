@@ -24,6 +24,13 @@ error from erasing an Undo opportunity.
   oldest first. Every action is guarded against double taps.
 - A failing callback is logged as a scrubbed technical event and does not
   strand later callbacks or queued feedback.
+- Undo captures its repository and reminder/streak services before the route
+  closes. Deferred actions and batch-label builders must not read a disposed
+  widget reference or route context. An account change rejects the old action
+  before it can mutate the new account's data.
+- Success and failure feedback belongs to the coordinator, so it remains visible
+  after the originating detail route closes; failures are not swallowed by
+  route-local callbacks.
 - With accessible navigation enabled, Flutter's persistent action behavior
   keeps an Undo bar available until the user acts or dismisses it. Other users
   receive the fixed five-second Undo interval.
@@ -62,6 +69,8 @@ Widget integration coverage is in `test/widget_test.dart`. Tests cover protected
 Undo, compatible and incompatible batches, visible count, deadline reset,
 LIFO/exactly-once execution, callback failure, accessible persistence, and the
 four Trash restoration call sites.
+`test/ui_audit_regressions_test.dart` exercises task-detail Trash and completion
+Undo after navigation disposes the originating route, including restore failure.
 
 Physical-device evidence is still required for TalkBack announcements,
 hardware focus, keyboard and floating-action-button overlap, route transitions,

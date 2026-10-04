@@ -6,6 +6,61 @@ The current application version is defined only in `pubspec.yaml`. Released vers
 
 ## Unreleased
 
+- Advanced the application version to 1.0.3 and build number to 17 (`1.0.3+17`)
+  to preserve monotonic Android `versionCode` progression.
+
+- Stopped notification startup and resume continuations from registering work
+  or starting backup after their ready-screen owner is disposed. Initial
+  account-read failures now stay within optional startup error handling.
+
+- Kept newer unfinished editor drafts when an older save finishes after its
+  editor closes. Draft completion now checks the saved generation and cannot
+  race a replacement write across secure-storage owners.
+
+- Made restore and account-deletion barriers wait for optional photo downloads
+  and their file writes, including work from a replaced coordinator. A timeout fails preparation instead of allowing an old
+  download to recreate media after cleanup or restoration.
+
+- Preserved item and task form edits when their own paid type change or move
+  arrives through synchronization before the save finishes. Canonical adoption
+  and the local form save are atomic, survive editor closure, retain recovery
+  drafts on failure, and continue to reject competing edits or account changes.
+
+- Made Shorebird release and patch validation stop immediately when any native
+  validation command fails, preventing later successful commands from hiding a
+  failed check before publication.
+
+- Hardened reminder reconciliation: failed alarm cancellations retain retry state,
+  opaque queue versions protect replacements across concurrent refreshes, and
+  local-only background refresh no longer requires a cloud session. Overdue
+  plans no longer consume the candidate window for future reminders. The local
+  pre-launch schema baseline advances; unsupported older pre-launch databases
+  are rejected without rewriting their data.
+- Corrected deferred Undo after navigation, preserved saved dates outside the
+  pickers' default range, and blocked asset editing until tags and saved drafts
+  finish loading. Required parallel startup reads now own errors immediately,
+  and startup reports sign-out only after the authentication session is cleared.
+- Rejected malformed successful weather responses without overwriting valid
+  cached observations or presenting missing measurements as fresh zero values.
+- Aligned backup export self-verification with import resource/hash limits,
+  preserved unresolved account-deletion journals after preparation failure,
+  cleared all account-scoped editor draft families, and kept synchronization
+  suspended throughout backup restore and unresolved recovery.
+- Enforced image dimensions before frame allocation for supported local photo
+  formats, bounded metadata records and compressed profile expansion, and
+  rejected unsafe decoder paths or metadata too large for normalized JPEGs.
+  Preserved bounded ICC profiles with correct JPEG framing and reassembled
+  profiles split across input JPEG segments. Photo upload
+  finalization now returns canonical server fields and timestamps on initial
+  execution and replay.
+- Corrected browser deletion acknowledgement payloads, bounded all cleanup
+  worker I/O by the invocation deadline, and revoked VersionDeck download
+  controls for withdrawn releases and expired verification leases in open tabs.
+- Made disposable backend teardown stop its owned serving process tree, restore
+  the caller's directory, and report failures to remove temporary credentials.
+  The generated server bootstrap also preserves Unicode paths and paths containing
+  straight or curly apostrophes.
+
 - Fixed notification inbox read-state reversion bug and plan completion sync timestamp:
   - **Task Notification Reopening Elimination**: Fixed flawed `shouldReopen` condition in `DriftNotificationInboxRepository.createNotification` that previously reverted read task notifications back to unread (`read_at: null`) whenever background reconciliation or app launch evaluated due tasks. Confined reopening solely to digest notifications whose content changed (`normalizedKind == 'digest' && contentChanged`).
   - **Plan Completion Read State Sync**: Updated `_markPlanInboxRead` in `DriftMaintenanceRepository` to set `updatedAt: Value(now)` alongside `readAt`, ensuring that marking a plan's notification as read upon task completion properly triggers cloud synchronization to Supabase.

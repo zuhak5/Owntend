@@ -4,7 +4,7 @@ create extension if not exists pgtap with schema extensions;
 set local role postgres;
 set search_path = public, extensions, pg_catalog;
 
-select extensions.plan(22);
+select extensions.plan(28);
 
 select extensions.has_function('public', 'prepare_asset_photo_upload', ARRAY['text', 'text', 'bigint', 'text', 'text', 'text'], 'prepare-first media RPC exists');
 select extensions.has_function('public', 'finalize_asset_photo_upload', ARRAY['uuid', 'text', 'text', 'integer', 'text', 'boolean'], 'media finalization RPC exists');
@@ -150,5 +150,71 @@ select extensions.throws_ok(
   'MEDIA_STAGE_NOT_FOUND',
   'another user cannot finalize the stage'
 );
+
+-- A successful replacement must acknowledge the actual canonical photo row,
+-- including metadata preserved by the upsert and the trigger-owned revision.
+set local role postgres;
+update public.asset_photos set caption = 'Original caption', is_primary = true
+where user_id = '00000000-0000-0000-0000-00000000000a' and id = 'photo-a';
+create temporary table photo_replacement_result (payload jsonb);
+grant all on photo_replacement_result to authenticated;
+
+set local role authenticated;
+set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-00000000000a"}';
+select public.prepare_asset_photo_upload(
+  'asset-a', 'photo-a', 1024, 'image/jpeg', repeat('b', 64), 'replace-upload-0002'
+);
+
+set local role postgres;
+insert into storage.objects (bucket_id, name, owner, metadata)
+select 'user-media', staging_path, user_id,
+       '{"size":"1024","mimetype":"image/jpeg"}'::jsonb
+from public.media_staging_objects where idempotency_key = 'replace-upload-0002';
+
+set local role authenticated;
+insert into photo_replacement_result
+select public.finalize_asset_photo_upload(
+  (select id from public.media_staging_objects where idempotency_key = 'replace-upload-0002'),
+  'asset-a', 'photo-a',
+  (select revision::integer from public.asset_photos where id = 'photo-a'),
+  null, false
+);
+
+select extensions.is(
+  (select payload ->> 'revision' from photo_replacement_result),
+  (select revision::text from public.asset_photos where id = 'photo-a'),
+  'replacement response includes the canonical new revision'
+);
+select extensions.is(
+  (select payload ->> 'caption' from photo_replacement_result),
+  (select caption from public.asset_photos where id = 'photo-a'),
+  'replacement response includes the retained canonical caption'
+);
+select extensions.is(
+  (select payload ->> 'is_primary' from photo_replacement_result),
+  (select is_primary::text from public.asset_photos where id = 'photo-a'),
+  'replacement response includes the retained canonical primary flag'
+);
+
+select extensions.is(
+  (select (payload ->> 'created_at')::timestamptz from photo_replacement_result),
+  (select created_at from public.asset_photos where id = 'photo-a'),
+  'replacement preserves the canonical creation time'
+);
+select extensions.is(
+  (select (payload ->> 'updated_at')::timestamptz from photo_replacement_result),
+  (select updated_at from public.asset_photos where id = 'photo-a'),
+  'replacement returns the canonical server update time'
+);
+select extensions.is(
+  public.finalize_asset_photo_upload(
+    (select id from public.media_staging_objects where idempotency_key = 'replace-upload-0002'),
+    'asset-a', 'photo-a', 1
+  ) - 'idempotent',
+  (select payload - 'idempotent' from photo_replacement_result),
+  'replacement replay returns the same complete canonical response'
+);
+
+select * from extensions.finish();
 
 rollback;

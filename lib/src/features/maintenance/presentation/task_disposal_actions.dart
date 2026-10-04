@@ -64,8 +64,11 @@ Future<bool> moveTaskToTrashWithUndo(
   WidgetRef ref,
   TaskItem task,
 ) async {
+  final checkUndoAccount = captureUndoAccountGuard(ref);
+  final repository = ref.read(maintenanceRepositoryProvider);
+  final reconcileNotifications = captureNotificationReconciliation(ref);
   try {
-    await ref.read(maintenanceRepositoryProvider).archivePlan(task.plan.id);
+    await repository.archivePlan(task.plan.id);
   } on Object catch (error) {
     if (context.mounted) {
       hk_ui.showToast(
@@ -78,7 +81,7 @@ Future<bool> moveTaskToTrashWithUndo(
     }
     return false;
   }
-  await wakeNotificationReconciliation(ref);
+  await reconcileNotifications();
   if (!context.mounted) {
     return true;
   }
@@ -86,23 +89,9 @@ Future<bool> moveTaskToTrashWithUndo(
     context,
     duration: const Duration(seconds: 5),
     onUndo: () async {
-      try {
-        await ref.read(maintenanceRepositoryProvider).restorePlan(task.plan.id);
-        await wakeNotificationReconciliation(ref);
-        if (context.mounted) {
-          hk_ui.showToast(context, content: Text(context.l10n.taskRestored));
-        }
-      } on Object catch (error) {
-        if (context.mounted) {
-          hk_ui.showToast(
-            context,
-            content: Text(
-              failureMessage(context, error, fallback: AppFailureCode.undo),
-            ),
-            severity: hk_ui.HkToastSeverity.error,
-          );
-        }
-      }
+      checkUndoAccount();
+      await repository.restorePlan(task.plan.id);
+      await reconcileNotifications();
     },
   );
   return true;

@@ -197,58 +197,87 @@ export async function processMediaCleanupBatch(
   services: MediaCleanupServices,
   batchSize = DEFAULT_BATCH_SIZE,
   deadline: number = Date.now() + OVERALL_DEADLINE_MS,
+  controller = new AbortController(),
 ): Promise<BatchOutcome> {
-  const entries = await services.claimBatch(
-    Math.min(Math.max(batchSize, 1), MAX_BATCH_SIZE),
-  );
-  let succeeded = 0;
-  let failed = 0;
-  let cursor = 0;
+  // Race every external await, including claim/ack, against the SAME deadline.
+  // Aborting the adapter fetch also releases network resources. A provider that
+  // ignores cancellation cannot resume our control flow and acknowledge late.
+  const timeoutError = new Error("MEDIA_CLEANUP_DEADLINE_EXCEEDED");
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      reject(timeoutError);
+    }, Math.max(0, deadline - Date.now()));
+  });
+  const bounded = <T>(operation: () => Promise<T>): Promise<T> => {
+    if (controller.signal.aborted || Date.now() >= deadline) {
+      controller.abort();
+      return Promise.reject(timeoutError);
+    }
+    return Promise.race([operation(), timedOut]);
+  };
+  try {
+    const entries = await bounded(() =>
+      services.claimBatch(
+        Math.min(Math.max(batchSize, 1), MAX_BATCH_SIZE),
+      )
+    );
+    let succeeded = 0;
+    let failed = 0;
+    let cursor = 0;
 
-  // Bounded-concurrency worker pool; stops scheduling when the overall
-  // deadline is reached so the invocation always answers within budget.
-  const workers = Array.from(
-    { length: Math.min(MAX_CONCURRENT_REMOVALS, entries.length) },
-    async () => {
-      while (cursor < entries.length && Date.now() < deadline) {
-        const entry = entries[cursor++];
-        try {
-          const result = await services.removeStorageObject(entry.object_path);
-          if (result.success) {
-            await services.acknowledgeCleanup(entry.id);
-            succeeded++;
-          } else {
-            const isTerminal = entry.attempts >= 5;
-            if (isTerminal) {
-              console.warn(
-                `[media_cleanup_terminal_failure] Entry ${entry.id} reached terminal failure for object: ${
-                  result.errorCode ?? "storage_error"
-                }`,
-              );
-            }
-            await services.recordFailure(
-              entry.id,
-              result.errorCode ?? "storage_error",
-              isTerminal,
+    // Bounded-concurrency worker pool; stops scheduling when the overall
+    // deadline is reached so the invocation always answers within budget.
+    const workers = Array.from(
+      { length: Math.min(MAX_CONCURRENT_REMOVALS, entries.length) },
+      async () => {
+        while (cursor < entries.length && Date.now() < deadline) {
+          const entry = entries[cursor++];
+          try {
+            const result = await bounded(() =>
+              services.removeStorageObject(entry.object_path)
             );
+            if (result.success) {
+              await bounded(() => services.acknowledgeCleanup(entry.id));
+              succeeded++;
+            } else {
+              const isTerminal = entry.attempts >= 5;
+              if (isTerminal) {
+                console.warn(
+                  `[media_cleanup_terminal_failure] Entry ${entry.id} reached terminal failure for object: ${
+                    result.errorCode ?? "storage_error"
+                  }`,
+                );
+              }
+              await bounded(() =>
+                services.recordFailure(
+                  entry.id,
+                  result.errorCode ?? "storage_error",
+                  isTerminal,
+                )
+              );
+              failed++;
+            }
+          } catch (_err) {
+            // RPC failures during ack/record leave the row claimed until its
+            // lease expires; the next invocation retries it. No raw payload is
+            // reported.
             failed++;
           }
-        } catch (_err) {
-          // RPC failures during ack/record leave the row claimed until its
-          // lease expires; the next invocation retries it. No raw payload is
-          // reported.
-          failed++;
         }
-      }
-    },
-  );
+      },
+    );
 
-  await Promise.all(workers);
+    await Promise.all(workers);
 
-  // Entries never scheduled because of the deadline remain claimed under a
-  // five-minute lease and are retried by the next invocation.
-  const processed = succeeded + failed;
-  return { processed, succeeded, failed };
+    // Entries never scheduled because of the deadline remain claimed under a
+    // five-minute lease and are retried by the next invocation.
+    const processed = succeeded + failed;
+    return { processed, succeeded, failed };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export function verifyWorkerAuthority(req: Request): WorkerAuthorityResult {
@@ -302,7 +331,7 @@ function isValidRequestShape(contentLength: number): boolean {
 }
 
 export function createHandler(
-  servicesFactory: (req: Request) => MediaCleanupServices,
+  servicesFactory: (req: Request, signal: AbortSignal) => MediaCleanupServices,
   reporterFactory: (req: Request) => EdgeExceptionReporter = (_req) =>
     createEdgeExceptionReporter("process-media-cleanup"),
   authority: WorkerAuthority = verifyWorkerAuthority,
@@ -346,14 +375,20 @@ export function createHandler(
 
     const reporter = reporterFactory(req);
     try {
-      const services = servicesFactory(req);
+      const controller = new AbortController();
+      const services = servicesFactory(req, controller.signal);
       const url = new URL(req.url);
       const requestedBatch = parseInt(url.searchParams.get("batch") ?? "", 10);
       const batchSize = Number.isNaN(requestedBatch)
         ? DEFAULT_BATCH_SIZE
         : requestedBatch;
 
-      const result = await processMediaCleanupBatch(services, batchSize);
+      const result = await processMediaCleanupBatch(
+        services,
+        batchSize,
+        Date.now() + OVERALL_DEADLINE_MS,
+        controller,
+      );
       return new Response(JSON.stringify({ success: true, ...result }), {
         status: 200,
         headers: jsonHeaders,
@@ -388,11 +423,12 @@ export type WorkerAuthority = (
 ) => WorkerAuthorityResult | Promise<WorkerAuthorityResult>;
 
 if (import.meta.main) {
-  const handler = createHandler((_req) => {
+  const handler = createHandler((_req, signal) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
     const client = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false, autoRefreshToken: false },
+      global: { fetch: (input, init) => fetch(input, { ...init, signal }) },
     });
     return new SupabaseMediaCleanupServices(client);
   });

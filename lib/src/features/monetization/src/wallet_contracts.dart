@@ -208,6 +208,7 @@ class AuthoritativeMutationResult {
     this.conflictReason,
     this.asset,
     this.plan,
+    this.detailRows = const [],
   });
 
   factory AuthoritativeMutationResult.fromJson(Map<String, dynamic> json) =>
@@ -223,6 +224,7 @@ class AuthoritativeMutationResult {
         plan: json['plan'] is Map
             ? Map<String, dynamic>.from(json['plan'] as Map)
             : null,
+        detailRows: _jsonMapList(json['detail_rows']),
       );
 
   final String status;
@@ -232,6 +234,7 @@ class AuthoritativeMutationResult {
   final String? conflictReason;
   final Map<String, dynamic>? asset;
   final Map<String, dynamic>? plan;
+  final List<Map<String, dynamic>> detailRows;
 
   bool get applied => status == 'applied';
 }

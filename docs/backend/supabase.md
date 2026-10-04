@@ -162,6 +162,13 @@ RPC contracts should define:
 
 The media RPCs `prepare_asset_photo_upload`, `finalize_asset_photo_upload`, and `set_primary_asset_photo` follow the same wrapper/private-implementation boundary. Public functions are pinned invokers; privileged implementations are pinned definers in non-exposed `owntend_media_private`, derive `auth.uid()`, and validate ownership.
 
+Photo finalization returns the persisted photo identity, object path, caption,
+primary flag, revision, and creation/update timestamps after database triggers
+have run. First execution and idempotent replay return the same canonical fields
+and verified object facts. Replacing bytes can preserve the existing caption and
+primary selection; the client adopts the returned state rather than projecting
+request fields or device timestamps into its synchronization shadow.
+
 ## Storage
 
 The `user-media` bucket is private and limited to supported image MIME types and the configured 10 MiB object limit. Object paths and policies must prevent cross-user access. Signed URLs, if used, are temporary credentials and must not appear in logs, Sentry, or public artifacts.
@@ -170,7 +177,24 @@ Media metadata, object creation, replacement, and cleanup should tolerate partia
 
 Asset and photo identifiers are text throughout the synced tables and media RPC boundary. Before any bytes are uploaded, Flutter calls `prepare_asset_photo_upload` with an idempotency key and expected object facts. The server serializes prepares per user, enforces at most 20 fresh staged rows and 100 MiB expected bytes, and returns an opaque `<user>/media/<stage-uuid>/<attempt>.<ext>` path. Exact active/finalized replays are stable; expired or failed attempts retain the staging row ID, queue the old path, increment `attempt`, and issue a new path. The Storage INSERT policy requires that exact fresh staged row. Authenticated Storage DELETE has no policy; clients delete photo metadata through `delete_asset_photo`, and the service worker alone removes objects.
 
-### Protected media-cleanup worker  Server-side cleanup is executed only by the [`process-media-cleanup`](../../supabase/functions/process-media-cleanup/index.ts) Edge Function against the service-role worker RPCs `claim_media_cleanup_batch`, `acknowledge_media_cleanup`, and `record_media_cleanup_failure`, all of which are revoked from client roles and granted exclusively to `service_role`.  Worker authority is a dedicated service-to-service capability, never a user JWT and never the platform service-role key:  - The gateway runs this function with `verify_jwt = false` in `supabase/config.toml`; bearer tokens carry no meaning on this endpoint. - Callers must present an exact random capability in the `X-Owntend-Worker-Token` header. The function compares it in constant time against `OWNTEND_MEDIA_CLEANUP_WORKER_TOKEN` from Edge Runtime environment configuration. - A request without the header receives `401`; a wrong value receives `403`. Without a configured capability the function fails closed with `403`. No CORS headers are ever emitted; non-POST methods, non-JSON content types, and oversized bodies are rejected. - Work is bounded: batches are capped at 25 rows claimed under `SKIP LOCKED`, removals run with bounded concurrency (4) under an overall 20-second deadline, and rows whose lease (5 minutes) expires after a dead invocation are reclaimed automatically. Absent Storage objects count as idempotent successes. - Failures persist only bounded allowlisted technical codes (`last_error_code`); raw provider messages and object paths are never stored or logged.  Recurring invocation is fail-safe: when operators provision BOTH the Vault secret `media_cleanup_worker_authorization` (the same capability value as the runtime token) AND the database setting `owntend.media_cleanup_function_url` holding the EXACT function endpoint, migration-time scheduling registers the protected `owntend-media-cleanup-worker` cron job that POSTs the endpoint hourly with the capability header and a 30-second request budget; while either input is absent no schedule exists and the queue drains only through explicitly authorized invocations. Expired staging reservations are swept by the separate in-database `owntend-media-staging-sweep` job, which needs no external secret.  The canonical backend gate (`npm run test:backend-integration`) proves the whole contract end to end - gateway denials, capability acceptance, real Storage deletion, idempotent re-removal, bounded failure codes, lease recovery, and disjoint concurrent claims - against a freshly applied blank baseline in an isolated disposable stack. ## Realtime
+### Protected media-cleanup worker
+
+Server-side cleanup is executed only by the [`process-media-cleanup`](../../supabase/functions/process-media-cleanup/index.ts) Edge Function against the service-role worker RPCs `claim_media_cleanup_batch`, `acknowledge_media_cleanup`, and `record_media_cleanup_failure`, all of which are revoked from client roles and granted exclusively to `service_role`.
+
+Worker authority is a dedicated service-to-service capability, never a user JWT and never the platform service-role key:
+
+- The gateway runs this function with `verify_jwt = false` in `supabase/config.toml`; bearer tokens carry no meaning on this endpoint.
+- Callers must present an exact random capability in the `X-Owntend-Worker-Token` header. The function compares it in constant time against `OWNTEND_MEDIA_CLEANUP_WORKER_TOKEN` from Edge Runtime environment configuration.
+- A request without the header receives `401`; a wrong value receives `403`. Without a configured capability the function fails closed with `403`. No CORS headers are ever emitted; non-POST methods, non-JSON content types, and oversized bodies are rejected.
+- Work is bounded: batches are capped at 25 rows claimed under `SKIP LOCKED`, removals run with bounded concurrency (4) under an overall 20-second deadline, and rows whose lease (5 minutes) expires after a dead invocation are reclaimed automatically. Absent Storage objects count as idempotent successes.
+- The same remaining deadline bounds claim, Storage removal, acknowledgment, and failure-recording waits; expiry aborts their network requests. Unfinished removal is never acknowledged, even if the provider returns later. Ambiguous completion or acknowledgment leaves the existing lease available for idempotent retry after expiry.
+- Failures persist only bounded allowlisted technical codes (`last_error_code`); raw provider messages and object paths are never stored or logged.
+
+Recurring invocation is fail-safe: when operators provision BOTH the Vault secret `media_cleanup_worker_authorization` (the same capability value as the runtime token) AND the database setting `owntend.media_cleanup_function_url` holding the EXACT function endpoint, migration-time scheduling registers the protected `owntend-media-cleanup-worker` cron job that POSTs the endpoint hourly with the capability header and a 30-second request budget; while either input is absent no schedule exists and the queue drains only through explicitly authorized invocations. Expired staging reservations are swept by the separate in-database `owntend-media-staging-sweep` job, which needs no external secret.
+
+The canonical backend gate (`npm run test:backend-integration`) proves the whole contract end to end - gateway denials, capability acceptance, real Storage deletion, idempotent re-removal, bounded failure codes, lease recovery, and disjoint concurrent claims - against a freshly applied blank baseline in an isolated disposable stack.
+
+## Realtime
 
 Realtime is an invalidation mechanism, not a replacement for authenticated pull and revision checks. The client must tolerate dropped, duplicated, delayed, and out-of-order events.
 
@@ -214,6 +238,7 @@ Native Flutter HTTP requests normally have no `Origin` header. They continue thr
 
 - `POST` with `{ "recovery_key": "<43-character base64url value>", "expected_user_id": "<uuid>" }` queries status.
 - `POST` with `{ "recovery_key": "<43-character base64url value>", "expected_user_id": "<uuid>", "action": "acknowledge" }` advances the operation to `acknowledged`.
+- Browser acknowledgment uses exactly this shape; unknown body fields are rejected rather than widening the capability contract.
 - The endpoint is capability-authorized and intentionally does not require a caller JWT. Authorization derives from the hashed recovery key plus the expected user binding so recovery still works after the Auth user has been deleted.
 - Responses specify status (`pending`, `deleted`, `acknowledged`, `recovery_not_found`, or `unauthorized`), target user ID, timestamps, and GC window.
 - Recovery records enter a 7-day retention window after acknowledgment before garbage collection.

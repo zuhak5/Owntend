@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -592,18 +594,19 @@ void main() {
           .thenAnswer((_) async {});
       final store = OfflineCreationDraftStore(secureStorage);
 
-      await store.save('task_user_asset', {
+      final generation = await store.save('task_user_asset', {
         'operation_id': 'operation-1',
         'title': 'Inspect seals',
         'materials': ['cloth', 'sealant'],
       });
 
       expect(await store.load('task_user_asset'), {
+        OfflineCreationDraftStore.generationKey: generation,
         'operation_id': 'operation-1',
         'title': 'Inspect seals',
         'materials': ['cloth', 'sealant'],
       });
-      await store.clear('task_user_asset');
+      await store.clear('task_user_asset', expectedGeneration: generation);
       verify(
         () =>
             secureStorage.delete(key: 'owntend_creation_draft_task_user_asset'),
@@ -611,28 +614,150 @@ void main() {
     },
   );
 
-  test('offline draft account cleanup preserves other accounts', () async {
-    final secureStorage = _MockSecureStorage();
-    final stored = <String, String>{
-      'owntend_creation_draft_task_user-1_asset-a': '{}',
-      'owntend_creation_draft_asset_user-1_room-a': '{}',
-      'owntend_creation_draft_asset_copy_user-1_asset-b': '{}',
-      'owntend_creation_draft_task_user-10_asset-c': '{}',
-      'unrelated': '{}',
-    };
-    when(() => secureStorage.readAll()).thenAnswer((_) async => stored);
-    when(() => secureStorage.delete(key: any(named: 'key')))
-        .thenAnswer((invocation) async {
-          stored.remove(invocation.namedArguments[#key] as String);
-        });
+  test(
+    'account cleanup removes the current editor draft key formats',
+    () async {
+      final secureStorage = _MockSecureStorage();
+      final stored = <String, String>{
+        for (final kind in [
+          'asset_create',
+          'asset_edit',
+          'asset_copy',
+          'task_create',
+          'task_edit',
+        ])
+          'owntend_creation_draft_${kind}_user-1_target': '{"notes":"private"}',
+        'owntend_creation_draft_asset_create_user-10_target': '{}',
+        'owntend_creation_draft_task_edit_local_target': '{}',
+        'unrelated': '{}',
+      };
+      when(() => secureStorage.readAll()).thenAnswer((_) async => stored);
+      when(() => secureStorage.delete(key: any(named: 'key')))
+          .thenAnswer((invocation) async {
+            stored.remove(invocation.namedArguments[#key] as String);
+          });
+      await OfflineCreationDraftStore(secureStorage).clearForAccount('user-1');
+      expect(stored.keys, {
+        'owntend_creation_draft_asset_create_user-10_target',
+        'owntend_creation_draft_task_edit_local_target',
+        'unrelated',
+      });
+    },
+  );
 
-    await OfflineCreationDraftStore(secureStorage).clearForAccount('user-1');
+  test(
+    'draft completion cannot clear a replacement or an unowned draft',
+    () async {
+      final storage = _MockSecureStorage();
+      final values = <String, String>{};
+      when(
+        () => storage.write(
+          key: any(named: 'key'),
+          value: any(named: 'value'),
+        ),
+      ).thenAnswer((call) async {
+        values[call.namedArguments[#key] as String] =
+            call.namedArguments[#value] as String;
+      });
+      when(() => storage.read(key: any(named: 'key')))
+          .thenAnswer((call) async => values[call.namedArguments[#key]]);
+      when(() => storage.delete(key: any(named: 'key')))
+          .thenAnswer((call) async {
+            values.remove(call.namedArguments[#key]);
+          });
+      final first = OfflineCreationDraftStore(storage);
+      final reopened = OfflineCreationDraftStore(storage);
+      const key = 'asset_edit_user-1_asset';
+      final previous = await first.save(key, {'name': 'Original form'});
+      final replacement = await reopened.save(key, {
+        'name': 'New unfinished form',
+      });
+      expect(replacement, isNot(previous));
+      await first.clear(key, expectedGeneration: previous);
+      await first.clear(key, expectedGeneration: null);
+      expect((await reopened.load(key))?['name'], 'New unfinished form');
+      await reopened.clear(key, expectedGeneration: replacement);
+      expect(await first.load(key), isNull);
+      final recreated = await reopened.save(key, {
+        'name': 'New unfinished form',
+      });
+      expect(recreated, isNot(replacement));
+      await first.clear(key, expectedGeneration: replacement);
+      expect(
+        (await reopened.load(key))?[OfflineCreationDraftStore.generationKey],
+        recreated,
+      );
+    },
+  );
 
-    expect(stored.keys, {
-      'owntend_creation_draft_task_user-10_asset-c',
-      'unrelated',
-    });
-  });
+  test(
+    'draft replacement waits until compare-and-delete completes across stores',
+    () async {
+      final storage = _MockSecureStorage();
+      String? encoded;
+      final readStarted = Completer<void>();
+      final releaseRead = Completer<void>();
+      var holdRead = false;
+      when(
+        () => storage.write(
+          key: any(named: 'key'),
+          value: any(named: 'value'),
+        ),
+      ).thenAnswer((call) async {
+        encoded = call.namedArguments[#value] as String;
+      });
+      when(() => storage.read(key: any(named: 'key'))).thenAnswer((_) async {
+        final captured = encoded;
+        if (holdRead) {
+          holdRead = false;
+          readStarted.complete();
+          await releaseRead.future;
+        }
+        return captured;
+      });
+      when(() => storage.delete(key: any(named: 'key'))).thenAnswer((_) async {
+        encoded = null;
+      });
+      final first = OfflineCreationDraftStore(storage);
+      final second = OfflineCreationDraftStore(storage);
+      const key = 'task_edit_user-1_plan';
+      final generation = await first.save(key, {'title': 'Old'});
+      holdRead = true;
+      final clear = first.clear(key, expectedGeneration: generation);
+      await readStarted.future;
+      final replacement = second.save(key, {'title': 'New'});
+      releaseRead.complete();
+      await clear;
+      await replacement;
+      expect((await second.load(key))?['title'], 'New');
+    },
+  );
+
+  test(
+    'draft persistence failure is reported and does not block later saves',
+    () async {
+      final storage = _MockSecureStorage();
+      var fail = true;
+      when(
+        () => storage.write(
+          key: any(named: 'key'),
+          value: any(named: 'value'),
+        ),
+      ).thenAnswer((_) async {
+        if (fail) throw StateError('storage unavailable');
+      });
+      final store = OfflineCreationDraftStore(storage);
+      await expectLater(
+        store.save('asset_edit_user-1_asset', {'name': 'Form'}),
+        throwsStateError,
+      );
+      fail = false;
+      expect(
+        await store.save('asset_edit_user-1_asset', {'name': 'Form'}),
+        isNotEmpty,
+      );
+    },
+  );
 
   testWidgets('native slot owns visible spacing and removes it after no-fill', (
     tester,

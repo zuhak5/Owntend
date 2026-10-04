@@ -14,6 +14,7 @@ import {
   ReleaseCacheState,
   classifyReleaseCache,
 } from "./cache-policy.js";
+import { enhanceAbiDownloads } from "./abi-downloads.js";
 
 const MANIFEST_URL = "./releases.json";
 const CACHE_KEY = "versiondeck-release-manifest-v1";
@@ -57,6 +58,9 @@ let generation = 0;
 let toastTimer = null;
 let relativeTimer = null;
 let controllerReloaded = false;
+let currentManifest = null;
+let downloadsAuthorized = false;
+let leaseTimer = null;
 
 function announce(message) {
   ui.status.textContent = "";
@@ -155,6 +159,27 @@ function setDownloadsEnabled(enabled) {
   if (!enabled) {
     ui.sticky.hidden = true;
     document.body.classList.remove("has-sticky-download");
+  }
+}
+
+function refreshDownloadAuthority() {
+  clearTimeout(leaseTimer);
+  const authority = currentManifest && classifyVersionDeckManifest(currentManifest);
+  downloadsAuthorized = downloadsAuthorized && authority?.state === VersionDeckManifestState.ACTIVE;
+  setDownloadsEnabled(downloadsAuthorized);
+  if (downloadsAuthorized) {
+    leaseTimer = setTimeout(refreshDownloadAuthority, Math.max(1, authority.leaseExpiresAt - Date.now()));
+  } else if (authority?.state === VersionDeckManifestState.EXPIRED) {
+    showBanner("VersionDeck manifest trust has expired. Downloads stay disabled until a fresh manifest is published.");
+  }
+  return downloadsAuthorized;
+}
+
+function guardDownloadActivation(event) {
+  if (!event.target?.closest?.("[data-download-link]")) return;
+  if (!refreshDownloadAuthority()) {
+    event.preventDefault();
+    event.stopPropagation();
   }
 }
 
@@ -351,6 +376,7 @@ function renderArchive(releases, latestStableId) {
       return node;
     };
     const card = get(".release-card");
+    card.dataset.releaseId = String(release.id);
     const title = get(".release-title");
     const label = get(".release-label");
     const meta = get(".release-meta");
@@ -439,6 +465,9 @@ function renderArchive(releases, latestStableId) {
 }
 
 function resetUi() {
+  clearTimeout(leaseTimer);
+  currentManifest = null;
+  downloadsAuthorized = false;
   ui.latest.classList.remove("loading-card");
   ui.latest.setAttribute("aria-busy", "false");
   ui.latest.replaceChildren();
@@ -486,6 +515,7 @@ function renderManifest(manifest, source = { kind: "live" }) {
   }
 
   resetUi();
+  currentManifest = manifest;
   if (validation.state === VersionDeckManifestState.DISABLED) {
     renderDisabledLatest(manifest);
     renderArchive(manifest.releases, null);
@@ -503,6 +533,7 @@ function renderManifest(manifest, source = { kind: "live" }) {
     );
   }
   renderArchive(manifest.releases, manifest.latestStableReleaseId);
+  enhanceAbiDownloads(manifest);
 
   const expired =
     validation.state === VersionDeckManifestState.EXPIRED ||
@@ -512,7 +543,8 @@ function renderManifest(manifest, source = { kind: "live" }) {
   } else if (validation.state === VersionDeckManifestState.EXPIRED) {
     showBanner("VersionDeck manifest trust has expired. Downloads stay disabled until a fresh manifest is published.");
   }
-  setDownloadsEnabled(!expired);
+  downloadsAuthorized = !expired;
+  refreshDownloadAuthority();
   updateRelativeTimeElements();
   announce(expired
     ? "Release trust data expired. Downloads are disabled."
@@ -629,8 +661,15 @@ function startRelativeTicker() {
 }
 
 ui.refresh.addEventListener("click", () => loadReleases(true));
-document.addEventListener("visibilitychange", startRelativeTicker);
-window.addEventListener("pageshow", startRelativeTicker);
+function resumePage() {
+  refreshDownloadAuthority();
+  startRelativeTicker();
+}
+document.addEventListener("visibilitychange", resumePage);
+window.addEventListener("pageshow", resumePage);
+for (const eventName of ["click", "auxclick", "contextmenu"]) {
+  document.addEventListener(eventName, guardDownloadActivation, true);
+}
 
 window.addEventListener("beforeinstallprompt", (event) => {
   event.preventDefault();

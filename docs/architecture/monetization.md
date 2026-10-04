@@ -172,6 +172,17 @@ Free copies use `copy_asset`. The server reads an active source asset owned by t
 
 Task reparenting and asset-type changes are quote/commit operations. `move_maintenance_plan_with_point_delta` charges `max(0, destination_cost - paid_cost)`. `change_asset_type_with_point_delta` includes every attached plan, including archived plans, and charges the aggregate shortfall. Commits recompute under deterministic row locks, reject `charge_changed` or `insufficient_points` without writes, insert one `plan_economy_operations` row, and debit at most once. Direct authenticated updates of `maintenance_plans.asset_id` and `assets.asset_type` are not granted.
 
+Before committing either editor operation, the complete unfinished form is saved
+as an account-scoped secure draft. The application controller captures the local
+preimage, performs the RPC without a database lock, then adopts the canonical
+root and type-detail rows together with the remaining form edits in one local
+transaction. Its own feed update may arrive first without causing a false CAS
+conflict. A different local edit, newer remote revision, account change, or
+changed occurrence still blocks the save. Route disposal does not cancel this
+captured continuation. A failed local save keeps the draft for reopening; only
+a successful save clears it. Type-change execution and replay both return the
+canonical detail rows, including server-assigned revisions and timestamps.
+
 A wallet below the required charge during task creation is an expected business outcome, not a transport failure. Task creation returns HTTP success with `status: insufficient_points`, the authoritative balance, a zero charge, and no entity, operation, wallet, or ledger mutation. The Flutter repository maps that structured payload to a typed shortage. Task creation persists the attempt as permanently rejected instead of outcome-unknown, and the task editor keeps a modal recovery surface visible until the user chooses to keep editing or earn points. Reward loading, no-fill, dismissal, rejection, and server-verification-pending states are shown inline so an unavailable ad never leaves the user waiting without an explanation.
 
 When the server cannot confirm a charged operation, the client must not present it as completed or enqueue a blind wallet mutation. User input may be preserved only as an explicitly unfinished draft in a workflow that supports it. Every creation operation uses a durable pre-RPC journal write (`TaskCreationOperationStore` / `ChargedOperationJournal`) before invoking backend RPCs. If durable write to secure storage fails, the RPC is not executed. New charged-creation payloads include a client-generated SHA-256 `request_hash`; the same value is retained in the durable journal. The backend keeps this client recovery identity separately as `creation_point_operations.client_request_hash`, while the existing `request_hash` remains the server-computed digest of canonical JSONB used to reject altered create-RPC replays.
@@ -233,3 +244,11 @@ Rewarded-ad device callbacks remain `shownAwaitingServerVerification`. SSV
 settlement changes `point_wallets` on the server; Realtime plus canonical
 refetch/resume/reconnect convergence updates the same wallet owner. No device
 callback fabricates a credit.
+
+Each saved draft has an opaque generation. Editor completion clears only the
+generation captured by that form operation, preserving a newer draft from a
+reopened editor. Saves, reads and conditional cleanup are serialized across
+draft-store instances so a write cannot interleave with compare-and-delete.
+Persistence failure propagates before an operation can depend on that draft.
+
+Account deletion removes secure creation/edit drafts using the exact key families emitted by the asset and task editors, including asset copies. Cleanup is bounded to the target account delimiter; drafts for other accounts and local mode remain intact. Secure-storage deletion failures propagate so deletion cannot report local cleanup complete while those drafts remain.

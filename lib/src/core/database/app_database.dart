@@ -590,6 +590,11 @@ class NotificationReconciliationRequests extends Table {
   String get tableName => 'notification_reconciliation_requests';
 
   TextColumn get scopeKey => text()();
+  TextColumn get requestVersion => text()
+      .withDefault(
+        const CustomExpression<String>('(lower(hex(randomblob(16))))'),
+      )
+      .check(const CustomExpression<bool>('length(request_version) = 32'))();
   TextColumn get planId => text().nullable()();
   TextColumn get reason => text().check(
     const CustomExpression<bool>('length(reason) BETWEEN 1 AND 80'),
@@ -837,7 +842,7 @@ class AppDatabase extends _$AppDatabase {
 
   static const databaseName = 'owntend';
   static const databaseFileName = '$databaseName.sqlite';
-  static const currentSchemaVersion = 1;
+  static const currentSchemaVersion = 2;
   static const _sqliteBusyTimeoutMs = 8000;
   static const _startupRecoveryAttempts = 5;
   static const _searchIndexSourceTables = <String>[
@@ -908,26 +913,41 @@ class AppDatabase extends _$AppDatabase {
       await _createSearchIndex();
       await _createSearchIndexGenerationInfrastructure();
       await _createSyncTriggers();
+      await _createNotificationReconciliationVersionTrigger();
     },
     onUpgrade: (m, from, to) async {
-      // Tables are managed incrementally across schema versions.
-      // Do not invoke m.createAll() as tables already exist from baseline.
-      await _createIndexes();
-      await _createSearchIndex();
-      await _createSearchIndexGenerationInfrastructure();
-      await _createSyncTriggers();
+      // Pre-launch schemas are not supported user-data formats. Reject them
+      // before any mutation instead of silently opening an incompatible shape.
+      throw StateError(
+        'Local database does not match the canonical v$currentSchemaVersion '
+        'schema baseline (found schema $from). Pre-launch databases have no '
+        'upgrade path; clear app storage to recreate the database.',
+      );
     },
     beforeOpen: (details) async {
       await customStatement('PRAGMA busy_timeout = $_sqliteBusyTimeoutMs');
       await customStatement('PRAGMA foreign_keys = ON');
       // Runtime verification only: a database that does not match the
-      // canonical v1 baseline is rejected instead of being silently repaired.
+      // canonical baseline is rejected instead of being silently repaired.
       await _verifyBaselineObjects();
       await _seedSyncRuntime();
       await _recoverExpiredSyncRuntimeLease();
       await _seedDefaults();
     },
   );
+
+  Future<void> _createNotificationReconciliationVersionTrigger() {
+    return customStatement('''
+CREATE TRIGGER notification_reconciliation_version_update
+AFTER UPDATE ON notification_reconciliation_requests
+WHEN NEW.request_version = OLD.request_version
+BEGIN
+  UPDATE notification_reconciliation_requests
+  SET request_version = lower(hex(randomblob(16)))
+  WHERE scope_key = NEW.scope_key;
+END;
+''');
+  }
 
   static const _baselineTables = <String>[
     'areas',
@@ -986,6 +1006,11 @@ class AppDatabase extends _$AppDatabase {
     if (!present.contains('table:search_index')) {
       missing.add('virtual table search_index');
     }
+    if (!present.contains(
+      'trigger:notification_reconciliation_version_update',
+    )) {
+      missing.add('trigger notification_reconciliation_version_update');
+    }
     final triggerRows = rows
         .where((row) => row.read<String>('type') == 'trigger')
         .length;
@@ -1001,7 +1026,7 @@ class AppDatabase extends _$AppDatabase {
     }
     if (missing.isNotEmpty) {
       throw StateError(
-        'Local database does not match the canonical v1 schema baseline '
+        'Local database does not match the canonical v$currentSchemaVersion schema baseline '
         '(missing: ${missing.join(', ')}). Pre-launch databases have no '
         'upgrade path; clear app storage to recreate the database.',
       );

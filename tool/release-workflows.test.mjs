@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import test from 'node:test';
+import { parse } from 'yaml';
 
 import {
   validateActionSource,
@@ -12,6 +16,79 @@ const read = async (path) =>
     '\r\n',
     '\n',
   );
+
+test('Shorebird validation stops at each failing native command', async (t) => {
+  const probe = spawnSync('pwsh', ['-NoProfile', '-Command', '$PSVersionTable.PSVersion.ToString()'], { encoding: 'utf8' });
+  if (probe.error?.code === 'ENOENT') {
+    t.skip('PowerShell is required to execute the actual workflow validation blocks');
+    return;
+  }
+  assert.equal(probe.status, 0, probe.stderr);
+  const fixture = await fs.mkdtemp(path.join(os.tmpdir(), 'owntend-release-gate-'));
+  const bin = path.join(fixture, 'bin');
+  await fs.mkdir(bin);
+  await fs.mkdir(path.join(fixture, 'tool'));
+  try {
+    const recorder = path.join(fixture, 'command.cjs');
+    const log = path.join(fixture, 'commands.jsonl');
+    await fs.writeFile(recorder, `
+      const fs = require('node:fs');
+      const command = process.argv.slice(2).join(' ');
+      fs.appendFileSync(process.env.OWNTEND_GATE_LOG, JSON.stringify(command) + '\\n');
+      process.exit(command === process.env.OWNTEND_GATE_FAIL ? 7 : 0);
+    `);
+    for (const command of ['flutter', 'dart', 'npm', 'git', 'node']) {
+      const isWindows = process.platform === 'win32';
+      const destination = path.join(bin, command + (isWindows ? '.cmd' : ''));
+      const quote = (value) => `'${value.replaceAll("'", "'\\''")}'`;
+      const body = isWindows
+        ? `@echo off\r\n"${process.execPath}" "${recorder}" ${command} %*\r\nexit /b %errorlevel%\r\n`
+        : `#!/bin/sh\nexec ${quote(process.execPath)} ${quote(recorder)} ${command} "$@"\n`;
+      await fs.writeFile(destination, body, { mode: 0o755 });
+    }
+    for (const script of ['verify_android_release_registrants.ps1', 'install_shorebird.ps1']) {
+      await fs.writeFile(path.join(fixture, 'tool', script), '# Harmless fixture: no installation or repository mutation.\n');
+    }
+    for (const workflowPath of [
+      '.github/workflows/shorebird-release-android.yml',
+      '.github/workflows/shorebird-patch-android.yml',
+    ]) {
+      const workflow = parse(await read(workflowPath));
+      const step = Object.values(workflow.jobs).flatMap((job) => job.steps)
+        .find((entry) => entry.name === 'Install exact Shorebird CLI and validate dependencies');
+      assert.equal(step.shell, 'pwsh');
+      // Execute the real validation block. Only the flavor expression is resolved;
+      // PATH and task-owned script stubs prevent any real validation/publication.
+      const script = `$ErrorActionPreference = 'Stop'\n$PSNativeCommandUseErrorActionPreference = $false\n${step.run.replaceAll('${{ inputs.flavor }}', 'prod')}\nWrite-Output 'GATE_COMPLETED'\nif (Test-Path variable:\\LASTEXITCODE) { exit $LASTEXITCODE }\n`;
+      const scriptFile = path.join(fixture, 'gate.ps1');
+      await fs.writeFile(scriptFile, script);
+      const invoke = (failure) => spawnSync('pwsh', ['-NoProfile', '-File', scriptFile], {
+        cwd: fixture,
+        encoding: 'utf8',
+        env: { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH}`, OWNTEND_GATE_LOG: log, OWNTEND_GATE_FAIL: failure },
+      });
+      await fs.writeFile(log, '');
+      const success = invoke('');
+      assert.equal(success.status, 0, `${workflowPath}: ${success.stderr}`);
+      assert.match(success.stdout, /GATE_COMPLETED/);
+      const commands = (await fs.readFile(log, 'utf8')).trim().split('\n').map(JSON.parse);
+      assert.ok(commands.includes('flutter analyze --no-pub'));
+      assert.ok(commands.some((command) => command.includes('prod_build_config_test.dart')));
+      for (const [index, command] of commands.entries()) {
+        await fs.writeFile(log, '');
+        const failed = invoke(command);
+        assert.notEqual(failed.status, 0, `${workflowPath} continued after ${command}`);
+        assert.doesNotMatch(failed.stdout, /GATE_COMPLETED/, `${workflowPath}: ${command}`);
+        const observed = (await fs.readFile(log, 'utf8')).trim().split('\n').map(JSON.parse);
+        assert.deepEqual(observed, commands.slice(0, index + 1), `${workflowPath} ran commands after ${command}`);
+      }
+    }
+  } finally {
+    assert.equal(path.dirname(path.resolve(fixture)), path.resolve(os.tmpdir()));
+    assert.match(path.basename(fixture), /^owntend-release-gate-/);
+    await fs.rm(fixture, { recursive: true, force: true });
+  }
+});
 
 test('GitHub Actions use only reviewed immutable references', async () => {
   const result = await validateRepositoryActionReferences();

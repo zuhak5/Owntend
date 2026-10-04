@@ -101,6 +101,10 @@ Media can exist locally, in backup archives, and in private Supabase Storage. Me
 
 `asset_photos.relative_path` points only to repository-controlled local content. New imports are actual-content decoded, orientation-baked, dimension bounded, and normalized to JPEG before the row is inserted. A source extension or picker MIME hint is not authoritative. A decode, resource-budget, encoded-size, or filesystem failure leaves no photo row, while a later database failure removes the newly written file.
 
+The [photo import service](../../lib/src/core/services/photo_import_service.dart) and its [bounded preflight parser](../../lib/src/core/services/photo_import_preflight.dart) accept JPEG, PNG, GIF, BMP, and static WebP. Header dimensions, palettes, container record counts, EXIF traversal, and PNG image/profile inflation are checked before the corresponding decoder allocation. GIF and PNG contribute only their first frame; TIFF, EXR, ICO, and animated WebP are unsupported. Excessive or malformed metadata is rejected using the existing invalid-image failure.
+
+ICC payloads retained from JPEG, PNG, and static WebP must fit one normalized JPEG APP2 segment. Complete JPEG profiles split across APP2 chunks are reassembled by declared sequence, and normalized output includes the required sequence/count bytes. The raw profile budget excludes those framing bytes; incomplete, duplicate, inconsistent, or oversized profiles are rejected rather than silently truncated. Retained EXIF is also checked against the encoder's APP1 size limit. This boundary preserves supported bounded metadata; it does not add support for metadata the selected codecs do not expose. Normalized bytes are then used by local asset storage, media synchronization, and subsequent backups.
+
 ## Schema-change procedure
 
 For every new or changed field:
@@ -118,9 +122,9 @@ For every new or changed field:
 9. Update deletion and privacy inventories.
 10. Add focused repository, backend, synchronization, and UI tests.
 
-The current Drift schema version is `1`. It directly contains the canonical domain, FTS generation/invalidation, sync/outbox/shadow/checkpoint, notification-reconciliation, and durable local-media-cleanup structures. There is no unpublished upgrade ladder, Category table, duplicate device-notification table, or compatibility field in the current baseline.
+The current Drift schema version is defined by `AppDatabase.currentSchemaVersion` in [`app_database.dart`](../../lib/src/core/database/app_database.dart). It directly contains the canonical domain, FTS generation/invalidation, sync/outbox/shadow/checkpoint, notification-reconciliation, and durable local-media-cleanup structures. There is no unpublished upgrade ladder, Category table, duplicate device-notification table, or compatibility field in the current baseline.
 
-All static schema objects — tables, CHECK constraints, indexes, the FTS cache, and every sync/search trigger — are installed by one canonical creation path when a fresh database is created. `beforeOpen` performs only connection pragmas, baseline verification (a database that does not match the canonical v1 object inventory fails closed with an explicit error instead of being silently repaired), runtime lease recovery, and deliberate default seeding.
+All static schema objects — tables, CHECK constraints, indexes, the FTS cache, and every sync/search/reconciliation trigger — are installed by one canonical creation path when a fresh database is created. `beforeOpen` performs only connection pragmas, baseline verification (a database that does not match the canonical object inventory fails closed with an explicit error instead of being silently repaired), runtime lease recovery, and deliberate default seeding.
 
 Structural invariants enforced by the schema itself include:
 
@@ -135,6 +139,10 @@ Structural invariants enforced by the schema itself include:
 - Outbox operation/state/attempt/generation domains (`upsert`/`delete` trigger operations plus the durable `execute` completion journal; states `pending`, `inFlight`, `conflictRecovery`, `failedVisible`, `conflict`; attempts use `-1` as the terminal sentinel; generations start at 1).
 - Cursor sequence/generation domains and singleton runtime/account rows with all-or-nothing lease pairing.
 - Conflict resolution and notification-reconciliation reason domains.
+- Reminder reconciliation uses an opaque, database-generated `request_version`
+  that changes on every update. Acknowledgement and failure bookkeeping compare
+  that version, so same-second writes, row recreation, and independent consumers
+  cannot erase or delay newer work. Wall timestamps remain diagnostic/order data.
 - Retry-ready composite indexes for outbox dequeue, sync/local media cleanup, and reminder reconciliation; query plans are asserted by test.
 
 Repository mutations that originate in editors compare the row's expected
@@ -145,16 +153,18 @@ choosing its deterministic replacement commit together.
 
 ### Upgrade story and timestamp convention (WP-008, F-008)
 
-The current schema-1 baseline is the launch contract. `beforeOpen` deliberately rejects any
+The current baseline is the launch contract. `beforeOpen` deliberately rejects any
 database that does not match the canonical object inventory
 (`StateError` naming the missing objects plus "clear app storage" guidance);
 the startup bootstrap surfaces this as a localized, unrecoverable-database
 screen (`OwntendStartupFailure(databaseUnrecoverable: true)`).
 
-- **Through launch:** no `onUpgrade` ladder exists. Any schema change is made
-  directly in the schema-1 baseline (`schemaVersion` stays `1`) because zero devices
-  carry an older file. `test/database_baseline_rejection_test.dart` pins the
-  rejection contract.
+- **Through launch:** no `onUpgrade` ladder exists. Schema changes update the
+  canonical creation path and increment `currentSchemaVersion`, so an older
+  pre-launch file cannot be mistaken for the new shape. `onUpgrade` rejects an
+  older version before changing its data; incompatible files are not silently
+  repaired or deleted. `test/database_baseline_rejection_test.dart` pins both
+  prior-version rejection with data preservation and missing-object rejection.
 - **First post-launch schema change (trigger):** bump `currentSchemaVersion`,
   add an `onUpgrade` step from the previously shipped version, extend
   `test/database_schema_test.dart` with from-fixture coverage for every shipped

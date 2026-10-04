@@ -165,6 +165,56 @@ void main() {
     coordinator.resetForTesting();
   });
 
+  testWidgets('batch after route disposal starts a fresh Undo deadline', (
+    tester,
+  ) async {
+    final context = await pumpHarness(tester);
+    late BuildContext sourceContext;
+    var finalized = 0;
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => Scaffold(
+          body: Builder(
+            builder: (value) {
+              sourceContext = value;
+              return const Text('Temporary route');
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    coordinator.show(
+      sourceContext,
+      undoItem(
+        id: 'first-route',
+        label: 'First item',
+        undo: () async {},
+        finalize: () async => finalized++,
+      ),
+    );
+    await tester.pumpAndSettle();
+    Navigator.of(sourceContext).pop();
+    await tester.pumpAndSettle();
+    expect(sourceContext.mounted, isFalse);
+    await tester.pump(const Duration(seconds: 3));
+    coordinator.show(
+      context,
+      undoItem(
+        id: 'second-route',
+        label: 'Second item',
+        undo: () async {},
+        finalize: () async => finalized++,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
+    expect(coordinator.activeItem?.batchCount, 2);
+    expect(finalized, 0);
+    await coordinator.handleAction();
+  });
+
   testWidgets('accessible Undo remains until explicit action', (tester) async {
     final context = await pumpHarness(tester, accessibleNavigation: true);
     var finalized = 0;

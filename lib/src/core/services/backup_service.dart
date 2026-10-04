@@ -118,6 +118,7 @@ class OwntendBackupService
     this.onBeforeRestoreBarrier,
     RestoreFailpoints? failpoints,
     this.onRestoreCommit,
+    this.onRestoreRollback,
   }) : journalStore = journalStore ?? RestoreJournalStore(),
        sidecarRegistry = sidecarRegistry ?? SidecarRegistryStore(),
        failpoints = failpoints ?? RestoreFailpoints();
@@ -134,6 +135,10 @@ class OwntendBackupService
   /// and fully activated. Every restore path through this service therefore
   /// rebuilds dependent streams, not just the backup screen.
   final void Function()? onRestoreCommit;
+
+  /// Releases suspended services only after an unchanged database and rolled
+  /// back media are proven and the recovery journal has been cleared.
+  final void Function()? onRestoreRollback;
 
   static bool _operationInProgress = false;
 
@@ -392,6 +397,7 @@ class OwntendBackupService
       } catch (_) {
         await rollbackStagedMediaGenerations(appDir: appDir, token: mediaToken);
         await journalStore.clearActiveEntry();
+        onRestoreRollback?.call();
         rethrow;
       }
       failpoints.maybeThrow('db:importCommit:returned');
@@ -521,6 +527,7 @@ class OwntendBackupService
       );
 
       final databaseBytesCount = await snapshot.length();
+      _validateContainerLength(databaseBytesCount);
       final databaseHash = (await sha256.bind(snapshot.openRead()).first)
           .toString();
       final manifestFiles = <Map<String, Object>>[];
@@ -530,7 +537,7 @@ class OwntendBackupService
         'sha256': databaseHash,
       });
 
-      final userFiles = await _collectUserFiles(appDir);
+      final userFiles = await _collectUserFiles(appDir, databaseBytesCount);
       for (final entry in userFiles) {
         manifestFiles.add({
           'path': entry.path,
@@ -565,6 +572,9 @@ class OwntendBackupService
         'warnings': databaseSummary.warnings,
         'secretsIncluded': false,
       };
+      final manifestBytes = utf8.encode(_prettyJson(manifest));
+      final validatedManifest = _parseManifest(manifestBytes);
+      final entries = _validatedManifestEntries(validatedManifest);
 
       final filename =
           '${_filePrefix(trigger)}-${_timestampForFile(createdAt)}-'
@@ -588,20 +598,36 @@ class OwntendBackupService
               trigger == BackupTrigger.automatic ||
               trigger == BackupTrigger.preRestore,
         );
-        await writer.writeFrame(utf8.encode(_prettyJson(manifest)));
-        await writer.writeStream(snapshot.openRead());
-        for (final entry in userFiles) {
-          await writer.writeStream(entry.file.openRead());
+        try {
+          final payloadFrames = entries.fold<int>(
+            0,
+            (total, entry) =>
+                total +
+                (entry.bytes + writer.header.chunkSize - 1) ~/
+                    writer.header.chunkSize,
+          );
+          _validateContainerLength(
+            BackupContainerCodec.headerLength +
+                manifestBytes.length +
+                payloadBytes +
+                (payloadFrames + 1) * (4 + BackupContainerCodec.tagLength),
+          );
+          await writer.writeFrame(manifestBytes);
+          await writer.writeStream(snapshot.openRead());
+          for (final entry in userFiles) {
+            await writer.writeStream(entry.file.openRead());
+          }
+        } finally {
+          writer.destroyKey();
         }
-        writer.destroyKey();
         await random.flush();
       } finally {
         await random.close();
       }
 
       // Self-verification before the atomic rename: one authenticated
-      // read-back pass whose decrypted payload length must equal the declared
-      // total. The container is only published after this passes.
+      // read-back pass through the same manifest, size, framing and hash
+      // checks used by restore. Publish only after every entry passes.
       await _verifyContainerSelf(partialBackup, effectiveSecret);
 
       final completed = await partialBackup.rename(backup.path);
@@ -652,9 +678,10 @@ class OwntendBackupService
   }
 
   /// Authenticated read-back of a freshly written container. A single pass
-  /// verifies every frame MAC, parses the manifest frame, and checks the
-  /// decrypted payload length against the declared total.
+  /// verifies every frame MAC and the reader's complete payload contract
+  /// without writing a second copy of the payload into temporary storage.
   Future<void> _verifyContainerSelf(File file, String secret) async {
+    _validateContainerLength(await file.length());
     final handle = await file.open(mode: FileMode.read);
     try {
       final reader = await BackupContainerReader.open(
@@ -662,36 +689,9 @@ class OwntendBackupService
         passphrase: secret,
       );
       try {
-        Map<String, dynamic>? manifest;
-        var verifiedBytes = 0;
-        var frameIndex = 0;
-        while (true) {
-          final frame = await reader.readFrame(handle);
-          if (frame == null) break;
-          if (frameIndex == 0) {
-            try {
-              manifest = jsonDecode(utf8.decode(frame)) as Map<String, dynamic>;
-            } on Object {
-              throw const BackupException(
-                'Backup container failed self-verification: manifest unreadable.',
-              );
-            }
-          } else {
-            verifiedBytes += frame.length;
-          }
-          frameIndex++;
-        }
-        if (manifest == null) {
-          throw const BackupException(
-            'Backup container failed self-verification: manifest missing.',
-          );
-        }
-        final declared = _readInt(manifest, 'payloadBytes', fallback: -1);
-        if (declared < 0 || declared != verifiedBytes) {
-          throw const BackupException(
-            'Backup container failed self-verification. The backup was not saved.',
-          );
-        }
+        final manifest = _parseManifest(await reader.readFrame(handle));
+        final entries = _validatedManifestEntries(manifest);
+        await _validateContainerPayload(handle, reader, manifest, entries);
       } finally {
         reader.destroyKey();
       }
@@ -705,8 +705,12 @@ class OwntendBackupService
     }
   }
 
-  Future<List<_DiskBackupEntry>> _collectUserFiles(Directory appDir) async {
+  Future<List<_DiskBackupEntry>> _collectUserFiles(
+    Directory appDir,
+    int databaseBytes,
+  ) async {
     final entries = <_DiskBackupEntry>[];
+    var payloadBytes = databaseBytes;
     for (final root in _mediaRoots) {
       final dir = Directory(p.join(appDir.path, root));
       if (!await dir.exists()) {
@@ -726,6 +730,8 @@ class OwntendBackupService
           continue;
         }
         final size = await entity.length();
+        payloadBytes += size;
+        _validateContainerLength(payloadBytes);
         final hash = (await sha256.bind(entity.openRead()).first).toString();
         entries.add(
           _DiskBackupEntry(
@@ -753,16 +759,7 @@ class OwntendBackupService
       );
     }
     final containerLength = await containerFile.length();
-    if (containerLength == 0) {
-      throw const BackupException(
-        'Backup file is empty. Choose a complete Owntend backup.',
-      );
-    }
-    if (containerLength > _maxBackupBytes) {
-      throw const BackupException(
-        'Backup file is too large to restore safely. Choose a smaller Owntend backup.',
-      );
-    }
+    _validateContainerLength(containerLength);
 
     final handle = await containerFile.open(mode: FileMode.read);
     BackupContainerReader? reader;
@@ -806,33 +803,12 @@ class OwntendBackupService
       }
       reader = opened;
 
-      final manifestFrame = await reader.readFrame(handle);
-      if (manifestFrame == null || manifestFrame.length > _maxManifestBytes) {
-        throw const BackupException(
-          'Backup manifest is missing or too large. This does not look like a valid Owntend backup.',
-        );
-      }
-      final manifest = _parseManifest(manifestFrame);
-
-      final formatVersion = _readInt(manifest, 'format', fallback: 0);
-      final appName = manifest['app'];
-      if (appName != 'Owntend' || formatVersion != _currentFormatVersion) {
-        throw const BackupException(
-          'Backup format is not recognized. Choose an Owntend backup file.',
-        );
-      }
-
+      final manifest = _parseManifest(await reader.readFrame(handle));
       final manifestSchemaVersion = _readInt(
         manifest,
         'schemaVersion',
         fallback: 0,
       );
-      if (manifestSchemaVersion > db.schemaVersion) {
-        throw const BackupException(
-          'Backup was created by a newer database schema. Update Owntend before restoring this file.',
-        );
-      }
-
       final entries = _validatedManifestEntries(manifest);
 
       final tempDir = Directory(
@@ -865,12 +841,12 @@ class OwntendBackupService
 
       await tempDir.create(recursive: true);
       try {
-        await _extractContainerPayload(
+        await _validateContainerPayload(
           handle,
           reader,
           manifest,
           entries,
-          tempDir,
+          tempDir: tempDir,
         );
 
         final extractedDb = File(
@@ -937,14 +913,45 @@ class OwntendBackupService
     }
   }
 
-  Map<String, dynamic> _parseManifest(List<int> frame) {
+  void _validateContainerLength(int length) {
+    if (length == 0) {
+      throw const BackupException(
+        'Backup file is empty. Choose a complete Owntend backup.',
+      );
+    }
+    if (length > _maxBackupBytes) {
+      throw const BackupException(
+        'Backup file is too large to restore safely. Choose a smaller Owntend backup.',
+      );
+    }
+  }
+
+  Map<String, dynamic> _parseManifest(List<int>? frame) {
+    if (frame == null || frame.length > _maxManifestBytes) {
+      throw const BackupException(
+        'Backup manifest is missing or too large. This does not look like a valid Owntend backup.',
+      );
+    }
+    final Map<String, dynamic> manifest;
     try {
-      return jsonDecode(utf8.decode(frame)) as Map<String, dynamic>;
+      manifest = jsonDecode(utf8.decode(frame)) as Map<String, dynamic>;
     } catch (_) {
       throw const BackupException(
         'Backup manifest is corrupted or the passphrase is wrong. Try again.',
       );
     }
+    if (manifest['app'] != 'Owntend' ||
+        _readInt(manifest, 'format', fallback: 0) != _currentFormatVersion) {
+      throw const BackupException(
+        'Backup format is not recognized. Choose an Owntend backup file.',
+      );
+    }
+    if (_readInt(manifest, 'schemaVersion', fallback: 0) > db.schemaVersion) {
+      throw const BackupException(
+        'Backup was created by a newer database schema. Update Owntend before restoring this file.',
+      );
+    }
+    return manifest;
   }
 
   List<_ManifestEntry> _validatedManifestEntries(
@@ -981,10 +988,12 @@ class OwntendBackupService
           'Backup contains duplicate files. Choose a clean backup file.',
         );
       }
-      if (sizeValue is! num || shaValue is! String || shaValue.length != 64) {
+      if (sizeValue is! int ||
+          shaValue is! String ||
+          !RegExp(r'^[0-9a-f]{64}$').hasMatch(shaValue)) {
         throw const BackupException('Backup manifest file list is corrupted.');
       }
-      final size = sizeValue.toInt();
+      final size = sizeValue;
       if (size < 0 || size > _maxSingleEntryBytes) {
         throw const BackupException(
           'Backup contains an entry that is too large to restore safely.',
@@ -1008,29 +1017,39 @@ class OwntendBackupService
         'Backup is missing its manifest or Owntend database. Choose a complete backup.',
       );
     }
+    if (manifest['payloadBytes'] is! int || manifest['payloadBytes'] != total) {
+      throw const BackupException(
+        'Backup payload length does not match its manifest. Restore was blocked.',
+      );
+    }
     return entries;
   }
 
-  /// Streams the authenticated payload into staging files following the
+  /// Validates the authenticated payload, optionally writing staging files,
   /// manifest exactly: entry boundaries come from declared sizes, hashes are
   /// verified incrementally, and every byte written is counted against the
   /// hard total before touching disk beyond the staging directory.
-  Future<void> _extractContainerPayload(
+  Future<void> _validateContainerPayload(
     RandomAccessFile handle,
     BackupContainerReader reader,
     Map<String, dynamic> manifest,
-    List<_ManifestEntry> entries,
-    Directory tempDir,
-  ) async {
+    List<_ManifestEntry> entries, {
+    Directory? tempDir,
+  }) async {
     final declaredTotal = _readInt(manifest, 'payloadBytes', fallback: -1);
     var carried = BytesBuilder(copy: true);
     var carriedLength = 0;
     var totalWritten = 0;
 
     for (final entry in entries) {
-      final target = File(p.joinAll([tempDir.path, ...entry.path.split('/')]));
-      await target.parent.create(recursive: true);
-      final sink = target.openWrite();
+      IOSink? sink;
+      if (tempDir != null) {
+        final target = File(
+          p.joinAll([tempDir.path, ...entry.path.split('/')]),
+        );
+        await target.parent.create(recursive: true);
+        sink = target.openWrite();
+      }
       final digestOutput = _DigestSink();
       final digest = sha256.startChunkedConversion(digestOutput);
       var entryWritten = 0;
@@ -1041,7 +1060,7 @@ class OwntendBackupService
             final chunk = carried.takeBytes();
             final part = chunk.sublist(0, take);
             final rest = chunk.sublist(take);
-            sink.add(part);
+            sink?.add(part);
             digest.add(part);
             entryWritten += take;
             totalWritten += take;
@@ -1059,8 +1078,8 @@ class OwntendBackupService
           carriedLength += frame.length;
         }
       } finally {
-        await sink.flush();
-        await sink.close();
+        await sink?.flush();
+        await sink?.close();
         digest.close();
       }
       if (entryWritten != entry.bytes) {
@@ -1068,7 +1087,6 @@ class OwntendBackupService
           'Backup entry actual size does not match declared size in archive.',
         );
       }
-      digest.close();
       final actualHash = digestOutput.results;
       if (actualHash.toString() != entry.sha256) {
         throw const BackupException(
@@ -1083,6 +1101,11 @@ class OwntendBackupService
     }
 
     // Trailing frames beyond the declared payload are a tamper signal.
+    if (carriedLength > 0) {
+      throw const BackupException(
+        'Backup contains unexpected trailing data. Restore was blocked.',
+      );
+    }
     while (true) {
       final frame = await reader.readFrame(handle);
       if (frame == null) break;

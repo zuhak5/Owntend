@@ -12973,6 +12973,21 @@ class $NotificationReconciliationRequestsTable
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _requestVersionMeta = const VerificationMeta(
+    'requestVersion',
+  );
+  @override
+  late final GeneratedColumn<String> requestVersion = GeneratedColumn<String>(
+    'request_version',
+    aliasedName,
+    false,
+    check: () => const CustomExpression<bool>('length(request_version) = 32'),
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const CustomExpression<String>(
+      '(lower(hex(randomblob(16))))',
+    ),
+  );
   static const VerificationMeta _planIdMeta = const VerificationMeta('planId');
   @override
   late final GeneratedColumn<String> planId = GeneratedColumn<String>(
@@ -13081,6 +13096,7 @@ class $NotificationReconciliationRequestsTable
   @override
   List<GeneratedColumn> get $columns => [
     scopeKey,
+    requestVersion,
     planId,
     reason,
     createdAt,
@@ -13110,6 +13126,15 @@ class $NotificationReconciliationRequestsTable
       );
     } else if (isInserting) {
       context.missing(_scopeKeyMeta);
+    }
+    if (data.containsKey('request_version')) {
+      context.handle(
+        _requestVersionMeta,
+        requestVersion.isAcceptableOrUnknown(
+          data['request_version']!,
+          _requestVersionMeta,
+        ),
+      );
     }
     if (data.containsKey('plan_id')) {
       context.handle(
@@ -13195,6 +13220,10 @@ class $NotificationReconciliationRequestsTable
         DriftSqlType.string,
         data['${effectivePrefix}scope_key'],
       )!,
+      requestVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}request_version'],
+      )!,
       planId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}plan_id'],
@@ -13243,6 +13272,7 @@ class $NotificationReconciliationRequestsTable
 class NotificationReconciliationRequestRow extends DataClass
     implements Insertable<NotificationReconciliationRequestRow> {
   final String scopeKey;
+  final String requestVersion;
   final String? planId;
   final String reason;
   final DateTime createdAt;
@@ -13254,6 +13284,7 @@ class NotificationReconciliationRequestRow extends DataClass
   final bool requiresFullRebuild;
   const NotificationReconciliationRequestRow({
     required this.scopeKey,
+    required this.requestVersion,
     this.planId,
     required this.reason,
     required this.createdAt,
@@ -13268,6 +13299,7 @@ class NotificationReconciliationRequestRow extends DataClass
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['scope_key'] = Variable<String>(scopeKey);
+    map['request_version'] = Variable<String>(requestVersion);
     if (!nullToAbsent || planId != null) {
       map['plan_id'] = Variable<String>(planId);
     }
@@ -13291,6 +13323,7 @@ class NotificationReconciliationRequestRow extends DataClass
   NotificationReconciliationRequestsCompanion toCompanion(bool nullToAbsent) {
     return NotificationReconciliationRequestsCompanion(
       scopeKey: Value(scopeKey),
+      requestVersion: Value(requestVersion),
       planId: planId == null && nullToAbsent
           ? const Value.absent()
           : Value(planId),
@@ -13318,6 +13351,7 @@ class NotificationReconciliationRequestRow extends DataClass
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return NotificationReconciliationRequestRow(
       scopeKey: serializer.fromJson<String>(json['scopeKey']),
+      requestVersion: serializer.fromJson<String>(json['requestVersion']),
       planId: serializer.fromJson<String?>(json['planId']),
       reason: serializer.fromJson<String>(json['reason']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
@@ -13336,6 +13370,7 @@ class NotificationReconciliationRequestRow extends DataClass
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'scopeKey': serializer.toJson<String>(scopeKey),
+      'requestVersion': serializer.toJson<String>(requestVersion),
       'planId': serializer.toJson<String?>(planId),
       'reason': serializer.toJson<String>(reason),
       'createdAt': serializer.toJson<DateTime>(createdAt),
@@ -13350,6 +13385,7 @@ class NotificationReconciliationRequestRow extends DataClass
 
   NotificationReconciliationRequestRow copyWith({
     String? scopeKey,
+    String? requestVersion,
     Value<String?> planId = const Value.absent(),
     String? reason,
     DateTime? createdAt,
@@ -13361,6 +13397,7 @@ class NotificationReconciliationRequestRow extends DataClass
     bool? requiresFullRebuild,
   }) => NotificationReconciliationRequestRow(
     scopeKey: scopeKey ?? this.scopeKey,
+    requestVersion: requestVersion ?? this.requestVersion,
     planId: planId.present ? planId.value : this.planId,
     reason: reason ?? this.reason,
     createdAt: createdAt ?? this.createdAt,
@@ -13382,6 +13419,9 @@ class NotificationReconciliationRequestRow extends DataClass
   ) {
     return NotificationReconciliationRequestRow(
       scopeKey: data.scopeKey.present ? data.scopeKey.value : this.scopeKey,
+      requestVersion: data.requestVersion.present
+          ? data.requestVersion.value
+          : this.requestVersion,
       planId: data.planId.present ? data.planId.value : this.planId,
       reason: data.reason.present ? data.reason.value : this.reason,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
@@ -13406,6 +13446,7 @@ class NotificationReconciliationRequestRow extends DataClass
   String toString() {
     return (StringBuffer('NotificationReconciliationRequestRow(')
           ..write('scopeKey: $scopeKey, ')
+          ..write('requestVersion: $requestVersion, ')
           ..write('planId: $planId, ')
           ..write('reason: $reason, ')
           ..write('createdAt: $createdAt, ')
@@ -13422,6 +13463,7 @@ class NotificationReconciliationRequestRow extends DataClass
   @override
   int get hashCode => Object.hash(
     scopeKey,
+    requestVersion,
     planId,
     reason,
     createdAt,
@@ -13437,6 +13479,7 @@ class NotificationReconciliationRequestRow extends DataClass
       identical(this, other) ||
       (other is NotificationReconciliationRequestRow &&
           other.scopeKey == this.scopeKey &&
+          other.requestVersion == this.requestVersion &&
           other.planId == this.planId &&
           other.reason == this.reason &&
           other.createdAt == this.createdAt &&
@@ -13451,6 +13494,7 @@ class NotificationReconciliationRequestRow extends DataClass
 class NotificationReconciliationRequestsCompanion
     extends UpdateCompanion<NotificationReconciliationRequestRow> {
   final Value<String> scopeKey;
+  final Value<String> requestVersion;
   final Value<String?> planId;
   final Value<String> reason;
   final Value<DateTime> createdAt;
@@ -13463,6 +13507,7 @@ class NotificationReconciliationRequestsCompanion
   final Value<int> rowid;
   const NotificationReconciliationRequestsCompanion({
     this.scopeKey = const Value.absent(),
+    this.requestVersion = const Value.absent(),
     this.planId = const Value.absent(),
     this.reason = const Value.absent(),
     this.createdAt = const Value.absent(),
@@ -13476,6 +13521,7 @@ class NotificationReconciliationRequestsCompanion
   });
   NotificationReconciliationRequestsCompanion.insert({
     required String scopeKey,
+    this.requestVersion = const Value.absent(),
     this.planId = const Value.absent(),
     required String reason,
     this.createdAt = const Value.absent(),
@@ -13490,6 +13536,7 @@ class NotificationReconciliationRequestsCompanion
        reason = Value(reason);
   static Insertable<NotificationReconciliationRequestRow> custom({
     Expression<String>? scopeKey,
+    Expression<String>? requestVersion,
     Expression<String>? planId,
     Expression<String>? reason,
     Expression<DateTime>? createdAt,
@@ -13503,6 +13550,7 @@ class NotificationReconciliationRequestsCompanion
   }) {
     return RawValuesInsertable({
       if (scopeKey != null) 'scope_key': scopeKey,
+      if (requestVersion != null) 'request_version': requestVersion,
       if (planId != null) 'plan_id': planId,
       if (reason != null) 'reason': reason,
       if (createdAt != null) 'created_at': createdAt,
@@ -13519,6 +13567,7 @@ class NotificationReconciliationRequestsCompanion
 
   NotificationReconciliationRequestsCompanion copyWith({
     Value<String>? scopeKey,
+    Value<String>? requestVersion,
     Value<String?>? planId,
     Value<String>? reason,
     Value<DateTime>? createdAt,
@@ -13532,6 +13581,7 @@ class NotificationReconciliationRequestsCompanion
   }) {
     return NotificationReconciliationRequestsCompanion(
       scopeKey: scopeKey ?? this.scopeKey,
+      requestVersion: requestVersion ?? this.requestVersion,
       planId: planId ?? this.planId,
       reason: reason ?? this.reason,
       createdAt: createdAt ?? this.createdAt,
@@ -13550,6 +13600,9 @@ class NotificationReconciliationRequestsCompanion
     final map = <String, Expression>{};
     if (scopeKey.present) {
       map['scope_key'] = Variable<String>(scopeKey.value);
+    }
+    if (requestVersion.present) {
+      map['request_version'] = Variable<String>(requestVersion.value);
     }
     if (planId.present) {
       map['plan_id'] = Variable<String>(planId.value);
@@ -13588,6 +13641,7 @@ class NotificationReconciliationRequestsCompanion
   String toString() {
     return (StringBuffer('NotificationReconciliationRequestsCompanion(')
           ..write('scopeKey: $scopeKey, ')
+          ..write('requestVersion: $requestVersion, ')
           ..write('planId: $planId, ')
           ..write('reason: $reason, ')
           ..write('createdAt: $createdAt, ')
@@ -24071,6 +24125,7 @@ typedef $$SyncAccountTableProcessedTableManager =
 typedef $$NotificationReconciliationRequestsTableCreateCompanionBuilder =
     NotificationReconciliationRequestsCompanion Function({
       required String scopeKey,
+      Value<String> requestVersion,
       Value<String?> planId,
       required String reason,
       Value<DateTime> createdAt,
@@ -24085,6 +24140,7 @@ typedef $$NotificationReconciliationRequestsTableCreateCompanionBuilder =
 typedef $$NotificationReconciliationRequestsTableUpdateCompanionBuilder =
     NotificationReconciliationRequestsCompanion Function({
       Value<String> scopeKey,
+      Value<String> requestVersion,
       Value<String?> planId,
       Value<String> reason,
       Value<DateTime> createdAt,
@@ -24108,6 +24164,11 @@ class $$NotificationReconciliationRequestsTableFilterComposer
   });
   ColumnFilters<String> get scopeKey => $composableBuilder(
     column: $table.scopeKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get requestVersion => $composableBuilder(
+    column: $table.requestVersion,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -24171,6 +24232,11 @@ class $$NotificationReconciliationRequestsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get requestVersion => $composableBuilder(
+    column: $table.requestVersion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get planId => $composableBuilder(
     column: $table.planId,
     builder: (column) => ColumnOrderings(column),
@@ -24228,6 +24294,11 @@ class $$NotificationReconciliationRequestsTableAnnotationComposer
   });
   GeneratedColumn<String> get scopeKey =>
       $composableBuilder(column: $table.scopeKey, builder: (column) => column);
+
+  GeneratedColumn<String> get requestVersion => $composableBuilder(
+    column: $table.requestVersion,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<String> get planId =>
       $composableBuilder(column: $table.planId, builder: (column) => column);
@@ -24312,6 +24383,7 @@ class $$NotificationReconciliationRequestsTableTableManager
           updateCompanionCallback:
               ({
                 Value<String> scopeKey = const Value.absent(),
+                Value<String> requestVersion = const Value.absent(),
                 Value<String?> planId = const Value.absent(),
                 Value<String> reason = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
@@ -24324,6 +24396,7 @@ class $$NotificationReconciliationRequestsTableTableManager
                 Value<int> rowid = const Value.absent(),
               }) => NotificationReconciliationRequestsCompanion(
                 scopeKey: scopeKey,
+                requestVersion: requestVersion,
                 planId: planId,
                 reason: reason,
                 createdAt: createdAt,
@@ -24338,6 +24411,7 @@ class $$NotificationReconciliationRequestsTableTableManager
           createCompanionCallback:
               ({
                 required String scopeKey,
+                Value<String> requestVersion = const Value.absent(),
                 Value<String?> planId = const Value.absent(),
                 required String reason,
                 Value<DateTime> createdAt = const Value.absent(),
@@ -24350,6 +24424,7 @@ class $$NotificationReconciliationRequestsTableTableManager
                 Value<int> rowid = const Value.absent(),
               }) => NotificationReconciliationRequestsCompanion.insert(
                 scopeKey: scopeKey,
+                requestVersion: requestVersion,
                 planId: planId,
                 reason: reason,
                 createdAt: createdAt,

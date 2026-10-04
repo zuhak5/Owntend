@@ -2,11 +2,12 @@ part of '../sync_coordinator.dart';
 
 extension _SyncPostReadyCoordinator on SyncCoordinator {
   Future<void> _runPostReadyWork() async {
-    if (_accountDeletionInProgress) return;
+    if (_syncBlocked) return;
     final session = _authRepository.currentSession;
     if (session == null) return;
     final account = await _localStore.existingAccount();
-    if (account == null ||
+    if (_syncBlocked ||
+        account == null ||
         !account.enabled ||
         account.boundUserId != session.userId) {
       return;
@@ -47,13 +48,14 @@ extension _SyncPostReadyCoordinator on SyncCoordinator {
     required _ActiveAccountScope scope,
   }) async {
     final account = await _localStore.existingAccount();
+    if (!_isActiveAccountScope(scope)) return;
     if (account == null) return;
     if (account.boundUserId != session.userId) return;
     final queued = _deferredRemoteMedia.values.toList(growable: false);
     if (queued.isNotEmpty) {
       const parallelism = 4;
       for (var index = 0; index < queued.length; index += parallelism) {
-        if (_authRepository.currentSession?.userId != session.userId) return;
+        if (!_isActiveAccountScope(scope)) return;
         final end = math.min(index + parallelism, queued.length);
         final batch = queued.sublist(index, end);
         final results = await Future.wait([
@@ -74,7 +76,7 @@ extension _SyncPostReadyCoordinator on SyncCoordinator {
     final pendingKeys = await _localStore.remotePhotoRecordKeys(session.userId);
     const parallelism = 4;
     for (var index = 0; index < pendingKeys.length; index += parallelism) {
-      if (_authRepository.currentSession?.userId != session.userId) return;
+      if (!_isActiveAccountScope(scope)) return;
       final end = math.min(index + parallelism, pendingKeys.length);
       final records = await Future.wait([
         for (final recordKey in pendingKeys.sublist(index, end))
@@ -129,7 +131,11 @@ extension _SyncPostReadyCoordinator on SyncCoordinator {
         deviceId: deviceId,
         recordKey: recordKey,
       );
-      if (fetched == null) return null;
+      if (_syncBlocked ||
+          _authRepository.currentSession?.userId != userId ||
+          fetched == null) {
+        return null;
+      }
       return await _materializePostReadyRecord(fetched, userId);
     } on Object catch (error) {
       AppLogger.warning('sync_post_ready_photo_refetch_failed', error: error);

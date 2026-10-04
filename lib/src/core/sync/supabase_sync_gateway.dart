@@ -1350,25 +1350,13 @@ class SupabaseSyncGateway implements RealtimeSyncSource {
         },
       ),
     );
-    final finalizedPath = finalizeRes['object_path'];
-    if (finalizeRes['success'] != true || finalizedPath != stagingPath) {
-      throw const SupabaseFailure(
-        kind: SupabaseFailureKind.incompatibleSchema,
-        message: 'The cloud returned an invalid media finalization contract.',
-      );
-    }
-    final photoRow = <String, dynamic>{
-      'id': photoId,
-      'asset_id': assetId,
-      'user_id': userId,
-      'object_path': finalizedPath as String,
-      'caption': finalizeRes['caption'] ?? caption,
-      'is_primary': finalizeRes['is_primary'] ?? isPrimary,
-      'revision': finalizeRes['revision'] ?? revision ?? 1,
-      'created_at': DateTime.now().toUtc().toIso8601String(),
-      'updated_at': DateTime.now().toUtc().toIso8601String(),
-    };
-    return SyncRecord.fromRemote(syncSpecByEntity['asset_photo']!, photoRow);
+    return parseFinalizedAssetPhoto(
+      finalizeRes,
+      userId: userId,
+      photoId: photoId,
+      assetId: assetId,
+      objectPath: stagingPath,
+    );
   }
 
   Future<UserChangeFeedPage> fetchUserChangeFeed({
@@ -1576,6 +1564,50 @@ List<String> deleteCleanupObjectPaths({
 @visibleForTesting
 bool isStorageObjectMissingStatus(String? statusCode) {
   return int.tryParse(statusCode ?? '') == 404;
+}
+
+@visibleForTesting
+SyncRecord parseFinalizedAssetPhoto(
+  Map<String, dynamic> response, {
+  required String userId,
+  required String photoId,
+  required String assetId,
+  required String objectPath,
+}) {
+  final revision = response['revision'];
+  final createdAt = response['created_at'];
+  final updatedAt = response['updated_at'];
+  final caption = response['caption'];
+  if (response['success'] != true ||
+      response['photo_id'] != photoId ||
+      response['asset_id'] != assetId ||
+      response['object_path'] != objectPath ||
+      !objectPath.startsWith('$userId/media/') ||
+      !response.containsKey('caption') ||
+      (caption != null && caption is! String) ||
+      response['is_primary'] is! bool ||
+      revision is! int ||
+      revision < 1 ||
+      createdAt is! String ||
+      DateTime.tryParse(createdAt) == null ||
+      updatedAt is! String ||
+      DateTime.tryParse(updatedAt) == null) {
+    throw const SupabaseFailure(
+      kind: SupabaseFailureKind.incompatibleSchema,
+      message: 'The cloud returned an invalid media finalization contract.',
+    );
+  }
+  return SyncRecord.fromRemote(syncSpecByEntity['asset_photo']!, {
+    'id': photoId,
+    'asset_id': assetId,
+    'user_id': userId,
+    'object_path': objectPath,
+    'caption': caption,
+    'is_primary': response['is_primary'],
+    'revision': revision,
+    'created_at': createdAt,
+    'updated_at': updatedAt,
+  });
 }
 
 Map<String, dynamic>? _zeroOrOneRemoteRow(List<Map<String, dynamic>> rows) {

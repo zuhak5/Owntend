@@ -30,14 +30,12 @@ extension _SyncRuntimeCoordinator on SyncCoordinator {
       _deletingUserId = null;
     }
     try {
-      await configureBackgroundSync?.call(
-        account.enabled && !_accountDeletionInProgress,
-      );
+      await configureBackgroundSync?.call(account.enabled && !_syncBlocked);
     } on Object {
       // Foreground sync remains available if the OS scheduler rejects work.
     }
     await _emit();
-    if (!_accountDeletionInProgress) {
+    if (!_syncBlocked) {
       await _ensureRealtime();
     }
   }
@@ -51,7 +49,7 @@ extension _SyncRuntimeCoordinator on SyncCoordinator {
   }
 
   Future<void> _handlePendingChanged(int pending) async {
-    if (_accountDeletionInProgress) return;
+    if (_syncBlocked) return;
     await _emit();
     if (pending > 0 && await _localStore.hasReadyMutations()) {
       _scheduleAutomaticSync(pushOnly: true);
@@ -70,6 +68,7 @@ extension _SyncRuntimeCoordinator on SyncCoordinator {
   }
 
   Future<void> _initializeForAuthState(AuthStateChange state) async {
+    if (_restoreSuspended) return;
     await _emit();
     final session = state.session;
     if (session == null) {
@@ -84,7 +83,7 @@ extension _SyncRuntimeCoordinator on SyncCoordinator {
       _deletingUserId = null;
       _advanceAccountEpoch('new_auth_scope_after_deletion');
     }
-    if (_accountDeletionInProgress) {
+    if (_syncBlocked) {
       await _emit();
       return;
     }
@@ -127,7 +126,7 @@ extension _SyncRuntimeCoordinator on SyncCoordinator {
       _phaseOverride = null;
       _messageOverride = null;
     }
-    if (_accountDeletionInProgress) {
+    if (_syncBlocked) {
       await _emit();
       return;
     }
@@ -139,7 +138,7 @@ extension _SyncRuntimeCoordinator on SyncCoordinator {
   }
 
   Future<void> _runAutomaticSync() async {
-    if (_accountDeletionInProgress) return;
+    if (_syncBlocked) return;
     final account = await _localStore.existingAccount();
     if (account == null) return;
     if (!account.enabled ||
@@ -158,7 +157,7 @@ extension _SyncRuntimeCoordinator on SyncCoordinator {
   Future<void> _scheduleRetry() async {
     if (!_automaticSyncEnabled) return;
     _retryTimer?.cancel();
-    if (_accountDeletionInProgress) return;
+    if (_syncBlocked) return;
     final account = await _localStore.existingAccount();
     if (account == null) return;
     if (account.blockedReason != null) return;
@@ -196,7 +195,7 @@ extension _SyncRuntimeCoordinator on SyncCoordinator {
   }
 
   bool _isActiveAccountScope(_ActiveAccountScope scope) {
-    if (_accountDeletionInProgress) return false;
+    if (_syncBlocked) return false;
     if (scope.epoch != _accountEpoch) return false;
     return _authRepository.currentSession?.userId == scope.userId;
   }
@@ -220,7 +219,7 @@ extension _SyncRuntimeCoordinator on SyncCoordinator {
 
   Future<void> _ensureRealtimeSerial() async {
     final realtime = _realtime;
-    if (realtime == null || !_online || _accountDeletionInProgress) return;
+    if (realtime == null || !_online || _syncBlocked) return;
     final account = await _localStore.existingAccount();
     if (account == null) return;
     final session = _authRepository.currentSession;
@@ -313,7 +312,7 @@ extension _SyncRuntimeCoordinator on SyncCoordinator {
   }
 
   void _scheduleRealtimeReconnect() {
-    if (!_online || _realtime == null || _accountDeletionInProgress) return;
+    if (!_online || _realtime == null || _syncBlocked) return;
     _realtimeReconnectTimer?.cancel();
     _realtimeReconnectAttempts++;
     final seconds = math.min(

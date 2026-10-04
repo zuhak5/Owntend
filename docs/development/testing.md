@@ -25,7 +25,15 @@ server metadata advancement, stale-revision conflict behavior, and cross-user
 isolation. It also exercises the versioned maintenance-completion envelope and
 runs a stale completion through the real coordinator during initial hydration,
 proving one safe retry, canonical reconciliation, `ready` completion, and
-cross-user history isolation. Skips are honest gates, not rot.
+cross-user history isolation. For a local run of both lanes on the same fresh,
+isolated stack, use `npm run test:backend-integration -- -IncludeApplicationIntegration`.
+The runner writes loopback-only test credentials inside its temporary workspace,
+passes their file to Flutter, and removes it during teardown; it never prints
+the credentials or resets an existing developer stack. Serialize this command
+with other Flutter tests/builds on Windows. Skips are honest gates, not rot.
+The generated PowerShell server bootstrap quotes paths as literal values and
+preserves Unicode with BOM-marked UTF-8 for Windows PowerShell, including profile
+or repository paths containing spaces, straight or curly apostrophes, and Arabic.
 
 ## Launch evidence ladder
 
@@ -80,7 +88,7 @@ Functions require formatting, locked type-checking, unit/request-validation test
 
 ### Disposable backend endpoint integration
 
-`npm run test:backend-integration` provisions an isolated, disposable local Supabase stack on shifted ports inside a temporary workspace, applies the single initial migration, runs schema lint and all pgTAP files (including exact sync UPDATE ACL and maintenance-completion response matrices), serves every configured Edge Function over real HTTP, runs `supabase/tests/integration/*.test.ts` against the actual `/functions/v1/...` gateway, and tears everything down in every outcome. The application/backend lane separately drives two authenticated clients through real Auth, RLS, PostgREST, and Storage. It covers unprepared/expired upload denial, live-object delete denial, concurrent stage count/byte quotas, duplicate copy/move idempotency, simultaneous move/type point conservation with a deadlock timeout, validated history-restore replay/conflict, protected-column/history CRUD denial, full-record asset/plan PATCH allowlisting, server metadata advancement, stale revisions, strict occurrence-completion parsing and initial-hydration reconciliation, and cross-user UPDATE/history isolation. Both lanes keep credentials in memory and target loopback only.
+`npm run test:backend-integration` provisions an isolated, disposable local Supabase stack on shifted ports inside a temporary workspace, applies the single initial migration, runs schema lint and all pgTAP files (including exact sync UPDATE ACL and maintenance-completion response matrices), serves every configured Edge Function over real HTTP, runs `supabase/tests/integration/*.test.ts` against the actual `/functions/v1/...` gateway, and tears everything down in every outcome. The application/backend lane separately drives two authenticated clients through real Auth, RLS, PostgREST, and Storage. It covers unprepared/expired upload denial, live-object delete denial, concurrent stage count/byte quotas, duplicate copy/move idempotency, simultaneous move/type point conservation with a deadlock timeout, validated history-restore replay/conflict, protected-column/history CRUD denial, full-record asset/plan PATCH allowlisting, server metadata advancement, stale revisions, strict occurrence-completion parsing and initial-hydration reconciliation, and cross-user UPDATE/history isolation. Both lanes target loopback only. Credentials are never printed; per-run worker and application-test credential files exist only in the disposable workspace. Teardown stops the owned serving process tree and stack and verifies workspace deletion, reporting failure if any cleanup step fails. The explicit debug-only `KeepWorkspace` option retains that directory and its sensitive local test credentials.
 
 ### Browser deletion and Google/Android contract tests
 
@@ -352,6 +360,12 @@ Disposable backend endpoint integration (isolated stack, real gateway):
 npm run test:backend-integration
 ```
 
+To include the real two-user Flutter gateway suite before that stack is removed:
+
+```powershell
+npm run test:backend-integration -- -IncludeApplicationIntegration
+```
+
 VersionDeck packaging and static validation:
 
 ```powershell
@@ -390,13 +404,18 @@ Test every global/per-format runtime gate, generation invalidation, stale callba
 
 ### Backup and restore
 
-Test valid format-1/schema-1 backups, unsupported versions, path traversal, duplicate paths, oversized expansion, hash mismatch, insufficient storage, interrupted replacement, rollback, account mismatch, and sync restart.
+Test valid backups using the current archive format and `AppDatabase.currentSchemaVersion`, unsupported versions, path traversal, duplicate paths, oversized expansion, hash mismatch, insufficient storage, interrupted replacement, rollback, account mismatch, and sync restart.
 
 ### Notifications
 
 Test the separation of user preference, OS/service/special-access state, scheduler truth, and effective capability. Include manual weather with denied location, service-disabled location, notification denial and disabled channel, settings-return refresh, time-zone change, reboot, application update, stale snapshots, completion rescheduling, and duplicate prevention. For background notification work, cover matching versus mismatched account identity, idempotent unique periodic registration across restart, cancellation/rejection on sign-out or account switch, durable reconciliation surviving process restart, coalescing duplicate requests, ACK only after successful refresh, retry state after failure, and replay when a worker/foreground consumer restarts mid-reconciliation.
 
 ### Startup and transient feedback
+
+[`test/notification_bootstrap_lifecycle_test.dart`](../../test/notification_bootstrap_lifecycle_test.dart)
+holds account loading, scheduler initialization, background registration and
+refresh across owner disposal. It verifies no later startup side effect, owns
+initial read failure, and retains a positive live-owner initialization case.
 
 Test the first Flutter owner, fixed splash lifetime across startup/failure branch changes, non-blank fallback, English and Arabic semantics, compact/large-text layout, interaction blocking, and no repeating animation under reduced motion. For settings, exercise narrow English and Arabic layouts with scaled text, especially capability status and recovery actions. For feedback, test protected Undo ordering, exact-key batching, visible counts and deadline reset, LIFO Undo, FIFO finalization, exactly-once callbacks, accessible persistence, callback failure, directional layout, one visual gap above real Scaffold bottom navigation and floating actions, feedback above modal-sheet barriers, and all Trash restoration call sites. Schema migration coverage must preserve tasks and remaining metadata while removing retired dependency links. Native-ad contract coverage must enumerate every routed content placement and verify the shared light/dark surface palette. Sync gateway coverage guards the zero-row list-response path that avoids expected PostgREST 406 warnings without weakening revision checks.
 
@@ -412,6 +431,13 @@ Test the first Flutter owner, fixed splash lifetime across startup/failure branc
 
 
 ### Wallet synchronization
+
+[`test/authoritative_editor_race_test.dart`](../../test/authoritative_editor_race_test.dart)
+exercises charged item edits against real Drift state when their own canonical
+feed arrives, the editor closes, the local save fails, or a newer draft replaces
+the first form. [`test/monetization_test.dart`](../../test/monetization_test.dart)
+also covers draft generations, stale/ABA completion, cross-instance storage
+interleaving, save failure, and exact account cleanup.
 
 [`test/wallet_sync_test.dart`](../../test/wallet_sync_test.dart) covers the auth-scoped wallet owner,
 authoritative mutation adoption, stale-snapshot ordering, external updates,

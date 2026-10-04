@@ -187,6 +187,7 @@ final backupRepositoryProvider = Provider<BackupRepository>(
     // provider layer owns the single epoch publication boundary.
     onRestoreCommit: () =>
         ref.read(databaseRestoreEpochProvider.notifier).bump(),
+    onRestoreRollback: () => ref.invalidate(syncCoordinatorProvider),
   ),
 );
 
@@ -365,15 +366,15 @@ final assetSavedTasksProvider = StreamProvider.autoDispose
           .distinctByFingerprint(taskListFingerprint);
     });
 
-final assetTagsProvider = StreamProvider.autoDispose.family<List<Tag>, String>((
-  ref,
-  assetId,
-) {
-  return ref
+final assetTagsProvider = StreamProvider.autoDispose.family<List<Tag>, String>(
+  (ref, assetId) => ref
       .watch(assetRepositoryProvider)
       .watchTagsForAsset(assetId)
-      .distinctByFingerprint(tagListFingerprint);
-});
+      .distinctByFingerprint(tagListFingerprint),
+  // Editors await the first value. Surface failure to their explicit Retry
+  // state instead of keeping that future pending through automatic retries.
+  retry: (_, _) => null,
+);
 
 final assetPhotosProvider = StreamProvider.autoDispose
     .family<List<AssetPhoto>, String>((ref, assetId) {

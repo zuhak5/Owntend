@@ -108,6 +108,9 @@ class TaskCreationController extends ValueNotifier<TaskCreationState> {
   Future<AuthoritativeMutationResult> movePlanWithPointDelta({
     required Map<String, dynamic> operation,
     required String accountScope,
+    required DateTime expectedUpdatedAt,
+    required String expectedOccurrenceId,
+    required Future<void> Function(DateTime expectedUpdatedAt) saveLocalEdit,
   }) async {
     final monetizationRepo = ref.read(monetizationRepositoryProvider);
     if (monetizationRepo == null ||
@@ -115,14 +118,37 @@ class TaskCreationController extends ValueNotifier<TaskCreationState> {
       throw StateError('Cloud points service is unavailable.');
     }
 
+    final store = ref.read(localSyncStoreProvider);
+    if (store == null) {
+      throw StateError('Local synchronization is unavailable.');
+    }
+    final wallet = ref.read(pointWalletControllerProvider.notifier);
+    final snapshot = await store.captureAuthoritativeEditor(
+      entity: 'maintenance_plan',
+      recordKey: operation['plan_id'] as String,
+      accountId: accountScope,
+      expectedUpdatedAt: expectedUpdatedAt,
+      expectedOccurrenceId: expectedOccurrenceId,
+    );
+    if (monetizationRepo.currentUserId != accountScope) {
+      throw StateError('The editor account changed.');
+    }
     final result = await monetizationRepo.moveMaintenancePlan(operation);
     if (result.applied) {
-      ref
-          .read(pointWalletControllerProvider.notifier)
-          .adoptAuthoritativeMutationResult(
-            result.balance,
-            userId: accountScope,
-          );
+      wallet.adoptAuthoritativeMutationResult(
+        result.balance,
+        userId: accountScope,
+      );
+      if (result.plan == null) {
+        throw const FormatException('Missing canonical plan.');
+      }
+      await store.finishAuthoritativeEditor(
+        snapshot: snapshot,
+        canonicalJson: result.plan!,
+        expectedTarget: operation['target_asset_id'] as String,
+        saveLocalEdit: saveLocalEdit,
+        accountIsCurrent: () => monetizationRepo.currentUserId == accountScope,
+      );
     }
     return result;
   }

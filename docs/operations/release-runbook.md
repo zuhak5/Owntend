@@ -3,7 +3,8 @@
 Production release mutation remains contained. This runbook defines evidence and handoff; it does not authorize a Shorebird publish, Play upload, Sentry mutation, GitHub Release, VersionDeck publication, hosted backend mutation, or rollout.
 
 Pre-launch schema posture: while the `AGENTS.md` lifecycle checkbox is
-unchecked, Drift uses the current schema-1 baseline (reject-on-mismatch) and
+unchecked, Drift uses the current canonical baseline (reject-on-mismatch;
+versioned by `AppDatabase.currentSchemaVersion`) and
 Supabase uses the single initial migration documented in
 [`migrations-and-functions.md`](../backend/migrations-and-functions.md). Local
 blank-reset evidence does not claim that any linked hosted project was rebuilt.
@@ -19,6 +20,13 @@ At launch authorization, execute the production containment and launch verificat
 - the environment-scoped Shorebird token, Play upload signer, and non-exportable production KMS signing key.
 
 The backend workflow's required jobs include `Deno SSV tests`, `Google contract/static checks`, and `Supabase database tests`. A pending migration must follow the separately protected migration workflow; release CI does not deploy it.
+
+Both Shorebird validation blocks enable PowerShell native-command error handling
+with terminating errors. Any failed dependency, generation, analysis, test, or
+toolchain command stops the step before release or patch work can begin. The
+local workflow regression executes these blocks against harmless command stubs
+and verifies every native failure stops subsequent commands; protected workflow
+execution still requires CI evidence.
 
 The release workflow produces one canonical Shorebird AAB with obfuscation,
 Dart symbols, R8 mapping, merged-manifest/dependency/lint/SBOM evidence, exact

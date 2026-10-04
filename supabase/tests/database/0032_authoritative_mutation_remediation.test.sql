@@ -4,7 +4,7 @@ create extension if not exists pgtap with schema extensions;
 set local role postgres;
 set search_path = public, extensions, pg_catalog;
 
-select extensions.plan(43);
+select extensions.plan(53);
 
 select extensions.has_table(
   'owntend_monetization_private', 'maintenance_plan_entitlements',
@@ -156,7 +156,10 @@ insert into public.rooms(user_id, id, area_id, name) values
 insert into public.assets(user_id, id, room_id, name, asset_type) values
   ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'safety-a', 'room-a', 'Alarm', 'safety'),
   ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'general-a', 'room-a2', 'Sofa', 'general'),
-  ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'general-b', 'room-b', 'Other sofa', 'general');
+  ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'general-b', 'room-b', 'Other sofa', 'general'),
+  ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'safety-copy', 'room-b', 'Other account device', 'device');
+insert into public.device_details(user_id, asset_id, brand)
+values ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'safety-copy', 'Private other-account brand');
 
 set local role authenticated;
 set local "request.jwt.claims" =
@@ -333,9 +336,10 @@ select jsonb_build_object(
 )
 from public.assets
 where user_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' and id = 'safety-copy';
+create temporary table type_result as
+select public.change_asset_type_with_point_delta((select payload from type_request)) as payload;
 select extensions.is(
-  (public.change_asset_type_with_point_delta(
-    (select payload from type_request))->>'charged')::integer,
+  (select (payload->>'charged')::integer from type_result),
   1,
   'asset type change charges its aggregate shortfall'
 );
@@ -351,6 +355,63 @@ select extensions.is(
   true,
   'asset type change replay is idempotent'
 );
+select extensions.is(
+  (select payload->'detail_rows' from type_result), '[]'::jsonb,
+  'general type change returns an explicit empty canonical detail set'
+);
+select extensions.is(
+  public.change_asset_type_with_point_delta((select payload from type_request))->'detail_rows',
+  '[]'::jsonb,
+  'general type replay does not return another account detail with the same asset ID'
+);
+
+create temporary table type_detail_results(
+  asset_type text, applied jsonb, replayed jsonb, canonical jsonb
+);
+do $$
+declare
+  fixture record;
+  operation jsonb;
+  applied jsonb;
+  canonical jsonb;
+begin
+  for fixture in select * from (values
+    (21, 'device', '{"brand":"  Canonical brand  ","consumable":"  Filter  "}'::jsonb),
+    (22, 'pet', '{"species":"  Cat  "}'::jsonb),
+    (23, 'plant', '{"species":"  Basil  ","watering_interval_days":3}'::jsonb),
+    (24, 'safety', '{"safety_type":"  Smoke alarm  ","test_interval_days":30}'::jsonb)
+  ) as fixtures(sequence, asset_type, details)
+  loop
+    operation := jsonb_build_object(
+      'operation_id', 'aaaaaaaa-0000-4000-8000-' || lpad(fixture.sequence::text, 12, '0'),
+      'request_hash', repeat('4',64), 'asset_id', 'safety-copy',
+      'target_type', fixture.asset_type, 'details', fixture.details,
+      'expected_asset_revision', (select revision from public.assets
+        where user_id = auth.uid() and id = 'safety-copy'),
+      'max_charge', 0
+    );
+    applied := public.change_asset_type_with_point_delta(operation);
+    canonical := case fixture.asset_type
+      when 'device' then (select to_jsonb(d) from public.device_details d where d.user_id = auth.uid() and d.asset_id = 'safety-copy')
+      when 'pet' then (select to_jsonb(d) from public.pet_details d where d.user_id = auth.uid() and d.asset_id = 'safety-copy')
+      when 'plant' then (select to_jsonb(d) from public.plant_details d where d.user_id = auth.uid() and d.asset_id = 'safety-copy')
+      when 'safety' then (select to_jsonb(d) from public.safety_details d where d.user_id = auth.uid() and d.asset_id = 'safety-copy')
+    end;
+    insert into type_detail_results values (
+      fixture.asset_type, applied, public.change_asset_type_with_point_delta(operation), canonical
+    );
+  end loop;
+end;
+$$;
+select extensions.is(
+  applied->'detail_rows',
+  jsonb_build_array(jsonb_build_object('entity',asset_type || '_detail','row',canonical)),
+  asset_type || ' type change returns only its owner-bound stored detail, including normalized values and metadata'
+) from type_detail_results;
+select extensions.is(
+  replayed->'detail_rows', applied->'detail_rows',
+  asset_type || ' type change replay returns the same canonical detail envelope'
+) from type_detail_results;
 
 select extensions.is(
   public.complete_maintenance_task(

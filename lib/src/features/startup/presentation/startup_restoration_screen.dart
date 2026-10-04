@@ -251,32 +251,41 @@ class _NotificationBootstrapState extends ConsumerState<NotificationBootstrap>
   Widget build(BuildContext context) => widget.child;
 
   Future<void> _initializeNotifications() async {
-    if (_started) {
+    if (_started || !mounted) {
       return;
     }
     _started = true;
-    final syncAccount = await ref.read(localSyncStoreProvider)?.account();
-    await configureCloudSyncBackgroundTask(syncAccount?.enabled ?? false);
-    await _refreshNotifications();
-    unawaited(_runAutomaticBackup());
+    try {
+      final syncAccount = await ref.read(localSyncStoreProvider)?.account();
+      if (!mounted) return;
+      await configureCloudSyncBackgroundTask(syncAccount?.enabled ?? false);
+      if (!mounted) return;
+      await _refreshNotifications();
+      if (!mounted) return;
+      await _runAutomaticBackup();
+    } on Object catch (error) {
+      AppLogger.warning('notification_bootstrap', error: error);
+    }
   }
 
   Future<void> _refreshNotifications() async {
-    if (!ref.read(notificationAutoStartProvider)) {
-      return;
-    }
+    if (!mounted) return;
     try {
+      if (!ref.read(notificationAutoStartProvider)) return;
       final scheduler = ref.read(notificationSchedulerProvider);
       await scheduler.initialize();
+      if (!mounted) return;
       if (scheduler is NotificationBackgroundRegistration) {
         final backgroundRegistration =
             scheduler as NotificationBackgroundRegistration;
         await backgroundRegistration.registerBackgroundRefresh();
+        if (!mounted) return;
       }
       final session = ref.read(authRepositoryProvider)?.currentSession;
       final consumer = ref.read(notificationReconciliationConsumerProvider);
       if (session != null && consumer != null) {
         final result = await consumer.drainForAccount(session.userId);
+        if (!mounted) return;
         if (result == NotificationReconciliationDrainResult.refreshed ||
             result == NotificationReconciliationDrainResult.accountMismatch) {
           return;
@@ -289,10 +298,9 @@ class _NotificationBootstrapState extends ConsumerState<NotificationBootstrap>
   }
 
   Future<void> _runAutomaticBackup() async {
-    if (!ref.read(backupAutoStartProvider)) {
-      return;
-    }
+    if (!mounted) return;
     try {
+      if (!ref.read(backupAutoStartProvider)) return;
       await ref.read(backupRepositoryProvider).exportAutomaticBackupIfDue();
     } catch (_) {
       // Backup status is persisted by the backup service; startup should continue.

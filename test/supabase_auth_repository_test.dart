@@ -98,6 +98,52 @@ void main() {
     recoveryStore = _MemoryAccountDeletionRecoveryStore();
   });
 
+  for (final existingIdentity in [null, 'user-1', 'previous-user']) {
+    test(
+      'pre-request failure handles fresh versus existing $existingIdentity',
+      () async {
+        final client = _MockSupabaseClient();
+        final auth = _MockGoTrueClient();
+        final session = _MockSession();
+        final user = _MockUser();
+        when(() => client.auth).thenReturn(auth);
+        when(() => auth.currentSession).thenReturn(session);
+        when(() => session.user).thenReturn(user);
+        when(() => user.id).thenReturn('user-1');
+        when(
+          () => auth.signInWithIdToken(
+            provider: OAuthProvider.google,
+            idToken: 'google-id-token',
+            accessToken: 'google-access-token',
+          ),
+        ).thenAnswer((_) async => AuthResponse(session: session));
+        recoveryStore.operation = existingIdentity == null
+            ? null
+            : AccountDeletionRecoveryOperation(
+                expectedUserId: existingIdentity,
+                recoveryKey: recoveryKey,
+              );
+        final retained = recoveryStore.operation;
+        var cancelled = false;
+        final repository = SupabaseAuthRepository(
+          client,
+          googleSignIn,
+          onAccountDeletionPrepared: (_) async =>
+              throw StateError('barrier unavailable'),
+          onAccountDeletionCancelled: (_) async => cancelled = true,
+          onAccountDeleted: (_) async {},
+          accountDeletionRecoveryStore: recoveryStore,
+        );
+        await expectLater(
+          repository.deleteAccount(),
+          throwsA(isA<SupabaseFailure>()),
+        );
+        expect(recoveryStore.operation, same(retained));
+        expect(cancelled, existingIdentity == null);
+      },
+    );
+  }
+
   test('repository exposes no session for a fresh client', () {
     final client = SupabaseClient(
       'https://example.supabase.co',

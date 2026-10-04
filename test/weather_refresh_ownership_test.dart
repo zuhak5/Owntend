@@ -23,6 +23,78 @@ void main() {
     await db.close();
   });
 
+  test(
+    'malformed successful weather response cannot replace valid cache',
+    () async {
+      await settings.setHomeLocation(_locationA);
+      var response = _weatherResponse(27);
+      final weather = OpenMeteoWeatherRepository(
+        db: db,
+        settingsRepository: settings,
+        httpClient: MockClient((_) async => response),
+      );
+      final original = await weather.refreshWeather();
+      expect(original?.temperature, 27);
+      for (final body in [
+        '{}',
+        '{"current":{"temperature_2m":null},"daily":{}}',
+        '{"current":{},"daily":{"time":["invalid-date"]}}',
+      ]) {
+        response = http.Response(body, 200);
+        final refreshed = await weather.refreshWeather();
+        expect(refreshed?.temperature, 27);
+        expect(refreshed?.updatedAt, original?.updatedAt);
+        expect((await weather.cachedWeather())?.updatedAt, original?.updatedAt);
+      }
+    },
+  );
+
+  test(
+    'malformed successful weather without a cache remains unavailable',
+    () async {
+      await settings.setHomeLocation(_locationA);
+      final weather = OpenMeteoWeatherRepository(
+        db: db,
+        settingsRepository: settings,
+        httpClient: MockClient((_) async => http.Response('{}', 200)),
+      );
+      expect(await weather.refreshWeather(), isNull);
+      expect(await weather.cachedWeather(), isNull);
+    },
+  );
+
+  test('forecast alignment, dates and numeric types are validated', () async {
+    await settings.setHomeLocation(_locationA);
+    var response = _weatherResponse(27);
+    final weather = OpenMeteoWeatherRepository(
+      db: db,
+      settingsRepository: settings,
+      httpClient: MockClient((_) async => response),
+    );
+    final original = await weather.refreshWeather();
+    for (final mutate in <void Function(Map<String, dynamic>)>[
+      (data) => (data['current'] as Map)['temperature_2m'] = '27',
+      (data) => (data['current'] as Map)['wind_speed_10m'] = null,
+      (data) => (data['current'] as Map)['weather_code'] = 1.5,
+      (data) => (data['daily'] as Map)['time'] = ['2026-01-01'],
+      (data) {
+        final daily = data['daily'] as Map;
+        for (final key in daily.keys.toList()) {
+          daily[key] = key == 'time' ? ['2026-02-30'] : [0];
+        }
+      },
+    ]) {
+      final data =
+          jsonDecode(_weatherResponse(30).body) as Map<String, dynamic>;
+      mutate(data);
+      response = http.Response(jsonEncode(data), 200);
+      expect((await weather.refreshWeather())?.updatedAt, original?.updatedAt);
+      expect((await weather.cachedWeather())?.temperature, 27);
+    }
+    response = _weatherResponse(0);
+    expect((await weather.refreshWeather())?.temperature, 0);
+  });
+
   test('an old completion is discarded after home location changes', () async {
     await settings.setHomeLocation(_locationA);
     final aStarted = Completer<void>();

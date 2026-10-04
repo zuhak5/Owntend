@@ -17,6 +17,7 @@ import 'sync_contracts.dart';
 import 'sync_dtos.dart';
 
 part 'local_store/account_store.dart';
+part 'local_store/editor_mutation_store.dart';
 part 'local_store/media_store.dart';
 part 'local_store/mutation_store.dart';
 part 'local_store/outbox_store.dart';
@@ -57,6 +58,7 @@ class LocalSyncStore extends _LocalSyncStoreBase
         _LocalSyncAccountStore,
         _LocalSyncOutboxStore,
         _LocalSyncRemoteStore,
+        _LocalSyncEditorMutationStore,
         _LocalSyncMutationStore,
         _LocalSyncMediaStore
     implements RestoreCommitProbe {

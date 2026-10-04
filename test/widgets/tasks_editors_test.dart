@@ -78,7 +78,12 @@ void main() {
       for (final sheetCase in cases) {
         await tester.pumpWidget(
           ProviderScope(
-            overrides: testOverrides(settings),
+            overrides: [
+              ...testOverrides(settings),
+              offlineCreationDraftStoreProvider.overrideWithValue(
+                FakeOfflineCreationDraftStore(),
+              ),
+            ],
             child: MaterialApp(
               theme: testLightTheme(),
               home: Builder(
@@ -749,6 +754,9 @@ void main() {
               ...testOverrides(settings),
               assetTagsProvider(asset.id)
                   .overrideWithValue(const AsyncData([])),
+              offlineCreationDraftStoreProvider.overrideWithValue(
+                FakeOfflineCreationDraftStore(),
+              ),
             ],
             child: MaterialApp(
               theme: testLightTheme(),
@@ -790,6 +798,9 @@ void main() {
           overrides: [
             ...testOverrides(settings),
             assetTagsProvider(asset.id).overrideWithValue(const AsyncData([])),
+            offlineCreationDraftStoreProvider.overrideWithValue(
+              FakeOfflineCreationDraftStore(),
+            ),
           ],
           child: MaterialApp(
             theme: testLightTheme(),

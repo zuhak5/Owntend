@@ -1,7 +1,7 @@
 # Third-Party Dependency Notices
 
 **Product:** Owntend Android Application
-**Version:** 1.0.2 (Build 16)
+**Version:** 1.0.3 (Build 17)
 **Generated:** 2026-08-25T11:08:34.567Z
 
 > Owntend uses and redistributes open-source software packages under their respective upstream licenses.

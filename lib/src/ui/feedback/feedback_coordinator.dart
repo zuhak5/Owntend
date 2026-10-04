@@ -36,6 +36,9 @@ class FeedbackCoordinator extends ChangeNotifier {
           incoming.mode == HkFeedbackMode.undoable &&
           _canBatchUndo(active, incoming)) {
         _batchUndoItem(incoming);
+        if (_lastContext?.mounted != true) {
+          _lastContext = context;
+        }
         notifyListeners();
         _refreshActivePresentation();
         return null;

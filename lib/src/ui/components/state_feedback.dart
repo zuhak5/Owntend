@@ -38,6 +38,7 @@ ScaffoldFeatureController<SnackBar, SnackBarClosedReason>? showUndoToast(
   required FutureOr<void> Function() onUndo,
   FutureOr<void> Function()? onFinalize,
   String? actionLabel,
+  Widget? actionSuccessMessage,
   Duration duration = kActionToastDuration,
 }) {
   return _showUndoSnackBar(
@@ -48,6 +49,7 @@ ScaffoldFeatureController<SnackBar, SnackBarClosedReason>? showUndoToast(
     actionLabel: actionLabel ?? context.l10n.undo,
     duration: duration,
     batchItemType: 'completion',
+    actionSuccessMessage: actionSuccessMessage,
   );
 }
 
@@ -62,6 +64,7 @@ showTaskMovedToTrashSnackBar(
   return showMovedToTrashSnackBar(
     context,
     content: Text(context.l10n.taskMovedToTrash),
+    actionSuccessMessage: Text(context.l10n.taskRestored),
     onUndo: onUndo,
     onFinalize: onFinalize,
     actionLabel: actionLabel,
@@ -76,8 +79,10 @@ showMovedToTrashSnackBar(
   required FutureOr<void> Function() onUndo,
   FutureOr<void> Function()? onFinalize,
   String? actionLabel,
+  Widget? actionSuccessMessage,
   Duration duration = const Duration(seconds: 5),
 }) {
+  final l10n = context.l10n;
   return _showUndoSnackBar(
     context,
     content: content,
@@ -86,9 +91,12 @@ showMovedToTrashSnackBar(
     actionLabel: actionLabel ?? context.l10n.undo,
     duration: duration,
     batchItemType: 'trash',
+    actionSuccessMessage: actionSuccessMessage,
+    batchActionSuccessMessageBuilder: (count) =>
+        Text(l10n.nameRestored(l10n.trashItemCount(count))),
     batchMessageBuilder: (count) => count == 1
-        ? Text(context.l10n.taskMovedToTrash)
-        : Text('${context.l10n.trashItemCount(count)} · ${context.l10n.trash}'),
+        ? Text(l10n.taskMovedToTrash)
+        : Text('${l10n.trashItemCount(count)} · ${l10n.trash}'),
   );
 }
 
@@ -102,6 +110,8 @@ ScaffoldFeatureController<SnackBar, SnackBarClosedReason>? _showUndoSnackBar(
   EdgeInsetsGeometry? margin,
   String? batchItemType,
   Widget Function(int count)? batchMessageBuilder,
+  Widget? actionSuccessMessage,
+  Widget Function(int count)? batchActionSuccessMessageBuilder,
 }) {
   final item = HkFeedbackItem(
     id: DateTime.now().microsecondsSinceEpoch.toString(),
@@ -113,6 +123,9 @@ ScaffoldFeatureController<SnackBar, SnackBarClosedReason>? _showUndoSnackBar(
     duration: duration,
     batchItemType: batchItemType,
     batchMessageBuilder: batchMessageBuilder,
+    actionSuccessMessage: actionSuccessMessage,
+    batchActionSuccessMessageBuilder: batchActionSuccessMessageBuilder,
+    actionFailureMessage: Text(context.l10n.undoFailedPleaseTryAgain),
     margin: margin,
   );
   return FeedbackCoordinator.instance.show(context, item);

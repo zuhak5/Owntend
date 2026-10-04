@@ -11,8 +11,8 @@ directly instead of being treated as compatibility promises.
 | Concern | Authority | Current contract |
 | --- | --- | --- |
 | Product version and Android build | [`pubspec.yaml`](../../pubspec.yaml) | not copied here; the authoritative version/build live in [`pubspec.yaml`](../../pubspec.yaml) |
-| Local SQLite schema | `AppDatabase.currentSchemaVersion` | `1` |
-| Backup archive and embedded database | backup manifest constants | `1` |
+| Local SQLite schema | [`AppDatabase.currentSchemaVersion`](../../lib/src/core/database/app_database.dart) | canonical pre-launch baseline; previous unpublished shapes rejected |
+| Backup archive and embedded database | [`backup manifest constants`](../../lib/src/core/services/backup_service.dart) and `AppDatabase.currentSchemaVersion` | archive format and embedded schema validated independently |
 | Mobile/backend sync boundary | change-feed response contract | `1` |
 | Native-ad platform channel | shared Dart/Kotlin contract assertion | `2` |
 | VersionDeck manifest and cache contract | generic VersionDeck schema modules | `1` |
@@ -105,9 +105,17 @@ incremental pull, or mid-page fallback.
   revision checks on both items.
 - Reminder snapshots are durable desired state. Schedule reconciliation is
   serialized, verifies the platform's pending identifiers before accepting a
-  no-op, and removes only the exact reconciliation request version covered by a
-  successful refresh. Both authenticated (`drainForAccount`) and local-only
+  no-op, retains snapshots when platform cancellation fails, and removes only
+  the opaque database-generated reconciliation request version covered by a
+  successful refresh. Same-second writes and delete/reinsert races cannot be
+  acknowledged by older consumers. Both authenticated (`drainForAccount`) and local-only
   (`drainLocal`) drain paths flush pending durable requests upon schedule refresh.
+- The daily worker dispatches unbound local state through guarded local
+  reconciliation, without assuming a cloud session exists. A signed-out bound
+  account remains ineligible, and identity changes prevent acknowledgement.
+- Reminder selection applies its budget to scheduled eligible tasks, not the
+  first rows returned by due-date ordering; overdue tasks cannot starve a later
+  valid alarm. The horizon, quiet-hour policy and per-day limits still apply.
 - Snooze intent is persisted before scheduling so restart can replay it. Failed
   photo file deletions enqueue into `local_media_cleanup` so no orphan files
   remain unreferenced on disk.
@@ -129,6 +137,13 @@ PostgreSQL, Supabase, request, user-content, path, token, or SDK text is never
 shown to users or sent to telemetry. An error is never converted into an empty
 collection, `null`, disabled capability, or success.
 
+## Weather response integrity
+
+Weather refresh accepts only complete finite current measurements and aligned,
+valid forecast arrays from the requested response. Malformed success responses
+retain the previous cache and its observation timestamp, or leave weather
+unavailable when there is no cache; they never fabricate fresh zero readings.
+
 ## Media lifecycle
 
 1. The authenticated client asks the server to prepare an idempotent stage.
@@ -136,12 +151,21 @@ collection, `null`, disabled capability, or success.
    immutable owner-scoped path plus bounded expected size and media type.
 3. The client uploads without final-path overwrite semantics.
 4. Finalization verifies stage ownership and stored object facts through a
-   trusted server path before attaching the photo.
+   trusted server path before attaching the photo. Initial and replay responses
+   contain the stored revision, caption, primary state, and timestamps, which
+   the client validates and adopts without synthesizing canonical values.
 5. A durable cloud cleanup job owns every incomplete stage; a durable local
    cleanup row owns failed local-file deletion.
 
 Uploads are limited to 10 MiB. Object paths outside the authenticated owner's
 prefix or outside the app-owned local media directory are rejected.
+
+Local import checks bounded source headers before invoking decoder metadata APIs
+for supported JPEG, PNG, GIF, BMP, and static WebP files. It bounds BMP palettes,
+EXIF directory traversal, and PNG inflation, checks the resulting frame again, and
+normalizes the first frame to bounded JPEG output. TIFF, EXR, ICO, and animated WebP
+are rejected because their decoder metadata APIs cannot guarantee this
+pre-allocation check. See [system overview](system-overview.md#media-import).
 
 ## Account deletion retention
 

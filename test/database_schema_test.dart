@@ -9,13 +9,13 @@ String _text(int length, String value) =>
     List<String>.filled(length, value).join();
 
 void main() {
-  group('AppDatabase current schema-1 baseline', () {
+  group('AppDatabase current schema baseline', () {
     late File dbFile;
     late AppDatabase db;
 
     setUp(() async {
       dbFile = File(
-        '${Directory.systemTemp.path}/owntend_schema_v1_'
+        '${Directory.systemTemp.path}/owntend_schema_'
         '${DateTime.now().microsecondsSinceEpoch}.sqlite',
       );
       db = AppDatabase(executor: NativeDatabase(dbFile));
@@ -27,11 +27,11 @@ void main() {
       if (await dbFile.exists()) await dbFile.delete();
     });
 
-    test('creates only schema version 1', () async {
-      expect(AppDatabase.currentSchemaVersion, 1);
-      expect(db.schemaVersion, 1);
+    test('creates the current schema version', () async {
+      expect(AppDatabase.currentSchemaVersion, 2);
+      expect(db.schemaVersion, AppDatabase.currentSchemaVersion);
       final row = await db.customSelect('PRAGMA user_version').getSingle();
-      expect(row.read<int>('user_version'), 1);
+      expect(row.read<int>('user_version'), AppDatabase.currentSchemaVersion);
     });
 
     test('creates final domain, sync, search, and cleanup tables', () async {

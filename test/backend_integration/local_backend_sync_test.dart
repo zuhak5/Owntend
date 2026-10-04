@@ -15,6 +15,7 @@ import 'package:owntend/src/core/sync/sync_coordinator.dart';
 import 'package:owntend/src/core/sync/sync_contracts.dart';
 import 'package:owntend/src/core/sync/sync_dtos.dart';
 import 'package:owntend/src/features/auth/domain/auth_repository.dart';
+import 'package:owntend/src/features/monetization/monetization.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
@@ -1320,6 +1321,40 @@ void main() {
           .single())['asset_type'],
       'general',
     );
+    // Exercise the actual Flutter response parser against canonical detail
+    // envelopes for every supported type and exact operation replay.
+    final economy = SupabaseMonetizationRepository(userADevice1);
+    for (final type in ['device', 'pet', 'plant', 'safety', 'general']) {
+      final quote = await economy.quoteAssetTypeChange(
+        assetId: 'economy-race-safety',
+        targetType: type,
+      );
+      final operation = <String, dynamic>{
+        'operation_id': const Uuid().v4(),
+        'asset_id': 'economy-race-safety',
+        'target_type': type,
+        'details': <String, dynamic>{},
+        'expected_asset_revision': quote.revision,
+        'max_charge': quote.charge,
+      };
+      final accepted = await economy.changeAssetType(operation);
+      final replay = await economy.changeAssetType(operation);
+      expect(accepted.applied, isTrue);
+      expect(replay.alreadyProcessed, isTrue);
+      expect(replay.detailRows, accepted.detailRows);
+      expect(replay.asset, accepted.asset);
+      if (type == 'general') {
+        expect(accepted.detailRows, isEmpty);
+      } else {
+        final envelope = accepted.detailRows.single;
+        expect(envelope['entity'], '${type}_detail');
+        final row = envelope['row'] as Map;
+        expect(row['asset_id'], 'economy-race-safety');
+        expect(row['user_id'], userAId);
+        expect(row['revision'], greaterThan(0));
+        expect(DateTime.tryParse(row['updated_at'] as String), isNotNull);
+      }
+    }
   });
 
   test(

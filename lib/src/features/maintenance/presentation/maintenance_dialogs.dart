@@ -110,24 +110,31 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
         : 'task_edit_${userId ?? 'local'}_$existingPlanId';
   }
 
-  Future<void> _saveOfflineDraft() {
-    return ref.read(offlineCreationDraftStoreProvider).save(_offlineDraftKey, {
-      'operation_id': _creationOperationId ??= _uuid.v7(),
-      'plan_id': widget.task?.plan.id ?? (_creationPlanId ??= _uuid.v7()),
-      'asset_id': _assetId,
-      'title': _titleController.text,
-      'instructions': _instructionsController.text,
-      'interval': _intervalController.text,
-      'unit': _unit.name,
-      'priority': _priority.name,
-      'due_date': _dueDate.toUtc().toIso8601String(),
-      'task_type': _taskTypeController.text,
-      'location': _locationController.text,
-      'duration': _durationController.text,
-      'materials': _materialsController.text,
-      'reminder_days': _reminderDaysController.text,
-      'reminder_recommendation': _reminderRecommendationController.text,
-    });
+  String? _offlineDraftGeneration;
+
+  Future<String> _saveOfflineDraft() async {
+    final generation = await ref.read(offlineCreationDraftStoreProvider).save(
+      _offlineDraftKey,
+      {
+        'operation_id': _creationOperationId ??= _uuid.v7(),
+        'plan_id': widget.task?.plan.id ?? (_creationPlanId ??= _uuid.v7()),
+        'asset_id': _assetId,
+        'title': _titleController.text,
+        'instructions': _instructionsController.text,
+        'interval': _intervalController.text,
+        'unit': _unit.name,
+        'priority': _priority.name,
+        'due_date': _dueDate.toUtc().toIso8601String(),
+        'task_type': _taskTypeController.text,
+        'location': _locationController.text,
+        'duration': _durationController.text,
+        'materials': _materialsController.text,
+        'reminder_days': _reminderDaysController.text,
+        'reminder_recommendation': _reminderRecommendationController.text,
+      },
+    );
+    _offlineDraftGeneration = generation;
+    return generation;
   }
 
   Future<void> _restoreOfflineDraft({bool overwriteExisting = false}) async {
@@ -140,6 +147,8 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
       return;
     }
     String text(String key) => draft[key] as String? ?? '';
+    _offlineDraftGeneration =
+        draft[OfflineCreationDraftStore.generationKey] as String?;
     _creationOperationId = draft['operation_id'] as String?;
     _creationPlanId = draft['plan_id'] as String?;
     _titleController.text = text('title');
@@ -454,11 +463,17 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
   }
 
   Future<void> _pickDate() async {
+    final initialDate = DateUtils.dateOnly(_dueDate);
+    final now = DateTime.now();
+    final firstDate = DateUtils.dateOnly(
+      now.subtract(const Duration(days: 365)),
+    );
+    final lastDate = DateUtils.dateOnly(now.add(const Duration(days: 3650)));
     final selected = await showDatePicker(
       context: context,
-      initialDate: _dueDate,
-      firstDate: DateTime.now().subtract(const Duration(days: 365)),
-      lastDate: DateTime.now().add(const Duration(days: 3650)),
+      initialDate: initialDate,
+      firstDate: initialDate.isBefore(firstDate) ? initialDate : firstDate,
+      lastDate: initialDate.isAfter(lastDate) ? initialDate : lastDate,
     );
     if (selected != null && mounted) {
       setState(
@@ -510,6 +525,10 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
       return;
     }
     final metadata = _metadataFromForm();
+    final draftStore = ref.read(offlineCreationDraftStoreProvider);
+    final draftKey = _offlineDraftKey;
+    var draftGeneration = _offlineDraftGeneration;
+    final wakeReminders = captureNotificationReconciliation(ref);
     setState(() => _saving = true);
     try {
       validateMaintenancePlanInput(
@@ -600,14 +619,40 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
           return;
         }
       } else {
-        if (widget.task!.plan.assetId != assetId) {
+        final original = widget.task!.plan;
+        final repository = ref.read(maintenanceRepositoryProvider);
+        final creationController = ref.read(taskCreationControllerProvider);
+        final title = _titleController.text;
+        final instructions = _instructionsController.text;
+        final recurrence = RecurrenceRule(interval: interval, unit: _unit);
+        final priority = _priority;
+        final dueDate = _dueDate;
+        Future<void> saveLocal(DateTime expectedUpdatedAt) async {
+          await repository.savePlan(
+            id: planId,
+            assetId: assetId,
+            title: title,
+            instructions: instructions,
+            recurrence: recurrence,
+            priority: priority,
+            nextDueDate: dueDate,
+            reminderDaysBefore: reminderDaysBefore,
+            metadata: metadata,
+            expectedOccurrenceId: original.currentOccurrenceId,
+            expectedUpdatedAt: expectedUpdatedAt,
+          );
+        }
+
+        if (original.assetId != assetId) {
           final monetization = ref.read(monetizationRepositoryProvider);
-          if (monetization == null || monetization.currentUserId == null) {
+          final accountScope = monetization?.currentUserId;
+          if (monetization == null || accountScope == null) {
             throw StateError('Cloud points service is unavailable.');
           }
-          final online = await ref
-              .read(syncConnectivityInstanceProvider)
-              .isOnline();
+          final connectivity = ref.read(syncConnectivityInstanceProvider);
+          draftGeneration = await _saveOfflineDraft();
+          if (!mounted) return;
+          final online = await connectivity.isOnline();
           if (!mounted) return;
           if (!online) {
             await _saveOfflineDraft();
@@ -648,47 +693,34 @@ class _PlanEditorDialogState extends ConsumerState<PlanEditorDialog> {
             );
             if (confirmed != true) return;
           }
-          final result = await ref
-              .read(taskCreationControllerProvider)
-              .movePlanWithPointDelta(
-                operation: {
-                  'operation_id': _uuid.v7(),
-                  'plan_id': planId,
-                  'target_asset_id': assetId,
-                  'expected_plan_revision': quote.revision,
-                  'max_charge': quote.charge,
-                },
-                accountScope: monetization.currentUserId!,
-              );
           if (!mounted) return;
+          final result = await creationController.movePlanWithPointDelta(
+            operation: {
+              'operation_id': _uuid.v7(),
+              'plan_id': planId,
+              'target_asset_id': assetId,
+              'expected_plan_revision': quote.revision,
+              'max_charge': quote.charge,
+            },
+            accountScope: accountScope,
+            expectedUpdatedAt: original.updatedAt,
+            expectedOccurrenceId: original.currentOccurrenceId,
+            saveLocalEdit: saveLocal,
+          );
           if (!result.applied) {
             throw StateError(
-              result.status == 'charge_changed'
+              result.status == 'charge_changed' && mounted
                   ? context.l10n.authoritativeChargeChanged
                   : result.conflictReason ?? result.status,
             );
           }
+        } else {
+          await saveLocal(original.updatedAt);
         }
-
-        await ref
-            .read(maintenanceRepositoryProvider)
-            .savePlan(
-              id: planId,
-              assetId: assetId,
-              title: _titleController.text,
-              instructions: _instructionsController.text,
-              recurrence: RecurrenceRule(interval: interval, unit: _unit),
-              priority: _priority,
-              nextDueDate: _dueDate,
-              reminderDaysBefore: reminderDaysBefore,
-              metadata: metadata,
-              expectedOccurrenceId: widget.task?.plan.currentOccurrenceId,
-              expectedUpdatedAt: widget.task?.plan.updatedAt,
-            );
       }
-      await ref.read(offlineCreationDraftStoreProvider).clear(_offlineDraftKey);
+      await draftStore.clear(draftKey, expectedGeneration: draftGeneration);
 
-      await wakeNotificationReconciliation(ref);
+      await wakeReminders();
       if (mounted) {
         if (widget.task == null) {
           showTaskActionFeedback(context, TaskActionFeedbackType.created);

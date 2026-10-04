@@ -78,6 +78,8 @@ For meaningful UI changes, verify:
 - English LTR and Arabic RTL.
 - Long translations and text scaling.
 - Form labels, validation, hints, and error states.
+- Item-editor tag/draft initialization and retry states, plus old and distant
+  future date-picker selections in item editing, task editing, and postponement.
 - Dialogs, snackbars, bottom sheets, and notifications.
 - Process splash, static startup/failure branches, capability setup, and settings-return states.
 - Charts, dates, recurrence text, and statistics.
@@ -95,6 +97,10 @@ flutter test --no-pub test/feedback_coordinator_test.dart
 ```
 
 This is widget/source evidence only. It does not replace English/Arabic review, TalkBack, keyboard/focus, system-settings return, or launch testing on a physical release device.
+
+`test/ui_audit_regressions_test.dart` covers English/Arabic date-picker bounds
+and item-editor initialization failure/retry using the existing localized error
+and Retry messages.
 
 ## Generated-file discipline
 

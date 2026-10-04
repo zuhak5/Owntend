@@ -4,7 +4,7 @@
 
 Owntend helps users inventory household assets and keep recurring or one-time maintenance work visible, scheduled, and recoverable across offline and signed-in use.
 
-The first Flutter frame is owned by one process-lifetime splash above deferred startup, theme loading, application, and failure branches. Dismissal is gated on startup readiness (minimum 600ms brand settling duration, 0ms on reduced motion, immediate dismissal on fatal errors). A non-blank startup surface remains available underneath. Supabase initialization failure stays on a localized blocking surface with an explicit retry instead of silently launching a signed-out, cloud-disabled application. English/Arabic semantics, scaled compact layout, and reduced-motion behavior are part of the widget contract; a physical release launch still requires device validation.
+The first Flutter frame is owned by one process-lifetime splash above deferred startup, theme loading, application, and failure branches. Dismissal is gated on startup readiness (minimum 600ms brand settling duration, 0ms on reduced motion, immediate dismissal on fatal errors). A non-blank startup surface remains available underneath. Supabase initialization failure presents a localized retry surface for pristine local state; established local data may open offline. Startup owns concurrent loading failures immediately and reports sign-out only when the repository session is cleared. English/Arabic semantics, scaled compact layout, and reduced-motion behavior are part of the widget contract; a physical release launch still requires device validation.
 
 ## Navigation surfaces
 
@@ -14,7 +14,10 @@ The current application exposes dashboard, assets, maintenance, calendar, search
 
 - Areas and rooms organize the home.
 - Item Type is the sole item classification: device, pet, plant, safety, or general.
-- Assets represent maintained things and can carry tags, photos, notes, warranty information, and type-specific detail. Imported photos are decoded by content, orientation-normalized, dimension/byte bounded, and stored as normalized JPEGs before metadata is committed; a misleading extension is never treated as image proof.
+- Assets represent maintained things and can carry tags, photos, notes, warranty information, and type-specific detail. Imported JPEG, PNG, GIF, BMP, and static WebP photos have their dimensions and metadata resource limits checked before decoding, then are orientation-normalized, dimension/byte bounded, and stored as normalized JPEGs before metadata is committed. Supported bounded ICC profiles are preserved with valid JPEG framing, including profiles split across input JPEG segments. Only the first frame of GIF or PNG is imported; TIFF, EXR, ICO, animated WebP, and oversized or malformed metadata are rejected. A misleading extension is never treated as image proof. See the [media import contract](../architecture/data-model.md#media).
+- Item editors finish loading existing tags and any saved draft before exposing
+  editable fields or enabling Save. Initialization failures provide a localized
+  retry, and closing the editor cancels further form initialization.
 - Specialized detail models support devices, pets, plants, and safety-related assets.
 - Trash and cleanup flows protect against accidental permanent deletion. Moving a task, asset, room, or area to Trash offers restoration through the protected Undo coordinator; permanent deletion remains separately confirmed.
 
@@ -28,6 +31,9 @@ Category is not a second item classifier, search entity, persistence field, back
 - Calendar integration and date-based filtering.
 - Recommendations, timelines, readiness or health summaries, streaks, and warranty alerts.
 - Local reminders that can be restored after reboot or application update.
+- Existing dates outside the normal picker window remain selectable in item and
+  task editors and task postponement. Opening a picker never rewrites the saved
+  date merely to fit the usual range.
 - Task metadata without task-to-task dependency links; that retired feature is
   removed from editors, details, drafts, local/cloud schemas, and sync payloads.
 
@@ -98,7 +104,7 @@ later startup, foreground, or background retry.
 - Pre-restore safety backup.
 - Compatibility checks and rollback on failure.
 
-Backups exported outside the app are user-controlled sensitive files. The pre-launch application accepts only the canonical format-1/schema-1 contract and contains no obsolete Category table or old-format migration path.
+Backups exported outside the app are user-controlled sensitive files. The pre-launch application accepts the canonical format-1 container with the current schema contract defined by `AppDatabase.currentSchemaVersion` in [`app_database.dart`](../../lib/src/core/database/app_database.dart) and contains no obsolete Category table or old-format migration path.
 The restore picker exposes only the `.owntend-backup` extension; a generic `.zip` is not a supported backup.
 
 ## Monetization
@@ -114,6 +120,10 @@ The restore picker exposes only the `.owntend-backup` extension; a generic `.zip
   account-bound, single-use token from a canonically accepted completion; the
   client does not infer eligibility from its local due-task count.
 - Explicit unfinished drafts when charged creation cannot be completed offline.
+- Paid item-type changes and task moves preserve the rest of the form across
+  their own synchronization updates and editor closure. Failed local saves keep
+  the secure draft for reopening; completing an older save preserves a newer
+  unfinished draft. Competing domain edits still require reconciliation.
 - A collapsible native-ad placement on every routed application content screen,
   including task detail, Inbox, permission setup, and all Tools destinations.
 

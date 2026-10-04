@@ -96,6 +96,9 @@ class SyncCoordinator implements CloudSyncRepository, _SyncScheduleEnv {
   final StreamController<SyncStatus> _statusController =
       StreamController<SyncStatus>.broadcast();
   static const _localCleanupTimeout = Duration(seconds: 4);
+  // Provider replacement retires a coordinator without cancelling its I/O.
+  // Keep completion ownership across generations sharing the app's media tree.
+  static final Set<Future<void>> _unsettledWork = {};
 
   StreamSubscription<Object?>? _accountSubscription;
   StreamSubscription<Object?>? _pendingSubscription;
@@ -130,6 +133,7 @@ class SyncCoordinator implements CloudSyncRepository, _SyncScheduleEnv {
   final Map<String, SyncRecord> _deferredRemoteMedia = {};
   bool? _lastCloudAccountWasExisting;
   bool _accountDeletionInProgress = false;
+  bool _restoreSuspended = false;
   String? _deletingUserId;
   String? _lastAccountScopeKey;
 
@@ -137,7 +141,20 @@ class SyncCoordinator implements CloudSyncRepository, _SyncScheduleEnv {
 
   // WP-007: environment answers for [_SyncScheduleController].
   @override
-  bool get scheduleAccountDeletionInProgress => _accountDeletionInProgress;
+  bool get scheduleBlocked => _syncBlocked;
+
+  bool get _syncBlocked => _accountDeletionInProgress || _restoreSuspended;
+
+  void _requireRestoreReleased() {
+    if (_restoreSuspended) {
+      throw const SupabaseFailure(
+        kind: SupabaseFailureKind.conflict,
+        message: 'Cloud sync is suspended until restore recovery completes.',
+        diagnosticCode: 'restore_sync_suspended',
+      );
+    }
+  }
+
   @override
   bool get scheduleAutomaticEnabled => _automaticSyncEnabled;
   @override
@@ -230,6 +247,7 @@ class SyncCoordinator implements CloudSyncRepository, _SyncScheduleEnv {
 
   @override
   Future<void> enable() => _serializeAccountTransition(() async {
+    _requireRestoreReleased();
     final session = _authRepository.currentSession;
     if (session == null) {
       throw const SupabaseFailure(
@@ -238,6 +256,7 @@ class SyncCoordinator implements CloudSyncRepository, _SyncScheduleEnv {
       );
     }
     final account = await _localStore.account();
+    _requireRestoreReleased();
     if (account.migrationState == 'restorePaused' || account.restorePending) {
       throw const SupabaseFailure(
         kind: SupabaseFailureKind.conflict,
@@ -268,6 +287,7 @@ class SyncCoordinator implements CloudSyncRepository, _SyncScheduleEnv {
   @override
   Future<void> resumeRestoredSnapshotToCloud() =>
       _serializeAccountTransition(() async {
+        _requireRestoreReleased();
         final session = _authRepository.currentSession;
         if (session == null) {
           throw const SupabaseFailure(
@@ -276,6 +296,7 @@ class SyncCoordinator implements CloudSyncRepository, _SyncScheduleEnv {
           );
         }
         final account = await _localStore.account();
+        _requireRestoreReleased();
         if (account.migrationState != 'restorePaused' ||
             !account.restorePending ||
             account.boundUserId != null) {
@@ -298,7 +319,7 @@ class SyncCoordinator implements CloudSyncRepository, _SyncScheduleEnv {
   Future<void> _awaitInitialHydrationReadiness(String expectedUserId) async {
     final deadline = DateTime.now().add(initialHydrationLeaseWaitTimeout);
     while (true) {
-      if (_accountDeletionInProgress ||
+      if (_syncBlocked ||
           _authRepository.currentSession?.userId != expectedUserId) {
         throw const SupabaseFailure(
           kind: SupabaseFailureKind.authentication,
@@ -311,7 +332,7 @@ class SyncCoordinator implements CloudSyncRepository, _SyncScheduleEnv {
         mode: SyncMode.initialHydration,
       );
 
-      if (_accountDeletionInProgress ||
+      if (_syncBlocked ||
           _authRepository.currentSession?.userId != expectedUserId) {
         throw const SupabaseFailure(
           kind: SupabaseFailureKind.authentication,
@@ -394,37 +415,52 @@ class SyncCoordinator implements CloudSyncRepository, _SyncScheduleEnv {
   Future<void> fullReconcile() => _startSync(mode: SyncMode.fullReconcile);
 
   @override
-  Future<void> suspend() => _serializeAccountTransition(() async {
-    _advanceAccountEpoch('restore_barrier_suspend');
-    _cancelScheduledSyncWork();
-    _deferredRemoteMedia.clear();
-    _phaseOverride = SyncPhase.offline;
-    _messageOverride = 'Cloud sync is suspended for restore.';
-    try {
-      await configureBackgroundSync?.call(false);
-    } on Object catch (error) {
-      AppLogger.warning(
-        'sync_restore_suspend_background_cancel_failed',
-        error: error,
-      );
-    }
-    await _stopRealtime();
-    final active = _activeSync;
-    if (active != null) {
+  Future<void> suspend() {
+    // Close eligibility immediately, including while another account
+    // transition is awaiting I/O. Only a fresh coordinator after a verified
+    // restore commit or rollback may accept work again.
+    _restoreSuspended = true;
+    return _serializeAccountTransition(() async {
+      _advanceAccountEpoch('restore_barrier_suspend');
+      _cancelScheduledSyncWork();
+      _deferredRemoteMedia.clear();
+      _phaseOverride = SyncPhase.offline;
+      _messageOverride = 'Cloud sync is suspended for restore.';
       try {
-        await active.timeout(_localCleanupTimeout);
-      } on TimeoutException catch (error) {
+        await configureBackgroundSync?.call(false);
+      } on Object catch (error) {
         AppLogger.warning(
-          'sync_restore_active_sync_detached',
+          'sync_restore_suspend_background_cancel_failed',
           error: error,
-          fields: {'attempt': _syncAttemptSerial},
         );
-      } on Object {
-        // The active operation already recorded its actionable failure.
       }
-    }
-    await _emit();
-  });
+      await _stopRealtime();
+      await _awaitStoppedWork();
+      await _emit();
+    });
+  }
+
+  Future<T> _trackWork<T>(Future<T> work) {
+    late final Future<void> settled;
+    settled = work.then<void>(
+      (_) => _unsettledWork.remove(settled),
+      onError: (Object _, StackTrace _) {
+        _unsettledWork.remove(settled);
+      },
+    );
+    _unsettledWork.add(settled);
+    // Preserve the original result/error for its caller. The shared signal
+    // observes settlement only and never turns a failed operation into success.
+    return work;
+  }
+
+  Future<void> _awaitStoppedWork() async {
+    // A timeout is a failed barrier, never permission to clean or replace files
+    // while an old writer can still recreate them. Callers retain recovery state
+    // or cancel a fresh, pre-request attempt and may retry after work settles.
+    await Future.wait<void>(_unsettledWork.toList(growable: false))
+        .timeout(_localCleanupTimeout);
+  }
 
   Future<void> syncIncremental() => _startSync(mode: SyncMode.incrementalPull);
 
@@ -453,20 +489,7 @@ class SyncCoordinator implements CloudSyncRepository, _SyncScheduleEnv {
         );
       }
       await _stopRealtime();
-      final active = _activeSync;
-      if (active != null) {
-        try {
-          await active.timeout(_localCleanupTimeout);
-        } on TimeoutException catch (error) {
-          AppLogger.warning(
-            'sync_account_deletion_active_sync_detached',
-            error: error,
-            fields: {'attempt': _syncAttemptSerial},
-          );
-        } on Object {
-          // The active operation already recorded its actionable failure.
-        }
-      }
+      await _awaitStoppedWork();
       await _emit();
     });
   }
@@ -499,7 +522,9 @@ class SyncCoordinator implements CloudSyncRepository, _SyncScheduleEnv {
       _advanceAccountEpoch('account_deletion_cancelled');
       final account = await _localStore.existingAccount();
       try {
-        await configureBackgroundSync?.call(account?.enabled ?? false);
+        await configureBackgroundSync?.call(
+          !_syncBlocked && (account?.enabled ?? false),
+        );
       } on Object catch (error) {
         AppLogger.warning(
           'sync_account_deletion_background_resume_failed',
@@ -515,9 +540,13 @@ class SyncCoordinator implements CloudSyncRepository, _SyncScheduleEnv {
   }
 
   void startPostReadyWork() {
-    if (_accountDeletionInProgress) return;
+    if (_syncBlocked) return;
     if (_postReadyWork != null) return;
-    final work = _runPostReadyWork();
+    final work = _trackWork(
+      _runPostReadyWork().catchError((Object error, StackTrace _) {
+        AppLogger.warning('sync_post_ready_failed', error: error);
+      }),
+    );
     _postReadyWork = work;
     unawaited(
       work.whenComplete(() {
@@ -529,7 +558,7 @@ class SyncCoordinator implements CloudSyncRepository, _SyncScheduleEnv {
   }
 
   Future<void> onAppResumed() async {
-    if (_accountDeletionInProgress) return;
+    if (_syncBlocked) return;
     final account = await _localStore.existingAccount();
     if (account == null) return;
     if (account.enabled && _authRepository.currentSession != null) {
@@ -553,6 +582,8 @@ class SyncCoordinator implements CloudSyncRepository, _SyncScheduleEnv {
   }
 
   Future<void> dispose() async {
+    _restoreSuspended = true;
+    _advanceAccountEpoch('coordinator_disposed');
     _initializationTimer?.cancel();
     _retryTimer?.cancel();
     _realtimeReconnectTimer?.cancel();

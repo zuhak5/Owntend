@@ -298,6 +298,16 @@ explicit drafts. Copy recovery retains local-only tag/photo intent in secure
 storage but sends only the allowlisted source/target/room/include/map contract
 to Supabase.
 
+Paid editor continuations capture the account-bound root, related rows and
+outbox intent before the request. After acceptance, a short local transaction
+validates that rows still match the preimage or that exact RPC's canonical
+result, rejects newer shadows and replacement intent, adopts canonical rows and
+shadows, then performs the ordinary repository CAS save. Already-acknowledged
+pre-request queue entries may be absent; new intent cannot be erased. A type
+change replaces its old detail set and acknowledges only unchanged detail
+intent after validating the complete snapshot. Any form-save failure rolls
+this transaction back. This path never advances the feed cursor.
+
 ## Media synchronization
 
 Media requires coordination between local metadata, file availability, Storage objects, upload state, and deletion cleanup.
@@ -306,7 +316,7 @@ Media requires coordination between local metadata, file availability, Storage o
 - **Prepare-first ledger**: `prepare_asset_photo_upload` creates an owner-scoped stage before any Storage mutation and returns a server-issued `{user_id}/media/{staging_uuid}/{attempt}.{ext}` path. The preparation binds asset, photo, expected size/MIME, an idempotency key, and the client digest (explicitly advisory). Exact retries use atomic `ON CONFLICT`; expired/failed attempts retain identity, queue the previous path, and issue a new attempt.
 - **Exact quota authority**: one per-user transaction advisory lock serializes quota evaluation. Fresh `staged` rows may not exceed 20 or 100 MiB aggregate expected bytes. Concurrent exact replays consume quota once; concurrent distinct prepares cannot oversubscribe either limit.
 - **Storage policy binding**: authenticated INSERT requires the exact fresh staged path and active session. Prefix ownership alone is insufficient. Authenticated DELETE is not granted; `delete_asset_photo` records cleanup intent and the service worker removes bytes.
-- **Required client saga**: The client prepares, uploads once with `upsert: false`, then calls `finalize_asset_photo_upload`. Finalization reads trusted Storage metadata and validates owner, row revision, MIME type, size (<=10 MiB), and object existence before exposing photo metadata. Failure remains retryable or visible; there is no direct-upload fallback.
+- **Required client saga**: The client prepares, uploads once with `upsert: false`, then calls `finalize_asset_photo_upload`. Finalization reads trusted Storage metadata and validates owner, row revision, MIME type, size (<=10 MiB), and object existence before exposing photo metadata. First execution and replay return the canonical stored row, including trigger-assigned revision, preserved caption/primary state, and creation/update timestamps. The gateway validates and adopts those server values rather than reconstructing them from the request or the device clock. Failure remains retryable or visible; there is no direct-upload fallback.
 - **Server Durable Cleanup Ledger**: Upload finalization and server-side replacement flows enqueue superseded object paths into `media_cleanup_queue` transactionally before database mutation acknowledgement.
 - **Client Delete Tombstone & Cleanup Handoff**: A local `asset_photo` DELETE preserves the exact canonical Storage path in the durable outbox tombstone before the local row disappears. If the remote metadata row was already deleted (including response-loss retry), `SupabaseSyncGateway.write()` returns that same tombstone path as cleanup work. The coordinator acknowledges the exact outbox generation and inserts `sync_media_cleanup` in one Drift transaction, so the object path is always represented by either pending mutation intent or durable cleanup work. Storage object-not-found is successful idempotent cleanup; duplicate cleanup attempts are safe.
 - **Local file cleanup**: Replaced or remotely deleted local photo paths enter `local_media_cleanup`. Filesystem failures persist bounded retry/backoff; paths escaping the application documents root become visible terminal records instead of being executed.
@@ -323,7 +333,17 @@ Retryable failures should use bounded exponential backoff with jitter and persis
 
 ## Account deletion interaction
 
+Restore suspension is a separate coordinator-lifetime gate. Manual refresh, retries, full reconciliation, automatic scheduling, account/background listeners, Realtime, and post-ready work cannot start while it is set. Successful restore recreates the coordinator through the database epoch; proven rollback recreates it without changing the database. An unresolved journal requires startup recovery before sync can resume. Account-deletion cancellation or an app-resume event cannot bypass restore suspension.
+
 Before remote account deletion, normal synchronization is suspended to prevent new cloud writes. The deletion workflow then removes remote media and account state, records a verifiable result, and clears local data. If deletion succeeds remotely but local cleanup fails, restart recovery must finish local cleanup without attempting to resurrect the deleted cloud account.
+
+Both restore and deletion barriers join existing main sync and optional
+post-ready work before reporting success, including unsettled operations from
+retired coordinators. Disposal blocks new work and invalidates the old epoch;
+operation completion remains owned across provider replacements. Photo cache
+writes are part of that work. A settlement timeout fails the barrier; it never detaches a still-active
+writer and then grants permission to delete or replace media. Database epoch
+checks alone do not prove that a filesystem writer has stopped.
 
 ## Required test matrix
 

@@ -83,6 +83,84 @@ void main() {
       },
     );
 
+    test(
+      'rejects oversized export manifest without publishing or pruning',
+      () async {
+        final db = await _openDatabase(docs, databases);
+        final service = OwntendBackupService(db);
+        final previous = await service.exportBackup();
+        final media = Directory(p.join(docs.path, 'photos'))..createSync();
+        for (var index = 0; index < 1000; index++) {
+          File(p.join(media.path, 'audit-photo-$index.jpg'))
+              .writeAsBytesSync([1]);
+        }
+
+        await expectLater(
+          service.exportBackup(),
+          throwsA(isA<BackupException>()),
+        );
+
+        expect((await service.backupState()).lastBackup?.successful, isFalse);
+        expect(
+          Directory(p.dirname(previous)).listSync().map((file) => file.path),
+          [previous],
+        );
+        expect(temp.listSync(), isEmpty);
+        await expectLater(service.inspectBackup(previous), completes);
+      },
+    );
+
+    test(
+      'rejects oversized media before writing an encrypted payload',
+      () async {
+        final db = await _openDatabase(docs, databases);
+        final media = Directory(p.join(docs.path, 'photos'))..createSync();
+        final source = File(p.join(media.path, 'too-large.jpg'));
+        final handle = await source.open(mode: FileMode.write);
+        await handle.truncate(256 * 1024 * 1024);
+        await handle.close();
+        final service = OwntendBackupService(db);
+
+        await expectLater(
+          service.exportBackup(),
+          throwsA(isA<BackupException>()),
+        );
+
+        expect(Directory(p.join(docs.path, 'backups')).listSync(), isEmpty);
+        expect(temp.listSync(), isEmpty);
+        expect((await service.backupState()).lastBackup?.successful, isFalse);
+      },
+    );
+
+    test(
+      'rejects authenticated trailing bytes inside the last payload frame',
+      () async {
+        final db = await _openDatabase(docs, databases);
+        final service = OwntendBackupService(db);
+        final backupPath = await service.exportBackup();
+        final tampered = await _tamperBackup(
+          backupPath,
+          root,
+          appendPayloadBytes: true,
+        );
+
+        await expectLater(
+          service.restoreBackup(
+            tampered.path,
+            cloudDisposition: RestoreCloudDisposition.localOnlyPaused,
+          ),
+          throwsA(
+            isA<BackupException>().having(
+              (error) => error.message,
+              'message',
+              contains('trailing data'),
+            ),
+          ),
+        );
+        expect(temp.listSync(), isEmpty);
+      },
+    );
+
     test('backs up and restores media downloaded from cloud sync', () async {
       final db = await _openDatabase(docs, databases);
       await _seedRealisticData(db, root);
@@ -508,8 +586,10 @@ END
     test('death before the import transaction leaves the complete old '
         'generation', () async {
       final (:db, :photo, :backupPath) = await seedDivergedState();
+      var rollbacks = 0;
       final crashing = OwntendBackupService(
         db,
+        onRestoreRollback: () => rollbacks++,
         failpoints: RestoreFailpoints({'db:importCommit': 1}),
       );
 
@@ -521,6 +601,7 @@ END
         throwsA(isA<StateError>()),
       );
 
+      expect(rollbacks, 1);
       // The in-process failure handler already rolled staged media back;
       // assert the old generation is complete and unpaired with new data.
       expect(await roomName(db), 'Renamed After Backup');
@@ -534,6 +615,7 @@ END
       final (:db, :photo, :backupPath) = await seedDivergedState();
       final crashing = OwntendBackupService(
         db,
+        onRestoreRollback: () => fail('Committed restore must stay suspended'),
         failpoints: RestoreFailpoints({'db:importCommit:returned': 1}),
       );
 
@@ -776,6 +858,7 @@ Future<File> _tamperBackup(
   Directory root, {
   Map<String, Object?> manifestUpdates = const {},
   bool mutateDatabase = false,
+  bool appendPayloadBytes = false,
 }) async {
   final secret = await BackupAutoKeyStore.load();
   final sourceHandle = await File(backupPath).open(mode: FileMode.read);
@@ -811,7 +894,7 @@ Future<File> _tamperBackup(
       // decrypted content no longer matches the manifest checksum.
       frame[0] ^= 0x01;
     }
-    await writer.writeFrame(frame);
+    await writer.writeFrame(appendPayloadBytes ? [...frame, 0x01] : frame);
     payloadFrameIndex++;
   }
   await outHandle.close();

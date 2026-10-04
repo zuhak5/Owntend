@@ -41,6 +41,9 @@ Verification includes the applicable package name, version/build, digest, signer
 - Never let stale or malformed metadata enable downloads.
 - Never let network-fetched or cached metadata stay trusted past its absolute
   lease deadline.
+- Use one accepted manifest for every download producer, including ABI variants;
+  recheck lease authority on activation, expiry, and page resume. Historical
+  withdrawn or superseded releases never gain variant download links.
 - Never replace stable verified identity with an in-progress target version.
 - Never bypass signer, package, checksum, or ancestry checks to restore availability.
 - Keep generated diagnostics separate from public secrets and credentials.

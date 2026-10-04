@@ -6,8 +6,8 @@ extension _SyncRunCoordinator on SyncCoordinator {
   }
 
   Future<SyncRunOutcome> _startSyncWithOutcome({required SyncMode mode}) {
-    if (_accountDeletionInProgress) {
-      AppLogger.info('sync_skipped_account_deletion_in_progress');
+    if (_syncBlocked) {
+      AppLogger.info('sync_skipped_safety_barrier');
       return Future<SyncRunOutcome>.value(SyncRunOutcome.notEligible);
     }
     if (_activeSync != null) {
@@ -49,23 +49,25 @@ extension _SyncRunCoordinator on SyncCoordinator {
             work.pullTables?.length ?? (syncEntitySpecs.length + 1),
       },
     );
-    return _activeSync = _runSync(work, attempt: attempt).whenComplete(() {
-      _activeSync = null;
-      _activeWork = null;
-      if (_accountDeletionInProgress) {
-        _schedule.cancelQueuedWork();
-        return;
-      }
-      if (_schedule.takeFollowUpRequested()) {
-        final nextFullSync = _schedule.takeFollowUpFullSync();
-        if (nextFullSync) {
-          unawaited(_startSync(mode: SyncMode.fullReconcile));
-        } else {
-          _scheduleAutomaticSync();
+    return _activeSync = _trackWork(
+      _runSync(work, attempt: attempt).whenComplete(() {
+        _activeSync = null;
+        _activeWork = null;
+        if (_syncBlocked) {
+          _schedule.cancelQueuedWork();
+          return;
         }
-      }
-      unawaited(_scheduleRetry());
-    });
+        if (_schedule.takeFollowUpRequested()) {
+          final nextFullSync = _schedule.takeFollowUpFullSync();
+          if (nextFullSync) {
+            unawaited(_startSync(mode: SyncMode.fullReconcile));
+          } else {
+            _scheduleAutomaticSync();
+          }
+        }
+        unawaited(_scheduleRetry());
+      }),
+    );
   }
 
   SyncWork _workFor(
@@ -115,7 +117,7 @@ extension _SyncRunCoordinator on SyncCoordinator {
     required int attempt,
   }) async {
     _ActiveAccountScope? activeScope;
-    if (_accountDeletionInProgress) return SyncRunOutcome.notEligible;
+    if (_syncBlocked) return SyncRunOutcome.notEligible;
     final session = _authRepository.currentSession;
     final account = await _localStore.existingAccount();
     if (account == null) return SyncRunOutcome.notEligible;
@@ -331,11 +333,7 @@ extension _SyncRunCoordinator on SyncCoordinator {
       }
       final failure = SupabaseFailure.from(error);
       if (failure.kind == SupabaseFailureKind.authentication) {
-        try {
-          await _authRepository.signOut();
-        } on Object {
-          // The invalid cloud session must not prevent local-first recovery.
-        }
+        _signOutAfterFailedSync(activeScope);
       }
       _phaseOverride = switch (failure.kind) {
         SupabaseFailureKind.offline => SyncPhase.offline,
@@ -389,6 +387,21 @@ extension _SyncRunCoordinator on SyncCoordinator {
         );
       }
     }
+  }
+
+  void _signOutAfterFailedSync(_ActiveAccountScope scope) {
+    _runListener('sync_authentication_sign_out_failed', () async {
+      // Sign-out enters the same safety barrier. Finish this run and any
+      // enable/hydration transition awaiting it before entering that barrier.
+      try {
+        await _activeSync;
+      } on Object {
+        // The sync caller receives the original failure independently.
+      }
+      await _accountTransition;
+      if (!_isActiveAccountScope(scope)) return;
+      await _authRepository.signOut();
+    });
   }
 
   Future<_PullOutcome> _pullAll(

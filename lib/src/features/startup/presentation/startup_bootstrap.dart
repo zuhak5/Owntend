@@ -634,6 +634,7 @@ class StartupBootstrapController {
   var _routeHomeAfterReady = false;
   var _disposed = false;
   var _navigationCompleted = false;
+  var _syncSuspendedForSignOut = false;
   String? _activeUserId;
   Future<void>? _activeBootstrap;
   InitialHomeSnapshot? _offlineSnapshotCandidate;
@@ -728,6 +729,7 @@ class StartupBootstrapController {
       return _activeBootstrap;
     }
     AppLogger.info('startup_restore_retry');
+    _releaseSignOutSyncSuspension();
     await _bootstrapForSession(session, forceRestore: true);
   }
 
@@ -746,18 +748,25 @@ class StartupBootstrapController {
   }
 
   Future<void> signOutFromStartup() async {
-    final session = _state.value.session;
-    _startupGeneration += 1;
+    final previous = _state.value;
+    final session = previous.session;
+    final generation = ++_startupGeneration;
+    final auth = _ref.read(authRepositoryProvider);
+    final scheduler = _ref.read(notificationSchedulerProvider);
+    final inbox = _ref.read(notificationInboxRepositoryProvider);
+    final store = _ref.read(localSyncStoreProvider);
+    final syncCoordinator = _ref.read(syncCoordinatorProvider);
     final inFlight = _activeBootstrap;
     _activeBootstrap = null;
     _activeUserId = null;
     _routeHomeAfterReady = false;
     _navigationCompleted = false;
     _offlineSnapshotCandidate = null;
+    Object? signOutError;
     try {
       _scheduleRestoreServiceStop();
-      final syncCoordinator = _ref.read(syncCoordinatorProvider);
       if (syncCoordinator != null) {
+        _syncSuspendedForSignOut = true;
         await syncCoordinator.suspend();
       }
       if (inFlight != null) {
@@ -768,21 +777,53 @@ class StartupBootstrapController {
         }
       }
       if (session != null) {
-        await _ref
-            .read(notificationSchedulerProvider)
-            .clearAllScheduledReminders();
-        await _ref.read(notificationInboxRepositoryProvider).clear();
-        await _ref
-            .read(localSyncStoreProvider)
-            ?.clearPartialBootstrapForUser(session.userId);
+        await scheduler.clearAllScheduledReminders();
+        await inbox.clear();
+        await store?.clearPartialBootstrapForUser(session.userId);
       }
-      await _ref.read(authRepositoryProvider)?.signOut();
+      await auth?.signOut();
     } on Object catch (error) {
+      signOutError = error;
       AppLogger.warning('startup_sign_out', error: error);
     }
+    if (_disposed || generation != _startupGeneration) return;
     _ref.read(initialHomeSnapshotProvider).value = null;
-    _publishStartupState(const StartupBootstrapState.unauthenticated());
+    final remainingSession = auth?.currentSession;
+    if (remainingSession == null) {
+      _releaseSignOutSyncSuspension();
+      _publishStartupState(const StartupBootstrapState.unauthenticated());
+    } else {
+      final stage = previous.failure?.stage ?? InitialHydrationStage.finalizing;
+      _publishStartupState(
+        StartupBootstrapState.startupFailed(
+          session: remainingSession,
+          status: syntheticStartupStatus(
+            RestoreRunState.failed,
+            phase: SyncPhase.error,
+            stage: stage,
+          ),
+          canContinueOffline: false,
+          failure: StartupFailure(
+            stage: stage,
+            kind: StartupFailureKind.failed,
+            operation: 'sign_out',
+            allowConnectionCheck: false,
+          ),
+        ),
+      );
+      if (signOutError == null) {
+        AppLogger.warning('startup_sign_out_session_retained');
+      }
+    }
     _scheduleRestoreServiceStop();
+  }
+
+  void _releaseSignOutSyncSuspension() {
+    if (!_syncSuspendedForSignOut) return;
+    _syncSuspendedForSignOut = false;
+    // The retired coordinator must never resume stale work. A verified sign-out
+    // or an explicit startup retry creates a fresh account-bound owner.
+    _ref.invalidate(syncCoordinatorProvider);
   }
 
   Future<void> _bootstrapFromRepositorySession() async {
@@ -795,16 +836,30 @@ class StartupBootstrapController {
   }
 
   Future<void> _transitionSignedOut() async {
+    _releaseSignOutSyncSuspension();
     _startupGeneration += 1;
     _activeBootstrap = null;
     _activeUserId = null;
     _routeHomeAfterReady = false;
     _navigationCompleted = false;
     _offlineSnapshotCandidate = null;
+    final scheduler = _ref.read(notificationSchedulerProvider);
+    final inbox = _ref.read(notificationInboxRepositoryProvider);
+    // Auth already confirms sign-out. Own both independent cleanup failures
+    // without delaying the signed-out surface or attaching startup timers to
+    // work that deliberately outlives that surface.
     unawaited(
-      _ref.read(notificationSchedulerProvider).clearAllScheduledReminders(),
+      Future<void>.sync(scheduler.clearAllScheduledReminders)
+          .catchError((Object error, StackTrace stack) {
+            AppLogger.warning('startup_signed_out_reminders', error: error);
+          }),
     );
-    unawaited(_ref.read(notificationInboxRepositoryProvider).clear());
+    unawaited(
+      Future<void>.sync(inbox.clear)
+          .catchError((Object error, StackTrace stack) {
+            AppLogger.warning('startup_signed_out_inbox', error: error);
+          }),
+    );
     _ref.read(initialHomeSnapshotProvider).value = null;
     _publishStartupState(const StartupBootstrapState.unauthenticated());
     _scheduleRestoreServiceStop();
@@ -998,6 +1053,14 @@ class StartupBootstrapController {
       'load_rooms',
       () => _ref.read(assetRepositoryProvider).listRooms(),
     );
+    // Attach failure ownership to every concurrent read immediately, even
+    // when an earlier read is still pending. Keep the original typed failure.
+    await Future.wait<Object>([
+      profileFuture,
+      tasksFuture,
+      assetsFuture,
+      roomsFuture,
+    ], eagerError: true);
     final profile = await profileFuture;
     final tasks = await tasksFuture;
     final rawAssets = await assetsFuture;

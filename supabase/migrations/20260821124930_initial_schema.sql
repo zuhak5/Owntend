@@ -191,12 +191,17 @@ begin
     return jsonb_build_object(
       'success', true,
       'idempotent', true,
-      'photo_id', p_photo_id,
-      'asset_id', p_asset_id,
+      'photo_id', v_photo.id,
+      'asset_id', v_photo.asset_id,
       'object_path', v_photo.object_path,
       'caption', v_photo.caption,
       'is_primary', v_photo.is_primary,
-      'revision', v_photo.revision
+      'revision', v_photo.revision,
+      'created_at', v_photo.created_at,
+      'updated_at', v_photo.updated_at,
+      'verified_size', v_stage.object_size,
+      'verified_mime_type', v_stage.mime_type,
+      'digest_verification', 'client_advisory'
     );
   end if;
   if v_stage.expires_at <= clock_timestamp() then
@@ -250,7 +255,8 @@ begin
     is_primary = case when excluded.is_primary then true else asset_photos.is_primary end,
     revision = case when asset_photos.object_path is distinct from excluded.object_path
       then asset_photos.revision + 1 else asset_photos.revision end,
-    updated_at = clock_timestamp();
+    updated_at = clock_timestamp()
+  returning * into v_photo;
 
   update public.media_staging_objects
   set status = 'finalized', finalized_at = clock_timestamp()
@@ -259,12 +265,14 @@ begin
   return jsonb_build_object(
     'success', true,
     'idempotent', false,
-    'photo_id', p_photo_id,
-    'asset_id', p_asset_id,
-    'object_path', v_stage.staging_path,
-    'caption', p_caption,
-    'is_primary', coalesce(p_is_primary, false),
-    'revision', coalesce(p_expected_revision, 1),
+    'photo_id', v_photo.id,
+    'asset_id', v_photo.asset_id,
+    'object_path', v_photo.object_path,
+    'caption', v_photo.caption,
+    'is_primary', v_photo.is_primary,
+    'revision', v_photo.revision,
+    'created_at', v_photo.created_at,
+    'updated_at', v_photo.updated_at,
     'verified_size', v_object_size,
     'verified_mime_type', v_object_mime,
     'digest_verification', 'client_advisory'
@@ -672,7 +680,23 @@ BEGIN
       'status', 'applied', 'asset_id', v_asset_id,
       'target_type', v_asset.asset_type, 'balance', COALESCE(v_balance, 0),
       'charged', v_existing.charged_amount, 'already_processed', true,
-      'asset', to_jsonb(v_asset)
+      'asset', to_jsonb(v_asset),
+      'detail_rows', COALESCE((
+        SELECT jsonb_agg(x.item)
+        FROM (
+          SELECT jsonb_build_object('entity', 'device_detail', 'row', to_jsonb(d)) AS item
+          FROM public.device_details d WHERE d.user_id = caller_id AND d.asset_id = v_asset_id
+          UNION ALL
+          SELECT jsonb_build_object('entity', 'pet_detail', 'row', to_jsonb(d))
+          FROM public.pet_details d WHERE d.user_id = caller_id AND d.asset_id = v_asset_id
+          UNION ALL
+          SELECT jsonb_build_object('entity', 'plant_detail', 'row', to_jsonb(d))
+          FROM public.plant_details d WHERE d.user_id = caller_id AND d.asset_id = v_asset_id
+          UNION ALL
+          SELECT jsonb_build_object('entity', 'safety_detail', 'row', to_jsonb(d))
+          FROM public.safety_details d WHERE d.user_id = caller_id AND d.asset_id = v_asset_id
+        ) x
+      ), '[]'::jsonb)
     );
   END IF;
 
@@ -848,7 +872,23 @@ BEGIN
   RETURN jsonb_build_object(
     'status', 'applied', 'asset_id', v_asset_id, 'target_type', v_target_type,
     'balance', v_next_balance, 'charged', v_charge,
-    'already_processed', false, 'asset', to_jsonb(v_asset)
+    'already_processed', false, 'asset', to_jsonb(v_asset),
+    'detail_rows', COALESCE((
+      SELECT jsonb_agg(x.item)
+      FROM (
+        SELECT jsonb_build_object('entity', 'device_detail', 'row', to_jsonb(d)) AS item
+        FROM public.device_details d WHERE d.user_id = caller_id AND d.asset_id = v_asset_id
+        UNION ALL
+        SELECT jsonb_build_object('entity', 'pet_detail', 'row', to_jsonb(d))
+        FROM public.pet_details d WHERE d.user_id = caller_id AND d.asset_id = v_asset_id
+        UNION ALL
+        SELECT jsonb_build_object('entity', 'plant_detail', 'row', to_jsonb(d))
+        FROM public.plant_details d WHERE d.user_id = caller_id AND d.asset_id = v_asset_id
+        UNION ALL
+        SELECT jsonb_build_object('entity', 'safety_detail', 'row', to_jsonb(d))
+        FROM public.safety_details d WHERE d.user_id = caller_id AND d.asset_id = v_asset_id
+      ) x
+    ), '[]'::jsonb)
   );
 EXCEPTION
   WHEN check_violation OR not_null_violation OR invalid_text_representation THEN

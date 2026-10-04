@@ -1298,18 +1298,28 @@ class FakeMonetizationRepository extends MonetizationRepository {
 
 class FakeOfflineCreationDraftStore extends OfflineCreationDraftStore {
   final drafts = <String, Map<String, dynamic>>{};
+  int _generation = 0;
 
   @override
-  Future<void> save(String key, Map<String, dynamic> value) async {
-    drafts[key] = value;
+  Future<String> save(String key, Map<String, dynamic> value) async {
+    final generation = '${++_generation}';
+    drafts[key] = {
+      ...value,
+      OfflineCreationDraftStore.generationKey: generation,
+    };
+    return generation;
   }
 
   @override
   Future<Map<String, dynamic>?> load(String key) async => drafts[key];
 
   @override
-  Future<void> clear(String key) async {
-    drafts.remove(key);
+  Future<void> clear(String key, {required String? expectedGeneration}) async {
+    if (expectedGeneration != null &&
+        drafts[key]?[OfflineCreationDraftStore.generationKey] ==
+            expectedGeneration) {
+      drafts.remove(key);
+    }
   }
 }
 

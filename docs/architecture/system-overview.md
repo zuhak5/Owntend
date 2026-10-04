@@ -1,5 +1,12 @@
 # System Overview
 
+The authenticated-ready `NotificationBootstrap` owns notification initialization,
+resume refresh and automatic-backup startup. It checks that it is still mounted
+after each awaited startup phase before starting another side effect. Leaving
+the ready surface prevents the retired owner from registering background work,
+refreshing notifications or starting a backup. Initial account-read and optional
+startup failures have explicit error ownership.
+
 ## Context
 
 Owntend is an Android-first Flutter application. Its central architectural requirement is that users can continue organizing assets and recording maintenance while offline, then synchronize safely after authentication and connectivity return.
@@ -52,6 +59,14 @@ The local database is the immediate user-facing working set. Cloud synchronizati
 Ordinary local-first domain screens render from Drift-backed Riverpod providers. A local mutation commits through its repository and Drift transaction, Drift watchers emit, Riverpod updates, and already-mounted widgets render the new value without route remounts, manual refreshes, or screen-local collection caches. Multi-table repository watches may coalesce closely related Drift invalidations long enough to observe one coherent post-transaction aggregate; presentation screens must not stack a second debounce for the same domain state.
 
 The startup `InitialHomeSnapshot` is a first-ready-frame seed, not an ongoing competing source of truth. Home uses a live provider value whenever that concern has one and falls back to the startup seed only while the live concern has never produced usable data. Non-domain startup concerns such as profile, weather, backup state, notification count, and avatar/session state retain their own live-first fallbacks where appropriate.
+
+Required profile/task/asset/room reads start together under one immediate error
+owner, so an early failure reaches the blocking retry surface even if another
+read remains pending. Startup sign-out reports signed-out state only when the
+authentication repository has cleared its session. A retained session stays on
+the blocking recovery surface with offline continuation disabled after partial
+cleanup. Its suspended sync coordinator is retired; successful sign-out or an
+explicit startup retry creates a fresh account-bound owner.
 
 Home organizes maintenance tasks into dynamic urgency sections: Overdue tasks are placed in a dedicated prominent section above Today's and Upcoming tasks whenever overdue items exist (displaying up to 5 overdue items directly with a total-count subtitle on the header and a direct `/maintenance?filter=overdue` action link). When maintenance plans exist and are completed or clear for today, the task section communicates that the plan is up to date, keeping the dashboard consistent with the 100% home readiness score and suppressing redundant floating action buttons during empty states. To prevent stale persisted statuses from leaking across midnight boundaries or application sleep, `getTaskBuckets` normalizes task status dynamically based on current wall time. Task hydration in `MaintenanceRepository` resolves associated rooms via targeted ID queries (`room.id.isIn(roomIds)`) rather than full-table scans. Sponsored native ad cards are positioned below the task list and empty-state surfaces to eliminate cumulative layout shift (CLS), and scroll position is preserved across navigation shell tab switches via `PageStorageKey`. Pull-to-refresh on the dashboard performs a coordinated, deduplicated parallel refresh of user streaks, weather observations, and cloud synchronization while automatically re-invalidating any errored domain providers.
 
@@ -112,9 +127,9 @@ Application SnackBars are coordinated through one protected queue. An active Und
 
 ## Notifications and background execution
 
-The Android host declares permissions and components required for internet access, optional approximate location, notifications, boot handling, wake locks, vibration, foreground data synchronization, and local notification receivers. Notification plugin initialization is separate from account-scoped periodic registration: after authenticated readiness, `NotificationBootstrap` verifies that the active Supabase session matches the bound local account before it registers or updates the unique daily WorkManager refresh. The worker independently reloads and revalidates the same account boundary before reading or scheduling anything.
+The Android host declares permissions and components required for internet access, optional approximate location, notifications, boot handling, wake locks, vibration, foreground data synchronization, and local notification receivers. Notification plugin initialization is separate from periodic registration. `NotificationBootstrap` registers or updates the unique daily WorkManager refresh only for an enabled matching session/account or local-only data with neither a session nor an account binding. The worker independently reloads this boundary, dispatches to the appropriate local or authenticated consumer, and checks identity again after scheduler initialization and refresh. A signed-out bound account cannot be treated as local-only data.
 
-Durable notification-reconciliation requests live in Drift and are consumed after authenticated notification bootstrap, after relevant foreground maintenance reconciliation, and by the daily WorkManager path. A serialized consumer coalesces pending requests into one schedule refresh, compares durable desired state with platform pending IDs, and removes only the exact request versions covered by verified convergence. Failures and snooze intent remain durable with bounded retry metadata, so restart or a later trigger can replay them safely. Background work restores or reconciles reminders and synchronization without introducing fine or background location.
+Durable notification-reconciliation requests live in Drift and are consumed after eligible notification bootstrap, after relevant foreground maintenance reconciliation, and by the daily WorkManager path. A consumer coalesces pending requests into one schedule refresh, compares durable desired state with platform pending IDs, and removes only the exact opaque request versions covered by verified convergence. SQL generates a fresh version on insertion and update, preventing same-second replacement or delete/reinsert from being acknowledged by older work. Failed alarm cancellation retains the snapshot and fails reconciliation so the next attempt can remove the stale alarm. Failures and snooze intent remain durable with bounded retry metadata, so restart or a later trigger can replay them safely. Background work restores or reconciles reminders and synchronization without introducing fine or background location.
 
 ## Backup and restore
 
@@ -122,7 +137,7 @@ Owntend produces versioned, authenticated `.owntend-backup` containers — an `O
 
 ## Media import
 
-Local photo import validates the file and source-byte budget before decoding on a worker isolate, rejects undecodable or excessive-pixel content, bakes orientation, scales to the configured maximum dimension, and searches a bounded JPEG-quality ladder for an output within the cloud 10 MiB contract. The repository writes that normalized output first and inserts photo metadata only after the filesystem succeeds; database failure removes the just-written file.
+Local photo import validates the file and source-byte budget before decoding on a worker isolate. Supported JPEG, PNG, GIF, BMP, and static WebP inputs pass bounded source-header checks before invoking decoder metadata APIs, including BMP palette bounds, container record counts, EXIF traversal limits, and bounded PNG image/profile inflation. TIFF, EXR, ICO, and animated WebP are rejected because their decoder paths do not meet this contract. The service verifies decoded dimensions again, normalizes the first frame, bakes orientation, scales to the configured maximum dimension, and searches a bounded JPEG-quality ladder for an output within the cloud 10 MiB contract. Bounded ICC profiles are reassembled and correctly framed for JPEG output; retained EXIF must fit its JPEG segment. Unsupported metadata sizes or malformed profile chunks fail the import. The [media contract](data-model.md#media) describes the supported metadata boundary. The repository writes that normalized output first and inserts photo metadata only after the filesystem succeeds; database failure removes the just-written file.
 
 ## Observability
 

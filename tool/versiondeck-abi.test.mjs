@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
+import vm from "node:vm";
 import test from "node:test";
+import { enhanceAbiDownloads } from "../download-site/abi-downloads.js";
 import {
   normalizeRelease,
   selectProductionApkVariants,
@@ -11,7 +13,11 @@ import {
   VERSIONDECK_SIGNER_SHA256,
   VERSIONDECK_SPLIT_ABIS,
   validateVersionDeckManifest,
+  classifyVersionDeckManifest,
+  VersionDeckManifestState,
+  VersionDeckReleaseAvailabilityStatus,
 } from "../download-site/manifest-schema.js";
+import { RELEASE_CACHE_SCHEMA_VERSION, ReleaseCacheState, classifyReleaseCache } from "../download-site/cache-policy.js";
 
 const SHA_BY_ABI = Object.freeze({
   "arm64-v8a": "1".repeat(64),
@@ -186,4 +192,202 @@ test("ABI download UI never guesses CPU architecture from user agent", async () 
   assert.match(source, /VersionDeck does not guess device architecture/);
   assert.doesNotMatch(source, /userAgent|userAgentData|navigator\.platform/i);
   for (const abi of VERSIONDECK_SPLIT_ABIS) assert.match(source, new RegExp(abi.replace("-", "\\-")));
+});
+
+test("ABI chooser never restores downloads for an unavailable release", async (t) => {
+  const normalized = await normalizeRelease(splitRelease(), normalizationOptions());
+  const release = normalized.release;
+  release.availability = {
+    status: "withdrawn", reasonCode: "operator_withdrawal",
+    message: "Withdrawn", decidedAt: "2026-08-20T13:56:00Z",
+    supersededByReleaseId: null,
+  };
+  const manifest = {
+    schemaVersion: 1,
+    generatedAt: "2026-08-20T13:56:00Z",
+    leaseExpiresAt: "2026-08-21T13:56:00Z",
+    generatorCommit: COMMIT,
+    repository: VERSIONDECK_REPOSITORY,
+    package: { name: "app.owntend.mobile", signerCertificateSha256: VERSIONDECK_SIGNER_SHA256 },
+    publication: { status: "active", reasonCode: null, message: null, updatedAt: null },
+    latestStableReleaseId: null,
+    latestPrereleaseReleaseId: null,
+    releases: [release],
+  };
+  assert.deepEqual(validateVersionDeckManifest(manifest, { now: NOW }), []);
+  const createdLinks = [];
+  const links = { querySelector: () => null, append: () => {} };
+  const disabledPrimary = { textContent: "Withdrawn", title: "Withdrawn" };
+  const card = {
+    dataset: { releaseId: String(release.id) },
+    querySelector: (selector) => ({
+      ".release-title": { textContent: `Owntend ${release.version}` },
+      ".release-meta": { textContent: `Build ${release.build}` },
+      ".archive-download": disabledPrimary,
+      ".release-links": links,
+    })[selector] ?? null,
+  };
+  const originalDocument = globalThis.document;
+  t.after(() => {
+    if (originalDocument === undefined) delete globalThis.document;
+    else globalThis.document = originalDocument;
+  });
+  t.mock.method(Date, "now", () => NOW);
+  globalThis.document = {
+    querySelector: () => null,
+    querySelectorAll: () => [card],
+    createElement: (tag) => {
+      const node = { dataset: {}, append: () => {} };
+      if (tag === "a") createdLinks.push(node);
+      return node;
+    },
+  };
+  await enhanceAbiDownloads(manifest);
+  assert.equal(createdLinks.filter((link) => link.href).length, 0);
+  assert.equal(disabledPrimary.textContent, "Withdrawn");
+  release.availability = {
+    status: "superseded", reasonCode: "replaced_by_newer_build", message: "Superseded",
+    decidedAt: "2026-08-20T13:56:00Z", supersededByReleaseId: release.id + 1,
+  };
+  const successor = structuredClone(normalized.release);
+  successor.id = release.id + 1;
+  successor.availability = { status: "active", reasonCode: null, message: null, decidedAt: null, supersededByReleaseId: null };
+  manifest.releases.push(successor);
+  assert.deepEqual(validateVersionDeckManifest(manifest, { now: NOW }), []);
+  await enhanceAbiDownloads(manifest);
+  assert.equal(createdLinks.filter((link) => link.href).length, 0);
+  release.availability = { status: "active", reasonCode: null, message: null, decidedAt: null, supersededByReleaseId: null };
+  manifest.publication = { status: "disabled", reasonCode: "operator_disabled", message: "Disabled", updatedAt: "2026-08-20T13:56:00Z" };
+  assert.deepEqual(validateVersionDeckManifest(manifest, { now: NOW }), []);
+  await enhanceAbiDownloads(manifest);
+  assert.equal(createdLinks.filter((link) => link.href).length, 0);
+});
+
+// Run the actual app renderer and registered event handlers with a minimal DOM.
+// No network, timers or browser globals escape this isolated VM context.
+async function loadedPage(manifest) {
+  const documentEvents = new Map();
+  const windowEvents = new Map();
+  const timers = new Map();
+  let nextTimer = 0;
+  let now = NOW;
+  class Element {
+    constructor(tag = "div") {
+      this.tagName = tag.toUpperCase();
+      this.dataset = {};
+      this.children = [];
+      this.attributes = new Map();
+      this.className = "";
+      this.classList = { add() {}, remove() {} };
+      this.style = {};
+      this.hidden = false;
+    }
+    set textContent(value) { this._text = value; this.children = []; }
+    get textContent() { return this._text || this.children.map((node) => typeof node === "string" ? node : node.textContent).join(""); }
+    append(...nodes) { for (const node of nodes) { this.children.push(node); if (typeof node === "object") node.parentElement = this; } }
+    replaceChildren(...nodes) { this.children = []; this.append(...nodes); }
+    insertBefore(node) { this.append(node); }
+    setAttribute(name, value) { this.attributes.set(name, value); }
+    removeAttribute(name) {
+      this.attributes.delete(name);
+      if (name === "href") delete this.href;
+      if (name.startsWith("data-")) delete this.dataset[name.slice(5).replace(/-([a-z])/g, (_, c) => c.toUpperCase())];
+    }
+    getAttribute(name) { return this.attributes.get(name); }
+    addEventListener() {}
+    closest(selector) { return selector === "[data-download-link]" && this.dataset.downloadLink ? this : this.parentElement?.closest(selector) ?? null; }
+    matches(selector) {
+      if (selector === "[data-download-link]") return this.dataset.downloadLink === "true";
+      if (selector === "[data-abi-chooser]") return this.dataset.abiChooser === "true";
+      return selector.startsWith(".") && this.className.split(" ").includes(selector.slice(1).split(":")[0]);
+    }
+    querySelectorAll(selector) {
+      return this.children.filter((node) => typeof node === "object").flatMap((node) => [
+        ...(node.matches(selector) ? [node] : []), ...node.querySelectorAll(selector),
+      ]);
+    }
+    querySelector(selector) { return this.querySelectorAll(selector)[0] ?? null; }
+  }
+  const nodes = new Map();
+  const ids = ["latest-card", "release-list", "release-count", "release-template", "refresh-button", "sticky-download", "sticky-version", "sticky-download-link", "toast", "release-status", "stale-banner", "stale-banner-text", "update-notice", "update-button"];
+  for (const id of ids) nodes.set(`#${id}`, new Element());
+  nodes.get("#release-template").content = {
+    cloneNode() {
+      const fragment = new Element();
+      const card = new Element(); card.className = "release-card";
+      for (const className of ["release-title", "release-label", "release-meta", "release-summary", "archive-download", "release-details", "release-toggle", "release-links", "release-exact-date", "release-changes", "release-hash-copy", "release-verification"]) {
+        const node = new Element(); node.className = className; card.append(node);
+      }
+      // Template selectors can evolve without making unrelated layout details
+      // part of the test contract; download state is always the real app code.
+      const query = card.querySelector.bind(card);
+      card.querySelector = (selector) => { const found = query(selector); if (found) return found; const node = new Element(); node.className = selector.slice(1); card.append(node); return node; };
+      fragment.append(card);
+      fragment.querySelector = (selector) => selector === ".release-card" ? card : card.querySelector(selector);
+      return fragment;
+    },
+  };
+  const document = {
+    hidden: false, body: new Element(),
+    querySelector(selector) {
+      const [id, descendant] = selector.split(" ");
+      if (descendant) return nodes.get(id)?.querySelector(descendant) ?? null;
+      return nodes.get(id) ?? null;
+    },
+    querySelectorAll(selector) {
+      if (selector.startsWith("#")) { const [id, descendant] = selector.split(" "); return nodes.get(id)?.querySelectorAll(descendant) ?? []; }
+      return [...nodes.values()].flatMap((node) => [...(node.matches(selector) ? [node] : []), ...node.querySelectorAll(selector)]);
+    },
+    createElement: (tag) => new Element(tag),
+    createTextNode: (text) => text,
+    addEventListener(name, handler) { documentEvents.set(name, handler); },
+  };
+  const context = vm.createContext({
+    document, window: { addEventListener(name, handler) { windowEvents.set(name, handler); } },
+    navigator: {}, console, Intl, AbortController,
+    Date: class extends Date { static now() { return now; } },
+    setTimeout(handler, delay) { const id = ++nextTimer; timers.set(id, { handler, delay }); return id; },
+    clearTimeout(id) { timers.delete(id); }, setInterval() { return 0; }, clearInterval() {},
+    requestAnimationFrame(handler) { handler(); },
+    fetch: () => new Promise(() => {}),
+    createRelativeTimeElement: () => new Element("time"), formatExactDateTime: () => "date", updateRelativeTimeElements() {},
+    VersionDeckManifestState, VersionDeckReleaseAvailabilityStatus,
+    classifyVersionDeckManifest: (value) => classifyVersionDeckManifest(value, { now }), validateVersionDeckManifest,
+    RELEASE_CACHE_SCHEMA_VERSION, ReleaseCacheState, classifyReleaseCache,
+    VERSIONDECK_PRIMARY_ABI, VERSIONDECK_SPLIT_ABIS,
+  });
+  const abiSource = await fs.readFile(new URL("../download-site/abi-downloads.js", import.meta.url), "utf8");
+  vm.runInContext("globalThis.enhanceAbiDownloads = (() => {\n" + abiSource.replace(/^import\s*\{[\s\S]*?\}\s*from\s*"[^"]+";/gm, "").replace("export function enhanceAbiDownloads", "function enhanceAbiDownloads") + "\nreturn enhanceAbiDownloads; })();", context);
+  const source = await fs.readFile(new URL("../download-site/app.js", import.meta.url), "utf8");
+  vm.runInContext(source.replace(/^import\s*\{[\s\S]*?\}\s*from\s*"[^"]+";/gm, "") + "\nglobalThis.testRender = renderManifest;", context);
+  context.testRender(manifest);
+  return { document, nodes, documentEvents, windowEvents, timers, advance() { now = Date.parse(manifest.leaseExpiresAt) + 1; } };
+}
+
+test("loaded page revokes every download on expiry, resume and activation", async () => {
+  const normalized = await normalizeRelease(splitRelease(), normalizationOptions());
+  const manifest = {
+    schemaVersion: 1, generatedAt: "2026-08-20T13:56:00Z", leaseExpiresAt: "2026-08-21T13:56:00Z",
+    generatorCommit: COMMIT, repository: VERSIONDECK_REPOSITORY,
+    package: { name: "app.owntend.mobile", signerCertificateSha256: VERSIONDECK_SIGNER_SHA256 },
+    publication: { status: "active", reasonCode: null, message: null, updatedAt: null },
+    latestStableReleaseId: normalized.release.id, latestPrereleaseReleaseId: null, releases: [normalized.release],
+  };
+  for (const trigger of ["click", "auxclick", "contextmenu", "pageshow", "visibilitychange", "timer"]) {
+    const page = await loadedPage(manifest);
+    const links = page.document.querySelectorAll("[data-download-link]");
+    assert.ok(links.length >= 5, "primary, sticky, archive and checksum controls rendered");
+    assert.equal(links.filter((link) => link.dataset.apkAbi).length, 6, "latest and archive ABI variants share the render authority");
+    assert.ok(links.every((link) => link.href));
+    page.advance();
+    let prevented = false;
+    if (["click", "auxclick", "contextmenu"].includes(trigger)) {
+      page.documentEvents.get(trigger)?.({ target: links[0], preventDefault() { prevented = true; }, stopPropagation() {} });
+      assert.equal(prevented, true, `${trigger} must block expired authority`);
+    } else if (trigger === "timer") {
+      for (const { handler } of [...page.timers.values()]) handler();
+    } else (trigger === "pageshow" ? page.windowEvents : page.documentEvents).get(trigger)?.();
+    assert.ok(links.every((link) => !link.href), `${trigger} removes all download hrefs`);
+    assert.equal(page.nodes.get("#sticky-download").hidden, true);
+  }
 });

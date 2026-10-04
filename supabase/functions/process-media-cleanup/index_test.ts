@@ -1,4 +1,4 @@
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertRejects } from "@std/assert";
 import {
   classifyStorageError,
   createHandler,
@@ -111,6 +111,92 @@ Deno.test("processMediaCleanupBatch: treats object not found as idempotent succe
   assertEquals(result.failed, 0);
   assertEquals(services.acknowledged.has(1), true);
 });
+
+Deno.test("processMediaCleanupBatch: deadline bounds an unresponsive Storage removal", async () => {
+  const services = new MockMediaCleanupServices();
+  services.entries = [
+    { id: 1, user_id: "u1", object_path: "u1/media/hung.jpg", attempts: 1 },
+  ];
+  let releaseRemoval!: () => void;
+  services.removeStorageObject = () =>
+    new Promise((resolve) => {
+      releaseRemoval = () => resolve({ success: true });
+    });
+  const processing = processMediaCleanupBatch(services, 1, Date.now() + 20);
+  let watchdog!: ReturnType<typeof setTimeout>;
+  try {
+    const result = await Promise.race([
+      processing,
+      new Promise<null>((resolve) => {
+        watchdog = setTimeout(() => resolve(null), 200);
+      }),
+    ]);
+    assertEquals(
+      result !== null,
+      true,
+      "the invocation must return within its deadline",
+    );
+  } finally {
+    clearTimeout(watchdog);
+    releaseRemoval();
+    await processing;
+  }
+  await Promise.resolve();
+  assertEquals(
+    services.acknowledged.size,
+    0,
+    "late removal cannot acknowledge a timed-out job",
+  );
+});
+
+Deno.test("processMediaCleanupBatch: claim deadline aborts I/O and never starts late work", async () => {
+  const services = new MockMediaCleanupServices();
+  let resolveClaim!: (entries: MediaCleanupEntry[]) => void;
+  services.claimBatch = () =>
+    new Promise((resolve) => {
+      resolveClaim = resolve;
+    });
+  const controller = new AbortController();
+  await assertRejects(
+    () => processMediaCleanupBatch(services, 1, Date.now() + 20, controller),
+    Error,
+    "MEDIA_CLEANUP_DEADLINE_EXCEEDED",
+  );
+  assertEquals(controller.signal.aborted, true);
+  resolveClaim([{
+    id: 1,
+    user_id: "u1",
+    object_path: "u1/media/a.jpg",
+    attempts: 1,
+  }]);
+  await Promise.resolve();
+  assertEquals(services.acknowledged.size, 0);
+});
+
+for (const operation of ["acknowledgeCleanup", "recordFailure"] as const) {
+  Deno.test(`processMediaCleanupBatch: deadline bounds hung ${operation}`, async () => {
+    const services = new MockMediaCleanupServices();
+    services.entries = [{
+      id: 1,
+      user_id: "u1",
+      object_path: "u1/media/a.jpg",
+      attempts: 1,
+    }];
+    if (operation === "recordFailure") {
+      services.storageFailures.add("u1/media/a.jpg");
+    }
+    services[operation] = () => new Promise(() => {});
+    const controller = new AbortController();
+    const result = await processMediaCleanupBatch(
+      services,
+      1,
+      Date.now() + 20,
+      controller,
+    );
+    assertEquals(result, { processed: 1, succeeded: 0, failed: 1 });
+    assertEquals(controller.signal.aborted, true);
+  });
+}
 
 Deno.test("processMediaCleanupBatch: records allowlisted codes and terminal state at attempts >= 5", async () => {
   const services = new MockMediaCleanupServices();

@@ -288,15 +288,23 @@ class OpenMeteoWeatherRepository implements WeatherRepository {
     Map<String, dynamic> data,
     HomeLocation location,
   ) {
-    final current = data['current'] as Map<String, dynamic>? ?? const {};
-    final daily = data['daily'] as Map<String, dynamic>? ?? const {};
-    final dates = (daily['time'] as List?) ?? const [];
-    final codes = (daily['weather_code'] as List?) ?? const [];
-    final maxTemps = (daily['temperature_2m_max'] as List?) ?? const [];
-    final minTemps = (daily['temperature_2m_min'] as List?) ?? const [];
-    final precip =
-        (daily['precipitation_probability_max'] as List?) ?? const [];
-    final wind = (daily['wind_speed_10m_max'] as List?) ?? const [];
+    final current = data['current'] as Map<String, dynamic>;
+    final daily = data['daily'] as Map<String, dynamic>;
+    final dates = daily['time'] as List;
+    final codes = daily['weather_code'] as List;
+    final maxTemps = daily['temperature_2m_max'] as List;
+    final minTemps = daily['temperature_2m_min'] as List;
+    final precip = daily['precipitation_probability_max'] as List;
+    final wind = daily['wind_speed_10m_max'] as List;
+    if ([
+      codes,
+      maxTemps,
+      minTemps,
+      precip,
+      wind,
+    ].any((values) => values.length != dates.length)) {
+      throw const FormatException('Inconsistent weather forecast lengths.');
+    }
     final responseTimezone = data['timezone'];
     final resolvedLocation = HomeLocation(
       label: location.label,
@@ -319,18 +327,12 @@ class OpenMeteoWeatherRepository implements WeatherRepository {
       forecast: [
         for (var index = 0; index < dates.length; index++)
           WeatherForecastDay(
-            date: DateTime.tryParse('${dates[index]}') ?? DateTime.now(),
-            weatherCode: _int(index < codes.length ? codes[index] : null),
-            temperatureMax: _double(
-              index < maxTemps.length ? maxTemps[index] : null,
-            ),
-            temperatureMin: _double(
-              index < minTemps.length ? minTemps[index] : null,
-            ),
-            precipitationProbabilityMax: _int(
-              index < precip.length ? precip[index] : null,
-            ),
-            windSpeedMax: _double(index < wind.length ? wind[index] : null),
+            date: _forecastDate(dates[index]),
+            weatherCode: _int(codes[index]),
+            temperatureMax: _double(maxTemps[index]),
+            temperatureMin: _double(minTemps[index]),
+            precipitationProbabilityMax: _int(precip[index]),
+            windSpeedMax: _double(wind[index]),
           ),
       ],
     );
@@ -409,9 +411,31 @@ class OpenMeteoWeatherRepository implements WeatherRepository {
     };
   }
 
-  double _double(Object? value) => value is num ? value.toDouble() : 0;
+  double _double(Object? value) {
+    if (value is! num || !value.isFinite) {
+      throw const FormatException('Missing or invalid weather measurement.');
+    }
+    return value.toDouble();
+  }
 
-  int _int(Object? value) => value is num ? value.round() : 0;
+  int _int(Object? value) {
+    final number = _double(value);
+    if (number != number.roundToDouble()) {
+      throw const FormatException('Invalid integer weather measurement.');
+    }
+    return number.toInt();
+  }
+
+  DateTime _forecastDate(Object? value) {
+    if (value is! String || !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(value)) {
+      throw const FormatException('Invalid forecast date.');
+    }
+    final date = DateTime.tryParse(value);
+    if (date == null || date.toIso8601String().substring(0, 10) != value) {
+      throw const FormatException('Invalid forecast date.');
+    }
+    return date;
+  }
 
   Future<String> _deviceLocationLabel(double lat, double lng) async {
     final language = await _languageCode();

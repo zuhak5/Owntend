@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:drift/drift.dart' hide isNull, isNotNull;
@@ -14,7 +15,9 @@ import 'package:owntend/src/core/domain/contracts.dart';
 import 'package:owntend/src/core/domain/models.dart';
 import 'package:owntend/src/core/supabase/supabase_failure.dart';
 import 'package:owntend/src/core/sync/change_feed_contract.dart';
+import 'package:owntend/src/core/sync/account_safety_barrier.dart';
 import 'package:owntend/src/core/sync/local_sync_store.dart';
+import 'package:owntend/src/core/sync/media_download_cache.dart';
 import 'package:owntend/src/core/sync/supabase_sync_gateway.dart';
 import 'package:owntend/src/core/sync/sync_coordinator.dart';
 import 'package:owntend/src/core/sync/sync_connectivity.dart';
@@ -24,6 +27,7 @@ import 'support/maintenance_test_extensions.dart';
 import 'package:owntend/src/core/sync/sync_contracts.dart';
 import 'package:owntend/src/core/sync/sync_dtos.dart';
 import 'package:owntend/src/features/auth/domain/auth_repository.dart';
+import 'package:owntend/src/features/auth/data/account_safety_auth_repository.dart';
 import 'package:mocktail/mocktail.dart';
 
 class _MockGateway extends Mock implements SupabaseSyncGateway {}
@@ -48,6 +52,8 @@ class _StatefulGateway implements SupabaseSyncGateway {
   final queuedMaintenanceCompletionResults = <MaintenanceCompletionResult>[];
   bool maintenanceConflictWithCanonicalPlan = false;
   Completer<void>? materializeMediaGate;
+  Future<SyncRecord> Function(SyncRecord record, String userId)?
+  materializeOverride;
   Completer<void>? pullGate;
   Completer<void>? startRealtimeGate;
   Completer<void>? feedGate;
@@ -581,6 +587,9 @@ class _StatefulGateway implements SupabaseSyncGateway {
     String userId,
   ) async {
     materializeMediaCalls++;
+    if (materializeOverride != null) {
+      return materializeOverride!(record, userId);
+    }
     await materializeMediaGate?.future;
     return SyncRecord(
       spec: record.spec,
@@ -788,6 +797,23 @@ class _StackFailureGateway extends _StatefulGateway {
   }
 }
 
+class _AuthenticationFailureGateway extends _StatefulGateway {
+  @override
+  Future<List<SyncRecord>> pullAuthoritativeSnapshotPage({
+    required SyncEntitySpec spec,
+    required String userId,
+    required String deviceId,
+    String? afterRecordKey,
+    void Function(int exactCount)? onExactCount,
+    bool materializeMedia = true,
+  }) async {
+    throw const SupabaseFailure(
+      kind: SupabaseFailureKind.authentication,
+      message: 'Session expired.',
+    );
+  }
+}
+
 class _DelayedFinalizationStore extends LocalSyncStore {
   _DelayedFinalizationStore(super.db);
 
@@ -890,6 +916,196 @@ void main() {
       ),
     );
   });
+
+  test('restore suspension blocks every new cloud entry point and account listener', () async {
+    final db = AppDatabase(executor: NativeDatabase.memory());
+    addTearDown(db.close);
+    final store = LocalSyncStore(db);
+    await store.account();
+    await store.setEnabled(
+      enabled: true,
+      boundUserId: 'user-1',
+      migrationState: 'active',
+    );
+    await store.recordSyncSuccess(DateTime.now());
+    final auth = _FakeAuthRepository(const AuthSession(userId: 'user-1'));
+    addTearDown(auth.controller.close);
+    final gateway = _StatefulGateway();
+    final background = <bool>[];
+    final coordinator = SyncCoordinator(
+      auth,
+      store,
+      gateway,
+      realtime: gateway,
+      configureBackgroundSync: (enabled) async => background.add(enabled),
+    );
+    addTearDown(coordinator.dispose);
+    final suspended = coordinator.suspend();
+    // Entry is blocked immediately, before the serialized barrier completes.
+    await coordinator.syncNow();
+    await suspended;
+    await coordinator.retry();
+    await coordinator.fullReconcile();
+    await coordinator.syncIncremental();
+    await coordinator.onAppResumed();
+    coordinator.startPostReadyWork();
+    await store.recordSyncSuccess(DateTime.now());
+    await expectLater(coordinator.enable(), throwsA(isA<SupabaseFailure>()));
+    await expectLater(
+      coordinator.resumeRestoredSnapshotToCloud(),
+      throwsA(isA<SupabaseFailure>()),
+    );
+    // Await the account subscription's configuration without a wall-clock race.
+    await _waitFor(() => background.length >= 2);
+    expect(background, everyElement(isFalse));
+    expect(gateway.startRealtimeCalls, 0);
+    expect(gateway.fetchFeedCalls, 0);
+    expect(gateway.pullCalls, isEmpty);
+    expect(gateway.writeCalls, isEmpty);
+  });
+
+  for (final deleting in [false, true]) {
+    for (final retiredOwner in [false, true]) {
+      for (final timeout in [false, true]) {
+        test(
+          'destructive barrier waits for optional photo file writes (deletion=$deleting, timeout=$timeout, retired=$retiredOwner)',
+          () async {
+            final root = await Directory.systemTemp.createTemp(
+              'owntend-barrier-test-',
+            );
+            addTearDown(() => root.delete(recursive: true));
+            final db = AppDatabase(executor: NativeDatabase.memory());
+            addTearDown(db.close);
+            final store = LocalSyncStore(db);
+            final assets = DriftAssetRepository(db);
+            final area = await assets.saveArea(
+              name: 'Home',
+              kind: AreaKind.indoor,
+            );
+            final room = await assets.saveRoom(areaId: area, name: 'Room');
+            final asset = await assets.saveAsset(
+              name: 'Item',
+              roomId: room,
+              assetType: AssetType.general,
+            );
+            await store.setEnabled(
+              enabled: true,
+              boundUserId: 'user-1',
+              migrationState: 'active',
+            );
+            await store.recordSyncSuccess(DateTime.now());
+            final photo = SyncRecord.fromRemote(
+              syncSpecByEntity['asset_photo']!,
+              {
+                'id': 'pending-photo',
+                'user_id': 'user-1',
+                'asset_id': asset,
+                'object_path': 'user-1/media/pending.jpg',
+                'caption': null,
+                'is_primary': true,
+                'revision': 1,
+                'created_at': DateTime.utc(2026).toIso8601String(),
+                'updated_at': DateTime.utc(2026).toIso8601String(),
+              },
+            );
+            await store.applyRemoteRecords([photo]);
+            await db.delete(db.syncOutbox).go();
+            final started = Completer<void>();
+            final finished = Completer<void>();
+            final download = Completer<Uint8List>();
+            final cache = MediaDownloadCache(
+              rootProvider: () async => root,
+              download: (_) {
+                started.complete();
+                return download.future;
+              },
+            );
+            final gateway = _StatefulGateway();
+            await gateway.write(
+              record: photo,
+              userId: 'user-1',
+              deviceId: 'device',
+              expectedRevision: null,
+            );
+            gateway.materializeOverride = (record, userId) async {
+              try {
+                await cache.materialize(
+                  objectPath: 'user-1/media/pending.jpg',
+                  version: '1',
+                  assetId: asset,
+                );
+                return record;
+              } finally {
+                finished.complete();
+              }
+            };
+            final auth = _FakeAuthRepository(
+              const AuthSession(userId: 'user-1'),
+            );
+            addTearDown(auth.controller.close);
+            var coordinator = SyncCoordinator(
+              auth,
+              store,
+              gateway,
+              realtime: gateway,
+              listenToAuthChanges: false,
+            );
+            coordinator.startPostReadyWork();
+            await started.future;
+            if (retiredOwner) {
+              await coordinator.dispose();
+              coordinator = SyncCoordinator(
+                auth,
+                store,
+                gateway,
+                realtime: gateway,
+                listenToAuthChanges: false,
+              );
+            }
+            addTearDown(coordinator.dispose);
+            var returned = false;
+            final barrier =
+                (deleting
+                        ? coordinator.prepareForAccountDeletion('user-1')
+                        : coordinator.suspend())
+                    .then((_) => returned = true);
+            try {
+              if (timeout) {
+                await expectLater(barrier, throwsA(isA<TimeoutException>()));
+                expect(returned, isFalse);
+                expect(
+                  await Directory('${root.path}/cloud_media').exists(),
+                  isFalse,
+                );
+              } else {
+                await Future<void>.delayed(const Duration(milliseconds: 100));
+                expect(
+                  returned,
+                  isFalse,
+                  reason: 'A completed barrier must prove that no old photo writer can recreate cleaned media.',
+                );
+              }
+            } finally {
+              download.complete(Uint8List.fromList([1, 2, 3]));
+              if (!timeout) await barrier;
+              await finished.future;
+            }
+            if (timeout) {
+              // Failure did not grant cleanup authority. Retry only after the
+              // previous writer settles; this barrier can now finish safely.
+              await (deleting
+                  ? coordinator.prepareForAccountDeletion('user-1')
+                  : coordinator.suspend());
+            }
+            final media = Directory('${root.path}/cloud_media');
+            expect(await media.exists(), isTrue);
+            await media.delete(recursive: true);
+            expect(await media.exists(), isFalse);
+          },
+        );
+      }
+    }
+  }
 
   test('blocks a different account from claiming bound local data', () async {
     final db = AppDatabase(executor: NativeDatabase.memory());
@@ -2541,6 +2757,54 @@ void main() {
       );
     },
   );
+
+  for (final initialHydration in [false, true]) {
+    test(
+      'authentication failure settles sync before its sign-out barrier (enable=$initialHydration)',
+      () async {
+        final db = AppDatabase(executor: NativeDatabase.memory());
+        addTearDown(db.close);
+        final store = LocalSyncStore(db);
+        await store.account();
+        await store.setEnabled(enabled: true, boundUserId: 'user-1');
+        await db.delete(db.syncOutbox).go();
+        final delegate = _FakeAuthRepository(
+          const AuthSession(userId: 'user-1'),
+        );
+        addTearDown(delegate.controller.close);
+        late final SyncCoordinator coordinator;
+        final auth = AccountSafetyAuthRepository(
+          delegate,
+          barrier: AccountSafetyBarrier(
+            prepareAccountScope: (userId) =>
+                coordinator.prepareForAccountDeletion(userId),
+            cancelBackgroundWork: () async {},
+            releaseAccountScope: (userId) => delegate.currentSession == null
+                ? coordinator.completeAccountSignOut(userId)
+                : coordinator.cancelAccountDeletion(userId),
+          ),
+        );
+        coordinator = SyncCoordinator(
+          auth,
+          store,
+          _AuthenticationFailureGateway(),
+          listenToAuthChanges: false,
+        );
+        addTearDown(coordinator.dispose);
+
+        await expectLater(
+          initialHydration ? coordinator.enable() : coordinator.syncNow(),
+          throwsA(isA<SupabaseFailure>()),
+        );
+        await _waitFor(() => delegate.currentSession == null);
+        await _waitFor(
+          () => coordinator.status().then(
+            (value) => value.phase == SyncPhase.signedOut,
+          ),
+        );
+      },
+    );
+  }
 
   test(
     'maintenance history restore conflict keeps its durable server reason',

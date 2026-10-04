@@ -5,7 +5,7 @@
 
 .DESCRIPTION
     Creates a temporary copy of the repository Supabase configuration on
-    shifted ports, starts and resets ONLY that stack, loads deterministic
+    shifted ports, starts ONLY that stack, loads deterministic
     fixtures, serves every configured Edge Function, executes the Deno
     integration suites under supabase/tests/integration against real
     endpoints, and tears everything down even on failure.
@@ -14,12 +14,16 @@
       - Refuses to run when the repository is linked to any remote project.
       - Never touches a developer-started stack: the isolated stack listens
         on ports shifted by -PortOffset from the committed local ports.
-      - Credentials stay in memory; they are never printed or logged.
+      - Credentials are never printed or logged. Per-run credential files
+        exist only in the disposable workspace and are removed at teardown.
       - Teardown stops served functions, stops the stack without backup, and
         deletes the temporary workspace in all outcomes.
 
 .EXAMPLE
     npm run test:backend-integration
+
+.EXAMPLE
+    npm run test:backend-integration -- -IncludeApplicationIntegration
 #>
 
 [CmdletBinding()]
@@ -29,6 +33,9 @@ param(
 
     # Keep the disposable workspace for debugging (never used in CI).
     [switch]$KeepWorkspace,
+
+    # Also run the real Flutter Auth/RLS/sync/Storage scenarios on this stack.
+    [switch]$IncludeApplicationIntegration,
 
     # Environment variable name carrying the worker capability secret that is
     # injected into the served cleanup function.
@@ -69,27 +76,82 @@ if (-not (Test-Path -LiteralPath (Join-Path $repositoryRoot 'supabase\config.tom
 }
 
 # ---------------------------------------------------- disposable workspace
-$workspace = Join-Path ([IO.Path]::GetTempPath()) ("owntend-backend-integration-" + [Guid]::NewGuid().ToString('N'))
+$temporaryRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd([IO.Path]::DirectorySeparatorChar)
+$workspace = Join-Path $temporaryRoot ("owntend-backend-integration-" + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $workspace | Out-Null
 
 $serveProcess = $null
 
 function Stop-DisposableStack {
+    $cleanupFailed = $false
     try {
         if ($serveProcess -and -not $serveProcess.HasExited) {
-            Stop-Process -Id $serveProcess.Id -Force -ErrorAction SilentlyContinue
+            if ($env:OS -eq 'Windows_NT') {
+                # Stopping only PowerShell leaves cmd/Supabase children holding
+                # the log files and working directory open on Windows.
+                $processes = @(Get-CimInstance Win32_Process)
+                $ownedIds = [Collections.Generic.List[int]]::new()
+                $ownedIds.Add($serveProcess.Id)
+                for ($index = 0; $index -lt $ownedIds.Count; $index++) {
+                    foreach ($child in $processes | Where-Object { $_.ParentProcessId -eq $ownedIds[$index] }) {
+                        $ownedIds.Add([int]$child.ProcessId)
+                    }
+                }
+                for ($index = $ownedIds.Count - 1; $index -ge 0; $index--) {
+                    Stop-Process -Id $ownedIds[$index] -Force -ErrorAction SilentlyContinue
+                }
+            } else {
+                $serveProcess.Kill($true)
+            }
+            $serveProcess.WaitForExit()
             $script:serveProcess = $null
         }
+    } catch {
+        $cleanupFailed = $true
+        Write-Warning 'The disposable Edge Functions process did not stop cleanly.'
+    }
+    try {
         $supabaseDir = Join-Path $workspace 'supabase'
         if (Test-Path -LiteralPath $supabaseDir) {
             Push-Location $supabaseDir
-            & $supabaseCli stop --no-backup 2>$null | Out-Null
-            Pop-Location
+            try {
+                # Windows PowerShell wraps native stderr as errors. CLI progress
+                # on stderr must not skip Pop-Location or workspace deletion.
+                $previousErrorPreference = $ErrorActionPreference
+                $ErrorActionPreference = 'Continue'
+                & $supabaseCli stop --no-backup 2>$null | Out-Null
+                $stopExit = $LASTEXITCODE
+                if ($stopExit -ne 0) { $cleanupFailed = $true }
+            } finally {
+                $ErrorActionPreference = $previousErrorPreference
+                Pop-Location
+            }
         }
-    } catch { }
-    if (-not $KeepWorkspace -and (Test-Path -LiteralPath $workspace)) {
-        Remove-Item -LiteralPath $workspace -Recurse -Force -ErrorAction SilentlyContinue
+    } catch {
+        $cleanupFailed = $true
+        Write-Warning 'The disposable Supabase stack did not stop cleanly.'
     }
+    if (-not $KeepWorkspace -and (Test-Path -LiteralPath $workspace)) {
+        $resolvedWorkspace = (Resolve-Path -LiteralPath $workspace).ProviderPath
+        if ([IO.Path]::GetDirectoryName($resolvedWorkspace) -ne $temporaryRoot -or
+            [IO.Path]::GetFileName($resolvedWorkspace) -notmatch '^owntend-backend-integration-[a-f0-9]{32}$' -or
+            (Get-Item -LiteralPath $resolvedWorkspace).Attributes -band [IO.FileAttributes]::ReparsePoint) {
+            throw 'Refusing to remove an unexpected disposable workspace target.'
+        }
+        for ($attempt = 0; $attempt -lt 5; $attempt++) {
+            try {
+                Remove-Item -LiteralPath $resolvedWorkspace -Recurse -Force -ErrorAction Stop
+                break
+            } catch {
+                if ($attempt -eq 4) { throw 'Could not remove the disposable backend workspace; cleanup requires attention.' }
+                Start-Sleep -Milliseconds 500
+            }
+        }
+        if (Test-Path -LiteralPath $resolvedWorkspace) {
+            throw 'Disposable backend workspace still exists after teardown.'
+        }
+    }
+    if ($cleanupFailed) { throw 'Disposable backend teardown failed; inspect the local stack and process state.' }
 }
 
 Write-Host "Preparing disposable backend workspace: $workspace"
@@ -166,8 +228,8 @@ try {
     }
 
     # ------------------------------------------------------------ credentials
-    # Parse status output strictly in memory. Values are never echoed or
-    # written anywhere persistent.
+    # Parse status output strictly in memory. Values are never echoed; any
+    # necessary per-run credential file belongs to the disposable workspace.
     $statusJson = & $supabaseCli status -o json
     if ($LASTEXITCODE -ne 0) { Pop-Location; throw 'supabase status failed.' }
     Pop-Location
@@ -192,16 +254,23 @@ try {
     $envFile = Join-Path $workspace 'functions.env'
     [IO.File]::WriteAllText($envFile, "$MediaCleanupWorkerTokenEnv=$workerToken")
     Write-Host 'Serving Edge Functions...'
-    # A bootstrap script sidesteps quoting problems caused by spaces in the
-    # temporary workspace path. The bootstrap is launched by the same
+    # A bootstrap script sidesteps process-argument quoting for workspace paths.
+    # Escape every quote delimiter PowerShell accepts, including curly quotes.
+    # The bootstrap is launched by the same
     # PowerShell host executing this lane (Windows PowerShell or pwsh), which
     # keeps the served-function environment identical across platforms.
     $hostExecutable = (Get-Process -Id $PID).Path
     $serveBootstrap = Join-Path $workspace 'run-functions-serve.ps1'
-    $serveScript = "Set-Location -LiteralPath '" + (Join-Path $workspace 'supabase') + "'" + [Environment]::NewLine
-    $serveScript += '& ''' + $supabaseCli + ''' functions serve --env-file ''' + $envFile + ''' 1> ''' + $serveLog + ''' 2> ''' + $serveErr + ''''
-    [IO.File]::WriteAllText($serveBootstrap, $serveScript)
-    $serveProcess = Start-Process -FilePath $hostExecutable `
+    function ConvertTo-ServePathLiteral([string]$Value) {
+        return "'" + [regex]::Replace($Value, '[\u0027\u2018\u2019\u201a\u201b]', '$0$0') + "'"
+    }
+    $serveScript = 'Set-Location -LiteralPath ' + (ConvertTo-ServePathLiteral (Join-Path $workspace 'supabase')) + [Environment]::NewLine
+    $serveScript += '& ' + (ConvertTo-ServePathLiteral $supabaseCli) + ' functions serve --env-file ' + (ConvertTo-ServePathLiteral $envFile) + ' 1> ' + (ConvertTo-ServePathLiteral $serveLog) + ' 2> ' + (ConvertTo-ServePathLiteral $serveErr)
+    # Windows PowerShell 5.1 otherwise reads non-ASCII UTF-8 source as ANSI.
+    [IO.File]::WriteAllText($serveBootstrap, $serveScript, [Text.UTF8Encoding]::new($true))
+    $serveWindowOptions = @{}
+    if ($env:OS -eq 'Windows_NT') { $serveWindowOptions.WindowStyle = 'Hidden' }
+    $serveProcess = Start-Process @serveWindowOptions -FilePath $hostExecutable `
         -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$serveBootstrap`"" `
         -PassThru
 
@@ -246,6 +315,26 @@ try {
         Get-Content -LiteralPath $serveLog -ErrorAction SilentlyContinue | Select-Object -First 40 | ForEach-Object { Write-Host $_ }
         Get-Content -LiteralPath $serveErr -ErrorAction SilentlyContinue | Select-Object -First 20 | ForEach-Object { Write-Host $_ }
         throw "Integration tests failed (exit $testExit)."
+    }
+    if ($IncludeApplicationIntegration) {
+        # These credentials belong only to the disposable loopback stack. Keep
+        # them out of command lines and logs and remove them with the workspace.
+        $applicationDefinesPath = Join-Path $workspace 'application-test-defines.json'
+        $applicationDefines = @{
+            OWNTEND_TEST_SUPABASE_URL = $apiUrl
+            OWNTEND_TEST_SUPABASE_ANON_KEY = $anonKey
+            OWNTEND_TEST_SUPABASE_SERVICE_ROLE_KEY = $serviceRoleKey
+        } | ConvertTo-Json
+        [IO.File]::WriteAllText($applicationDefinesPath, $applicationDefines)
+        Push-Location $repositoryRoot
+        try {
+            & flutter test --no-pub --concurrency=1 --timeout 3m `
+                test/backend_integration/local_backend_sync_test.dart `
+                "--dart-define-from-file=$applicationDefinesPath"
+            if ($LASTEXITCODE -ne 0) {
+                throw "Application/backend integration failed (exit $LASTEXITCODE)."
+            }
+        } finally { Pop-Location }
     }
     Write-Host 'Backend integration suite passed.' -ForegroundColor Green
 } finally {

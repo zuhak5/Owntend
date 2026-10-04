@@ -48,6 +48,8 @@ class AssetCreationController {
   Future<AuthoritativeMutationResult> changeAssetTypeWithPointDelta({
     required Map<String, dynamic> operation,
     required String accountScope,
+    required DateTime expectedUpdatedAt,
+    required Future<void> Function(DateTime expectedUpdatedAt) saveLocalEdit,
   }) async {
     final monetizationRepo = ref.read(monetizationRepositoryProvider);
     if (monetizationRepo == null ||
@@ -55,14 +57,37 @@ class AssetCreationController {
       throw StateError('Cloud points service is unavailable.');
     }
 
+    final store = ref.read(localSyncStoreProvider);
+    if (store == null) {
+      throw StateError('Local synchronization is unavailable.');
+    }
+    final wallet = ref.read(pointWalletControllerProvider.notifier);
+    final snapshot = await store.captureAuthoritativeEditor(
+      entity: 'asset',
+      recordKey: operation['asset_id'] as String,
+      accountId: accountScope,
+      expectedUpdatedAt: expectedUpdatedAt,
+    );
+    if (monetizationRepo.currentUserId != accountScope) {
+      throw StateError('The editor account changed.');
+    }
     final result = await monetizationRepo.changeAssetType(operation);
     if (result.applied) {
-      ref
-          .read(pointWalletControllerProvider.notifier)
-          .adoptAuthoritativeMutationResult(
-            result.balance,
-            userId: accountScope,
-          );
+      wallet.adoptAuthoritativeMutationResult(
+        result.balance,
+        userId: accountScope,
+      );
+      if (result.asset == null) {
+        throw const FormatException('Missing canonical asset.');
+      }
+      await store.finishAuthoritativeEditor(
+        snapshot: snapshot,
+        canonicalJson: result.asset!,
+        expectedTarget: operation['target_type'] as String,
+        detailRows: result.detailRows,
+        saveLocalEdit: saveLocalEdit,
+        accountIsCurrent: () => monetizationRepo.currentUserId == accountScope,
+      );
     }
     return result;
   }

@@ -17,11 +17,14 @@ Future<bool> deleteThingWithConfirmation(
   if (!confirmed || !context.mounted) {
     return false;
   }
-  await ref.read(assetRepositoryProvider).trashAsset(asset.id);
+  final checkUndoAccount = captureUndoAccountGuard(ref);
+  final repository = ref.read(assetRepositoryProvider);
+  final reconcileNotifications = captureNotificationReconciliation(ref);
+  await repository.trashAsset(asset.id);
   if (!context.mounted) {
     return false;
   }
-  await wakeNotificationReconciliation(ref);
+  await reconcileNotifications();
   if (!context.mounted) {
     return false;
   }
@@ -29,27 +32,11 @@ Future<bool> deleteThingWithConfirmation(
   hk_ui.showMovedToTrashSnackBar(
     context,
     content: Text(context.l10n.nameMovedToTrash(asset.name)),
+    actionSuccessMessage: Text(context.l10n.nameRestored(asset.name)),
     onUndo: () async {
-      try {
-        await ref.read(assetRepositoryProvider).restoreAsset(asset.id);
-        await wakeNotificationReconciliation(ref);
-        if (context.mounted) {
-          hk_ui.showToast(
-            context,
-            content: Text(context.l10n.nameRestored(asset.name)),
-          );
-        }
-      } on Object catch (error) {
-        if (context.mounted) {
-          hk_ui.showToast(
-            context,
-            content: Text(
-              failureMessage(context, error, fallback: AppFailureCode.undo),
-            ),
-            severity: hk_ui.HkToastSeverity.error,
-          );
-        }
-      }
+      checkUndoAccount();
+      await repository.restoreAsset(asset.id);
+      await reconcileNotifications();
     },
   );
   return true;
@@ -69,11 +56,14 @@ Future<bool> deleteRoomWithConfirmation(
   if (!confirmed || !context.mounted) {
     return false;
   }
-  await ref.read(assetRepositoryProvider).trashRoom(room.id);
+  final checkUndoAccount = captureUndoAccountGuard(ref);
+  final repository = ref.read(assetRepositoryProvider);
+  final reconcileNotifications = captureNotificationReconciliation(ref);
+  await repository.trashRoom(room.id);
   if (!context.mounted) {
     return false;
   }
-  await wakeNotificationReconciliation(ref);
+  await reconcileNotifications();
   if (!context.mounted) {
     return false;
   }
@@ -81,27 +71,11 @@ Future<bool> deleteRoomWithConfirmation(
   hk_ui.showMovedToTrashSnackBar(
     context,
     content: Text(context.l10n.nameMovedToTrash(room.name)),
+    actionSuccessMessage: Text(context.l10n.nameRestored(room.name)),
     onUndo: () async {
-      try {
-        await ref.read(assetRepositoryProvider).restoreRoom(room.id);
-        await wakeNotificationReconciliation(ref);
-        if (context.mounted) {
-          hk_ui.showToast(
-            context,
-            content: Text(context.l10n.nameRestored(room.name)),
-          );
-        }
-      } on Object catch (error) {
-        if (context.mounted) {
-          hk_ui.showToast(
-            context,
-            content: Text(
-              failureMessage(context, error, fallback: AppFailureCode.undo),
-            ),
-            severity: hk_ui.HkToastSeverity.error,
-          );
-        }
-      }
+      checkUndoAccount();
+      await repository.restoreRoom(room.id);
+      await reconcileNotifications();
     },
   );
   return true;
@@ -121,11 +95,14 @@ Future<bool> deleteAreaWithConfirmation(
   if (!confirmed || !context.mounted) {
     return false;
   }
-  await ref.read(assetRepositoryProvider).trashArea(area.id);
+  final checkUndoAccount = captureUndoAccountGuard(ref);
+  final repository = ref.read(assetRepositoryProvider);
+  final reconcileNotifications = captureNotificationReconciliation(ref);
+  await repository.trashArea(area.id);
   if (!context.mounted) {
     return false;
   }
-  await wakeNotificationReconciliation(ref);
+  await reconcileNotifications();
   if (!context.mounted) {
     return false;
   }
@@ -133,27 +110,11 @@ Future<bool> deleteAreaWithConfirmation(
   hk_ui.showMovedToTrashSnackBar(
     context,
     content: Text(context.l10n.nameMovedToTrash(area.name)),
+    actionSuccessMessage: Text(context.l10n.nameRestored(area.name)),
     onUndo: () async {
-      try {
-        await ref.read(assetRepositoryProvider).restoreArea(area.id);
-        await wakeNotificationReconciliation(ref);
-        if (context.mounted) {
-          hk_ui.showToast(
-            context,
-            content: Text(context.l10n.nameRestored(area.name)),
-          );
-        }
-      } on Object catch (error) {
-        if (context.mounted) {
-          hk_ui.showToast(
-            context,
-            content: Text(
-              failureMessage(context, error, fallback: AppFailureCode.undo),
-            ),
-            severity: hk_ui.HkToastSeverity.error,
-          );
-        }
-      }
+      checkUndoAccount();
+      await repository.restoreArea(area.id);
+      await reconcileNotifications();
     },
   );
   return true;

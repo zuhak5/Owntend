@@ -11,7 +11,7 @@ const shell = process.platform === 'win32' ? 'powershell.exe' : 'pwsh';
 
 const result = spawnSync(
   shell,
-  ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script],
+  ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script, ...process.argv.slice(2)],
   { stdio: 'inherit' },
 );
 

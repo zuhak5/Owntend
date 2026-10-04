@@ -6,6 +6,72 @@ import 'package:owntend/src/core/sync/supabase_sync_gateway.dart';
 import 'package:owntend/src/core/sync/sync_dtos.dart';
 
 void main() {
+  group('canonical finalized photo response', () {
+    Map<String, dynamic> response() => {
+      'success': true,
+      'idempotent': false,
+      'photo_id': 'photo-1',
+      'asset_id': 'asset-1',
+      'object_path': 'user-1/media/stage/0.jpg',
+      'caption': 'Retained caption',
+      'is_primary': true,
+      'revision': 4,
+      'created_at': '2026-08-01T03:00:00Z',
+      'updated_at': '2026-08-21T04:00:00Z',
+    };
+    SyncRecord parse(Map<String, dynamic> payload) => parseFinalizedAssetPhoto(
+      payload,
+      userId: 'user-1',
+      photoId: 'photo-1',
+      assetId: 'asset-1',
+      objectPath: 'user-1/media/stage/0.jpg',
+    );
+    test('first execution and replay adopt server fields and timestamps', () {
+      for (final replay in [false, true]) {
+        final record = parse(response()..['idempotent'] = replay);
+        expect(record.revision, 4);
+        expect(record.values['caption'], 'Retained caption');
+        expect(record.values['is_primary'], true);
+        expect(record.values['created_at'], '2026-08-01T03:00:00Z');
+        expect(record.clientModifiedAt, DateTime.utc(2026, 8, 21, 4));
+        expect(record.serverUpdatedAt, DateTime.utc(2026, 8, 21, 4));
+      }
+      expect(parse(response()..['caption'] = null).values['caption'], isNull);
+    });
+    test('missing or malformed canonical state fails closed', () {
+      final invalid = <Map<String, dynamic>>[
+        for (final key in [
+          'revision',
+          'caption',
+          'is_primary',
+          'created_at',
+          'updated_at',
+        ])
+          response()..remove(key),
+        response()..['revision'] = 0,
+        response()..['revision'] = 1.5,
+        response()..['caption'] = false,
+        response()..['is_primary'] = 'true',
+        response()..['created_at'] = 'invalid',
+        response()..['updated_at'] = 'invalid',
+        response()..['photo_id'] = 'other-photo',
+        response()..['asset_id'] = 'other-asset',
+        response()..['object_path'] = 'other-user/media/stage/0.jpg',
+      ];
+      for (final payload in invalid) {
+        expect(
+          () => parse(payload),
+          throwsA(
+            isA<SupabaseFailure>().having(
+              (error) => error.kind,
+              'kind',
+              SupabaseFailureKind.incompatibleSchema,
+            ),
+          ),
+        );
+      }
+    });
+  });
   test('zero-row optimistic writes use list responses instead of HTTP 406', () {
     final source = File('lib/src/core/sync/supabase_sync_gateway.dart')
         .readAsStringSync();

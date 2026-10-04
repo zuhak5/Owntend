@@ -1,17 +1,22 @@
 import 'dart:io';
 
-import 'package:drift/drift.dart';
+import 'package:drift/drift.dart' hide isNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:owntend/src/core/database/app_database.dart';
 import 'package:owntend/src/core/domain/contracts.dart';
 import 'package:owntend/src/core/services/notification_service.dart';
 import 'package:owntend/src/core/services/reminder_schedule_reconciler.dart';
+import 'package:owntend/src/core/sync/local_sync_store.dart';
 
 class _FakeNotificationScheduler implements NotificationScheduler {
   int refreshCount = 0;
   Object? failure;
   Future<void> Function()? onRefresh;
+  Future<void> Function()? onInitialize;
+
+  @override
+  Future<void> initialize() async => onInitialize?.call();
 
   @override
   Future<void> refreshSchedules() async {
@@ -44,6 +49,151 @@ Future<void> _insertRequest(
 }
 
 void main() {
+  test(
+    'request versions survive reopen and protect independent connections',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'owntend-reminder-version-',
+      );
+      final file = File('${directory.path}/reminders.sqlite');
+      var writer = AppDatabase(executor: NativeDatabase(file));
+      AppDatabase? reader;
+      try {
+        final now = DateTime.utc(2026, 8, 17, 20);
+        await _insertRequest(writer, scopeKey: 'plan:a', updatedAt: now);
+        final original = await writer
+            .select(writer.notificationReconciliationRequests)
+            .getSingle();
+        await writer.close();
+        writer = AppDatabase(executor: NativeDatabase(file));
+        final reopened = await writer
+            .select(writer.notificationReconciliationRequests)
+            .getSingle();
+        expect(reopened.requestVersion, original.requestVersion);
+        reader = AppDatabase(executor: NativeDatabase(file));
+        final scheduler = _FakeNotificationScheduler()
+          ..onRefresh = () => writer.customStatement(
+            "UPDATE notification_reconciliation_requests SET reason = 'schedule_inputs_changed' WHERE scope_key = 'plan:a'",
+          );
+        final consumer = NotificationReconciliationConsumer(
+          database: reader,
+          scheduler: scheduler,
+          accountGuard: (_) async => true,
+          now: () => now,
+        );
+        expect(
+          await consumer.drainForAccount('user-a'),
+          NotificationReconciliationDrainResult.refreshed,
+        );
+        final replacement = await writer
+            .select(writer.notificationReconciliationRequests)
+            .getSingle();
+        expect(replacement.requestVersion, isNot(original.requestVersion));
+        expect(replacement.updatedAt, original.updatedAt);
+        scheduler.onRefresh = null;
+        await consumer.drainForAccount('user-a');
+        expect(
+          await writer.select(writer.notificationReconciliationRequests).get(),
+          isEmpty,
+        );
+      } finally {
+        await reader?.close();
+        await writer.close();
+        await directory.delete(recursive: true);
+      }
+    },
+  );
+
+  group('daily background notification execution', () {
+    late AppDatabase db;
+    late _FakeNotificationScheduler scheduler;
+    String? userId;
+
+    setUp(() {
+      db = AppDatabase(executor: NativeDatabase.memory());
+      scheduler = _FakeNotificationScheduler();
+      userId = null;
+    });
+    tearDown(() => db.close());
+
+    Future<NotificationReconciliationDrainResult> runWorker() =>
+        refreshBackgroundNotifications(
+          database: db,
+          scheduler: scheduler,
+          currentUserId: () => userId,
+        );
+
+    test(
+      'local worker refreshes and drains durable work without a session',
+      () async {
+        await _insertRequest(db, scopeKey: 'plan:a', updatedAt: DateTime.now());
+        expect(
+          await runWorker(),
+          NotificationReconciliationDrainResult.refreshed,
+        );
+        expect(scheduler.refreshCount, 1);
+        expect(
+          await db.select(db.notificationReconciliationRequests).get(),
+          isEmpty,
+        );
+      },
+    );
+
+    test('local worker refreshes when no durable request is queued', () async {
+      expect(await runWorker(), NotificationReconciliationDrainResult.noWork);
+      expect(scheduler.refreshCount, 1);
+    });
+
+    test('signed-out bound account cannot execute local work', () async {
+      await LocalSyncStore(db).bindIdentity('user-a');
+      expect(
+        await runWorker(),
+        NotificationReconciliationDrainResult.accountMismatch,
+      );
+      expect(scheduler.refreshCount, 0);
+    });
+
+    test('matching authenticated worker drains account work', () async {
+      await LocalSyncStore(db).bindIdentity('user-a');
+      userId = 'user-a';
+      await _insertRequest(db, scopeKey: 'plan:a', updatedAt: DateTime.now());
+      expect(
+        await runWorker(),
+        NotificationReconciliationDrainResult.refreshed,
+      );
+      expect(scheduler.refreshCount, 1);
+      expect(
+        await db.select(db.notificationReconciliationRequests).get(),
+        isEmpty,
+      );
+    });
+
+    test('identity change during initialization prevents scheduling', () async {
+      scheduler.onInitialize = () async => userId = 'user-a';
+      expect(
+        await runWorker(),
+        NotificationReconciliationDrainResult.accountMismatch,
+      );
+      expect(scheduler.refreshCount, 0);
+    });
+
+    test(
+      'identity change during local refresh preserves pending work',
+      () async {
+        await _insertRequest(db, scopeKey: 'plan:a', updatedAt: DateTime.now());
+        scheduler.onRefresh = () async => userId = 'user-a';
+        expect(
+          await runWorker(),
+          NotificationReconciliationDrainResult.accountMismatch,
+        );
+        expect(
+          await db.select(db.notificationReconciliationRequests).get(),
+          hasLength(1),
+        );
+      },
+    );
+  });
+
   group('background registration contract', () {
     test('requires a matching enabled account identity', () {
       expect(
@@ -254,6 +404,73 @@ void main() {
       expect(request.updatedAt.toUtc(), newer);
       expect(scheduler.refreshCount, 1);
     });
+
+    test(
+      'request replaced within the same second survives acknowledgement',
+      () async {
+        await _insertRequest(db, scopeKey: 'plan:a', updatedAt: now);
+        var replaced = false;
+        scheduler.onRefresh = () async {
+          if (replaced) return;
+          replaced = true;
+          await _insertRequest(
+            db,
+            scopeKey: 'plan:a',
+            updatedAt: now.add(const Duration(milliseconds: 125)),
+          );
+        };
+        await consumer().drainForAccount('user-a');
+        expect(
+          await db.select(db.notificationReconciliationRequests).get(),
+          hasLength(1),
+        );
+        await consumer().drainForAccount('user-a');
+        expect(scheduler.refreshCount, 2);
+        expect(
+          await db.select(db.notificationReconciliationRequests).get(),
+          isEmpty,
+        );
+      },
+    );
+
+    test(
+      'deleted and recreated request is not acknowledged by an older drain',
+      () async {
+        await _insertRequest(db, scopeKey: 'plan:a', updatedAt: now);
+        scheduler.onRefresh = () async {
+          await db.delete(db.notificationReconciliationRequests).go();
+          await _insertRequest(db, scopeKey: 'plan:a', updatedAt: now);
+        };
+
+        await consumer().drainForAccount('user-a');
+
+        expect(
+          await db.select(db.notificationReconciliationRequests).get(),
+          hasLength(1),
+        );
+      },
+    );
+
+    test(
+      'failure cannot back off a replacement request from the same second',
+      () async {
+        await _insertRequest(db, scopeKey: 'plan:a', updatedAt: now);
+        scheduler.onRefresh = () =>
+            _insertRequest(db, scopeKey: 'plan:a', updatedAt: now);
+        scheduler.failure = StateError('platform unavailable');
+
+        await expectLater(
+          consumer().drainForAccount('user-a'),
+          throwsA(isA<StateError>()),
+        );
+
+        final request = await db
+            .select(db.notificationReconciliationRequests)
+            .getSingle();
+        expect(request.attempts, 0);
+        expect(request.nextAttemptAt, isNull);
+      },
+    );
 
     test(
       'daily worker source drains durable work before fallback refresh',

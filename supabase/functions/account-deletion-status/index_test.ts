@@ -1,4 +1,5 @@
 import { assertEquals, assertMatch } from "@std/assert";
+import { acknowledgeAccountDeletion } from "../../../download-site/account-deletion.js";
 
 import {
   type AccountDeletionStatusServices,
@@ -288,6 +289,39 @@ Deno.test("acknowledging completed operation returns an acknowledged receipt", a
     status: "acknowledged",
     user_id: userId,
   });
+  assertEquals(
+    services.events.includes(
+      "acknowledge:33333333-3333-4333-8333-333333333333",
+    ),
+    true,
+  );
+});
+
+Deno.test("website acknowledgement reaches the status handler contract", async () => {
+  const services = new FakeStatusServices();
+  services.operation = {
+    operationId: "33333333-3333-4333-8333-333333333333",
+    stage: "completed",
+    activeUserId: null,
+    completed: true,
+  };
+  const fetchApi =
+    ((input: RequestInfo | URL, init?: RequestInit) =>
+      handleAccountDeletionStatus(
+        new Request(input, init),
+        configuredEnvironment,
+        factoryFor(services),
+      )) as typeof fetch;
+  const receipt = await acknowledgeAccountDeletion(
+    {
+      supabaseUrl: "https://example.supabase.co",
+      supabasePublishableKey: "public-test-key",
+    },
+    recoveryKey,
+    userId,
+    fetchApi,
+  );
+  assertEquals(receipt.deleted, true);
   assertEquals(
     services.events.includes(
       "acknowledge:33333333-3333-4333-8333-333333333333",

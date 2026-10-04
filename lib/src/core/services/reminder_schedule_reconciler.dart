@@ -261,7 +261,7 @@ class NotificationReconciliationConsumer {
               ..where(
                 (row) =>
                     row.scopeKey.equals(request.scopeKey) &
-                    row.updatedAt.equals(request.updatedAt),
+                    row.requestVersion.equals(request.requestVersion),
               ))
             .go();
       }
@@ -269,7 +269,12 @@ class NotificationReconciliationConsumer {
     return NotificationReconciliationDrainResult.refreshed;
   }
 
-  Future<NotificationReconciliationDrainResult> drainLocal() async {
+  Future<NotificationReconciliationDrainResult> drainLocal({
+    Future<bool> Function()? accountGuard,
+  }) async {
+    if (accountGuard != null && !await accountGuard()) {
+      return NotificationReconciliationDrainResult.accountMismatch;
+    }
     final now = _now();
     final requests =
         await (database.select(database.notificationReconciliationRequests)
@@ -291,13 +296,17 @@ class NotificationReconciliationConsumer {
       rethrow;
     }
 
+    if (accountGuard != null && !await accountGuard()) {
+      return NotificationReconciliationDrainResult.accountMismatch;
+    }
+
     await database.transaction(() async {
       for (final request in requests) {
         await (database.delete(database.notificationReconciliationRequests)
               ..where(
                 (row) =>
                     row.scopeKey.equals(request.scopeKey) &
-                    row.updatedAt.equals(request.updatedAt),
+                    row.requestVersion.equals(request.requestVersion),
               ))
             .go();
       }
@@ -318,7 +327,7 @@ class NotificationReconciliationConsumer {
               ..where(
                 (row) =>
                     row.scopeKey.equals(request.scopeKey) &
-                    row.updatedAt.equals(request.updatedAt),
+                    row.requestVersion.equals(request.requestVersion),
               ))
             .write(
               NotificationReconciliationRequestsCompanion(
