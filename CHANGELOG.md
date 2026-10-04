@@ -9,6 +9,10 @@ The current application version is defined only in `pubspec.yaml`. Released vers
 - Advanced the application version to 1.0.3 and build number to 17 (`1.0.3+17`)
   to preserve monotonic Android `versionCode` progression.
 
+- Fixed VersionDeck manifest generation clock skew rejection by propagating the
+  unified build timestamp to asset normalization and validating the generated manifest
+  against completion time when release artifact verification spans multiple minutes.
+
 - Stopped notification startup and resume continuations from registering work
   or starting backup after their ready-screen owner is disposed. Initial
   account-read failures now stay within optional startup error handling.

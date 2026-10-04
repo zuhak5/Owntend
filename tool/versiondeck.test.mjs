@@ -363,6 +363,17 @@ test("manifest validation requires exact verification evidence", async () => {
     error.includes("signerVerified")));
 });
 
+test("buildManifest accepts releases when verification duration exceeds clock skew threshold", async () => {
+  const { manifest } = await buildManifest([releaseFixture()], {
+    ...normalizationOptions(),
+    control: baseControl(),
+    generatorCommit: COMMIT,
+  });
+  assert.equal(manifest.releases.length, 1);
+  assert.equal(manifest.releases[0].availability.status, VersionDeckReleaseAvailabilityStatus.ACTIVE);
+  assert.deepEqual(validateVersionDeckManifest(manifest), []);
+});
+
 test("compareVersionBuild sorts higher semantic version first, then higher build", () => {
   const releases = [
     { id: 1, version: "1.0.0", build: 9, publishedAt: "2026-01-01T00:00:00Z" },

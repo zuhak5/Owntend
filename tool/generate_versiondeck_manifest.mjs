@@ -370,7 +370,7 @@ export async function buildManifest(rawReleases, options = {}) {
   const diagnostics = [];
   if (publication.status === VersionDeckPublicationStatus.DISABLED) {
     const manifest = { ...base, latestStableReleaseId: null, latestPrereleaseReleaseId: null, releases: [] };
-    const errors = validateVersionDeckManifest(manifest, { now });
+    const errors = validateVersionDeckManifest(manifest, { now: options.now ?? Date.now() });
     if (errors.length) throw new Error(`Generated manifest is invalid: ${errors.join(" ")}`);
     diagnostics.push({ type: "publication-disabled", reasonCode: publication.reasonCode, message: publication.message, updatedAt: publication.updatedAt });
     return { manifest, diagnostics };
@@ -379,7 +379,7 @@ export async function buildManifest(rawReleases, options = {}) {
   for (const raw of rawReleases) {
     if (raw?.draft) continue;
     const historicalDecision = resolveHistoricalReleaseDecision(raw, control);
-    const result = await normalizeRelease(raw, { ...options, historicalDecision });
+    const result = await normalizeRelease(raw, { ...options, now, historicalDecision });
     if (result.release) releases.push(result.release);
     else diagnostics.push({ id: raw?.id ?? null, tag: raw?.tag_name ?? "", errors: result.errors });
   }
@@ -390,7 +390,7 @@ export async function buildManifest(rawReleases, options = {}) {
     latestPrereleaseReleaseId: releases.find((item) => item.prerelease && item.availability.status === VersionDeckReleaseAvailabilityStatus.ACTIVE)?.id ?? null,
     releases,
   };
-  const errors = validateVersionDeckManifest(manifest, { now });
+  const errors = validateVersionDeckManifest(manifest, { now: options.now ?? Date.now() });
   if (errors.length) throw new Error(`Generated manifest is invalid: ${errors.join(" ")}`);
   return { manifest, diagnostics };
 }
