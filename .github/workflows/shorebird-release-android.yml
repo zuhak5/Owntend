@@ -225,7 +225,7 @@ jobs:
 
       - name: Upload Shorebird release evidence
         id: upload
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ steps.metadata.outputs.artifact_name }}
           path: |
@@ -311,7 +311,7 @@ jobs:
           .\tool\derive_versiondeck_apks.ps1 -AppBundle $Aab[0].FullName -ExpectedVersion "${{ needs.release.outputs.version_name }}" -ExpectedBuild "${{ needs.release.outputs.build_number }}" -KeystorePath $Keystore -KeyAlias $env:ANDROID_APK_KEY_ALIAS
           Remove-Item -LiteralPath $Keystore -Force
       - name: Upload derived APK evidence
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: Owntend-production-shorebird-apk-evidence-${{ github.run_number }}
           path: release/shorebird-apk-evidence/**
